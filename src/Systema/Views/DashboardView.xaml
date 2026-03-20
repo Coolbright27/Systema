@@ -1,0 +1,518 @@
+<UserControl x:Class="Systema.Views.DashboardView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:conv="clr-namespace:Systema.Core.Converters"
+             xmlns:vm="clr-namespace:Systema.ViewModels"
+             Background="{StaticResource BgPrimaryBrush}">
+
+    <UserControl.Resources>
+        <conv:BoolToVisibilityConverter x:Key="BoolToVis"/>
+
+        <!-- Pill badge style for status dots -->
+        <Style x:Key="StatusDot" TargetType="Ellipse">
+            <Setter Property="Width"           Value="8"/>
+            <Setter Property="Height"          Value="8"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Margin"          Value="0,0,7,0"/>
+            <Setter Property="Fill"            Value="{StaticResource TextSecondaryBrush}"/>
+        </Style>
+
+        <!-- Checklist item label -->
+        <Style x:Key="CheckLabel" TargetType="TextBlock" BasedOn="{StaticResource BodyText}">
+            <Setter Property="FontSize"   Value="12"/>
+            <Setter Property="Margin"     Value="0,0,0,0"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+    </UserControl.Resources>
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <Grid Margin="32,28,32,28">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>  <!-- 0: header -->
+                <RowDefinition Height="20"/>    <!-- 1: spacer -->
+                <RowDefinition Height="Auto"/>  <!-- 2: status row -->
+                <RowDefinition Height="20"/>    <!-- 3: spacer -->
+                <RowDefinition Height="Auto"/>  <!-- 4: auto-pilot card -->
+                <RowDefinition Height="20"/>    <!-- 5: spacer -->
+                <RowDefinition Height="Auto"/>  <!-- 6: napping card -->
+                <RowDefinition Height="16"/>    <!-- 7: spacer -->
+                <RowDefinition Height="Auto"/>  <!-- 8: footer info bar -->
+            </Grid.RowDefinitions>
+
+            <!-- ══════════════════════════════════════════════════════════════ -->
+            <!-- HEADER                                                         -->
+            <!-- ══════════════════════════════════════════════════════════════ -->
+            <Grid Grid.Row="0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Grid.Column="0">
+                    <TextBlock Text="Dashboard" Style="{StaticResource HeadingLarge}"/>
+                    <TextBlock Text="Systema is working in the background — here's what's happening on your PC."
+                               Style="{StaticResource CaptionText}" Margin="0,4,0,0"
+                               Foreground="{StaticResource TextSecondaryBrush}"/>
+                </StackPanel>
+
+                <!-- Admin + version badges -->
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top" Margin="12,0,0,0">
+                    <Border Background="#1A00E5A0" BorderBrush="{StaticResource AccentGreenBrush}"
+                            BorderThickness="1" CornerRadius="6" Padding="10,5" Margin="0,0,8,0">
+                        <StackPanel Orientation="Horizontal">
+                            <Ellipse Width="7" Height="7" Fill="{StaticResource AccentGreenBrush}"
+                                     VerticalAlignment="Center" Margin="0,0,6,0"/>
+                            <TextBlock Text="Administrator" FontSize="11" FontWeight="SemiBold"
+                                       Foreground="{StaticResource AccentGreenBrush}" FontFamily="Segoe UI"/>
+                        </StackPanel>
+                    </Border>
+                    <Border Background="{StaticResource BgSurfaceBrush}" BorderBrush="{StaticResource BorderBrush}"
+                            BorderThickness="1" CornerRadius="6" Padding="10,5">
+                        <TextBlock Text="v1.6.6" FontSize="11" FontWeight="SemiBold"
+                                   Foreground="{StaticResource TextSecondaryBrush}" FontFamily="Segoe UI"/>
+                    </Border>
+                </StackPanel>
+            </Grid>
+
+            <!-- ══════════════════════════════════════════════════════════════ -->
+            <!-- STATUS ROW — 3 live status pills                               -->
+            <!-- ══════════════════════════════════════════════════════════════ -->
+            <Grid Grid.Row="2">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="12"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="12"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- ── Task Sleep pill ───────────────────────────────── -->
+                <Border Grid.Column="0" Style="{StaticResource Card}" Padding="16,14">
+                    <StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                            <Ellipse>
+                                <Ellipse.Style>
+                                    <Style TargetType="Ellipse" BasedOn="{StaticResource StatusDot}">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding TaskSleepActive}" Value="True">
+                                                <Setter Property="Fill" Value="{StaticResource AccentGreenBrush}"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Ellipse.Style>
+                            </Ellipse>
+                            <TextBlock Text="Task Sleep" Style="{StaticResource BodyText}"
+                                       FontWeight="SemiBold" VerticalAlignment="Center"/>
+                        </StackPanel>
+                        <TextBlock Text="{Binding TaskSleepStatus}" TextWrapping="Wrap">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionText}">
+                                    <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding TaskSleepActive}" Value="True">
+                                            <Setter Property="Foreground" Value="{StaticResource AccentGreenBrush}"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                    </StackPanel>
+                </Border>
+
+                <!-- ── Game Boost pill ───────────────────────────────── -->
+                <Border Grid.Column="2" Style="{StaticResource Card}" Padding="16,14">
+                    <StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                            <Ellipse>
+                                <Ellipse.Style>
+                                    <Style TargetType="Ellipse" BasedOn="{StaticResource StatusDot}">
+                                        <Style.Triggers>
+                                            <!-- Games detected → blue -->
+                                            <DataTrigger Binding="{Binding GamesDetected}" Value="True">
+                                                <Setter Property="Fill" Value="{StaticResource AccentBlueBrush}"/>
+                                            </DataTrigger>
+                                            <!-- Boosting → green (highest priority — last wins) -->
+                                            <DataTrigger Binding="{Binding GameBoostActive}" Value="True">
+                                                <Setter Property="Fill" Value="{StaticResource AccentGreenBrush}"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Ellipse.Style>
+                            </Ellipse>
+                            <TextBlock Text="Game Boost" Style="{StaticResource BodyText}"
+                                       FontWeight="SemiBold" VerticalAlignment="Center"/>
+                        </StackPanel>
+                        <TextBlock Text="{Binding GameBoostStatus}" TextWrapping="Wrap">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionText}">
+                                    <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding GamesDetected}" Value="True">
+                                            <Setter Property="Foreground" Value="{StaticResource AccentBlueBrush}"/>
+                                        </DataTrigger>
+                                        <!-- Active overrides detected — last wins -->
+                                        <DataTrigger Binding="{Binding GameBoostActive}" Value="True">
+                                            <Setter Property="Foreground" Value="{StaticResource AccentGreenBrush}"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                    </StackPanel>
+                </Border>
+
+                <!-- ── Privacy pill ──────────────────────────────────── -->
+                <Border Grid.Column="4" Style="{StaticResource Card}" Padding="16,14">
+                    <StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                            <Ellipse>
+                                <Ellipse.Style>
+                                    <Style TargetType="Ellipse" BasedOn="{StaticResource StatusDot}">
+                                        <!-- Default is yellow (collecting) -->
+                                        <Setter Property="Fill" Value="{StaticResource AccentYellowBrush}"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding DataCollectionBlocked}" Value="True">
+                                                <Setter Property="Fill" Value="{StaticResource AccentGreenBrush}"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Ellipse.Style>
+                            </Ellipse>
+                            <TextBlock Text="Data Collection" Style="{StaticResource BodyText}"
+                                       FontWeight="SemiBold" VerticalAlignment="Center"/>
+                        </StackPanel>
+                        <TextBlock Text="{Binding DataCollectionStatus}" TextWrapping="Wrap">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionText}">
+                                    <Setter Property="Foreground" Value="{StaticResource AccentYellowBrush}"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding DataCollectionBlocked}" Value="True">
+                                            <Setter Property="Foreground" Value="{StaticResource AccentGreenBrush}"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                    </StackPanel>
+                </Border>
+            </Grid>
+
+            <!-- ══════════════════════════════════════════════════════════════ -->
+            <!-- AUTO-PILOT CARD                                                -->
+            <!-- ══════════════════════════════════════════════════════════════ -->
+            <Border Grid.Row="4" Style="{StaticResource Card}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="32"/>
+                        <ColumnDefinition Width="220"/>
+                    </Grid.ColumnDefinitions>
+
+                    <!-- Left: title + checklist -->
+                    <StackPanel Grid.Column="0">
+                        <!-- Heading row -->
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                            <TextBlock Text="Auto-Pilot" Style="{StaticResource HeadingMedium}" Margin="0,0,10,0"/>
+                            <Border CornerRadius="4" Padding="7,2" VerticalAlignment="Center"
+                                    Background="#1A00B4FF" BorderBrush="{StaticResource AccentBlueBrush}" BorderThickness="1">
+                                <TextBlock Text="SMART OPTIMIZE" FontSize="9" FontWeight="Bold"
+                                           Foreground="{StaticResource AccentBlueBrush}"/>
+                            </Border>
+                        </StackPanel>
+
+                        <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,0,0,16"
+                                   Foreground="{StaticResource TextSecondaryBrush}">
+                            Analyses your hardware and applies the best settings automatically.
+                            All changes are reversible from their respective tabs.
+                        </TextBlock>
+
+                        <!-- Checklist -->
+                        <ItemsControl ItemsSource="{Binding AutoPilotChecklist}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="{x:Type vm:AutoPilotItem}">
+                                    <Grid Margin="0,0,0,7">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="18"/>
+                                            <ColumnDefinition Width="165"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+
+                                        <!-- Tick / cross -->
+                                        <TextBlock Grid.Column="0" FontSize="12" FontWeight="Bold"
+                                                   VerticalAlignment="Center">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Text"       Value="✗"/>
+                                                    <Setter Property="Foreground" Value="{StaticResource AccentYellowBrush}"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsDone}" Value="True">
+                                                            <Setter Property="Text"       Value="✓"/>
+                                                            <Setter Property="Foreground" Value="{StaticResource AccentGreenBrush}"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+
+                                        <!-- Label -->
+                                        <TextBlock Grid.Column="1" Text="{Binding Label}"
+                                                   FontWeight="SemiBold">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock" BasedOn="{StaticResource CheckLabel}">
+                                                    <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsDone}" Value="True">
+                                                            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+
+                                        <!-- Detail -->
+                                        <TextBlock Grid.Column="2" Text="{Binding Detail}"
+                                                   VerticalAlignment="Center" TextWrapping="Wrap">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionText}">
+                                                    <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsDone}" Value="True">
+                                                            <Setter Property="Foreground" Value="{StaticResource AccentGreenBrush}"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+
+                    <!-- Separator -->
+                    <Border Grid.Column="1" Width="1" Background="{StaticResource BorderBrush}"
+                            HorizontalAlignment="Center" Margin="0,4,0,4"/>
+
+                    <!-- Right: button + help text -->
+                    <StackPanel Grid.Column="2" VerticalAlignment="Center">
+                        <!-- Optimize button -->
+                        <Button Command="{Binding RunAutoPilotCommand}"
+                                Padding="0,14" Margin="0,0,0,12" FontSize="14" FontWeight="SemiBold"
+                                HorizontalContentAlignment="Center">
+                            <Button.Style>
+                                <Style TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
+                                    <!-- Grayed when applied or running -->
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsAutoPilotApplied}" Value="True">
+                                            <Setter Property="Background"  Value="#1A2B45"/>
+                                            <Setter Property="BorderBrush" Value="{StaticResource AccentGreenBrush}"/>
+                                            <Setter Property="Foreground"  Value="{StaticResource AccentGreenBrush}"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
+                            <TextBlock Text="{Binding AutoPilotButtonText}" TextWrapping="Wrap"
+                                       TextAlignment="Center" FontWeight="SemiBold" FontSize="13"/>
+                        </Button>
+
+                        <!-- Loading indicator -->
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,10"
+                                    Visibility="{Binding IsAutoPilotRunning, Converter={StaticResource BoolToVis}}">
+                            <Ellipse Width="7" Height="7" Fill="{StaticResource AccentBlueBrush}"
+                                     Margin="0,0,6,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="Applying settings…" Style="{StaticResource CaptionText}"
+                                       Foreground="{StaticResource AccentBlueBrush}" VerticalAlignment="Center"/>
+                        </StackPanel>
+
+                        <!-- Pending count badge (hidden when all done) -->
+                        <Border HorizontalAlignment="Center" CornerRadius="6" Padding="10,5" Margin="0,0,0,10"
+                                Visibility="{Binding IsAutoPilotApplied, Converter={StaticResource BoolToVis}, ConverterParameter=Invert}">
+                            <Border.Style>
+                                <Style TargetType="Border">
+                                    <Setter Property="Background"   Value="#1AFFC107"/>
+                                    <Setter Property="BorderBrush"  Value="{StaticResource AccentYellowBrush}"/>
+                                    <Setter Property="BorderThickness" Value="1"/>
+                                </Style>
+                            </Border.Style>
+                            <TextBlock Foreground="{StaticResource AccentYellowBrush}"
+                                       FontSize="11" FontWeight="SemiBold" TextAlignment="Center">
+                                <Run Text="{Binding AutoPilotPendingCount, Mode=OneWay}"/>
+                                <Run Text=" setting(s) to apply"/>
+                            </TextBlock>
+                        </Border>
+
+                        <!-- All-done badge -->
+                        <Border HorizontalAlignment="Center" CornerRadius="6" Padding="10,5"
+                                Background="#1A00E5A0" BorderBrush="{StaticResource AccentGreenBrush}"
+                                BorderThickness="1"
+                                Visibility="{Binding IsAutoPilotApplied, Converter={StaticResource BoolToVis}}">
+                            <TextBlock Text="PC is fully optimized" Foreground="{StaticResource AccentGreenBrush}"
+                                       FontSize="11" FontWeight="SemiBold" TextAlignment="Center"/>
+                        </Border>
+
+                        <TextBlock Margin="0,14,0,0" TextWrapping="Wrap" TextAlignment="Center"
+                                   Style="{StaticResource CaptionText}"
+                                   Foreground="{StaticResource TextSecondaryBrush}">
+                            All changes are reversible from their individual tabs. A restart may be
+                            needed for the page file change to take effect.
+                        </TextBlock>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <!-- ══════════════════════════════════════════════════════════════ -->
+            <!-- NAPPING APPS CARD                                              -->
+            <!-- ══════════════════════════════════════════════════════════════ -->
+            <Border Grid.Row="6" Style="{StaticResource Card}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="24"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+
+                    <!-- Left: heading + app chips -->
+                    <StackPanel Grid.Column="0">
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                            <TextBlock Text="Task Sleep" Style="{StaticResource HeadingMedium}" Margin="0,0,10,0"/>
+                            <!-- Nap count badge — only when apps are napping -->
+                            <Border CornerRadius="10" Padding="8,2" VerticalAlignment="Center"
+                                    Background="#1A00B4FF" BorderBrush="{StaticResource AccentBlueBrush}"
+                                    BorderThickness="1"
+                                    Visibility="{Binding TaskSleepActive, Converter={StaticResource BoolToVis}}">
+                                <TextBlock FontSize="10" FontWeight="Bold" Foreground="{StaticResource AccentBlueBrush}">
+                                    <Run Text="{Binding NappedAppCount, Mode=OneWay}"/>
+                                    <Run Text=" napping"/>
+                                </TextBlock>
+                            </Border>
+                        </StackPanel>
+
+                        <!-- Dynamic description -->
+                        <TextBlock Margin="0,0,0,12" TextWrapping="Wrap">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionText}">
+                                    <Setter Property="Text"       Value="Enable Task Sleep from its tab to automatically manage background apps."/>
+                                    <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding TaskSleepActive}" Value="True">
+                                            <Setter Property="Text"       Value="Systema is napping these apps for you — they use less CPU, memory, and GPU in the background."/>
+                                            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+
+                        <!-- App chips — shown only when Task Sleep is active -->
+                        <ItemsControl ItemsSource="{Binding NappedApps}"
+                                      Visibility="{Binding TaskSleepActive, Converter={StaticResource BoolToVis}}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <WrapPanel/>
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Background="#161B25" BorderBrush="{StaticResource BorderBrush}"
+                                            BorderThickness="1" CornerRadius="20" Padding="10,4" Margin="0,0,7,7">
+                                        <StackPanel Orientation="Horizontal">
+                                            <Ellipse Width="6" Height="6" Fill="{StaticResource AccentBlueBrush}"
+                                                     VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                            <TextBlock Text="{Binding}" Style="{StaticResource CaptionText}"
+                                                       FontSize="11" Foreground="{StaticResource AccentBlueBrush}"/>
+                                        </StackPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <!-- Empty state: Task Sleep on but nothing napping -->
+                        <TextBlock FontStyle="Italic"
+                                   Visibility="{Binding TaskSleepActive, Converter={StaticResource BoolToVis}}">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionText}">
+                                    <Setter Property="Foreground"  Value="{StaticResource TextSecondaryBrush}"/>
+                                    <Setter Property="Visibility"  Value="Collapsed"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding NappedAppCount}" Value="0">
+                                            <Setter Property="Visibility" Value="Visible"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                            All apps are well-behaved right now — nothing needs napping.
+                        </TextBlock>
+                    </StackPanel>
+
+                    <!-- Separator -->
+                    <Border Grid.Column="1" Width="1" Background="{StaticResource BorderBrush}"
+                            HorizontalAlignment="Center" Margin="0,4,0,4"/>
+
+                    <!-- Right: quick stat column -->
+                    <StackPanel Grid.Column="2" VerticalAlignment="Center" MinWidth="130">
+                        <TextBlock Text="WHAT GETS NAPPED" FontSize="9" FontWeight="Bold" Margin="0,0,0,10"
+                                   Foreground="{StaticResource TextSecondaryBrush}" FontFamily="Segoe UI"/>
+
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                            <Ellipse Width="5" Height="5" Fill="{StaticResource AccentBlueBrush}"
+                                     VerticalAlignment="Center" Margin="0,0,7,0"/>
+                            <TextBlock Text="Minimized apps" Style="{StaticResource CaptionText}"/>
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                            <Ellipse Width="5" Height="5" Fill="{StaticResource AccentBlueBrush}"
+                                     VerticalAlignment="Center" Margin="0,0,7,0"/>
+                            <TextBlock Text="System tray apps" Style="{StaticResource CaptionText}"/>
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                            <Ellipse Width="5" Height="5" Fill="{StaticResource AccentBlueBrush}"
+                                     VerticalAlignment="Center" Margin="0,0,7,0"/>
+                            <TextBlock Text="High-CPU background tasks" Style="{StaticResource CaptionText}"/>
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal">
+                            <Ellipse Width="5" Height="5" Fill="{StaticResource AccentGreenBrush}"
+                                     VerticalAlignment="Center" Margin="0,0,7,0"/>
+                            <TextBlock Text="Games always protected" Style="{StaticResource CaptionText}"
+                                       Foreground="{StaticResource AccentGreenBrush}"/>
+                        </StackPanel>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <!-- ══════════════════════════════════════════════════════════════ -->
+            <!-- FOOTER INFO BAR                                                -->
+            <!-- ══════════════════════════════════════════════════════════════ -->
+            <Border Grid.Row="8" Background="{StaticResource BgSurfaceBrush}"
+                    CornerRadius="8" Padding="16,10">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+
+                    <!-- Status message -->
+                    <TextBlock Grid.Column="0" Text="{Binding StatusMessage}"
+                               Style="{StaticResource CaptionText}" VerticalAlignment="Center"
+                               Foreground="{StaticResource TextSecondaryBrush}"/>
+
+                    <!-- RAM usage -->
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="0,0,20,0" VerticalAlignment="Center">
+                        <TextBlock Text="RAM: " Style="{StaticResource CaptionText}"
+                                   Foreground="{StaticResource TextSecondaryBrush}"/>
+                        <TextBlock Text="{Binding RamUsageText}" Style="{StaticResource CaptionText}"
+                                   Foreground="{StaticResource AccentBlueBrush}" FontWeight="SemiBold"/>
+                    </StackPanel>
+
+                    <!-- Power plan -->
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBlock Text="Power: " Style="{StaticResource CaptionText}"
+                                   Foreground="{StaticResource TextSecondaryBrush}"/>
+                        <TextBlock Text="{Binding ActivePlan}" Style="{StaticResource CaptionText}"
+                                   Foreground="{StaticResource AccentBlueBrush}" FontWeight="SemiBold"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+        </Grid>
+    </ScrollViewer>
+</UserControl>

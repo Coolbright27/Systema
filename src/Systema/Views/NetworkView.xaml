@@ -1,0 +1,155 @@
+<UserControl x:Class="Systema.Views.NetworkView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Background="{DynamicResource BgPrimaryBrush}">
+
+    <!-- ══════════════════════════════════════════════════════════════════
+         LOCAL RESOURCE MERGE
+         Merging the theme dictionary here guarantees every StaticResource /
+         DynamicResource lookup resolves locally, even before the UserControl
+         is connected to the visual tree (fixes XamlParseException in
+         DataTemplate-hosted views).
+         ══════════════════════════════════════════════════════════════════ -->
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/Resources/Themes/Dark.xaml"/>
+            </ResourceDictionary.MergedDictionaries>
+
+            <!-- Inline styles that use BasedOn must live here (not inline)
+                 so the base style resolves from the local merged dictionary. -->
+            <Style x:Key="CfaStatusTextStyle" TargetType="TextBlock" BasedOn="{StaticResource CaptionText}">
+                <Style.Triggers>
+                    <DataTrigger Binding="{Binding ControlledFolderAccessEnabled}" Value="True">
+                        <Setter Property="Text" Value="Ransomware Protection: ON"/>
+                        <Setter Property="Foreground" Value="{DynamicResource AccentGreenBrush}"/>
+                    </DataTrigger>
+                    <DataTrigger Binding="{Binding ControlledFolderAccessEnabled}" Value="False">
+                        <Setter Property="Text" Value="Ransomware Protection: OFF"/>
+                        <Setter Property="Foreground" Value="{DynamicResource AccentRedBrush}"/>
+                    </DataTrigger>
+                </Style.Triggers>
+            </Style>
+
+            <Style x:Key="CfaToggleButtonStyle" TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
+                <Style.Triggers>
+                    <DataTrigger Binding="{Binding ControlledFolderAccessEnabled}" Value="True">
+                        <Setter Property="Content" Value="Turn Off Protection"/>
+                    </DataTrigger>
+                    <DataTrigger Binding="{Binding ControlledFolderAccessEnabled}" Value="False">
+                        <Setter Property="Content" Value="Turn On Protection"/>
+                    </DataTrigger>
+                </Style.Triggers>
+            </Style>
+        </ResourceDictionary>
+    </UserControl.Resources>
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <Grid Margin="32,28,32,28">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="20"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="20"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <!-- Header -->
+            <StackPanel Grid.Row="0">
+                <TextBlock Text="Network &amp; Security" Style="{DynamicResource HeadingLarge}"/>
+                <TextBlock Text="Switch DNS servers for faster browsing and protect your files from ransomware."
+                           Style="{DynamicResource CaptionText}" Margin="0,4,0,0"/>
+            </StackPanel>
+
+            <!-- DNS Switcher -->
+            <Border Grid.Row="2" Style="{DynamicResource Card}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="200"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0" Margin="0,0,24,0">
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                            <TextBlock Text="DNS Switcher" Style="{DynamicResource HeadingMedium}"/>
+                            <Border Background="{DynamicResource AccentYellowBrush}" CornerRadius="4"
+                                    Padding="6,2" Margin="10,0,0,0" VerticalAlignment="Center">
+                                <TextBlock Text="MODERATE" FontSize="9" FontWeight="Bold" Foreground="#0D0F14"/>
+                            </Border>
+                        </StackPanel>
+                        <TextBlock Style="{DynamicResource CaptionText}" TextWrapping="Wrap" Margin="0,0,0,8">
+                            Switch your DNS provider for faster page loads and more private browsing.
+                            Cloudflare (1.1.1.1) is fast, free, and private.
+                        </TextBlock>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                            <TextBlock Text="Current DNS: " Style="{DynamicResource CaptionText}"/>
+                            <TextBlock Text="{Binding CurrentDns}" Style="{DynamicResource CaptionText}"
+                                       Foreground="{DynamicResource AccentBlueBrush}" FontWeight="SemiBold"/>
+                        </StackPanel>
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                        <TextBlock Text="Select Profile" Style="{DynamicResource CaptionText}" Margin="0,0,0,6"/>
+                        <ComboBox ItemsSource="{Binding DnsProfiles}"
+                                  SelectedItem="{Binding SelectedProfile}"
+                                  DisplayMemberPath="Name"
+                                  Style="{DynamicResource DarkComboBox}"
+                                  Margin="0,0,0,10"/>
+                        <Button Content="Apply DNS" Style="{DynamicResource PrimaryButton}"
+                                Command="{Binding ApplyDnsCommand}"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <!-- Security Cards -->
+            <Grid Grid.Row="4">
+                <!-- Defender Hardening -->
+                <Border Style="{DynamicResource Card}">
+                    <StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                            <TextBlock Text="Ransomware Protection" Style="{DynamicResource HeadingMedium}"/>
+                            <Border Background="{DynamicResource AccentYellowBrush}" CornerRadius="4"
+                                    Padding="6,2" Margin="10,0,0,0" VerticalAlignment="Center">
+                                <TextBlock Text="MODERATE" FontSize="9" FontWeight="Bold" Foreground="#0D0F14"/>
+                            </Border>
+                        </StackPanel>
+                        <TextBlock Text="Controlled Folder Access blocks untrusted programs from changing your personal files — your best defence against ransomware. Only affects unknown programs; your normal apps work fine."
+                                   Style="{DynamicResource CaptionText}" TextWrapping="Wrap" Margin="0,0,0,12"/>
+
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
+                            <Ellipse Width="10" Height="10" VerticalAlignment="Center" Margin="0,0,8,0">
+                                <Ellipse.Style>
+                                    <Style TargetType="Ellipse">
+                                        <Setter Property="Fill" Value="{DynamicResource AccentRedBrush}"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding ControlledFolderAccessEnabled}" Value="True">
+                                                <Setter Property="Fill" Value="{DynamicResource AccentGreenBrush}"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Ellipse.Style>
+                            </Ellipse>
+                            <!-- Uses keyed style from UserControl.Resources (safe BasedOn resolution) -->
+                            <TextBlock Style="{StaticResource CfaStatusTextStyle}"/>
+                        </StackPanel>
+
+                        <!-- Uses keyed style from UserControl.Resources (safe BasedOn resolution) -->
+                        <Button HorizontalAlignment="Left"
+                                Command="{Binding ToggleControlledFolderAccessCommand}"
+                                Style="{StaticResource CfaToggleButtonStyle}"/>
+                    </StackPanel>
+                </Border>
+            </Grid>
+
+            <!-- Status -->
+            <Grid Grid.Row="5" Margin="0,16,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Text="{Binding StatusMessage}" Style="{DynamicResource CaptionText}" VerticalAlignment="Center"/>
+                <Button Grid.Column="1" Content="Refresh Status" Style="{DynamicResource GhostButton}"
+                        Command="{Binding RefreshCommand}"/>
+            </Grid>
+        </Grid>
+    </ScrollViewer>
+</UserControl>

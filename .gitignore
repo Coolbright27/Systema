@@ -1,7 +1,29 @@
-# Ignore everything
-*
-.*
+# Build output
+bin/
+obj/
+publish/
 
-# Allow only these files
-!.gitignore
-!README.md
+# VS / Rider
+.vs/
+.idea/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Logs & crash dumps
+*.log
+*.dmp
+
+# OS
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# Installer output (compiled setup .exe — built from .iss, not source)
+installer/output/
+
+# Secrets / env
+.env
+*.pfx
+*.snk

@@ -1,0 +1,144 @@
+<Window x:Class="Systema.Views.ServicePickerDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Select Services to Kill"
+        Width="620" Height="520"
+        WindowStartupLocation="CenterOwner"
+        Background="#161B25"
+        Foreground="#E2E8F0"
+        BorderBrush="#2D3748" BorderThickness="1"
+        ResizeMode="NoResize">
+
+    <Window.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/Resources/Themes/Dark.xaml"/>
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </Window.Resources>
+
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="12"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="8"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="12"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Title -->
+        <StackPanel Grid.Row="0">
+            <TextBlock Text="Add Services to Kill List" FontSize="16" FontWeight="SemiBold"
+                       Foreground="#E2E8F0" Margin="0,0,0,4"/>
+            <TextBlock Text="Select services to suspend during game sessions. Changes take effect on next boost."
+                       FontSize="12" Foreground="#A0AEC0" TextWrapping="Wrap"/>
+        </StackPanel>
+
+        <!-- Search -->
+        <TextBox Grid.Row="2" x:Name="SearchBox"
+                 Style="{StaticResource DarkTextBox}"
+                 Text="" Tag="Search services..."
+                 TextChanged="SearchBox_TextChanged"/>
+
+        <!-- Service List -->
+        <Border Grid.Row="4" Background="#0D1117" BorderBrush="#2D3748" BorderThickness="1" CornerRadius="6">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <!-- Column Headers -->
+                <Border Grid.Row="0" Background="#1A2332" Padding="12,8"
+                        BorderBrush="#2D3748" BorderThickness="0,0,0,1">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="30"/>
+                            <ColumnDefinition Width="190"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="72"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="1" Text="SERVICE" FontSize="10" FontWeight="Bold"
+                                   Foreground="#718096"/>
+                        <TextBlock Grid.Column="2" Text="DESCRIPTION" FontSize="10" FontWeight="Bold"
+                                   Foreground="#718096"/>
+                        <TextBlock Grid.Column="3" Text="STATUS" FontSize="10" FontWeight="Bold"
+                                   Foreground="#718096"/>
+                    </Grid>
+                </Border>
+
+                <!-- Items -->
+                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled">
+                    <ItemsControl x:Name="ServiceList">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Padding="12,7" BorderBrush="#2D3748" BorderThickness="0,0,0,1"
+                                        Background="Transparent">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="30"/>
+                                            <ColumnDefinition Width="190"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="72"/>
+                                        </Grid.ColumnDefinitions>
+                                        <CheckBox Grid.Column="0"
+                                                  IsChecked="{Binding IsSelected, Mode=TwoWay}"
+                                                  VerticalAlignment="Top" Margin="0,3,0,0"/>
+                                        <!-- Service name + technical ID -->
+                                        <StackPanel Grid.Column="1" Margin="0,0,8,0" VerticalAlignment="Top">
+                                            <TextBlock Text="{Binding DisplayName}" FontSize="12"
+                                                       Foreground="#E2E8F0"
+                                                       TextWrapping="Wrap"/>
+                                            <TextBlock Text="{Binding ServiceName}" FontSize="10"
+                                                       Foreground="#4A5568"/>
+                                        </StackPanel>
+                                        <!-- Description from registry -->
+                                        <TextBlock Grid.Column="2" Text="{Binding Description}" FontSize="11"
+                                                   Foreground="#718096" VerticalAlignment="Top"
+                                                   TextWrapping="Wrap" Margin="0,2,8,0"/>
+                                        <!-- Status -->
+                                        <TextBlock Grid.Column="3" Text="{Binding Status}" FontSize="11"
+                                                   VerticalAlignment="Top" Margin="0,2,0,0">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Foreground" Value="#A0AEC0"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding Status}" Value="Running">
+                                                            <Setter Property="Foreground" Value="#68D391"/>
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding Status}" Value="Stopped">
+                                                            <Setter Property="Foreground" Value="#FC8181"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+            </Grid>
+        </Border>
+
+        <!-- Buttons -->
+        <Grid Grid.Row="6">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="8"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <TextBlock x:Name="SelectionCount" Grid.Column="0"
+                       FontSize="12" Foreground="#A0AEC0" VerticalAlignment="Center"/>
+            <Button Grid.Column="1" Content="Add Selected" Style="{StaticResource PrimaryButton}"
+                    Click="AddButton_Click" Padding="16,8"/>
+            <Button Grid.Column="3" Content="Cancel" Style="{StaticResource GhostButton}"
+                    Click="CancelButton_Click" Padding="16,8"/>
+        </Grid>
+    </Grid>
+</Window>

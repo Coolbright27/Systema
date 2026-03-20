@@ -1,0 +1,1146 @@
+<UserControl x:Class="Systema.Views.TaskSleepView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis"/>
+
+        <!-- Transparent, borderless clickable button (used for the Advanced expander header) -->
+        <Style x:Key="ExpanderButton" TargetType="Button">
+            <Setter Property="Background"       Value="Transparent"/>
+            <Setter Property="BorderThickness"  Value="0"/>
+            <Setter Property="Padding"          Value="0"/>
+            <Setter Property="Cursor"           Value="Hand"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="bg" Background="Transparent" CornerRadius="4" Padding="0">
+                            <ContentPresenter HorizontalAlignment="Stretch"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="bg" Property="Background" Value="#0CFFFFFF"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Inline section label used inside the Advanced card -->
+        <Style x:Key="SectionLabel" TargetType="TextBlock">
+            <Setter Property="FontSize"   Value="10"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+            <Setter Property="Margin"     Value="0,0,0,12"/>
+        </Style>
+
+        <!-- TextBox style for threshold inputs -->
+        <Style x:Key="ThresholdInput" TargetType="TextBox"
+               BasedOn="{StaticResource {x:Type TextBox}}">
+            <Setter Property="Width"                   Value="64"/>
+            <Setter Property="TextAlignment"           Value="Center"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="Height"                  Value="32"/>
+        </Style>
+    </UserControl.Resources>
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="32,28,32,32">
+
+            <!-- ===== HEADER ===== -->
+            <Grid Margin="0,0,0,20">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Grid.Column="0">
+                    <TextBlock Text="Task Sleep" Style="{StaticResource HeadingLarge}"/>
+                    <TextBlock Text="Naps background apps that hog CPU. Foreground apps are always protected."
+                               Margin="0,6,0,0"
+                               Style="{StaticResource BodyText}"
+                               Foreground="{StaticResource TextSecondaryBrush}"
+                               TextWrapping="Wrap"/>
+                </StackPanel>
+
+                <CheckBox Grid.Column="1"
+                          IsChecked="{Binding IsEnabled, Mode=TwoWay}"
+                          Style="{StaticResource ToggleSwitch}"
+                          VerticalAlignment="Center"
+                          Margin="24,0,0,0"/>
+            </Grid>
+
+            <!-- ===== LIVE MONITOR CARD ===== -->
+            <Border Style="{StaticResource Card}" Margin="0,0,0,16">
+                <StackPanel>
+
+                    <!-- Card header: stats + Show All -->
+                    <Grid Margin="0,0,0,14">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+
+                        <WrapPanel Grid.Column="0" VerticalAlignment="Center">
+                            <TextBlock Text="LIVE MONITOR"
+                                       Style="{StaticResource SectionLabel}"
+                                       Margin="0,0,0,0"
+                                       VerticalAlignment="Center"/>
+                            <!-- System CPU pill -->
+                            <Border CornerRadius="10" Padding="8,3"
+                                    Background="#12FFFFFF"
+                                    Margin="12,0,8,0"
+                                    VerticalAlignment="Center">
+                                <TextBlock Text="{Binding SystemCpuDisplay}"
+                                           FontSize="11" FontWeight="SemiBold"
+                                           Foreground="{StaticResource TextSecondaryBrush}"/>
+                            </Border>
+                            <!-- Napping count pill -->
+                            <Border CornerRadius="10" Padding="8,3"
+                                    VerticalAlignment="Center">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Setter Property="Background" Value="#12FFFFFF"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding ThrottledCountDisplay}" Value="all awake">
+                                                <Setter Property="Background" Value="#0C3EFF3E"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                                <TextBlock Text="{Binding ThrottledCountDisplay}"
+                                           FontSize="11" FontWeight="SemiBold">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Foreground" Value="#FCD34D"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding ThrottledCountDisplay}" Value="all awake">
+                                                    <Setter Property="Foreground" Value="#6EE7B7"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </Border>
+                        </WrapPanel>
+
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Text="Show all"
+                                       Style="{StaticResource CaptionText}"
+                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                       VerticalAlignment="Center"
+                                       Margin="0,0,8,0"/>
+                            <CheckBox IsChecked="{Binding ShowAllProcesses, Mode=TwoWay}"
+                                      Style="{StaticResource ToggleSwitch}"
+                                      VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Grid>
+
+                    <!-- Process table column headers -->
+                    <Grid Margin="0,0,0,6">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="52"/>
+                            <ColumnDefinition Width="88"/>
+                            <ColumnDefinition Width="70"/>
+                            <ColumnDefinition Width="60"/>
+                            <ColumnDefinition Width="32"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="PROCESS"
+                                   Style="{StaticResource CaptionText}"
+                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                   FontWeight="SemiBold"/>
+                        <TextBlock Grid.Column="1" Text="CPU%"
+                                   Style="{StaticResource CaptionText}"
+                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                   FontWeight="SemiBold"
+                                   TextAlignment="Right"/>
+                        <TextBlock Grid.Column="2" Text="STATUS"
+                                   Style="{StaticResource CaptionText}"
+                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                   FontWeight="SemiBold"
+                                   Margin="10,0,0,0"/>
+                        <TextBlock Grid.Column="3" Text="AFFINITY"
+                                   Style="{StaticResource CaptionText}"
+                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                   FontWeight="SemiBold"
+                                   Margin="6,0,0,0"/>
+                        <TextBlock Grid.Column="4" Text="SINCE"
+                                   Style="{StaticResource CaptionText}"
+                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                   FontWeight="SemiBold"
+                                   Margin="6,0,0,0"/>
+                    </Grid>
+
+                    <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,0,0,6"/>
+
+                    <!-- Process rows -->
+                    <ScrollViewer MaxHeight="230"
+                                  VerticalScrollBarVisibility="Auto"
+                                  HorizontalScrollBarVisibility="Disabled">
+                        <ItemsControl ItemsSource="{Binding LiveProcesses}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid Margin="0,0,0,4" MinHeight="24">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="52"/>
+                                            <ColumnDefinition Width="88"/>
+                                            <ColumnDefinition Width="70"/>
+                                            <ColumnDefinition Width="60"/>
+                                            <ColumnDefinition Width="32"/>
+                                        </Grid.ColumnDefinitions>
+
+                                        <!-- Process name — bold when napping -->
+                                        <TextBlock Grid.Column="0"
+                                                   Text="{Binding Name}"
+                                                   VerticalAlignment="Center"
+                                                   TextTrimming="CharacterEllipsis">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock" BasedOn="{StaticResource BodyText}">
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsThrottled}" Value="True">
+                                                            <Setter Property="FontWeight" Value="SemiBold"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+
+                                        <!-- CPU% -->
+                                        <TextBlock Grid.Column="1"
+                                                   Text="{Binding CpuPercent, StringFormat={}{0:F1}}"
+                                                   Style="{StaticResource CaptionText}"
+                                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                                   TextAlignment="Right"
+                                                   VerticalAlignment="Center"/>
+
+                                        <!-- Status badge — Napping (amber), Active (blue), Pending (purple) -->
+                                        <Border Grid.Column="2"
+                                                CornerRadius="4" Padding="6,2"
+                                                Margin="8,0,0,0"
+                                                HorizontalAlignment="Left"
+                                                VerticalAlignment="Center">
+                                            <Border.Style>
+                                                <Style TargetType="Border">
+                                                    <Setter Property="Background" Value="Transparent"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding StatusLabel}" Value="Napping">
+                                                            <Setter Property="Background" Value="#78350F"/>
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding StatusLabel}" Value="Active">
+                                                            <Setter Property="Background" Value="#1E3A5F"/>
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding StatusLabel}" Value="Pending">
+                                                            <Setter Property="Background" Value="#2D1B5E"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Border.Style>
+                                            <TextBlock Text="{Binding StatusLabel}"
+                                                       FontSize="11" FontWeight="SemiBold">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding StatusLabel}" Value="Napping">
+                                                                <Setter Property="Foreground" Value="#FCD34D"/>
+                                                            </DataTrigger>
+                                                            <DataTrigger Binding="{Binding StatusLabel}" Value="Active">
+                                                                <Setter Property="Foreground" Value="#60A5FA"/>
+                                                            </DataTrigger>
+                                                            <DataTrigger Binding="{Binding StatusLabel}" Value="Pending">
+                                                                <Setter Property="Foreground" Value="#C084FC"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                        </Border>
+
+                                        <TextBlock Grid.Column="3"
+                                                   Text="{Binding CoreLabel}"
+                                                   Style="{StaticResource CaptionText}"
+                                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                                   Margin="6,0,0,0"
+                                                   VerticalAlignment="Center"/>
+
+                                        <TextBlock Grid.Column="4"
+                                                   Text="{Binding ThrottledFor}"
+                                                   Style="{StaticResource CaptionText}"
+                                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                                   Margin="6,0,0,0"
+                                                   VerticalAlignment="Center"/>
+
+                                        <!-- ⋯ action menu — only shown when napping -->
+                                        <Button Grid.Column="5"
+                                                Content="···"
+                                                FontSize="14"
+                                                Background="Transparent"
+                                                BorderThickness="0"
+                                                Foreground="{StaticResource TextSecondaryBrush}"
+                                                Padding="0" Margin="4,0,0,0"
+                                                Cursor="Hand"
+                                                VerticalAlignment="Center"
+                                                HorizontalAlignment="Center"
+                                                ToolTip="Options for this process"
+                                                Click="ProcessMenuButton_Click">
+                                            <Button.Style>
+                                                <Style TargetType="Button">
+                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsThrottled}" Value="True">
+                                                            <Setter Property="Visibility" Value="Visible"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Button.Style>
+                                            <Button.Tag>0</Button.Tag>
+                                            <Button.ContextMenu>
+                                                <ContextMenu>
+                                                    <MenuItem Header="Stop Napping"
+                                                              Command="{Binding DataContext.WakeProcessCommand,
+                                                                  RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                              CommandParameter="{Binding}"/>
+                                                    <Separator/>
+                                                    <MenuItem Header="Whitelist — never nap this app"
+                                                              Command="{Binding DataContext.WhitelistProcessCommand,
+                                                                  RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                              CommandParameter="{Binding}"/>
+                                                </ContextMenu>
+                                            </Button.ContextMenu>
+                                        </Button>
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+
+                    <!-- Empty state: Task Sleep disabled -->
+                    <TextBlock Text="Turn on Task Sleep above to start monitoring.">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionText}">
+                                <Setter Property="Visibility" Value="Collapsed"/>
+                                <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+                                <Setter Property="Margin" Value="0,6,0,0"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsEnabled}" Value="False">
+                                        <Setter Property="Visibility" Value="Visible"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+
+                    <!-- Empty state: enabled but nothing napping -->
+                    <TextBlock Text="No apps napping right now.">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionText}">
+                                <Setter Property="Visibility" Value="Collapsed"/>
+                                <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+                                <Setter Property="Margin" Value="0,6,0,0"/>
+                                <Style.Triggers>
+                                    <MultiDataTrigger>
+                                        <MultiDataTrigger.Conditions>
+                                            <Condition Binding="{Binding IsEnabled}" Value="True"/>
+                                            <Condition Binding="{Binding LiveProcesses.Count}" Value="0"/>
+                                        </MultiDataTrigger.Conditions>
+                                        <MultiDataTrigger.Setters>
+                                            <Setter Property="Visibility" Value="Visible"/>
+                                        </MultiDataTrigger.Setters>
+                                    </MultiDataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+
+                    <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,14,0,12"/>
+
+                    <!-- Recent Activity -->
+                    <TextBlock Text="RECENT ACTIVITY"
+                               Style="{StaticResource SectionLabel}"
+                               Margin="0,0,0,10"/>
+
+                    <ScrollViewer MaxHeight="160"
+                                  VerticalScrollBarVisibility="Auto"
+                                  HorizontalScrollBarVisibility="Disabled">
+                        <ItemsControl ItemsSource="{Binding RecentEvents}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <WrapPanel Margin="0,0,0,4" VerticalAlignment="Center">
+
+                                        <!-- Timestamp -->
+                                        <TextBlock Text="{Binding Timestamp, StringFormat={}{0:HH:mm:ss}}"
+                                                   Style="{StaticResource CaptionText}"
+                                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                                   VerticalAlignment="Center"
+                                                   Width="56"
+                                                   Margin="0,0,8,0"/>
+
+                                        <!-- Action badge -->
+                                        <Border CornerRadius="4" Padding="6,2"
+                                                Margin="0,0,8,0"
+                                                VerticalAlignment="Center">
+                                            <Border.Style>
+                                                <Style TargetType="Border">
+                                                    <Setter Property="Background" Value="#1F2937"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding Action}" Value="Napping">
+                                                            <Setter Property="Background" Value="#78350F"/>
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding Action}" Value="Woke up">
+                                                            <Setter Property="Background" Value="#064E3B"/>
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding Action}" Value="Re-enforced">
+                                                            <Setter Property="Background" Value="#431407"/>
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding Action}" Value="Error">
+                                                            <Setter Property="Background" Value="#7F1D1D"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Border.Style>
+                                            <TextBlock Text="{Binding Action}"
+                                                       FontSize="11" FontWeight="SemiBold">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding Action}" Value="Napping">
+                                                                <Setter Property="Foreground" Value="#FCD34D"/>
+                                                            </DataTrigger>
+                                                            <DataTrigger Binding="{Binding Action}" Value="Woke up">
+                                                                <Setter Property="Foreground" Value="#6EE7B7"/>
+                                                            </DataTrigger>
+                                                            <DataTrigger Binding="{Binding Action}" Value="Re-enforced">
+                                                                <Setter Property="Foreground" Value="#FDBA74"/>
+                                                            </DataTrigger>
+                                                            <DataTrigger Binding="{Binding Action}" Value="Error">
+                                                                <Setter Property="Foreground" Value="#FCA5A5"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                        </Border>
+
+                                        <!-- Process name -->
+                                        <TextBlock Text="{Binding ProcessName}"
+                                                   Style="{StaticResource CaptionText}"
+                                                   FontWeight="SemiBold"
+                                                   VerticalAlignment="Center"
+                                                   Margin="0,0,6,0"/>
+
+                                        <!-- Detail (hidden if empty) -->
+                                        <TextBlock Text="{Binding Detail}"
+                                                   VerticalAlignment="Center">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionText}">
+                                                    <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding Detail}" Value="">
+                                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+
+                                    </WrapPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+
+                    <!-- Empty state: no events yet -->
+                    <TextBlock Text="No activity yet.">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionText}">
+                                <Setter Property="Visibility" Value="Collapsed"/>
+                                <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding RecentEvents.Count}" Value="0">
+                                        <Setter Property="Visibility" Value="Visible"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+
+                    <!-- Status message -->
+                    <TextBlock Text="{Binding StatusMessage}"
+                               Style="{StaticResource CaptionText}"
+                               Foreground="{StaticResource TextSecondaryBrush}"
+                               Margin="0,10,0,0"/>
+
+                </StackPanel>
+            </Border>
+
+            <!-- ===== SLEEP BEHAVIOR CARD ===== -->
+            <Border Style="{StaticResource Card}" Margin="0,0,0,16">
+                <StackPanel>
+                    <TextBlock Text="SLEEP BEHAVIOR"
+                               Style="{StaticResource SectionLabel}"
+                               Margin="0,0,0,16"/>
+
+                    <!-- Stay asleep until opened (Persistent Nap) -->
+                    <Grid Margin="0,0,0,16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" Margin="0,0,24,0">
+                            <TextBlock Text="Stay asleep until opened"
+                                       Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
+                            <TextBlock Text="Keeps apps napped until you switch to them — like macOS App Nap. Stops Firefox and similar apps from bouncing in and out of sleep."
+                                       Style="{StaticResource CaptionText}"
+                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                       TextWrapping="Wrap" Margin="0,3,0,0"/>
+                        </StackPanel>
+                        <CheckBox Grid.Column="1"
+                                  IsChecked="{Binding PersistentNapEnabled, Mode=TwoWay}"
+                                  Style="{StaticResource ToggleSwitch}"
+                                  VerticalAlignment="Top"/>
+                    </Grid>
+
+                    <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,0,0,16"/>
+
+                    <!-- Minimize Nap -->
+                    <Grid Margin="0,0,0,16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" Margin="0,0,24,0">
+                            <TextBlock Text="Sleep minimized apps"
+                                       Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
+                            <TextBlock Text="Automatically naps any app the moment you minimize it — unless it is playing audio, on a call, or recording. Apps get a brief idle wake every minute to stay in sync."
+                                       Style="{StaticResource CaptionText}"
+                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                       TextWrapping="Wrap" Margin="0,3,0,0"/>
+                        </StackPanel>
+                        <CheckBox Grid.Column="1"
+                                  IsChecked="{Binding MinimizeNapEnabled, Mode=TwoWay}"
+                                  Style="{StaticResource ToggleSwitch}"
+                                  VerticalAlignment="Top"/>
+                    </Grid>
+
+                    <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,0,0,16"/>
+
+                    <!-- Tray Nap -->
+                    <Grid Margin="0,0,0,16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" Margin="0,0,24,0">
+                            <TextBlock Text="Sleep system tray apps"
+                                       Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
+                            <TextBlock Text="Naps apps that live only in the system tray and have no open windows — cloud sync agents, launchers, background utilities. They get a rare brief wake every 5 minutes. Apps with active audio are never affected."
+                                       Style="{StaticResource CaptionText}"
+                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                       TextWrapping="Wrap" Margin="0,3,0,0"/>
+                        </StackPanel>
+                        <CheckBox Grid.Column="1"
+                                  IsChecked="{Binding TrayNapEnabled, Mode=TwoWay}"
+                                  Style="{StaticResource ToggleSwitch}"
+                                  VerticalAlignment="Top"/>
+                    </Grid>
+
+                    <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,0,0,16"/>
+
+                    <!-- Protect active window -->
+                    <Grid Margin="0,0,0,16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" Margin="0,0,24,0">
+                            <TextBlock Text="Protect active window"
+                                       Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
+                            <TextBlock Text="Never throttle the app you are currently using."
+                                       Style="{StaticResource CaptionText}"
+                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                       TextWrapping="Wrap" Margin="0,3,0,0"/>
+                        </StackPanel>
+                        <CheckBox Grid.Column="1"
+                                  IsChecked="{Binding IgnoreForeground, Mode=TwoWay}"
+                                  Style="{StaticResource ToggleSwitch}"
+                                  VerticalAlignment="Top"/>
+                    </Grid>
+
+                    <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,0,0,16"/>
+
+                    <!-- Skip system services -->
+                    <Grid Margin="0,0,0,16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" Margin="0,0,24,0">
+                            <TextBlock Text="Skip system services"
+                                       Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
+                            <TextBlock Text="Excludes Windows background services, antivirus, and system processes."
+                                       Style="{StaticResource CaptionText}"
+                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                       TextWrapping="Wrap" Margin="0,3,0,0"/>
+                        </StackPanel>
+                        <CheckBox Grid.Column="1"
+                                  IsChecked="{Binding ExcludeSystemServices, Mode=TwoWay}"
+                                  Style="{StaticResource ToggleSwitch}"
+                                  VerticalAlignment="Top"/>
+                    </Grid>
+
+                    <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,0,0,16"/>
+
+                    <!-- Windows Efficiency Mode -->
+                    <Grid Margin="0,0,0,16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" Margin="0,0,24,0">
+                            <TextBlock Text="Windows Efficiency Mode"
+                                       Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
+                            <TextBlock Text="Reduces clock speed and scheduler priority using EcoQoS. Works on any Intel or AMD CPU."
+                                       Style="{StaticResource CaptionText}"
+                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                       TextWrapping="Wrap" Margin="0,3,0,0"/>
+                        </StackPanel>
+                        <CheckBox Grid.Column="1"
+                                  IsChecked="{Binding EnableEfficiencyMode, Mode=TwoWay}"
+                                  Style="{StaticResource ToggleSwitch}"
+                                  VerticalAlignment="Top"/>
+                    </Grid>
+
+                    <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,0,0,16"/>
+
+                    <!-- Lower CPU priority -->
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" Margin="0,0,24,0">
+                            <TextBlock Text="Lower CPU priority"
+                                       Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
+                            <TextBlock Text="Sets napped apps to Idle scheduling priority so they only run when the CPU is otherwise free."
+                                       Style="{StaticResource CaptionText}"
+                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                       TextWrapping="Wrap" Margin="0,3,0,0"/>
+                        </StackPanel>
+                        <CheckBox Grid.Column="1"
+                                  IsChecked="{Binding LowerCpuPriority, Mode=TwoWay}"
+                                  Style="{StaticResource ToggleSwitch}"
+                                  VerticalAlignment="Top"/>
+                    </Grid>
+
+                </StackPanel>
+            </Border>
+
+            <!-- ===== ADVANCED SLEEP SETTINGS (collapsible) ===== -->
+            <Border Style="{StaticResource Card}" Margin="0,0,0,16">
+                <StackPanel>
+
+                    <!-- Clickable header -->
+                    <Button Command="{Binding ToggleAdvancedCommand}"
+                            Style="{StaticResource ExpanderButton}">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="Advanced Sleep Settings"
+                                           Style="{StaticResource HeadingMedium}"/>
+                                <TextBlock Text="CPU triggers, GPU/I/O throttle methods, and per-app rules"
+                                           Style="{StaticResource CaptionText}"
+                                           Foreground="{StaticResource TextSecondaryBrush}"
+                                           Margin="0,2,0,0"/>
+                            </StackPanel>
+                            <TextBlock Grid.Column="1"
+                                       FontSize="14"
+                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                       VerticalAlignment="Center"
+                                       Margin="16,0,0,0">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Text" Value="&#x25BC;"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsAdvancedExpanded}" Value="True">
+                                                <Setter Property="Text" Value="&#x25B2;"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </Grid>
+                    </Button>
+
+                    <!-- Collapsible content -->
+                    <StackPanel Visibility="{Binding IsAdvancedExpanded, Converter={StaticResource BoolToVis}}">
+
+                        <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,16,0,20"/>
+
+                        <!-- ── CPU TRIGGERS ── -->
+                        <TextBlock Text="CPU TRIGGERS" Style="{StaticResource SectionLabel}"/>
+
+                        <!-- System CPU Trigger -->
+                        <Grid Margin="0,0,0,16">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="64"/>
+                                <ColumnDefinition Width="28"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" Margin="0,0,16,0">
+                                <TextBlock Text="System CPU trigger"
+                                           Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
+                                <TextBlock Text="Task Sleep only activates when total system CPU exceeds this."
+                                           Style="{StaticResource CaptionText}"
+                                           Foreground="{StaticResource TextSecondaryBrush}"
+                                           TextWrapping="Wrap" Margin="0,3,0,0"/>
+                            </StackPanel>
+                            <TextBox Grid.Column="1"
+                                     Text="{Binding SystemCpuTriggerPercent, UpdateSourceTrigger=LostFocus}"
+                                     Style="{StaticResource ThresholdInput}"/>
+                            <TextBlock Grid.Column="2" Text="%" VerticalAlignment="Center"
+                                       Margin="6,0,0,0" Style="{StaticResource BodyText}"
+                                       Foreground="{StaticResource TextSecondaryBrush}"/>
+                        </Grid>
+
+                        <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,0,0,16"/>
+
+                        <!-- Per-Process Start -->
+                        <Grid Margin="0,0,0,16">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="64"/>
+                                <ColumnDefinition Width="28"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" Margin="0,0,16,0">
+                                <TextBlock Text="Process nap threshold"
+                                           Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
+                                <TextBlock Text="A process must exceed this CPU usage before Task Sleep considers napping it."
+                                           Style="{StaticResource CaptionText}"
+                                           Foreground="{StaticResource TextSecondaryBrush}"
+                                           TextWrapping="Wrap" Margin="0,3,0,0"/>
+                            </StackPanel>
+                            <TextBox Grid.Column="1"
+                                     Text="{Binding ProcessCpuStartPercent, UpdateSourceTrigger=LostFocus}"
+                                     Style="{StaticResource ThresholdInput}"/>
+                            <TextBlock Grid.Column="2" Text="%" VerticalAlignment="Center"
+                                       Margin="6,0,0,0" Style="{StaticResource BodyText}"
+                                       Foreground="{StaticResource TextSecondaryBrush}"/>
+                        </Grid>
+
+                        <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,0,0,16"/>
+
+                        <!-- Per-Process Stop (only relevant when Persistent Nap is off) -->
+                        <Grid Margin="0,0,0,16">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="64"/>
+                                <ColumnDefinition Width="28"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" Margin="0,0,16,0">
+                                <TextBlock Text="Wake threshold (classic mode)"
+                                           Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
+                                <TextBlock Text="When Persistent Nap is off, an app wakes when its CPU drops below this."
+                                           Style="{StaticResource CaptionText}"
+                                           Foreground="{StaticResource TextSecondaryBrush}"
+                                           TextWrapping="Wrap" Margin="0,3,0,0"/>
+                            </StackPanel>
+                            <TextBox Grid.Column="1"
+                                     Text="{Binding ProcessCpuStopPercent, UpdateSourceTrigger=LostFocus}"
+                                     Style="{StaticResource ThresholdInput}"/>
+                            <TextBlock Grid.Column="2" Text="%" VerticalAlignment="Center"
+                                       Margin="6,0,0,0" Style="{StaticResource BodyText}"
+                                       Foreground="{StaticResource TextSecondaryBrush}"/>
+                        </Grid>
+
+                        <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,0,0,16"/>
+
+                        <!-- Time Over Quota -->
+                        <Grid Margin="0,0,0,16">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="64"/>
+                                <ColumnDefinition Width="28"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" Margin="0,0,16,0">
+                                <TextBlock Text="Reaction delay"
+                                           Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
+                                <TextBlock Text="A process must stay above the threshold for this long before being napped. Prevents reacting to brief spikes."
+                                           Style="{StaticResource CaptionText}"
+                                           Foreground="{StaticResource TextSecondaryBrush}"
+                                           TextWrapping="Wrap" Margin="0,3,0,0"/>
+                            </StackPanel>
+                            <TextBox Grid.Column="1"
+                                     Text="{Binding TimeOverQuotaMs, UpdateSourceTrigger=LostFocus}"
+                                     Style="{StaticResource ThresholdInput}"/>
+                            <TextBlock Grid.Column="2" Text="ms" VerticalAlignment="Center"
+                                       Margin="6,0,0,0" Style="{StaticResource BodyText}"
+                                       Foreground="{StaticResource TextSecondaryBrush}"/>
+                        </Grid>
+
+                        <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,0,0,16"/>
+
+                        <!-- Min Duration -->
+                        <Grid Margin="0,0,0,16">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="64"/>
+                                <ColumnDefinition Width="28"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" Margin="0,0,16,0">
+                                <TextBlock Text="Minimum nap duration"
+                                           Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
+                                <TextBlock Text="Once napped, keep the app napped for at least this long even if its CPU drops quickly."
+                                           Style="{StaticResource CaptionText}"
+                                           Foreground="{StaticResource TextSecondaryBrush}"
+                                           TextWrapping="Wrap" Margin="0,3,0,0"/>
+                            </StackPanel>
+                            <TextBox Grid.Column="1"
+                                     Text="{Binding MinAdjustmentDurationMs, UpdateSourceTrigger=LostFocus}"
+                                     Style="{StaticResource ThresholdInput}"/>
+                            <TextBlock Grid.Column="2" Text="ms" VerticalAlignment="Center"
+                                       Margin="6,0,0,0" Style="{StaticResource BodyText}"
+                                       Foreground="{StaticResource TextSecondaryBrush}"/>
+                        </Grid>
+
+                        <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,0,0,16"/>
+
+                        <!-- Max Duration -->
+                        <Grid Margin="0,0,0,24">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="64"/>
+                                <ColumnDefinition Width="28"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" Margin="0,0,16,0">
+                                <TextBlock Text="Max nap duration (classic mode safety net)"
+                                           Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
+                                <TextBlock Text="Force-wake any app after this time. Only applies when Persistent Nap is off."
+                                           Style="{StaticResource CaptionText}"
+                                           Foreground="{StaticResource TextSecondaryBrush}"
+                                           TextWrapping="Wrap" Margin="0,3,0,0"/>
+                            </StackPanel>
+                            <TextBox Grid.Column="1"
+                                     Text="{Binding MaxAdjustmentDurationMs, UpdateSourceTrigger=LostFocus}"
+                                     Style="{StaticResource ThresholdInput}"/>
+                            <TextBlock Grid.Column="2" Text="ms" VerticalAlignment="Center"
+                                       Margin="6,0,0,0" Style="{StaticResource BodyText}"
+                                       Foreground="{StaticResource TextSecondaryBrush}"/>
+                        </Grid>
+
+                        <!-- ── THROTTLE METHODS ── -->
+                        <TextBlock Text="THROTTLE METHODS" Style="{StaticResource SectionLabel}"/>
+
+                        <!-- Lower GPU Priority -->
+                        <Grid Margin="0,0,0,16">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" Margin="0,0,24,0">
+                                <TextBlock Text="Lower GPU priority"
+                                           Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
+                                <TextBlock Text="Tells the graphics driver to give napped apps the lowest GPU scheduling slot."
+                                           Style="{StaticResource CaptionText}"
+                                           Foreground="{StaticResource TextSecondaryBrush}"
+                                           TextWrapping="Wrap" Margin="0,3,0,0"/>
+                            </StackPanel>
+                            <CheckBox Grid.Column="1"
+                                      IsChecked="{Binding LowerGpuPriority, Mode=TwoWay}"
+                                      Style="{StaticResource ToggleSwitch}"
+                                      VerticalAlignment="Top"/>
+                        </Grid>
+
+                        <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,0,0,16"/>
+
+                        <!-- Lower I/O Priority -->
+                        <Grid Margin="0,0,0,16">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" Margin="0,0,24,0">
+                                <TextBlock Text="Lower I/O priority"
+                                           Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
+                                <TextBlock Text="Reduces disk and file access priority so napped apps don't slow down your active work."
+                                           Style="{StaticResource CaptionText}"
+                                           Foreground="{StaticResource TextSecondaryBrush}"
+                                           TextWrapping="Wrap" Margin="0,3,0,0"/>
+                            </StackPanel>
+                            <CheckBox Grid.Column="1"
+                                      IsChecked="{Binding LowerIoPriority, Mode=TwoWay}"
+                                      Style="{StaticResource ToggleSwitch}"
+                                      VerticalAlignment="Top"/>
+                        </Grid>
+
+                        <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,0,0,16"/>
+
+                        <!-- Detect E-Cores -->
+                        <Grid Margin="0,0,0,16">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" Margin="0,0,24,0">
+                                <TextBlock Text="Detect efficiency cores (E-cores)"
+                                           Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
+                                <TextBlock Text="Auto-detects E-cores on Intel 12th gen+ / AMD hybrid CPUs. Required for the option below."
+                                           Style="{StaticResource CaptionText}"
+                                           Foreground="{StaticResource TextSecondaryBrush}"
+                                           TextWrapping="Wrap" Margin="0,3,0,0"/>
+                            </StackPanel>
+                            <CheckBox Grid.Column="1"
+                                      IsChecked="{Binding DetectECores, Mode=TwoWay}"
+                                      Style="{StaticResource ToggleSwitch}"
+                                      VerticalAlignment="Top"/>
+                        </Grid>
+
+                        <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,0,0,16"/>
+
+                        <!-- Move to E-Cores -->
+                        <Grid Margin="0,0,0,16">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" Margin="0,0,24,0">
+                                <TextBlock Text="Move napped apps to E-cores"
+                                           Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
+                                <TextBlock Text="Pins napped apps to efficiency cores, freeing P-cores for your active work."
+                                           Style="{StaticResource CaptionText}"
+                                           Foreground="{StaticResource TextSecondaryBrush}"
+                                           TextWrapping="Wrap" Margin="0,3,0,0"/>
+                            </StackPanel>
+                            <CheckBox Grid.Column="1"
+                                      IsChecked="{Binding MoveToECores, Mode=TwoWay}"
+                                      Style="{StaticResource ToggleSwitch}"
+                                      VerticalAlignment="Top"/>
+                        </Grid>
+
+                        <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,0,0,16"/>
+
+                        <!-- Act on foreground children -->
+                        <Grid Margin="0,0,0,16">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" Margin="0,0,24,0">
+                                <TextBlock Text="Throttle active window's background tasks"
+                                           Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
+                                <TextBlock Text="Off by default: child processes of your active window (e.g. browser GPU/renderer) are protected too."
+                                           Style="{StaticResource CaptionText}"
+                                           Foreground="{StaticResource TextSecondaryBrush}"
+                                           TextWrapping="Wrap" Margin="0,3,0,0"/>
+                            </StackPanel>
+                            <CheckBox Grid.Column="1"
+                                      IsChecked="{Binding ActOnForegroundChildren, Mode=TwoWay}"
+                                      Style="{StaticResource ToggleSwitch}"
+                                      VerticalAlignment="Top"/>
+                        </Grid>
+
+                        <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,0,0,16"/>
+
+                        <!-- Lower memory priority -->
+                        <Grid Margin="0,0,0,16">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" Margin="0,0,24,0">
+                                <TextBlock Text="Lower memory priority"
+                                           Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
+                                <TextBlock Text="Marks napped processes so Windows pages out their RAM first, reclaiming physical memory for foreground apps."
+                                           Style="{StaticResource CaptionText}"
+                                           Foreground="{StaticResource TextSecondaryBrush}"
+                                           TextWrapping="Wrap" Margin="0,3,0,0"/>
+                            </StackPanel>
+                            <CheckBox Grid.Column="1"
+                                      IsChecked="{Binding LowerMemoryPriority, Mode=TwoWay}"
+                                      Style="{StaticResource ToggleSwitch}"
+                                      VerticalAlignment="Top"/>
+                        </Grid>
+
+                        <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,0,0,16"/>
+
+                        <!-- Trim working set -->
+                        <Grid Margin="0,0,0,16">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" Margin="0,0,24,0">
+                                <TextBlock Text="Trim working set on nap"
+                                           Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
+                                <TextBlock Text="Immediately returns a napped app's RAM pages to the OS. Most noticeable with memory-heavy background apps like browsers or Electron apps."
+                                           Style="{StaticResource CaptionText}"
+                                           Foreground="{StaticResource TextSecondaryBrush}"
+                                           TextWrapping="Wrap" Margin="0,3,0,0"/>
+                            </StackPanel>
+                            <CheckBox Grid.Column="1"
+                                      IsChecked="{Binding TrimWorkingSet, Mode=TwoWay}"
+                                      Style="{StaticResource ToggleSwitch}"
+                                      VerticalAlignment="Top"/>
+                        </Grid>
+
+                        <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,0,0,16"/>
+
+                        <!-- Adaptive tick -->
+                        <Grid Margin="0,0,0,16">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" Margin="0,0,24,0">
+                                <TextBlock Text="Adaptive monitor tick"
+                                           Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
+                                <TextBlock Text="Slows the monitor to 2.5 s when the system is idle and nothing is napped, reducing Task Sleep's own CPU overhead."
+                                           Style="{StaticResource CaptionText}"
+                                           Foreground="{StaticResource TextSecondaryBrush}"
+                                           TextWrapping="Wrap" Margin="0,3,0,0"/>
+                            </StackPanel>
+                            <CheckBox Grid.Column="1"
+                                      IsChecked="{Binding AdaptiveTick, Mode=TwoWay}"
+                                      Style="{StaticResource ToggleSwitch}"
+                                      VerticalAlignment="Top"/>
+                        </Grid>
+
+                        <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,0,0,16"/>
+
+                        <!-- Enforce Settings -->
+                        <Grid Margin="0,0,0,24">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" Margin="0,0,24,0">
+                                <TextBlock Text="Re-enforce settings every tick"
+                                           Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
+                                <TextBlock Text="Re-applies nap settings every second even if an app tries to raise its own priority back."
+                                           Style="{StaticResource CaptionText}"
+                                           Foreground="{StaticResource TextSecondaryBrush}"
+                                           TextWrapping="Wrap" Margin="0,3,0,0"/>
+                            </StackPanel>
+                            <CheckBox Grid.Column="1"
+                                      IsChecked="{Binding EnforceSettings, Mode=TwoWay}"
+                                      Style="{StaticResource ToggleSwitch}"
+                                      VerticalAlignment="Top"/>
+                        </Grid>
+
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- ===== WHITELIST CARD ===== -->
+            <Border Style="{StaticResource Card}" Margin="0,0,0,16">
+                <StackPanel>
+                    <TextBlock Text="NEVER NAP LIST" Style="{StaticResource SectionLabel}" Margin="0,0,0,4"/>
+                    <TextBlock Text="Apps on this list are permanently protected — Task Sleep will never touch them. You can also add any napping process to this list using the ··· button in the live monitor above."
+                               Style="{StaticResource CaptionText}"
+                               Foreground="{StaticResource TextSecondaryBrush}"
+                               TextWrapping="Wrap" Margin="0,0,0,16"/>
+
+                    <!-- Whitelist items -->
+                    <ItemsControl ItemsSource="{Binding Whitelist}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border BorderBrush="{StaticResource BorderBrush}"
+                                        BorderThickness="0,0,0,1"
+                                        Padding="0,6">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                                            <Border Background="#0C3EFF3E" CornerRadius="4"
+                                                    Padding="6,2" Margin="0,0,8,0" VerticalAlignment="Center">
+                                                <TextBlock Text="PROTECTED" FontSize="9" FontWeight="Bold"
+                                                           Foreground="#6EE7B7"/>
+                                            </Border>
+                                            <TextBlock Text="{Binding}"
+                                                       Style="{StaticResource BodyText}"
+                                                       FontFamily="Cascadia Mono, Consolas, monospace"
+                                                       FontSize="12"
+                                                       VerticalAlignment="Center"/>
+                                        </StackPanel>
+                                        <Button Grid.Column="1"
+                                                Content="Remove"
+                                                FontSize="11"
+                                                Background="Transparent"
+                                                BorderThickness="0"
+                                                Foreground="{StaticResource TextSecondaryBrush}"
+                                                Padding="8,4"
+                                                Cursor="Hand"
+                                                VerticalAlignment="Center"
+                                                Command="{Binding DataContext.RemoveFromWhitelistCommand,
+                                                    RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                CommandParameter="{Binding}"/>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <!-- Empty state -->
+                    <TextBlock Text="No apps whitelisted yet.">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionText}">
+                                <Setter Property="Visibility" Value="Collapsed"/>
+                                <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+                                <Setter Property="Margin" Value="0,0,0,8"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding Whitelist.Count}" Value="0">
+                                        <Setter Property="Visibility" Value="Visible"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+
+                    <!-- Add to whitelist form -->
+                    <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,12,0,12"/>
+                    <WrapPanel>
+                        <TextBox Width="180"
+                                 Text="{Binding WhitelistNewApp, UpdateSourceTrigger=PropertyChanged}"
+                                 Style="{StaticResource DarkTextBox}"
+                                 Height="32"
+                                 Margin="0,0,8,0"/>
+
+                        <ComboBox Width="180"
+                                  Height="32"
+                                  ItemsSource="{Binding RunningProcessNames}"
+                                  SelectedItem="{Binding SelectedRunningProcess, Mode=OneWayToSource}"
+                                  Margin="0,0,8,0"/>
+
+                        <Button Content="↻"
+                                Width="32" Height="32"
+                                FontSize="14"
+                                ToolTip="Refresh running processes list"
+                                Command="{Binding RefreshRunningCommand}"
+                                Style="{StaticResource GhostButton}"
+                                Margin="0,0,8,0"/>
+
+                        <Button Content="Add to Whitelist"
+                                Height="32"
+                                Padding="14,0"
+                                Style="{StaticResource PrimaryButton}"
+                                Command="{Binding AddToWhitelistCommand}"/>
+                    </WrapPanel>
+                    <TextBlock Text="Type a process name (without .exe) or pick from the running list, then click Add."
+                               Style="{StaticResource CaptionText}"
+                               Foreground="{StaticResource TextSecondaryBrush}"
+                               Margin="0,6,0,0"/>
+                </StackPanel>
+            </Border>
+
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

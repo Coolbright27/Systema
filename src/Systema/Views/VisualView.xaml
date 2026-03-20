@@ -1,0 +1,588 @@
+<UserControl x:Class="Systema.Views.VisualView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:conv="clr-namespace:Systema.Core.Converters"
+             Background="{StaticResource BgPrimaryBrush}">
+
+    <UserControl.Resources>
+        <conv:BoolToVisibilityConverter x:Key="BoolToVis"/>
+
+        <!-- Transparent, borderless clickable button used for section expanders -->
+        <Style x:Key="ExpanderButton" TargetType="Button">
+            <Setter Property="Background"                 Value="Transparent"/>
+            <Setter Property="BorderThickness"            Value="0"/>
+            <Setter Property="Padding"                    Value="0"/>
+            <Setter Property="Cursor"                     Value="Hand"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="bg" Background="Transparent" CornerRadius="4" Padding="0">
+                            <ContentPresenter HorizontalAlignment="Stretch"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="bg" Property="Background" Value="#0CFFFFFF"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <Grid Margin="32,28,32,28">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>  <!-- 0: Header -->
+                <RowDefinition Height="20"/>    <!-- 1: spacer -->
+                <RowDefinition Height="Auto"/>  <!-- 2: Power Plan card -->
+                <RowDefinition Height="Auto"/>  <!-- 3: Battery card (collapses if no battery) -->
+                <RowDefinition Height="20"/>    <!-- 4: spacer -->
+                <RowDefinition Height="Auto"/>  <!-- 5: Animation Presets card -->
+                <RowDefinition Height="20"/>    <!-- 6: spacer -->
+                <RowDefinition Height="Auto"/>  <!-- 7: Individual Controls card -->
+                <RowDefinition Height="Auto"/>  <!-- 8: Status bar -->
+            </Grid.RowDefinitions>
+
+            <!-- Header -->
+            <StackPanel Grid.Row="0">
+                <TextBlock Text="Visual &amp; Power" Style="{StaticResource HeadingLarge}"/>
+                <TextBlock Text="Adjust visual animations and your PC's power settings."
+                           Style="{StaticResource CaptionText}" Margin="0,4,0,0"/>
+            </StackPanel>
+
+            <!-- ══════════════════════════════════════════════════════ Power Plan Card -->
+            <Border Grid.Row="2" Style="{StaticResource Card}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="200"/>
+                    </Grid.ColumnDefinitions>
+
+                    <!-- Left: description + active plan -->
+                    <StackPanel Grid.Column="0" Margin="0,0,24,0">
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                            <TextBlock Text="Power Plan" Style="{StaticResource HeadingMedium}"/>
+                            <Border Background="{StaticResource AccentYellowBrush}" CornerRadius="4"
+                                    Padding="6,2" Margin="10,0,0,0" VerticalAlignment="Center">
+                                <TextBlock Text="MODERATE" FontSize="9" FontWeight="Bold" Foreground="#0D0F14"/>
+                            </Border>
+                        </StackPanel>
+                        <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,0,0,12">
+                            Switches to a high-performance power plan so your CPU runs at full speed and doesn't throttle itself down.
+                            Best for gaming and heavy workloads. Click "Restore Balanced" to go back to the default plan.
+                        </TextBlock>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="Active Plan: " Style="{StaticResource CaptionText}"/>
+                            <TextBlock Text="{Binding ActivePowerPlan}" Style="{StaticResource CaptionText}"
+                                       Foreground="{StaticResource AccentBlueBrush}" FontWeight="SemiBold"/>
+                        </StackPanel>
+                        <!-- Battery Plan badge — shown when a battery optimization was applied -->
+                        <StackPanel Orientation="Horizontal" Margin="0,4,0,0"
+                                    Visibility="{Binding IsBatteryPlanActive, Converter={StaticResource BoolToVis}}">
+                            <Border Background="{StaticResource AccentGreenBrush}" CornerRadius="3"
+                                    Padding="5,1" Margin="0,0,6,0" VerticalAlignment="Center">
+                                <TextBlock Text="BATTERY PLAN" FontSize="9" FontWeight="Bold" Foreground="#0D0F14"/>
+                            </Border>
+                            <TextBlock Text="Battery optimization active" Style="{StaticResource CaptionText}"
+                                       Foreground="{StaticResource AccentGreenBrush}" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </StackPanel>
+
+                    <!-- Right: plan buttons -->
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                        <Button Content="Activate Performance" Margin="0,0,0,10"
+                                Command="{Binding SetHighPerformanceCommand}"
+                                Visibility="{Binding IsHighPerformancePlanActive, Converter={StaticResource BoolToVis}, ConverterParameter=Invert}"
+                                Style="{StaticResource PrimaryButton}"/>
+                        <Button Content="Activate Performance" Margin="0,0,0,10"
+                                Command="{Binding SetHighPerformanceCommand}"
+                                Visibility="{Binding IsHighPerformancePlanActive, Converter={StaticResource BoolToVis}}"
+                                Style="{StaticResource GhostButton}"/>
+                        <Button Content="Restore Balanced"
+                                Command="{Binding SetBalancedCommand}"
+                                Visibility="{Binding IsHighPerformancePlanActive, Converter={StaticResource BoolToVis}}"
+                                Style="{StaticResource PrimaryButton}"/>
+                        <Button Content="Restore Balanced"
+                                Command="{Binding SetBalancedCommand}"
+                                Visibility="{Binding IsHighPerformancePlanActive, Converter={StaticResource BoolToVis}, ConverterParameter=Invert}"
+                                Style="{StaticResource GhostButton}"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <!-- ══════════════════════════════════════════════════ Battery Optimization Card
+                 Wraps its own spacer so collapsing the StackPanel leaves no dead space. -->
+            <StackPanel Grid.Row="3"
+                        Visibility="{Binding HasBattery, Converter={StaticResource BoolToVis}}">
+                <Border Height="16"/>
+                <Border Style="{StaticResource Card}">
+                    <StackPanel>
+                        <!-- Header -->
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                            <TextBlock Text="Battery Optimization" Style="{StaticResource HeadingMedium}"/>
+                            <Border Background="{StaticResource AccentGreenBrush}" CornerRadius="4"
+                                    Padding="6,2" Margin="10,0,0,0" VerticalAlignment="Center">
+                                <TextBlock Text="LAPTOP" FontSize="9" FontWeight="Bold" Foreground="#0D0F14"/>
+                            </Border>
+                        </StackPanel>
+                        <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,0,0,16">
+                            These settings reduce battery drain by limiting CPU boost. They only apply
+                            to this system because a battery was detected.
+                        </TextBlock>
+
+                        <!-- Balanced on Battery -->
+                        <Grid Margin="0,0,0,4">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" Margin="0,0,20,0" VerticalAlignment="Center">
+                                <TextBlock Text="Balanced on Battery"
+                                           Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
+                                <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,3,0,0">
+                                    Caps CPU speed on battery to stop turbo-boost from draining the battery.
+                                    Plugged-in performance is unchanged.
+                                </TextBlock>
+                            </StackPanel>
+                            <Button Grid.Column="1" Content="Apply" VerticalAlignment="Center"
+                                    Padding="20,9"
+                                    Command="{Binding SetBalancedOnBatteryCommand}"
+                                    Style="{StaticResource GhostButton}"/>
+                        </Grid>
+
+                        <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,12,0,12"/>
+
+                        <!-- Max Battery Life -->
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" Margin="0,0,20,0" VerticalAlignment="Center">
+                                <TextBlock Text="Max Battery Life"
+                                           Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
+                                <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,3,0,0">
+                                    Caps CPU to 80% on battery for maximum battery savings.
+                                    Plugged-in performance is unchanged.
+                                </TextBlock>
+                            </StackPanel>
+                            <Button Grid.Column="1" Content="Apply" VerticalAlignment="Center"
+                                    Padding="20,9"
+                                    Command="{Binding SetMaxBatteryLifeCommand}"
+                                    Style="{StaticResource GhostButton}"/>
+                        </Grid>
+
+                        <!-- AC power notice — only shown when battery plan is active but plugged in -->
+                        <StackPanel Visibility="{Binding IsOnAcWithBatteryPlanActive, Converter={StaticResource BoolToVis}}">
+                            <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,12,0,12"/>
+                            <Border Background="#1AFCD34D" BorderBrush="{StaticResource AccentYellowBrush}"
+                                    BorderThickness="1" CornerRadius="6" Padding="12,8">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="⚡" FontSize="14" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                    <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap"
+                                               Foreground="{StaticResource AccentYellowBrush}">
+                                        <Run FontWeight="SemiBold" Text="On AC power — "/>
+                                        <Run Text="battery optimization is configured but inactive. The CPU cap only applies when running on battery."/>
+                                    </TextBlock>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+
+                        <!-- Stop Battery Optimization — only shown when active -->
+                        <StackPanel Visibility="{Binding IsBatteryPlanActive, Converter={StaticResource BoolToVis}}">
+                            <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,12,0,12"/>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" Margin="0,0,20,0" VerticalAlignment="Center">
+                                    <TextBlock Text="Stop Battery Optimization"
+                                               Style="{StaticResource BodyText}" FontWeight="SemiBold"
+                                               Foreground="{StaticResource AccentYellowBrush}"/>
+                                    <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,3,0,0">
+                                        Removes the CPU cap and restores full battery performance.
+                                    </TextBlock>
+                                </StackPanel>
+                                <Button Grid.Column="1" Content="Stop" VerticalAlignment="Center"
+                                        Padding="20,9"
+                                        Command="{Binding StopBatteryOptimizationCommand}"
+                                        Style="{StaticResource GhostButton}"
+                                        BorderBrush="{StaticResource AccentYellowBrush}"
+                                        Foreground="{StaticResource AccentYellowBrush}"/>
+                            </Grid>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+
+            <!-- ══════════════════════════════════════════════════ Animation Presets Card -->
+            <Border Grid.Row="5" Style="{StaticResource Card}">
+                <StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
+                        <TextBlock Text="Animation Presets" Style="{StaticResource HeadingMedium}"/>
+                        <Border Background="{StaticResource AccentGreenBrush}" CornerRadius="4"
+                                Padding="6,2" Margin="10,0,0,0" VerticalAlignment="Center">
+                            <TextBlock Text="SAFE" FontSize="9" FontWeight="Bold" Foreground="#0D0F14"/>
+                        </Border>
+                    </StackPanel>
+                    <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,0,0,16">
+                        One-click animation presets. The active preset is highlighted blue. Changes apply immediately — no restart needed.
+                        Not sure which to pick? Start with "Optimize For Speed" for a good balance between looks and performance.
+                    </TextBlock>
+                    <StackPanel Orientation="Horizontal">
+                        <!-- No Animations preset -->
+                        <Button Padding="16,8" Margin="0,0,10,0"
+                                Command="{Binding ApplyNoAnimationsCommand}"
+                                ToolTip="Disable ALL animations for absolute maximum speed">
+                            <Button.Style>
+                                <Style TargetType="Button" BasedOn="{StaticResource GhostButton}">
+                                    <Setter Property="Content" Value="No Animations"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding ActivePreset}" Value="none">
+                                            <Setter Property="Background" Value="{StaticResource AccentBlueBrush}"/>
+                                            <Setter Property="Foreground" Value="#0D0F14"/>
+                                            <Setter Property="BorderBrush" Value="{StaticResource AccentBlueBrush}"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
+                        </Button>
+                        <!-- Optimize For Speed preset -->
+                        <Button Padding="16,8" Margin="0,0,10,0"
+                                Command="{Binding ApplyOptimizeForSpeedCommand}"
+                                ToolTip="Disable window/menu animations but keep Animate Controls, font smoothing, and drag content">
+                            <Button.Style>
+                                <Style TargetType="Button" BasedOn="{StaticResource GhostButton}">
+                                    <Setter Property="Content" Value="Optimize For Speed"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding ActivePreset}" Value="speed">
+                                            <Setter Property="Background" Value="{StaticResource AccentBlueBrush}"/>
+                                            <Setter Property="Foreground" Value="#0D0F14"/>
+                                            <Setter Property="BorderBrush" Value="{StaticResource AccentBlueBrush}"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
+                        </Button>
+                        <!-- Windows Default preset -->
+                        <Button Padding="16,8"
+                                Command="{Binding ApplyWindowsDefaultCommand}"
+                                ToolTip="Restore all Windows animation defaults">
+                            <Button.Style>
+                                <Style TargetType="Button" BasedOn="{StaticResource GhostButton}">
+                                    <Setter Property="Content" Value="Windows Default"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding ActivePreset}" Value="default">
+                                            <Setter Property="Background" Value="{StaticResource AccentBlueBrush}"/>
+                                            <Setter Property="Foreground" Value="#0D0F14"/>
+                                            <Setter Property="BorderBrush" Value="{StaticResource AccentBlueBrush}"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
+                        </Button>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- ══════════════════════════════════════════════ Individual Animation Controls -->
+            <Border Grid.Row="7" Style="{StaticResource Card}">
+                <StackPanel>
+                    <!-- Clickable header / expander -->
+                    <Button Command="{Binding ToggleIndividualControlsCommand}"
+                            Style="{StaticResource ExpanderButton}" Margin="0,0,0,0">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="Individual Animation Controls" Style="{StaticResource HeadingMedium}"/>
+                                <TextBlock Style="{StaticResource CaptionText}" Margin="0,4,0,0">
+                                    Fine-tune individual Windows animation effects. Use presets above for the easiest experience.
+                                </TextBlock>
+                            </StackPanel>
+                            <TextBlock Grid.Column="1" VerticalAlignment="Center" Margin="12,0,0,0"
+                                       Foreground="{StaticResource TextSecondaryBrush}" FontSize="13">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Text" Value="▼"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding ShowIndividualControls}" Value="True">
+                                                <Setter Property="Text" Value="▲"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </Grid>
+                    </Button>
+
+                    <!-- Collapsible content -->
+                    <StackPanel Visibility="{Binding ShowIndividualControls, Converter={StaticResource BoolToVis}}"
+                                Margin="0,16,0,0">
+                    <TextBlock Style="{StaticResource CaptionText}" Margin="0,0,0,12"
+                               Foreground="{StaticResource AccentBlueBrush}">
+                        💡 Not sure? Use the Animation Presets above — they're easier and cover most use cases.
+                    </TextBlock>
+
+                    <!-- Apply / Cancel — shown at top when changes are pending -->
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,12"
+                                Visibility="{Binding HasPendingChanges, Converter={StaticResource BoolToVis}}">
+                        <Button Content="Apply Changes" Style="{StaticResource PrimaryButton}"
+                                Margin="0,0,10,0" Command="{Binding ApplyChangesCommand}"/>
+                        <Button Content="Cancel" Style="{StaticResource GhostButton}"
+                                Command="{Binding CancelChangesCommand}"/>
+                        <TextBlock Text="You have unsaved changes." Style="{StaticResource CaptionText}"
+                                   Foreground="{StaticResource AccentYellowBrush}"
+                                   VerticalAlignment="Center" Margin="12,0,0,0"/>
+                    </StackPanel>
+
+                    <!-- Animate controls/elements inside windows -->
+                    <Grid Margin="0,0,0,12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,20,0">
+                            <TextBlock Text="Animate buttons and UI elements"
+                                       Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
+                            <TextBlock Text="Fade-in effects for list items and menus inside windows."
+                                       Style="{StaticResource CaptionText}" Margin="0,2,0,0"/>
+                        </StackPanel>
+                        <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}"
+                                  IsChecked="{Binding AnimateControlsEnabled, Mode=TwoWay}"
+                                  VerticalAlignment="Center"/>
+                    </Grid>
+                    <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,0,0,12"/>
+
+                    <!-- Animate windows when minimizing/maximizing -->
+                    <Grid Margin="0,0,0,12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,20,0">
+                            <TextBlock Text="Animate windows when minimizing and maximizing"
+                                       Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
+                            <TextBlock Text="The window zoom-in/out effect when opening or minimizing. Disabling this gives the biggest visible speed improvement."
+                                       Style="{StaticResource CaptionText}" Margin="0,2,0,0"/>
+                        </StackPanel>
+                        <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}"
+                                  IsChecked="{Binding AnimateWindowsEnabled, Mode=TwoWay}"
+                                  VerticalAlignment="Center"/>
+                    </Grid>
+                    <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,0,0,12"/>
+
+                    <!-- Fade/slide menus -->
+                    <Grid Margin="0,0,0,12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,20,0">
+                            <TextBlock Text="Fade or slide menus into view"
+                                       Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
+                            <TextBlock Text="Context menus appear instantly when this is disabled."
+                                       Style="{StaticResource CaptionText}" Margin="0,2,0,0"/>
+                        </StackPanel>
+                        <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}"
+                                  IsChecked="{Binding FadeMenusEnabled, Mode=TwoWay}"
+                                  VerticalAlignment="Center"/>
+                    </Grid>
+                    <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,0,0,12"/>
+
+                    <!-- Show window contents while dragging -->
+                    <Grid Margin="0,0,0,12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,20,0">
+                            <TextBlock Text="Show content while moving windows"
+                                       Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
+                            <TextBlock Text="Shows the full window content while you drag it. Recommended to keep on — turning it off shows only an outline."
+                                       Style="{StaticResource CaptionText}" Margin="0,2,0,0"/>
+                        </StackPanel>
+                        <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}"
+                                  IsChecked="{Binding ShowDragContentsEnabled, Mode=TwoWay}"
+                                  VerticalAlignment="Center"/>
+                    </Grid>
+                    <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,0,0,12"/>
+
+                    <!-- Smooth font edges -->
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid.Style>
+                            <Style TargetType="Grid">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding ActivePreset}" Value="none">
+                                        <Setter Property="Opacity" Value="0.4"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Grid.Style>
+                        <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,20,0">
+                            <TextBlock Text="Smooth text rendering (ClearType)"
+                                       Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
+                            <TextBlock Text="Makes text sharper and easier to read on screen. Strongly recommended to keep on."
+                                       Style="{StaticResource CaptionText}" Margin="0,2,0,0"/>
+                        </StackPanel>
+                        <CheckBox Grid.Column="1"
+                                  IsChecked="{Binding SmoothFontsEnabled, Mode=TwoWay}"
+                                  VerticalAlignment="Center">
+                            <CheckBox.Style>
+                                <Style TargetType="CheckBox" BasedOn="{StaticResource ToggleSwitch}">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding ActivePreset}" Value="none">
+                                            <Setter Property="IsEnabled" Value="False"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </CheckBox.Style>
+                        </CheckBox>
+                    </Grid>
+
+                    <!-- Tooltip animation -->
+                    <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,0,0,12"/>
+                    <Grid Margin="0,0,0,12">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,20,0">
+                            <TextBlock Text="Fade or slide tooltips into view" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
+                            <TextBlock Text="Tooltips appear instantly when disabled." Style="{StaticResource CaptionText}" Margin="0,2,0,0"/>
+                        </StackPanel>
+                        <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}"
+                                  IsChecked="{Binding TooltipAnimationEnabled, Mode=TwoWay}" VerticalAlignment="Center"/>
+                    </Grid>
+
+                    <!-- Fade out menu items -->
+                    <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,0,0,12"/>
+                    <Grid Margin="0,0,0,12">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,20,0">
+                            <TextBlock Text="Fade out menu items after clicking" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
+                            <TextBlock Text="Selection fade effect for menus." Style="{StaticResource CaptionText}" Margin="0,2,0,0"/>
+                        </StackPanel>
+                        <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}"
+                                  IsChecked="{Binding FadeOutMenuItemsEnabled, Mode=TwoWay}" VerticalAlignment="Center"/>
+                    </Grid>
+
+                    <!-- Cursor shadow -->
+                    <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,0,0,12"/>
+                    <Grid Margin="0,0,0,12">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,20,0">
+                            <TextBlock Text="Show shadow under mouse cursor" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
+                            <TextBlock Text="Adds a small drop shadow beneath the pointer." Style="{StaticResource CaptionText}" Margin="0,2,0,0"/>
+                        </StackPanel>
+                        <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}"
+                                  IsChecked="{Binding CursorShadowEnabled, Mode=TwoWay}" VerticalAlignment="Center"/>
+                    </Grid>
+
+                    <!-- Window shadow -->
+                    <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,0,0,12"/>
+                    <Grid Margin="0,0,0,12">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,20,0">
+                            <TextBlock Text="Show shadows under windows" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
+                            <TextBlock Text="Drop shadows around window borders." Style="{StaticResource CaptionText}" Margin="0,2,0,0"/>
+                        </StackPanel>
+                        <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}"
+                                  IsChecked="{Binding WindowShadowEnabled, Mode=TwoWay}" VerticalAlignment="Center"/>
+                    </Grid>
+
+                    <!-- ComboBox animation -->
+                    <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,0,0,12"/>
+                    <Grid Margin="0,0,0,12">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,20,0">
+                            <TextBlock Text="Slide open combo boxes" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
+                            <TextBlock Text="Combo box dropdowns animate open instead of appearing instantly." Style="{StaticResource CaptionText}" Margin="0,2,0,0"/>
+                        </StackPanel>
+                        <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}"
+                                  IsChecked="{Binding ComboBoxAnimationEnabled, Mode=TwoWay}" VerticalAlignment="Center"/>
+                    </Grid>
+
+                    <!-- Listbox smooth scrolling -->
+                    <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,0,0,12"/>
+                    <Grid Margin="0,0,0,12">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,20,0">
+                            <TextBlock Text="Smooth-scroll list boxes" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
+                            <TextBlock Text="Lists scroll smoothly instead of jumping by line." Style="{StaticResource CaptionText}" Margin="0,2,0,0"/>
+                        </StackPanel>
+                        <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}"
+                                  IsChecked="{Binding ListboxSmoothScrollingEnabled, Mode=TwoWay}" VerticalAlignment="Center"/>
+                    </Grid>
+
+                    <!-- Listview watermark -->
+                    <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,0,0,12"/>
+                    <Grid Margin="0,0,0,12">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,20,0">
+                            <TextBlock Text="Show folder type watermarks" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
+                            <TextBlock Text="Folder-type watermark images in Explorer windows." Style="{StaticResource CaptionText}" Margin="0,2,0,0"/>
+                        </StackPanel>
+                        <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}"
+                                  IsChecked="{Binding ListviewWatermarkEnabled, Mode=TwoWay}" VerticalAlignment="Center"/>
+                    </Grid>
+
+                    <!-- Icon label shadow -->
+                    <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,0,0,12"/>
+                    <Grid Margin="0,0,0,12">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,20,0">
+                            <TextBlock Text="Drop shadows on desktop icon text" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
+                            <TextBlock Text="Text shadows under icon names on the desktop." Style="{StaticResource CaptionText}" Margin="0,2,0,0"/>
+                        </StackPanel>
+                        <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}"
+                                  IsChecked="{Binding IconLabelShadowEnabled, Mode=TwoWay}" VerticalAlignment="Center"/>
+                    </Grid>
+
+                    <!-- Aero Peek -->
+                    <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,0,0,12"/>
+                    <Grid Margin="0,0,0,12">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,20,0">
+                            <TextBlock Text="Desktop peek preview" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
+                            <TextBlock Text="Hover over the Show Desktop button (far right of taskbar) to preview the desktop." Style="{StaticResource CaptionText}" Margin="0,2,0,0"/>
+                        </StackPanel>
+                        <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}"
+                                  IsChecked="{Binding AeroPeekEnabled, Mode=TwoWay}" VerticalAlignment="Center"/>
+                    </Grid>
+
+                    <!-- Taskbar thumbnail previews -->
+                    <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,0,0,12"/>
+                    <Grid Margin="0,0,0,12">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,20,0">
+                            <TextBlock Text="Taskbar hover previews" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
+                            <TextBlock Text="Show window thumbnail when hovering taskbar buttons." Style="{StaticResource CaptionText}" Margin="0,2,0,0"/>
+                        </StackPanel>
+                        <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}"
+                                  IsChecked="{Binding TaskbarThumbnailPreviewsEnabled, Mode=TwoWay}" VerticalAlignment="Center"/>
+                    </Grid>
+
+                    </StackPanel><!-- end collapsible content -->
+                </StackPanel>
+            </Border>
+
+            <!-- Status bar -->
+            <Grid Grid.Row="8" Margin="0,16,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Text="{Binding StatusMessage}" Style="{StaticResource CaptionText}" VerticalAlignment="Center"/>
+                <Button Grid.Column="1" Content="Refresh" Style="{StaticResource GhostButton}"
+                        Command="{Binding RefreshCommand}"/>
+            </Grid>
+        </Grid>
+    </ScrollViewer>
+</UserControl>

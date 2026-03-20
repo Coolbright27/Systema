@@ -1,0 +1,313 @@
+<Window x:Class="Systema.Views.CrashReportWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Systema — Crash Report"
+        Height="700" Width="780"
+        MinHeight="540" MinWidth="600"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        WindowStartupLocation="CenterScreen"
+        Topmost="True">
+
+    <Border Background="#0D0F14"
+            CornerRadius="12"
+            BorderBrush="#FF4560"
+            BorderThickness="1">
+        <Border.Effect>
+            <DropShadowEffect Color="#000000" BlurRadius="30" ShadowDepth="0" Opacity="0.7"/>
+        </Border.Effect>
+
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="48"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <!-- ── Title Bar ── -->
+            <Border Grid.Row="0"
+                    Background="#111520"
+                    CornerRadius="12,12,0,0"
+                    MouseLeftButtonDown="TitleBar_MouseDown">
+                <Grid Margin="16,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <!-- Red warning dot -->
+                        <Ellipse Width="12" Height="12" Fill="#FF4560" Margin="0,0,10,0">
+                            <Ellipse.Effect>
+                                <DropShadowEffect Color="#FF4560" BlurRadius="8" ShadowDepth="0"/>
+                            </Ellipse.Effect>
+                        </Ellipse>
+                        <TextBlock Text="SYSTEMA" FontWeight="Bold" FontSize="13"
+                                   Foreground="#E8EAF0" VerticalAlignment="Center"/>
+                        <TextBlock Text="  ·  Crash Report" FontSize="13"
+                                   Foreground="#6B7A99" VerticalAlignment="Center"/>
+                    </StackPanel>
+                    <Button Grid.Column="1" Click="Close_Click" Width="32" Height="32"
+                            Background="Transparent" BorderThickness="0" Cursor="Hand">
+                        <TextBlock Text="✕" FontSize="12" Foreground="#6B7A99"/>
+                    </Button>
+                </Grid>
+            </Border>
+
+            <!-- ── Body ── -->
+            <Grid Grid.Row="1" Margin="24,20,24,8">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>   <!-- Header -->
+                    <RowDefinition Height="14"/>     <!-- spacer -->
+                    <RowDefinition Height="Auto"/>   <!-- Error card -->
+                    <RowDefinition Height="12"/>     <!-- spacer -->
+                    <RowDefinition Height="2*"/>     <!-- Stack trace (2/3 of remaining) -->
+                    <RowDefinition Height="8"/>      <!-- spacer -->
+                    <RowDefinition Height="1*" MinHeight="90"/>  <!-- Recent activity (1/3) -->
+                </Grid.RowDefinitions>
+
+                <!-- Header -->
+                <StackPanel Grid.Row="0">
+                    <TextBlock Text="Systema encountered an unexpected error"
+                               FontSize="18" FontWeight="SemiBold"
+                               Foreground="#E8EAF0" FontFamily="Segoe UI"/>
+                    <TextBlock x:Name="SubtitleText"
+                               Text="The application has stopped working. A crash report has been saved."
+                               FontSize="13" Foreground="#6B7A99" FontFamily="Segoe UI"
+                               TextWrapping="Wrap" Margin="0,6,0,0"/>
+                </StackPanel>
+
+                <!-- Error summary card -->
+                <Border Grid.Row="2"
+                        Background="#1A2035"
+                        BorderBrush="#FF4560"
+                        BorderThickness="0,0,0,3"
+                        CornerRadius="8"
+                        Padding="16,12">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="5"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="8"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+                        <TextBlock Grid.Row="0" Text="ERROR" FontSize="10" FontWeight="Bold"
+                                   Foreground="#FF4560" FontFamily="Segoe UI" Margin="0,0,0,0"/>
+                        <TextBlock Grid.Row="2" x:Name="ErrorMessageText"
+                                   Text="Unknown error"
+                                   FontSize="13" Foreground="#E8EAF0"
+                                   FontFamily="Consolas"
+                                   TextWrapping="Wrap"/>
+                        <!-- System info line -->
+                        <TextBlock Grid.Row="4" x:Name="SystemInfoText"
+                                   Text=""
+                                   FontSize="11" Foreground="#4A5A78"
+                                   FontFamily="Consolas"/>
+                    </Grid>
+                </Border>
+
+                <!-- Stack Trace -->
+                <Grid Grid.Row="4">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="6"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    <TextBlock Grid.Row="0"
+                               Text="Stack Trace"
+                               FontSize="11" FontWeight="SemiBold"
+                               Foreground="#6B7A99" FontFamily="Segoe UI"/>
+                    <Border Grid.Row="2"
+                            Background="#161B25"
+                            BorderBrush="#1F2B45"
+                            BorderThickness="1"
+                            CornerRadius="8">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                      HorizontalScrollBarVisibility="Auto"
+                                      Padding="12,10">
+                            <TextBlock x:Name="StackTraceText"
+                                       FontFamily="Consolas"
+                                       FontSize="11"
+                                       Foreground="#8A9ABB"
+                                       TextWrapping="NoWrap"
+                                       LineHeight="18"/>
+                        </ScrollViewer>
+                    </Border>
+                </Grid>
+
+                <!-- Recent Activity -->
+                <Grid Grid.Row="6">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="6"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    <TextBlock Grid.Row="0"
+                               Text="Recent Activity"
+                               FontSize="11" FontWeight="SemiBold"
+                               Foreground="#6B7A99" FontFamily="Segoe UI"/>
+                    <Border Grid.Row="2"
+                            Background="#161B25"
+                            BorderBrush="#1F2B45"
+                            BorderThickness="1"
+                            CornerRadius="8">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                      Padding="12,10">
+                            <TextBlock x:Name="LogText"
+                                       FontFamily="Consolas"
+                                       FontSize="11"
+                                       Foreground="#8A9ABB"
+                                       TextWrapping="Wrap"
+                                       LineHeight="18"/>
+                        </ScrollViewer>
+                    </Border>
+                </Grid>
+            </Grid>
+
+            <!-- ── Footer Actions ── -->
+            <Border Grid.Row="2"
+                    Background="#111520"
+                    CornerRadius="0,0,12,12"
+                    Padding="24,14">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+
+                    <!-- Crash report path -->
+                    <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                        <TextBlock Text="Crash report saved to:"
+                                   FontSize="10" Foreground="#6B7A99" FontFamily="Segoe UI"
+                                   Margin="0,0,0,3"/>
+                        <TextBlock x:Name="CrashPathText"
+                                   FontSize="11" Foreground="#00B4FF"
+                                   FontFamily="Consolas"
+                                   TextTrimming="CharacterEllipsis"
+                                   Cursor="Hand"
+                                   MouseLeftButtonDown="OpenLogsFolder_Click"
+                                   ToolTip="Click to open the logs folder"/>
+                    </StackPanel>
+
+                    <!-- Action buttons -->
+                    <StackPanel Grid.Column="1" Orientation="Horizontal">
+
+                        <!-- Copy Report -->
+                        <Button x:Name="CopyButton"
+                                Content="Copy Report"
+                                Click="CopyReport_Click"
+                                Background="#1F2B45"
+                                Foreground="#E8EAF0"
+                                BorderThickness="0"
+                                Padding="14,9"
+                                Cursor="Hand"
+                                FontFamily="Segoe UI"
+                                FontSize="13"
+                                Margin="0,0,10,0">
+                            <Button.Template>
+                                <ControlTemplate TargetType="Button">
+                                    <Border Background="{TemplateBinding Background}"
+                                            CornerRadius="6"
+                                            Padding="{TemplateBinding Padding}">
+                                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter Property="Background" Value="#2A3A55"/>
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Button.Template>
+                        </Button>
+
+                        <!-- Open Logs Folder -->
+                        <Button x:Name="OpenFolderButton"
+                                Content="Open Logs Folder"
+                                Click="OpenLogsFolder_Click"
+                                Background="#1F2B45"
+                                Foreground="#E8EAF0"
+                                BorderThickness="0"
+                                Padding="14,9"
+                                Cursor="Hand"
+                                FontFamily="Segoe UI"
+                                FontSize="13"
+                                Margin="0,0,10,0">
+                            <Button.Template>
+                                <ControlTemplate TargetType="Button">
+                                    <Border Background="{TemplateBinding Background}"
+                                            CornerRadius="6"
+                                            Padding="{TemplateBinding Padding}">
+                                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter Property="Background" Value="#2A3A55"/>
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Button.Template>
+                        </Button>
+
+                        <!-- Join Discord -->
+                        <Button x:Name="DiscordButton"
+                                Content="Join Discord"
+                                Click="Discord_Click"
+                                Background="#5865F2"
+                                Foreground="White"
+                                BorderThickness="0"
+                                Padding="14,9"
+                                Cursor="Hand"
+                                FontFamily="Segoe UI"
+                                FontWeight="SemiBold"
+                                FontSize="13"
+                                Margin="0,0,10,0">
+                            <Button.Template>
+                                <ControlTemplate TargetType="Button">
+                                    <Border Background="{TemplateBinding Background}"
+                                            CornerRadius="6"
+                                            Padding="{TemplateBinding Padding}">
+                                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter Property="Background" Value="#6B77F4"/>
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Button.Template>
+                        </Button>
+
+                        <!-- Close Systema -->
+                        <Button x:Name="CloseButton"
+                                Content="Close Systema"
+                                Click="Close_Click"
+                                Background="#FF4560"
+                                Foreground="White"
+                                BorderThickness="0"
+                                Padding="14,9"
+                                Cursor="Hand"
+                                FontFamily="Segoe UI"
+                                FontWeight="SemiBold"
+                                FontSize="13">
+                            <Button.Template>
+                                <ControlTemplate TargetType="Button">
+                                    <Border Background="{TemplateBinding Background}"
+                                            CornerRadius="6"
+                                            Padding="{TemplateBinding Padding}">
+                                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter Property="Background" Value="#FF6B82"/>
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Button.Template>
+                        </Button>
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </Grid>
+    </Border>
+</Window>

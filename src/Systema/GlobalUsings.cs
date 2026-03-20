@@ -1,0 +1,11 @@
+// Disambiguate WPF vs WinForms types that conflict when UseWindowsForms=true
+global using Application   = System.Windows.Application;
+global using UserControl   = System.Windows.Controls.UserControl;
+global using MessageBox    = System.Windows.MessageBox;
+global using WindowState   = System.Windows.WindowState;
+global using Color         = System.Windows.Media.Color;
+global using Brushes       = System.Windows.Media.Brushes;
+global using Binding       = System.Windows.Data.Binding;
+global using Path          = System.IO.Path;
+global using File          = System.IO.File;
+global using Directory     = System.IO.Directory;

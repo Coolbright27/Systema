@@ -1,0 +1,217 @@
+<Window x:Class="Systema.Views.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="clr-namespace:Systema.ViewModels"
+        xmlns:views="clr-namespace:Systema.Views"
+        Title="Systema" Height="720" Width="1100"
+        MinHeight="600" MinWidth="900"
+        WindowStyle="None" AllowsTransparency="True"
+        Background="Transparent"
+        WindowStartupLocation="CenterScreen"
+        Activated="Window_Activated"
+        Deactivated="Window_Deactivated">
+
+    <Window.Resources>
+        <DataTemplate DataType="{x:Type vm:DashboardViewModel}">
+            <views:DashboardView/>
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type vm:MemoryViewModel}">
+            <views:MemoryView/>
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type vm:ServicesViewModel}">
+            <views:ServicesView/>
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type vm:VisualViewModel}">
+            <views:VisualView/>
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type vm:GameBoosterViewModel}">
+            <views:GameBoosterView/>
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type vm:SettingsViewModel}">
+            <views:SettingsView/>
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type vm:ToolsViewModel}">
+            <views:ToolsView/>
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type vm:TaskSleepViewModel}">
+            <views:TaskSleepView/>
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type vm:BloatwareViewModel}">
+            <views:BloatwareView/>
+        </DataTemplate>
+    </Window.Resources>
+
+    <Border Background="{StaticResource BgPrimaryBrush}"
+            CornerRadius="12"
+            BorderBrush="{StaticResource BorderBrush}"
+            BorderThickness="1">
+        <Border.Effect>
+            <DropShadowEffect Color="#000000" BlurRadius="30" ShadowDepth="0" Opacity="0.6"/>
+        </Border.Effect>
+
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="48"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+
+            <!-- ===== TITLE BAR ===== -->
+            <Border Grid.Row="0"
+                    Background="{StaticResource BgSidebarBrush}"
+                    CornerRadius="12,12,0,0"
+                    MouseLeftButtonDown="TitleBar_MouseLeftButtonDown">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="200"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+
+                    <!-- Logo + Brand -->
+                    <StackPanel Grid.Column="0" Orientation="Horizontal"
+                                VerticalAlignment="Center" Margin="16,0">
+                        <Ellipse Width="20" Height="20" Margin="0,0,8,0">
+                            <Ellipse.Fill>
+                                <RadialGradientBrush>
+                                    <GradientStop Color="#00B4FF" Offset="0"/>
+                                    <GradientStop Color="#00E5A0" Offset="1"/>
+                                </RadialGradientBrush>
+                            </Ellipse.Fill>
+                        </Ellipse>
+                        <TextBlock Text="SYSTEMA" FontWeight="Bold" FontSize="14"
+                                   Foreground="{StaticResource TextPrimaryBrush}"
+                                   VerticalAlignment="Center"/>
+                    </StackPanel>
+
+                    <!-- Window Buttons -->
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" Margin="0,0,12,0">
+                        <Button Click="MinimizeButton_Click" Width="36" Height="36"
+                                ToolTip="Minimize to Tray" Style="{StaticResource GhostButton}"
+                                BorderThickness="0" Padding="0">
+                            <TextBlock Text="—" FontSize="12" Foreground="{StaticResource TextSecondaryBrush}"/>
+                        </Button>
+                        <Button Click="MaximizeButton_Click" Width="36" Height="36"
+                                ToolTip="Maximize" Style="{StaticResource GhostButton}"
+                                BorderThickness="0" Padding="0">
+                            <TextBlock Text="□" FontSize="12" Foreground="{StaticResource TextSecondaryBrush}"/>
+                        </Button>
+                        <Button Click="CloseButton_Click" Width="36" Height="36"
+                                ToolTip="Close to Tray" Style="{StaticResource GhostButton}"
+                                BorderThickness="0" Padding="0">
+                            <TextBlock Text="✕" FontSize="12" Foreground="{StaticResource TextSecondaryBrush}"/>
+                        </Button>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <!-- ===== CONTENT AREA ===== -->
+            <Grid Grid.Row="1">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="200"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- ===== SIDEBAR ===== -->
+                <Border Grid.Column="0"
+                        Background="{StaticResource BgSidebarBrush}"
+                        BorderBrush="{StaticResource BorderBrush}"
+                        BorderThickness="0,0,1,0">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="*"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <StackPanel Grid.Row="0" Margin="8,16,8,0">
+                            <Button Command="{Binding NavigateCommand}" CommandParameter="Dashboard"
+                                    Tag="Dashboard" Style="{StaticResource NavButton}">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="⬡" FontSize="14" Margin="0,0,10,0"
+                                               Foreground="{StaticResource AccentBlueBrush}"/>
+                                    <TextBlock Text="Dashboard"/>
+                                </StackPanel>
+                            </Button>
+                            <Button Command="{Binding NavigateCommand}" CommandParameter="Memory"
+                                    Tag="Memory" Style="{StaticResource NavButton}">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="▦" FontSize="14" Margin="0,0,10,0"
+                                               Foreground="{StaticResource TextSecondaryBrush}"/>
+                                    <TextBlock Text="Memory &amp; Startup"/>
+                                </StackPanel>
+                            </Button>
+                            <Button Command="{Binding NavigateCommand}" CommandParameter="Services"
+                                    Tag="Services" Style="{StaticResource NavButton}">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="◈" FontSize="14" Margin="0,0,10,0"
+                                               Foreground="{StaticResource TextSecondaryBrush}"/>
+                                    <TextBlock Text="Cleanup &amp; Services"/>
+                                </StackPanel>
+                            </Button>
+                            <Button Command="{Binding NavigateCommand}" CommandParameter="Visual"
+                                    Tag="Visual" Style="{StaticResource NavButton}">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="✦" FontSize="14" Margin="0,0,10,0"
+                                               Foreground="{StaticResource TextSecondaryBrush}"/>
+                                    <TextBlock Text="Visual &amp; Power"/>
+                                </StackPanel>
+                            </Button>
+                            <Button Command="{Binding NavigateCommand}" CommandParameter="GameBooster"
+                                    Tag="GameBooster" Style="{StaticResource NavButton}">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="🎮" FontSize="13" Margin="0,0,10,0"
+                                               Foreground="{StaticResource TextSecondaryBrush}"/>
+                                    <TextBlock Text="Game Booster"/>
+                                </StackPanel>
+                            </Button>
+                            <Button Command="{Binding NavigateCommand}" CommandParameter="Tools"
+                                    Tag="Tools" Style="{StaticResource NavButton}">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="🔧" FontSize="13" Margin="0,0,10,0"
+                                               Foreground="{StaticResource TextSecondaryBrush}"/>
+                                    <TextBlock Text="System Tweaks"/>
+                                </StackPanel>
+                            </Button>
+                            <Button Command="{Binding NavigateCommand}" CommandParameter="TaskSleep"
+                                    Tag="TaskSleep" Style="{StaticResource NavButton}">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="💤" FontSize="13" Margin="0,0,10,0"
+                                               Foreground="{StaticResource TextSecondaryBrush}"/>
+                                    <TextBlock Text="Task Sleep"/>
+                                </StackPanel>
+                            </Button>
+                            <Button Command="{Binding NavigateCommand}" CommandParameter="Bloatware"
+                                    Tag="Bloatware" Style="{StaticResource NavButton}">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="🧹" FontSize="13" Margin="0,0,10,0"
+                                               Foreground="{StaticResource TextSecondaryBrush}"/>
+                                    <TextBlock Text="App Cleanup"/>
+                                </StackPanel>
+                            </Button>
+
+                            <!-- Separator -->
+                            <Border Height="1" Background="{StaticResource BorderBrush}" Margin="8,12"/>
+
+                            <Button Command="{Binding NavigateCommand}" CommandParameter="Settings"
+                                    Tag="Settings" Style="{StaticResource NavButton}">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="⚙" FontSize="14" Margin="0,0,10,0"
+                                               Foreground="{StaticResource TextSecondaryBrush}"/>
+                                    <TextBlock Text="Settings"/>
+                                </StackPanel>
+                            </Button>
+                        </StackPanel>
+
+                        <!-- Version footer -->
+                        <TextBlock Grid.Row="1" Text="v1.6.5" Margin="16,0,0,16"
+                                   Style="{StaticResource CaptionText}"/>
+                    </Grid>
+                </Border>
+
+                <!-- ===== MAIN CONTENT ===== -->
+                <ContentControl Grid.Column="1"
+                                Content="{Binding CurrentView}"
+                                Background="{StaticResource BgPrimaryBrush}"/>
+            </Grid>
+        </Grid>
+    </Border>
+</Window>
