@@ -208,7 +208,7 @@ public partial class VisualViewModel : ObservableObject, IAutoRefreshable, IDisp
     {
         try
         {
-            if (!HasPendingChanges)
+            if (!HasPendingChanges && !IsLoading)
                 LoadFromService();
             // GetActivePlan() spawns powercfg.exe — use a large-stack thread (8 MB) so
             // AV/EDR CreateProcess hooks cannot overflow the ~1 MB threadpool stack.

@@ -58,6 +58,7 @@ public partial class MainViewModel : ObservableObject
     private readonly DispatcherTimer _heartbeatTimer;   // dedicated 1-second CrashGuard heartbeat
     private static readonly TimeSpan FocusedInterval   = TimeSpan.FromSeconds(1);
     private static readonly TimeSpan UnfocusedInterval = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan TrayOnlyInterval  = TimeSpan.FromSeconds(30);
 
     public MainViewModel(
         DashboardViewModel   dashboardVm,
@@ -106,6 +107,16 @@ public partial class MainViewModel : ObservableObject
         _refreshTimer.Interval = focused ? FocusedInterval : UnfocusedInterval;
     }
 
+    /// <summary>
+    /// Called when the window is hidden to tray. Slows the refresh timer to 30 s
+    /// so CPU is not wasted refreshing UI that the user cannot see.
+    /// Call SetFocused(false) when the window is restored to resume normal pacing.
+    /// </summary>
+    public void SetTrayOnly(bool trayOnly)
+    {
+        _refreshTimer.Interval = trayOnly ? TrayOnlyInterval : UnfocusedInterval;
+    }
+
     private async Task SafeRefreshAsync()
     {
         try
@@ -139,7 +150,7 @@ public partial class MainViewModel : ObservableObject
                 "Tools"       => ToolsVm,
                 "TaskSleep"   => TaskSleepVm,
                 "Bloatware"   => BloatwareVm,
-                _             => (object)DashboardVm
+                _ => LogUnknownSection(section)
             };
             CurrentView = next;
 
@@ -156,6 +167,12 @@ public partial class MainViewModel : ObservableObject
             LoggerService.Instance.Error("MainViewModel", $"Navigation to {section} failed", ex);
             CrashReportWindow.ShowError(ex, $"{section} — Navigation Error");
         }
+    }
+
+    private object LogUnknownSection(string section)
+    {
+        LoggerService.Instance.Warn("MainViewModel", $"Navigate: unknown section '{section}' — falling back to Dashboard");
+        return DashboardVm;
     }
 
     private async Task SafeRefreshOnNavigateAsync(IAutoRefreshable refreshable, string section)

@@ -192,8 +192,19 @@ public class ServiceControlService
 
     // ── Service status enumeration ────────────────────────────────────────────
 
+    // Cache: avoids re-querying all services on every 1-second refresh tick.
+    private (DateTime Time, List<ServiceInfo> Data) _statusCache;
+    private static readonly TimeSpan StatusCacheTtl = TimeSpan.FromSeconds(5);
+
     public List<ServiceInfo> GetServiceStatuses(bool gamesInstalled = false)
     {
+        // Return cached data if it is still fresh enough (avoids SCM round-trips on every tick)
+        if (_statusCache.Data != null
+            && (DateTime.UtcNow - _statusCache.Time) < StatusCacheTtl)
+        {
+            return _statusCache.Data;
+        }
+
         var result = new List<ServiceInfo>();
         foreach (var (name, display, desc, tooltip) in OptimizableServices)
         {
@@ -229,6 +240,9 @@ public class ServiceControlService
                 });
             }
         }
+
+        // Cache for StatusCacheTtl to avoid hammering the SCM on every refresh tick
+        _statusCache = (DateTime.UtcNow, result);
         return result;
     }
 
@@ -439,7 +453,12 @@ public class ServiceControlService
                     RedirectStandardOutput = true
                 };
                 using var proc = System.Diagnostics.Process.Start(psi);
-                proc?.WaitForExit(5000);
+                if (proc == null)
+                {
+                    Log.Warn("ServiceControl", $"schtasks.exe failed to start for task: {task}");
+                    continue;
+                }
+                proc.WaitForExit(5000);
             }
             catch { /* skip */ }
         }

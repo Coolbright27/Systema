@@ -24,9 +24,10 @@ public class PowerPlanService
 {
     private static readonly LoggerService _log = LoggerService.Instance;
 
-    private const string HighPerformanceGuid = "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c";
-    private const string BalancedGuid        = "381b4222-f694-41f0-9685-ff5bb260df2e";
-    private const string PowerSaverGuid      = "a1841308-3541-4fab-bc81-f71556f20b4a";
+    private const string HighPerformanceGuid    = "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c";
+    private const string BalancedGuid           = "381b4222-f694-41f0-9685-ff5bb260df2e";
+    private const string PowerSaverGuid         = "a1841308-3541-4fab-bc81-f71556f20b4a";
+    private const string UltimatePerformanceGuid = "e9a42b02-d5df-448d-aa00-03f14749eb61";
 
     // Max processor state sub-group and setting GUIDs (for 99% cap)
     private const string ProcessorSubGroup  = "54533251-82be-4824-96c1-47b60b740d00";
@@ -82,8 +83,8 @@ public class PowerPlanService
             try
             {
                 // Switch back to High Performance (or Ultimate if available)
-                RunPowercfg("/duplicatescheme e9a42b02-d5df-448d-aa00-03f14749eb61");
-                RunPowercfg($"/setactive e9a42b02-d5df-448d-aa00-03f14749eb61");
+                RunPowercfg($"/duplicatescheme {UltimatePerformanceGuid}");
+                RunPowercfg($"/setactive {UltimatePerformanceGuid}");
                 string plan = GetActivePlan();
                 if (!plan.Contains("Ultimate", StringComparison.OrdinalIgnoreCase))
                     RunPowercfg($"/setactive {HighPerformanceGuid}");
@@ -108,8 +109,8 @@ public class PowerPlanService
         {
             try
             {
-                RunPowercfg("/duplicatescheme e9a42b02-d5df-448d-aa00-03f14749eb61");
-                RunPowercfg($"/setactive e9a42b02-d5df-448d-aa00-03f14749eb61");
+                RunPowercfg($"/duplicatescheme {UltimatePerformanceGuid}");
+                RunPowercfg($"/setactive {UltimatePerformanceGuid}");
                 string plan = GetActivePlan();
                 if (!plan.Contains("Ultimate", StringComparison.OrdinalIgnoreCase))
                     RunPowercfg($"/setactive {HighPerformanceGuid}");
@@ -142,7 +143,7 @@ public class PowerPlanService
             // Match known well-known GUIDs first for consistent naming
             if (output.Contains(HighPerformanceGuid, StringComparison.OrdinalIgnoreCase))
                 return "High Performance";
-            if (output.Contains("e9a42b02-d5df-448d-aa00-03f14749eb61", StringComparison.OrdinalIgnoreCase))
+            if (output.Contains(UltimatePerformanceGuid, StringComparison.OrdinalIgnoreCase))
                 return "Ultimate Performance";
             if (output.Contains(PowerSaverGuid, StringComparison.OrdinalIgnoreCase))
                 return "Power Saver";
@@ -169,8 +170,8 @@ public class PowerPlanService
             try
             {
                 // Try to enable Ultimate Performance (Windows 10 Pro+)
-                RunPowercfg("/duplicatescheme e9a42b02-d5df-448d-aa00-03f14749eb61");
-                RunPowercfg($"/setactive e9a42b02-d5df-448d-aa00-03f14749eb61");
+                RunPowercfg($"/duplicatescheme {UltimatePerformanceGuid}");
+                RunPowercfg($"/setactive {UltimatePerformanceGuid}");
                 var plan = GetActivePlan();
                 if (plan.Contains("Ultimate", StringComparison.OrdinalIgnoreCase))
                 {
@@ -280,8 +281,8 @@ public class PowerPlanService
             {
                 if (planName.Contains("Ultimate", StringComparison.OrdinalIgnoreCase))
                 {
-                    RunPowercfg("/duplicatescheme e9a42b02-d5df-448d-aa00-03f14749eb61");
-                    RunPowercfg($"/setactive e9a42b02-d5df-448d-aa00-03f14749eb61");
+                    RunPowercfg($"/duplicatescheme {UltimatePerformanceGuid}");
+                    RunPowercfg($"/setactive {UltimatePerformanceGuid}");
                 }
                 else if (planName.Contains("High", StringComparison.OrdinalIgnoreCase))
                     RunPowercfg($"/setactive {HighPerformanceGuid}");

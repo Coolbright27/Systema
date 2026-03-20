@@ -161,7 +161,10 @@ public partial class BloatwareViewModel : ObservableObject, IAutoRefreshable
             StatusMessage = $"Removing {app.DisplayName}...";
             var result = await _bloatware.RemoveAsync(app.PackageName);
             if (result.Success)
+            {
                 succeeded++;
+                Apps.Remove(app); // remove immediately so the UI updates without waiting for a full reload
+            }
             else
             {
                 failed++;

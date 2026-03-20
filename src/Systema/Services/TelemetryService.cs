@@ -108,7 +108,7 @@ public class TelemetryService
 
             var result = errors.Count == 0
                 ? TweakResult.Ok("All telemetry disabled successfully.")
-                : TweakResult.Ok($"Telemetry disabled with {errors.Count} minor errors.");
+                : TweakResult.Fail($"Telemetry partially disabled — {errors.Count} step(s) failed. Check the log for details.");
             Log.LogChange("Telemetry Disabled", result.Message);
             return result;
         });

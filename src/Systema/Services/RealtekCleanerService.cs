@@ -230,6 +230,9 @@ public class RealtekCleanerService
             if (entries.Count == 0)
                 return TweakResult.Ok("No Realtek bloatware found — nothing to remove.");
 
+            // Backup entry metadata to registry before uninstalling so removal can be audited
+            BackupEntries(entries);
+
             int succeeded = 0;
             int failed    = 0;
             var errors    = new List<string>();
@@ -303,6 +306,45 @@ public class RealtekCleanerService
     });
 
     // ── Helpers ───────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Saves a snapshot of the entries' key metadata to HKCU\SOFTWARE\Systema\RealtekBackup
+    /// so the removal can be audited or the data restored manually if needed.
+    /// </summary>
+    private static void BackupEntries(List<RealtekEntry> entries)
+    {
+        try
+        {
+            const string backupKeyPath = @"SOFTWARE\Systema\RealtekBackup";
+            using var backupRoot = Microsoft.Win32.Registry.CurrentUser
+                .CreateSubKey(backupKeyPath, writable: true);
+            if (backupRoot == null) return;
+
+            // Record the backup timestamp
+            backupRoot.SetValue("BackupTime", DateTime.UtcNow.ToString("o"),
+                Microsoft.Win32.RegistryValueKind.String);
+
+            int index = 0;
+            foreach (var entry in entries)
+            {
+                try
+                {
+                    using var entryKey = backupRoot.CreateSubKey($"Entry_{index++}", writable: true);
+                    if (entryKey == null) continue;
+                    entryKey.SetValue("DisplayName",          entry.DisplayName,          Microsoft.Win32.RegistryValueKind.String);
+                    entryKey.SetValue("Version",              entry.Version,              Microsoft.Win32.RegistryValueKind.String);
+                    entryKey.SetValue("UninstallString",      entry.UninstallString,      Microsoft.Win32.RegistryValueKind.String);
+                    entryKey.SetValue("QuietUninstallString", entry.QuietUninstallString, Microsoft.Win32.RegistryValueKind.String);
+                    entryKey.SetValue("RegistryKey",          entry.RegistryKey,          Microsoft.Win32.RegistryValueKind.String);
+                }
+                catch { }
+            }
+        }
+        catch (Exception ex)
+        {
+            _log.Warn("RealtekCleanerService", $"BackupEntries failed: {ex.Message}");
+        }
+    }
 
     /// <summary>
     /// Builds a quiet uninstall command from the entry.

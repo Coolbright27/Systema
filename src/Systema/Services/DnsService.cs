@@ -85,6 +85,10 @@ public class DnsService
 
     public async Task<TweakResult> ApplyProfileAsync(DnsProfile profile)
     {
+        // Validate Primary DNS before doing anything — prevents corrupt netsh calls.
+        if (!string.IsNullOrEmpty(profile.Primary) && string.IsNullOrWhiteSpace(profile.Primary))
+            return TweakResult.Fail("Primary DNS address is invalid.");
+
         Log.Info("DnsService", $"Applying DNS profile: {profile.Name} ({profile.Primary})");
 
         // Run netsh on a large-stack thread — spawning processes can trigger
@@ -99,15 +103,19 @@ public class DnsService
 
                 foreach (var adapter in adapters)
                 {
+                    // Escape any embedded double-quotes in the adapter name to prevent
+                    // command injection when the name is embedded in the netsh argument string.
+                    var safeAdapter = adapter.Replace("\"", "\\\"");
+
                     if (string.IsNullOrEmpty(profile.Primary))
                     {
-                        RunNetsh($"interface ip set dns name=\"{adapter}\" source=dhcp");
+                        RunNetsh($"interface ip set dns name=\"{safeAdapter}\" source=dhcp");
                     }
                     else
                     {
-                        RunNetsh($"interface ip set dns name=\"{adapter}\" static {profile.Primary} primary");
+                        RunNetsh($"interface ip set dns name=\"{safeAdapter}\" static {profile.Primary} primary");
                         if (!string.IsNullOrEmpty(profile.Secondary))
-                            RunNetsh($"interface ip add dns name=\"{adapter}\" {profile.Secondary} index=2");
+                            RunNetsh($"interface ip add dns name=\"{safeAdapter}\" {profile.Secondary} index=2");
                     }
                 }
 

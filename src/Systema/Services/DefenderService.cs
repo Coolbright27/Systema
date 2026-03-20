@@ -20,6 +20,11 @@ public class DefenderService
 {
     private static readonly LoggerService _log = LoggerService.Instance;
 
+    // Limit to one concurrent PowerShell process — Defender's Set-MpPreference
+    // is not re-entrant and launching two instances simultaneously can cause
+    // one to fail with access denied or leave settings in a half-applied state.
+    private readonly SemaphoreSlim _psLock = new(1, 1);
+
     // Windows Defender stores Controlled Folder Access state directly in the registry.
     // Reading it here avoids spawning powershell.exe on every auto-refresh tick.
     private const string CfaKeyPath =
@@ -62,6 +67,23 @@ public class DefenderService
     }
 
     /// <summary>
+    /// Waits for the semaphore then runs a PowerShell Defender command.
+    /// Wraps the static helper so callers don't need to manage the lock themselves.
+    /// </summary>
+    private async Task<TweakResult> RunPowerShellAsync(string command)
+    {
+        await _psLock.WaitAsync();
+        try
+        {
+            return await RunPowerShellCoreAsync(command);
+        }
+        finally
+        {
+            _psLock.Release();
+        }
+    }
+
+    /// <summary>
     /// Reads CFA state directly from the Windows Defender registry key — no process spawn,
     /// no PowerShell overhead, safe to call on any thread including small-stack threadpool threads.
     /// </summary>
@@ -97,8 +119,9 @@ public class DefenderService
     /// Uses a large-stack thread (8 MB) so that Process.Start() — which can trigger
     /// AV/EDR CreateProcess hooks on the calling thread — doesn't overflow the stack.
     /// Only redirects stderr (not stdout) to avoid the classic pipe-buffer deadlock.
+    /// Callers must hold <see cref="_psLock"/> before calling this method.
     /// </summary>
-    private static Task<TweakResult> RunPowerShellAsync(string command)
+    private static Task<TweakResult> RunPowerShellCoreAsync(string command)
     {
         return ThreadHelper.RunOnLargeStackAsync<TweakResult>(() =>
         {

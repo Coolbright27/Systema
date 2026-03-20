@@ -49,6 +49,15 @@ public class UpdateService : IDisposable
     /// <summary>How often to re-check while the app is running (hours).</summary>
     private const double CheckIntervalHours = 2.0;
 
+    /// <summary>Seconds to wait after app startup before the first update check.</summary>
+    private const int StartupDelaySeconds = 20;
+
+    /// <summary>HTTP timeout in seconds for API requests and downloads.</summary>
+    private const int HttpTimeoutSeconds = 120;
+
+    /// <summary>Minimum disk free space (MB) required before starting a download.</summary>
+    private const long MinFreeDiskMb = 200;
+
     /// <summary>CPU must stay below this % to count as "idle".</summary>
     private const float CpuIdleThreshold = 60f;
 
@@ -101,6 +110,7 @@ public class UpdateService : IDisposable
     // Download phase
     private string? _downloadedPath;     // non-null = installer on disk, ready to launch
     private bool    _isDownloading;      // guard: only one download at a time
+    private readonly object _downloadLock = new(); // serialises _downloadedPath/_isDownloading reads+writes
 
     // Install phase — CPU idle gating
     private int      _idleSamples;
@@ -117,10 +127,10 @@ public class UpdateService : IDisposable
     public volatile bool IsGameModeActive;
 
     /// <summary>True while the installer .exe is being downloaded.</summary>
-    public bool IsDownloading => _isDownloading;
+    public bool IsDownloading { get { lock (_downloadLock) return _isDownloading; } }
 
     /// <summary>True when the installer .exe is on disk and ready to launch.</summary>
-    public bool IsReadyToInstall => _downloadedPath != null;
+    public bool IsReadyToInstall { get { lock (_downloadLock) return _downloadedPath != null; } }
 
     // ── HTTP client ───────────────────────────────────────────────────────────
 
@@ -128,7 +138,13 @@ public class UpdateService : IDisposable
 
     static UpdateService()
     {
-        Http = new HttpClient { Timeout = TimeSpan.FromSeconds(120) };
+        // Enforce TLS 1.2/1.3 — prevents downgrade attacks on the update channel.
+        var handler = new HttpClientHandler
+        {
+            SslProtocols = System.Security.Authentication.SslProtocols.Tls12
+                         | System.Security.Authentication.SslProtocols.Tls13
+        };
+        Http = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(HttpTimeoutSeconds) };
         Http.DefaultRequestHeaders.UserAgent.ParseAdd(
             $"Systema-Updater/{GetCurrentVersionString()}");
         Http.DefaultRequestHeaders.Accept.ParseAdd("application/vnd.github+json");
@@ -137,6 +153,38 @@ public class UpdateService : IDisposable
     public UpdateService(SettingsService settings)
     {
         _settings = settings;
+
+        // Clean up any orphaned installer files left by failed previous updates.
+        CleanupOldInstallers();
+    }
+
+    /// <summary>
+    /// Removes any Systema_Setup_*.exe files from the system temp folder that
+    /// are not the currently-downloaded path — prevents disk accumulation from
+    /// failed or interrupted update downloads.
+    /// </summary>
+    private void CleanupOldInstallers()
+    {
+        try
+        {
+            var tempDir = Path.GetTempPath();
+            foreach (var file in Directory.EnumerateFiles(tempDir, "Systema_Setup_*.exe"))
+            {
+                try
+                {
+                    // Keep the file we own in this session; delete everything else.
+                    lock (_downloadLock)
+                    {
+                        if (file.Equals(_downloadedPath, StringComparison.OrdinalIgnoreCase))
+                            continue;
+                    }
+                    File.Delete(file);
+                    _log.Info("AutoUpdate", $"Cleaned up old installer: {Path.GetFileName(file)}");
+                }
+                catch { /* best-effort — skip locked or already-deleted files */ }
+            }
+        }
+        catch { /* never throw from cleanup */ }
     }
 
     // ── Data type ─────────────────────────────────────────────────────────────
@@ -199,16 +247,18 @@ public class UpdateService : IDisposable
     /// </summary>
     public async Task InstallNowAsync()
     {
-        if (_downloadedPath == null) return;
-        await LaunchInstallerAndShutdownAsync(_downloadedPath, CancellationToken.None);
+        string? path;
+        lock (_downloadLock) { path = _downloadedPath; }
+        if (path == null) return;
+        await LaunchInstallerAndShutdownAsync(path, CancellationToken.None);
     }
 
     // ── Background loop ───────────────────────────────────────────────────────
 
     private async Task RunLoopAsync(CancellationToken ct)
     {
-        // Wait 20 s after startup before the first check so launch isn't slowed
-        if (!await DelayAsync(TimeSpan.FromSeconds(20), ct)) return;
+        // Wait after startup before the first check so launch isn't slowed
+        if (!await DelayAsync(TimeSpan.FromSeconds(StartupDelaySeconds), ct)) return;
 
         if (_settings.AutoUpdateEnabled)
             await DoCheckAsync();
@@ -287,10 +337,31 @@ public class UpdateService : IDisposable
 
     private async Task BeginDownloadAsync(UpdateInfo info)
     {
-        // Guard: only one download at a time; skip if already downloaded
-        if (_isDownloading || _downloadedPath != null) return;
+        // Guard: only one download at a time; skip if already downloaded.
+        // Lock makes the compound read+write atomic to prevent race conditions.
+        lock (_downloadLock)
+        {
+            if (_isDownloading || _downloadedPath != null) return;
+            _isDownloading = true;
+        }
 
-        _isDownloading = true;
+        // Check available disk space before starting the download.
+        try
+        {
+            var freeMb = new DriveInfo(Path.GetPathRoot(Path.GetTempPath()) ?? "C:\\")
+                .AvailableFreeSpace / (1024 * 1024);
+            if (freeMb < MinFreeDiskMb)
+            {
+                _log.Warn("AutoUpdate",
+                    $"Skipping download — only {freeMb} MB free on temp drive (need {MinFreeDiskMb} MB)");
+                OnStatus($"Update download skipped — not enough disk space ({freeMb} MB free).");
+                lock (_downloadLock) { _isDownloading = false; }
+                IsDownloadingChanged?.Invoke(false);
+                return;
+            }
+        }
+        catch { /* if we can't check, proceed anyway */ }
+
         IsDownloadingChanged?.Invoke(true);
         DownloadProgressChanged?.Invoke(0);
 
@@ -306,7 +377,7 @@ public class UpdateService : IDisposable
 
             var path = await DownloadInstallerAsync(info, progress);
 
-            _downloadedPath = path;
+            lock (_downloadLock) { _downloadedPath = path; }
             IsReadyToInstallChanged?.Invoke(true);
             OnStatus(
                 $"v{info.Version.ToString(3)} downloaded — " +
@@ -321,18 +392,20 @@ public class UpdateService : IDisposable
         }
         finally
         {
-            _isDownloading = false;
+            lock (_downloadLock) { _isDownloading = false; }
             IsDownloadingChanged?.Invoke(false);
         }
     }
 
     private void ClearDownload()
     {
-        if (_downloadedPath != null)
+        bool wasSet;
+        lock (_downloadLock)
         {
+            wasSet = _downloadedPath != null;
             _downloadedPath = null;
-            IsReadyToInstallChanged?.Invoke(false);
         }
+        if (wasSet) IsReadyToInstallChanged?.Invoke(false);
     }
 
     // ── Install (CPU-gated) ───────────────────────────────────────────────────

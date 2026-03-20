@@ -215,6 +215,20 @@ public sealed class TaskSleepService : IDisposable
         "LockApp", "LogonUI",
         // Diagnostics / perf tools — throttling Task Manager while troubleshooting is confusing
         "Taskmgr", "PerfHost",
+        // ── Anti-cheat services — throttling these causes game kicks or bans ────
+        "vgc",              // Valorant Vanguard anti-cheat
+        "vgtray",           // Vanguard tray
+        "EasyAntiCheat",    // Epic / most popular EAC titles
+        "EasyAntiCheat_EOS",// EAC with Epic Online Services
+        "BEService",        // BattlEye service (PUBG, Rainbow Six, etc.)
+        "BEService_x64",    // BattlEye 64-bit variant
+        "ngs2",             // nProtect GameGuard service
+        "GameGuard",        // nProtect GameGuard
+        "xhunter1",         // XIGNCODE3 anti-cheat
+        "PnkBstrA",         // PunkBuster agent
+        "PnkBstrB",         // PunkBuster background service
+        "EQU8",             // EQU8 anti-cheat
+        "mhyprot2",         // MiHoYo anti-cheat (Genshin / Honkai)
         // This app itself
         "Systema"
     };
@@ -309,13 +323,23 @@ public sealed class TaskSleepService : IDisposable
         _settings = settings;
     }
 
+    // Set by UpdateSettings when the max-concurrent-wakes cap is reduced.
+    // Checked at the start of each Tick() so the monitor thread enforces the new cap safely.
+    private volatile bool _enforceWakeCapOnNextTick;
+
     public void UpdateSettings(TaskSleepSettings settings)
     {
+        int oldMaxWakes;
         lock (_settingsLock)
         {
-            _settings  = settings;
-            _appRules  = settings.AppRules.ToDictionary(r => r.ProcessName, StringComparer.OrdinalIgnoreCase);
+            oldMaxWakes = _settings.MaxConcurrentBriefWakes;
+            _settings   = settings;
+            _appRules   = settings.AppRules.ToDictionary(r => r.ProcessName, StringComparer.OrdinalIgnoreCase);
         }
+
+        // If the cap was reduced, signal the monitor thread to enforce it on the very next tick.
+        if (settings.MaxConcurrentBriefWakes < oldMaxWakes)
+            _enforceWakeCapOnNextTick = true;
     }
 
     // ── Lifecycle ──────────────────────────────────────────────────────────────
@@ -342,6 +366,7 @@ public sealed class TaskSleepService : IDisposable
         if (!_running) return;
         _running = false;
         RestoreAll();
+        _lastSystemCpuPercent = 0; // reset AdaptiveTick state so next Start() samples fresh
         _log.Info("TaskSleepService", "Stopped — all processes restored");
         Notify("Task Sleep is off.");
     }
@@ -397,6 +422,24 @@ public sealed class TaskSleepService : IDisposable
         TaskSleepSettings s;
         Dictionary<string, TaskSleepAppRule> rules;
         lock (_settingsLock) { s = _settings; rules = _appRules; }
+
+        // 4d. If the max-concurrent-wakes cap was reduced, expire excess active brief wakes now.
+        // This runs on the monitor thread so dictionary access is safe (single-threaded tick).
+        if (_enforceWakeCapOnNextTick)
+        {
+            _enforceWakeCapOnNextTick = false;
+            int activeWakes = _briefWakeEndAt.Count + _trayBriefWakeEndAt.Count;
+            int excess = activeWakes - s.MaxConcurrentBriefWakes;
+            if (excess > 0)
+            {
+                // Expire the latest-ending brief wakes first (give priority to those that started earlier)
+                foreach (var pid in _briefWakeEndAt.OrderByDescending(kv => kv.Value)
+                                                    .Take(excess)
+                                                    .Select(kv => kv.Key)
+                                                    .ToList())
+                    _briefWakeEndAt.Remove(pid);
+            }
+        }
 
         // 1. Sample total system CPU
         double sysCpu = SampleSystemCpu();

@@ -106,10 +106,14 @@ public class LoggerService
     {
         var entry = new LogEntry(DateTime.Now, level, source, message, ex?.ToString());
 
-        // Ring buffer — drop oldest if full
+        // Ring buffer — enqueue first, then drain excess in a single atomic TryDequeue
+        // per iteration. ConcurrentQueue is thread-safe for individual operations but
+        // Count+TryDequeue is not atomic, so we over-drain slightly rather than under-drain.
         _ring.Enqueue(entry);
         while (_ring.Count > RingBufferCapacity)
-            _ring.TryDequeue(out _);
+        {
+            if (!_ring.TryDequeue(out _)) break; // nothing left to remove
+        }
 
         // Write to file (non-blocking fire-and-forget — failures are silent)
         _ = Task.Run(() => WriteToFile(entry));
@@ -191,7 +195,7 @@ public class LoggerService
 
     public string SaveCrashReport(Exception? ex, string context = "Unhandled Exception")
     {
-        var logsDir = Path.GetDirectoryName(_logPath)!;
+        var logsDir = Path.GetDirectoryName(_logPath) ?? Path.GetTempPath();
         var crashFile = Path.Combine(logsDir,
             $"crash_{DateTime.Now:yyyy-MM-dd_HH-mm-ss}.txt");
 
@@ -422,41 +426,52 @@ public class LoggerService
         catch { /* never throw from logger */ }
     }
 
-    private static void RotateLogs(string logsDir)
+    private void RotateLogs(string logsDir)
     {
-        try
+        lock (_fileLock)
         {
-            var old = Directory.GetFiles(logsDir, "systema_session*.log")
-                .OrderByDescending(File.GetLastWriteTime)
-                .Skip(4)
-                .ToList();
-            foreach (var f in old)
-                File.Delete(f);
-
-            // Rename current session log
-            var current = Path.Combine(logsDir, LogFileName);
-            if (File.Exists(current))
+            try
             {
-                var archive = Path.Combine(logsDir,
-                    $"systema_session_{File.GetLastWriteTime(current):yyyy-MM-dd_HH-mm-ss}.log");
-                File.Move(current, archive, overwrite: true);
+                var old = Directory.GetFiles(logsDir, "systema_session*.log")
+                    .OrderByDescending(File.GetLastWriteTime)
+                    .Skip(4)
+                    .ToList();
+                foreach (var f in old)
+                {
+                    try { File.Delete(f); }
+                    catch { /* skip files locked by another process */ }
+                }
+
+                // Rename current session log
+                var current = Path.Combine(logsDir, LogFileName);
+                if (File.Exists(current))
+                {
+                    var archive = Path.Combine(logsDir,
+                        $"systema_session_{File.GetLastWriteTime(current):yyyy-MM-dd_HH-mm-ss}.log");
+                    File.Move(current, archive, overwrite: true);
+                }
             }
+            catch { }
         }
-        catch { }
     }
 
     private static string GetDiagGpu()
     {
         try
         {
-            using var searcher = new System.Management.ManagementObjectSearcher(
-                "SELECT Name FROM Win32_VideoController WHERE PNPDeviceID IS NOT NULL");
-            var names = searcher.Get()
-                .Cast<System.Management.ManagementObject>()
-                .Select(o => o["Name"]?.ToString()?.Trim() ?? "Unknown")
-                .Where(n => n != "Unknown")
-                .ToList();
-            return names.Count > 0 ? string.Join(" | ", names) : "Unknown";
+            var task = System.Threading.Tasks.Task.Run(() =>
+            {
+                using var searcher = new System.Management.ManagementObjectSearcher(
+                    "SELECT Name FROM Win32_VideoController WHERE PNPDeviceID IS NOT NULL");
+                var names = searcher.Get()
+                    .Cast<System.Management.ManagementObject>()
+                    .Select(o => o["Name"]?.ToString()?.Trim() ?? "Unknown")
+                    .Where(n => n != "Unknown")
+                    .ToList();
+                return names.Count > 0 ? string.Join(" | ", names) : "Unknown";
+            });
+            // 3-second timeout — WMI GPU query can hang on some machines
+            return task.Wait(3000) ? task.Result : "Unknown (WMI timeout)";
         }
         catch { return "Unknown"; }
     }

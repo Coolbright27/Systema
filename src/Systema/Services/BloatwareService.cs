@@ -169,7 +169,11 @@ public class BloatwareService
     {
         _log.Info("BloatwareService", $"Removing: {packageName}");
 
-        return await Task.Run(() =>
+        // Escape single-quotes to prevent PowerShell string injection
+        // (e.g. package names containing apostrophes would break the command).
+        var safeName = packageName.Replace("'", "''");
+
+        return await Task.Run(async () =>
         {
             try
             {
@@ -178,19 +182,23 @@ public class BloatwareService
                 {
                     FileName               = "powershell.exe",
                     Arguments              = $"-NonInteractive -NoProfile -Command " +
-                                             $"\"Get-AppxPackage -Name '{packageName}' | Remove-AppxPackage\"",
+                                             $"\"Get-AppxPackage -Name '{safeName}' | Remove-AppxPackage\"",
                     UseShellExecute        = false,
                     CreateNoWindow         = true,
                     RedirectStandardOutput = true,
                     RedirectStandardError  = true,
                 };
                 ps.Start();
-                // Read both streams concurrently to avoid pipe-buffer deadlock
+
+                // Read both streams concurrently BEFORE waiting for process exit.
+                // If we called WaitForExit() first, the process would block writing
+                // to its stdout/stderr pipe buffers and the reads would never complete
+                // — a classic deadlock. Await the reads first, then wait for exit.
                 var stdoutTask = ps.StandardOutput.ReadToEndAsync();
                 var stderrTask = ps.StandardError.ReadToEndAsync();
-                ps.WaitForExit();
-                string err = stderrTask.GetAwaiter().GetResult();
-                string out_ = stdoutTask.GetAwaiter().GetResult();
+                string out_ = await stdoutTask;
+                string err  = await stderrTask;
+                await ps.WaitForExitAsync();
 
                 if (ps.ExitCode == 0)
                 {

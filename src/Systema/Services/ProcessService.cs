@@ -76,6 +76,7 @@ public class ProcessService
         {
             Log.Info("ProcessService", "Applying ProBalance throttling");
             int throttled = 0;
+            int failed    = 0;
             foreach (var proc in Process.GetProcesses())
             {
                 try
@@ -87,10 +88,15 @@ public class ProcessService
                         throttled++;
                     }
                 }
-                catch { }
+                catch (Exception ex)
+                {
+                    failed++;
+                    Log.Warn("ProcessService",
+                        $"Could not throttle PID {proc.Id} ({proc.ProcessName}): {ex.Message}");
+                }
             }
-            Log.Info("ProcessService", $"ProBalance throttled {throttled} processes");
-            return TweakResult.Ok($"ProBalance applied to {throttled} background processes.");
+            Log.Info("ProcessService", $"ProBalance throttled {throttled} processes ({failed} skipped/failed)");
+            return TweakResult.Ok($"ProBalance applied to {throttled} background processes ({failed} skipped).");
         });
     }
 

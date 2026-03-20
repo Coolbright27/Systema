@@ -12,6 +12,7 @@
 // spawning if the task fires while Systema is already running.
 // ════════════════════════════════════════════════════════════════════════════
 
+using System.Diagnostics;
 using Microsoft.Win32.TaskScheduler;
 using Systema.Core;
 
@@ -41,8 +42,18 @@ public class WatchdogService
     /// Creates (or replaces) the watchdog scheduled task.
     /// <paramref name="exePath"/> should be the full path to Systema.exe.
     /// </summary>
-    public void Enable(string exePath)
+    public void Enable(string? exePath = null)
     {
+        // Fall back to the current process exe path if the caller didn't supply one
+        if (string.IsNullOrWhiteSpace(exePath))
+            exePath = Process.GetCurrentProcess().MainModule?.FileName ?? string.Empty;
+
+        if (string.IsNullOrWhiteSpace(exePath))
+        {
+            _log.Warn("Watchdog", "Enable called but could not determine exe path — task not registered");
+            return;
+        }
+
         try
         {
             using var ts = new TaskService();

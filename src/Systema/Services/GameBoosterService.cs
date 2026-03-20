@@ -560,8 +560,33 @@ public sealed class GameBoosterService : IDisposable
                 try
                 {
                     foreach (var game in KnownGameProcesses)
-                        if (proc.ProcessName.Equals(game, StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (game.StartsWith("*") && game.EndsWith("*"))
+                        {
+                            // *fragment* → contains match
+                            var frag = game[1..^1];
+                            if (proc.ProcessName.Contains(frag, StringComparison.OrdinalIgnoreCase))
+                                return proc.ProcessName;
+                        }
+                        else if (game.StartsWith("*"))
+                        {
+                            // *suffix → ends-with match
+                            var suffix = game[1..];
+                            if (proc.ProcessName.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+                                return proc.ProcessName;
+                        }
+                        else if (game.EndsWith("*"))
+                        {
+                            // prefix* → starts-with match
+                            var prefix = game[..^1];
+                            if (proc.ProcessName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                                return proc.ProcessName;
+                        }
+                        else if (proc.ProcessName.Equals(game, StringComparison.OrdinalIgnoreCase))
+                        {
                             return game;
+                        }
+                    }
 
                     // Check anti-cheats as a proxy for a game running
                     foreach (var ac in AntiCheatProcesses)
@@ -631,7 +656,11 @@ public sealed class GameBoosterService : IDisposable
         var capturedGameName = gameName;
         return () =>
         {
-            BoostActivated?.Invoke(capturedGameName);
+            var dispatcher = System.Windows.Application.Current?.Dispatcher;
+            if (dispatcher != null && !dispatcher.CheckAccess())
+                dispatcher.BeginInvoke(() => BoostActivated?.Invoke(capturedGameName));
+            else
+                BoostActivated?.Invoke(capturedGameName);
             _tray?.SetTooltip($"Systema — Boosting: {capturedGameName}");
             _tray?.ShowBalloon("Game Boost Active",
                 $"Boosting for {capturedGameName}. Non-essential services suspended.",
@@ -686,7 +715,11 @@ public sealed class GameBoosterService : IDisposable
         // Return UI/tray notifications as an action to fire outside the lock.
         return () =>
         {
-            BoostDeactivated?.Invoke();
+            var dispatcher = System.Windows.Application.Current?.Dispatcher;
+            if (dispatcher != null && !dispatcher.CheckAccess())
+                dispatcher.BeginInvoke(() => BoostDeactivated?.Invoke());
+            else
+                BoostDeactivated?.Invoke();
             _tray?.SetTooltip("Systema — Windows Optimizer");
             _tray?.ShowBalloon("Game Boost Ended", "Services restored to normal.", System.Windows.Forms.ToolTipIcon.Info);
         };
@@ -778,7 +811,11 @@ public sealed class GameBoosterService : IDisposable
         if (_settings.GameBoosterDisableNagle)          ApplyDisableNagle();
         if (_settings.GameBoosterFlushDns)              FlushDns();
         if (_settings.GameBoosterNicPowerSaving)        ApplyNicPowerSaving();
-        if (_settings.GameBoosterDisableWifiOnEthernet) ApplyDisableWifi();
+        // WiFi disable uses NetworkInterface and WLAN API — both can trigger network driver
+        // callbacks that block the calling thread for several seconds. Fire on a threadpool
+        // thread so the DispatcherTimer tick (or lock-holding background thread) is not stalled.
+        if (_settings.GameBoosterDisableWifiOnEthernet)
+            _ = System.Threading.Tasks.Task.Run(ApplyDisableWifi);
 
         // 1. Aggressively trim RAM from background processes:
         //    Step 1 — per-process: remove working-set floor then flush pages to standby list.
@@ -825,7 +862,7 @@ public sealed class GameBoosterService : IDisposable
                 }
                 catch (Exception ex2) { _log.Warn("GameBoosterService", $"StandbyPurge failed: {ex2.Message}"); }
 
-                _log.Info("GameBoosterService", $"Freed memory from {trimmed} background processes");
+                _log.Info("GameBoosterService", $"Trimmed working sets of {trimmed} background processes to free RAM for {gameName}");
             }
             catch (Exception ex) { _log.Warn("GameBoosterService", $"FreeMemory failed: {ex.Message}"); }
         }

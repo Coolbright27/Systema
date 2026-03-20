@@ -50,7 +50,8 @@ public partial class App : Application
 
     // Prevents ShowCrashOnUIThread from being invoked recursively if the crash
     // window itself triggers another unhandled exception on the dispatcher.
-    private static volatile bool _crashHandlerActive;
+    // Uses int + Interlocked to make the check-and-set atomic (volatile bool cannot).
+    private static int _crashHandlerActiveInt;
 
     // Services held at App level so they outlive any single window
     private TrayService?   _trayService;
@@ -345,10 +346,10 @@ public partial class App : Application
 
     private void ShowCrashOnUIThread(Exception? ex, string context)
     {
-        // If we're already showing a crash report, skip — prevents infinite recursion
-        // if CrashReportWindow itself causes a DispatcherUnhandledException.
-        if (_crashHandlerActive) return;
-        _crashHandlerActive = true;
+        // Atomically claim the handler slot — if another call already owns it, bail out.
+        // Interlocked.CompareExchange makes the read+set a single atomic operation,
+        // preventing the TOCTOU race that volatile bool cannot prevent.
+        if (Interlocked.CompareExchange(ref _crashHandlerActiveInt, 1, 0) != 0) return;
         try
         {
             CrashReportWindow.ShowCrash(ex, context);
@@ -362,7 +363,7 @@ public partial class App : Application
                 MessageBoxImage.Stop);
             Shutdown(1);
         }
-        finally { _crashHandlerActive = false; }
+        finally { Interlocked.Exchange(ref _crashHandlerActiveInt, 0); }
     }
 
     // ── Windows session ending (logoff / shutdown / restart) ──────────────────

@@ -35,10 +35,23 @@ public class HealthScoreService
     // we fall back to defaults after this timeout rather than blocking forever.
     private static readonly TimeSpan ScoreTimeout = TimeSpan.FromSeconds(12);
 
+    // CPU score thresholds — percentage of total CPU utilisation
+    private const float CpuExcellentThreshold = 10f;  // < 10% → 100
+    private const float CpuGoodThreshold      = 30f;  // < 30% → 85
+    private const float CpuFairThreshold      = 60f;  // < 60% → 65
+    private const float CpuPoorThreshold      = 80f;  // < 80% → 40, else 20
+
     // Rolling average over the last 3 scans — prevents scores from jumping 20+ points
     // between ticks due to a momentary CPU spike or a brief GC pause during sampling.
     private readonly Queue<SystemHealthScore> _scoreHistory = new();
     private const int ScoreHistoryDepth = 3;
+
+    // Last-known sub-scores used as timeout fallbacks — better than a hardcoded 70
+    // because they reflect the actual system state from the most recent successful scan.
+    private int _lastCpuScore      = 70;
+    private int _lastRamScore      = 70;
+    private int _lastStartupScore  = 70;
+    private int _lastSecurityScore = 50;
 
     public HealthScoreService(
         MemoryService    memoryService,
@@ -75,12 +88,19 @@ public class HealthScoreService
                 $"Health score computation timed out after {ScoreTimeout.TotalSeconds:0} s — using partial results");
         }
 
-        // Read whatever completed; fall back to 70 for anything still pending or faulted
-        int cpuScore      = SafeResult(cpuTask,      70);
-        int ramScore      = SafeResult(ramTask,      70);
-        int startupScore  = SafeResult(startupTask,  70);
-        int securityScore = SafeResult(securityTask, 50);
-        int overall       = (cpuScore + ramScore + startupScore + securityScore) / 4;
+        // Read whatever completed; fall back to last-known scores for anything still pending or faulted
+        int cpuScore      = SafeResult(cpuTask,      _lastCpuScore);
+        int ramScore      = SafeResult(ramTask,      _lastRamScore);
+        int startupScore  = SafeResult(startupTask,  _lastStartupScore);
+        int securityScore = SafeResult(securityTask, _lastSecurityScore);
+
+        // Update cached last-known scores only for tasks that actually completed
+        if (cpuTask.IsCompletedSuccessfully)      _lastCpuScore      = cpuScore;
+        if (ramTask.IsCompletedSuccessfully)       _lastRamScore      = ramScore;
+        if (startupTask.IsCompletedSuccessfully)   _lastStartupScore  = startupScore;
+        if (securityTask.IsCompletedSuccessfully)  _lastSecurityScore = securityScore;
+
+        int overall = (cpuScore + ramScore + startupScore + securityScore) / 4;
 
         // Push raw result into rolling history, keep last ScoreHistoryDepth entries
         _scoreHistory.Enqueue(new SystemHealthScore
@@ -115,7 +135,11 @@ public class HealthScoreService
             counter.NextValue();
             Thread.Sleep(500);
             float cpu = counter.NextValue();
-            return cpu < 10 ? 100 : cpu < 30 ? 85 : cpu < 60 ? 65 : cpu < 80 ? 40 : 20;
+            return cpu < CpuExcellentThreshold ? 100
+                 : cpu < CpuGoodThreshold      ? 85
+                 : cpu < CpuFairThreshold      ? 65
+                 : cpu < CpuPoorThreshold      ? 40
+                 : 20;
         }
         catch (Exception ex)
         {

@@ -197,7 +197,7 @@ public class StartupService
                 else
                 {
                     using var runKey      = hive.OpenSubKey(basePath, true);
-                    var disabledKeyObj    = hive.CreateSubKey(disabled);
+                    using var disabledKeyObj = hive.CreateSubKey(disabled);
                     if (runKey != null && disabledKeyObj != null)
                     {
                         var value = runKey.GetValue(item.Name);

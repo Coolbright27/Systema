@@ -255,7 +255,7 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
                     {
                         Label  = "Balanced on battery",
                         IsDone = battOk,
-                        Detail = battOk ? "Enabled — switches to Balanced when unplugged" : "Not configured",
+                        Detail = battOk ? "Balanced on battery, High Performance on AC" : "Not configured — click Optimize to enable",
                     });
                 }
 
@@ -401,7 +401,7 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
         catch (Exception ex)
         {
             _log.Error("DashboardViewModel", "Auto-Pilot failed", ex);
-            StatusMessage = $"Auto-Pilot error: {ex.Message}";
+            StatusMessage = $"Auto-Pilot partially applied — one or more steps failed: {ex.Message}";
         }
         finally
         {

@@ -307,7 +307,12 @@ public static class CrashGuard
             lock (_writeLock)
             {
                 EnsureDirectory();
-                File.WriteAllText(SentinelPath, content);
+                // Write to a temp file first, then atomically rename to the sentinel path.
+                // This prevents a crash mid-write from leaving a corrupt/empty sentinel file
+                // that would show a misleading crash report on the next startup.
+                var tmp = SentinelPath + ".tmp";
+                File.WriteAllText(tmp, content);
+                File.Move(tmp, SentinelPath, overwrite: true);
             }
         }
         catch { /* never throw from crash handler */ }

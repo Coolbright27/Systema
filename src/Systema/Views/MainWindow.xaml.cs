@@ -30,6 +30,7 @@ public partial class MainWindow : Window
     private void MinimizeButton_Click(object sender, RoutedEventArgs e)
     {
         Hide(); // collapses to tray; App.xaml.cs re-shows on tray icon double-click
+        (DataContext as MainViewModel)?.SetTrayOnly(true);
         (Application.Current as App)?.NotifyWindowHidden();
     }
 
@@ -42,11 +43,15 @@ public partial class MainWindow : Window
     private void CloseButton_Click(object sender, RoutedEventArgs e)
     {
         Hide();
+        (DataContext as MainViewModel)?.SetTrayOnly(true);
         (Application.Current as App)?.NotifyWindowHidden();
     }
 
     private void Window_Activated(object sender, EventArgs e)
-        => (DataContext as MainViewModel)?.SetFocused(true);
+    {
+        (DataContext as MainViewModel)?.SetTrayOnly(false);
+        (DataContext as MainViewModel)?.SetFocused(true);
+    }
 
     private void Window_Deactivated(object sender, EventArgs e)
         => (DataContext as MainViewModel)?.SetFocused(false);
