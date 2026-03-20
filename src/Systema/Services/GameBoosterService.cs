@@ -121,8 +121,8 @@ public sealed class GameBoosterService : IDisposable
     // Nagle / NIC power — list of (HKLM-relative path, value name, original value or null=delete)
     private List<(string path, string name, object? val)>? _nagleRestore;
     private List<(string path, string name, object? val)>? _nicPowerRestore;
-    // Wi-Fi disable — true if we stopped WlanSvc to turn off the radio
-    private bool _wifiServiceStopped;
+    // Wi-Fi disable — true if we turned the software radio off via WLAN API
+    private bool _wifiRadioDisabled;
 
     public bool IsEnabled             => _settings.GameBoosterEnabled;
     public bool BoostActive           => _boostActive;
@@ -1170,21 +1170,64 @@ public sealed class GameBoosterService : IDisposable
         _log.Info("GameBoosterService", "NIC power saving restored");
     }
 
+    // ── P/Invoke: WLAN API (wlanapi.dll) — software radio toggle ─────────────
+    //
+    // WlanSetInterface with wlan_intf_opcode_radio_state is the same call that
+    // Windows Quick Settings makes internally (via RadioManager.dll → IRadioManager).
+    // It sets the SOFTWARE radio state per-interface, and Quick Settings will
+    // immediately reflect the change (toggle shows grey/off).
+
+    private enum WlanIntfOpcode : uint { RadioState = 4 }
+    private enum Dot11RadioState : uint { Unknown = 0, On = 1, Off = 2 }
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    private struct WlanInterfaceInfo
+    {
+        public Guid   InterfaceGuid;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 256)]
+        public string strInterfaceDescription;
+        public int    isState;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct WlanPhyRadioState
+    {
+        public uint          dwPhyIndex;
+        public Dot11RadioState dot11SoftwareRadioState;
+        public Dot11RadioState dot11HardwareRadioState;
+    }
+
+    [DllImport("wlanapi.dll", SetLastError = true)]
+    private static extern uint WlanOpenHandle(uint dwClientVersion, IntPtr pReserved,
+        out uint pdwNegotiatedVersion, out IntPtr phClientHandle);
+
+    [DllImport("wlanapi.dll")]
+    private static extern uint WlanCloseHandle(IntPtr hClientHandle, IntPtr pReserved);
+
+    [DllImport("wlanapi.dll")]
+    private static extern uint WlanEnumInterfaces(IntPtr hClientHandle, IntPtr pReserved,
+        out IntPtr ppInterfaceList);
+
+    [DllImport("wlanapi.dll")]
+    private static extern uint WlanSetInterface(IntPtr hClientHandle, ref Guid pInterfaceGuid,
+        WlanIntfOpcode OpCode, uint dwDataSize, IntPtr pData, IntPtr pReserved);
+
+    [DllImport("wlanapi.dll")]
+    private static extern void WlanFreeMemory(IntPtr pMemory);
+
     // ·· Disable Wi-Fi when Ethernet is active ··································
     //
-    // Strategy: stop the WlanSvc Windows service.
-    // Disabling a network adapter only removes it from the stack — the Wi-Fi radio
-    // stays on and Quick Settings still shows the toggle as enabled.
-    // Stopping WlanSvc turns the radio off entirely, which is what the Quick Settings
-    // Wi-Fi toggle does, and it will show as off/unavailable in Settings.
+    // Strategy: use WlanSetInterface(wlan_intf_opcode_radio_state, Off) via wlanapi.dll.
+    // This sets the SOFTWARE radio state on each Wi-Fi interface — identical to what
+    // the Windows Quick Settings Wi-Fi toggle does internally. Quick Settings will
+    // immediately show the toggle as grey/off.
 
     private void ApplyDisableWifi()
     {
-        _wifiServiceStopped = false;
+        _wifiRadioDisabled = false;
         try
         {
             // Only disable Wi-Fi when at least one wired adapter is up.
-            // Broad check: any non-loopback, non-tunnel, non-wireless, non-virtual Up adapter.
             bool ethernetUp = NetworkInterface.GetAllNetworkInterfaces()
                 .Any(n => n.OperationalStatus == OperationalStatus.Up
                        && n.NetworkInterfaceType != NetworkInterfaceType.Loopback
@@ -1200,40 +1243,78 @@ public sealed class GameBoosterService : IDisposable
                 return;
             }
 
-            // Stop WlanSvc — this turns off the Wi-Fi radio at the Windows level.
-            // Quick Settings will show Wi-Fi as off/unavailable, same as the toggle.
-            using var wlan = new ServiceController("WlanSvc");
-            wlan.Refresh();
-            if (wlan.Status != ServiceControllerStatus.Running)
-            {
-                _log.Info("GameBoosterService", "DisableWifi: WlanSvc already stopped — skipping");
-                return;
-            }
-
-            wlan.Stop();
-            PollForStatus(wlan, ServiceControllerStatus.Stopped, timeoutSeconds: 10);
-            _wifiServiceStopped = true;
-            _log.Info("GameBoosterService", "DisableWifi: WlanSvc stopped — Wi-Fi radio off");
+            _wifiRadioDisabled = SetWifiSoftwareRadio(Dot11RadioState.Off);
+            _log.Info("GameBoosterService",
+                _wifiRadioDisabled
+                    ? "DisableWifi: Wi-Fi software radio turned off (Quick Settings will show grey)"
+                    : "DisableWifi: no Wi-Fi interfaces found or WLAN API unavailable");
         }
         catch (Exception ex) { _log.Warn("GameBoosterService", $"ApplyDisableWifi failed: {ex.Message}"); }
     }
 
     private void RestoreWifi()
     {
-        if (!_wifiServiceStopped) return;
-        _wifiServiceStopped = false;
+        if (!_wifiRadioDisabled) return;
+        _wifiRadioDisabled = false;
         try
         {
-            using var wlan = new ServiceController("WlanSvc");
-            wlan.Refresh();
-            if (wlan.Status != ServiceControllerStatus.Running)
-            {
-                wlan.Start();
-                PollForStatus(wlan, ServiceControllerStatus.Running, timeoutSeconds: 10);
-                _log.Info("GameBoosterService", "RestoreWifi: WlanSvc started — Wi-Fi radio restored");
-            }
+            bool ok = SetWifiSoftwareRadio(Dot11RadioState.On);
+            _log.Info("GameBoosterService",
+                ok ? "RestoreWifi: Wi-Fi software radio restored" : "RestoreWifi: WLAN API call failed");
         }
         catch (Exception ex) { _log.Warn("GameBoosterService", $"RestoreWifi failed: {ex.Message}"); }
+    }
+
+    /// <summary>
+    /// Sets the software radio state on all Wi-Fi interfaces via wlanapi.dll.
+    /// Returns true if at least one interface was updated.
+    /// </summary>
+    private bool SetWifiSoftwareRadio(Dot11RadioState state)
+    {
+        if (WlanOpenHandle(2, IntPtr.Zero, out _, out IntPtr hClient) != 0) return false;
+        try
+        {
+            if (WlanEnumInterfaces(hClient, IntPtr.Zero, out IntPtr pList) != 0) return false;
+            try
+            {
+                // The list struct begins with dwNumberOfItems (DWORD) + dwIndex (DWORD),
+                // followed immediately by an inline array of WLAN_INTERFACE_INFO.
+                uint count  = (uint)Marshal.ReadInt32(pList, 0);
+                int infoSz  = Marshal.SizeOf<WlanInterfaceInfo>();
+                IntPtr pArr = pList + 8; // skip dwNumberOfItems + dwIndex
+                bool any    = false;
+
+                for (int i = 0; i < count; i++)
+                {
+                    var info = Marshal.PtrToStructure<WlanInterfaceInfo>(pArr + i * infoSz);
+                    var guid = info.InterfaceGuid;
+
+                    // Iterate PHY indices 0..7 to cover multi-band adapters (2.4 GHz + 5 GHz + 6 GHz)
+                    for (uint phy = 0; phy < 8; phy++)
+                    {
+                        var rs = new WlanPhyRadioState
+                        {
+                            dwPhyIndex             = phy,
+                            dot11SoftwareRadioState = state,
+                            dot11HardwareRadioState = Dot11RadioState.On,
+                        };
+                        int sz   = Marshal.SizeOf<WlanPhyRadioState>();
+                        IntPtr p = Marshal.AllocHGlobal(sz);
+                        try
+                        {
+                            Marshal.StructureToPtr(rs, p, false);
+                            uint ret = WlanSetInterface(hClient, ref guid, WlanIntfOpcode.RadioState, (uint)sz, p, IntPtr.Zero);
+                            if (ret == 0) any = true;
+                            else break; // non-zero for this PHY index → no more PHYs
+                        }
+                        finally { Marshal.FreeHGlobal(p); }
+                    }
+                }
+                return any;
+            }
+            finally { WlanFreeMemory(pList); }
+        }
+        finally { WlanCloseHandle(hClient, IntPtr.Zero); }
     }
 
     // ── Xbox Services Logic ────────────────────────────────────────────────────
