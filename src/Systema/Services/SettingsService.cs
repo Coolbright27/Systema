@@ -306,6 +306,12 @@ public class SettingsService
         set => WriteBool(nameof(AutoUpdateEnabled), value);
     }
 
+    public bool KeepSystemaRunning
+    {
+        get => ReadBool(nameof(KeepSystemaRunning), defaultValue: false);
+        set => WriteBool(nameof(KeepSystemaRunning), value);
+    }
+
     // ── Generic helpers ───────────────────────────────────────────────────────
 
     // Single lock serializes all concurrent registry reads and writes to prevent

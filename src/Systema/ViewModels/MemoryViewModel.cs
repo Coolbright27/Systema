@@ -42,6 +42,10 @@ public partial class MemoryViewModel : ObservableObject, IAutoRefreshable
     [ObservableProperty] private bool _isLoading;
     [ObservableProperty] private string _statusMessage = string.Empty;
 
+    // Free RAM card
+    [ObservableProperty] private bool   _isFreeing;
+    [ObservableProperty] private string _freeRamStatus = string.Empty;
+
     public long UsedRamMb => TotalRamMb - AvailableRamMb;
     public double RamUsagePercent => TotalRamMb > 0 ? (double)UsedRamMb / TotalRamMb * 100 : 0;
 
@@ -217,6 +221,35 @@ public partial class MemoryViewModel : ObservableObject, IAutoRefreshable
         {
             _log.Error("MemoryViewModel", "Toggle startup item failed", ex);
             StatusMessage = $"Error: {ex.Message}";
+        }
+    }
+
+    [RelayCommand]
+    private async Task FreeRamAsync()
+    {
+        if (IsFreeing) return;
+        IsFreeing     = true;
+        FreeRamStatus = "Flushing working sets and clearing standby RAM...";
+        try
+        {
+            var (freed, msg) = await Task.Run(() => _memoryService.FreeRam());
+            FreeRamStatus = msg;
+
+            // Refresh the available RAM display immediately after
+            var (total, avail) = await Task.Run(() => _memoryService.GetRamStats());
+            TotalRamMb     = total;
+            AvailableRamMb = avail;
+            OnPropertyChanged(nameof(UsedRamMb));
+            OnPropertyChanged(nameof(RamUsagePercent));
+        }
+        catch (Exception ex)
+        {
+            _log.Error("MemoryViewModel", "FreeRam failed", ex);
+            FreeRamStatus = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            IsFreeing = false;
         }
     }
 }

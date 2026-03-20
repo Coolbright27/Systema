@@ -58,6 +58,9 @@ public partial class App : Application
     private MainViewModel? _mainVm;
     private UpdateService? _updateService;
 
+    // Single-instance guard — prevents the watchdog task from spawning duplicates
+    private static Mutex? _singleInstanceMutex;
+
     protected override void OnStartup(StartupEventArgs e)
     {
         // ── Wire all global exception handlers before anything else ──
@@ -71,6 +74,18 @@ public partial class App : Application
         ShutdownMode = ShutdownMode.OnExplicitShutdown;
 
         Log.Info("App", "Starting Systema...");
+
+        // ── Single-instance guard ──
+        // If the watchdog task (or user) launches a second instance while Systema
+        // is already running, this mutex catches it and exits immediately.
+        _singleInstanceMutex = new Mutex(true, "Global\\SystemaSingleInstance", out bool isNewInstance);
+        if (!isNewInstance)
+        {
+            Log.Info("App", "Another instance is already running — exiting");
+            _singleInstanceMutex.Dispose();
+            Shutdown(0);
+            return;
+        }
 
         // ── Check for crash from previous session ──
         // CrashGuard writes a sentinel file before risky operations and deletes it
@@ -122,6 +137,7 @@ public partial class App : Application
             var wuTweaksService     = new WindowsUpdateTweaksService();
             var bloatwareService    = new BloatwareService();
             _updateService          = new UpdateService(settingsService);
+            var watchdogService     = new WatchdogService();
             var healthService       = new HealthScoreService(
                 memoryService, startupService, telemetryService,
                 animationService, powerPlanService);
@@ -145,7 +161,7 @@ public partial class App : Application
             var servicesVm    = new ServicesViewModel(serviceControl, optFeatures, restoreService, settingsService);
             var visualVm      = new VisualViewModel(animationService, powerPlanService, settingsService);
             var gameBoosterVm = new GameBoosterViewModel(gameboosterService, settingsService);
-            var settingsVm    = new SettingsViewModel(settingsService, restoreService, _updateService);
+            var settingsVm    = new SettingsViewModel(settingsService, restoreService, _updateService, watchdogService);
             var toolsVm       = new ToolsViewModel(
                 realtekService, coreParkingService, restoreService, settingsService, dnsService, wuTweaksService);
             var bloatwareVm   = new BloatwareViewModel(bloatwareService, restoreService, settingsService);

@@ -223,7 +223,10 @@ public class BloatwareService
             ps.StartInfo = new ProcessStartInfo
             {
                 FileName               = "powershell.exe",
-                Arguments              = "-NonInteractive -NoProfile -Command \"Get-AppxPackage | Select-Object -ExpandProperty Name\"",
+                // -User $env:USERNAME ensures we enumerate the current user's packages
+                // even when the process is running elevated (without this, Get-AppxPackage
+                // can return provisioned/system packages instead of the user's installed set).
+                Arguments              = "-NonInteractive -NoProfile -Command \"Get-AppxPackage -User $env:USERNAME | Select-Object -ExpandProperty Name\"",
                 UseShellExecute        = false,
                 CreateNoWindow         = true,
                 RedirectStandardOutput = true,

@@ -120,6 +120,42 @@
                         <CheckBox Grid.Column="1" IsChecked="{Binding StartWithWindows}"
                                   Style="{StaticResource ToggleSwitch}" VerticalAlignment="Center"/>
                     </Grid>
+
+                    <Separator Margin="0,16,0,16" Background="{StaticResource BorderBrush}" Height="1" Opacity="0.3"/>
+
+                    <!-- Keep Systema Running -->
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                            <TextBlock Text="Keep Systema Running" Style="{StaticResource BodyText}"
+                                       Foreground="{StaticResource TextPrimaryBrush}" FontWeight="SemiBold"/>
+                            <TextBlock Style="{StaticResource BodyText}" Foreground="{StaticResource TextSecondaryBrush}"
+                                       TextWrapping="Wrap" Margin="0,2,16,0">
+                                Registers a Windows Task Scheduler watchdog that checks every 5 minutes and
+                                restarts Systema automatically if it ever stops — even after a crash or accidental close.
+                            </TextBlock>
+                            <!-- Status feedback -->
+                            <TextBlock Text="{Binding KeepRunningStatus}"
+                                       Foreground="{StaticResource AccentGreenBrush}"
+                                       FontSize="11" TextWrapping="Wrap" Margin="0,4,16,0">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Visibility" Value="Visible"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding KeepRunningStatus}" Value="">
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </StackPanel>
+                        <CheckBox Grid.Column="1" IsChecked="{Binding KeepSystemaRunning}"
+                                  Style="{StaticResource ToggleSwitch}" VerticalAlignment="Center"/>
+                    </Grid>
                 </StackPanel>
             </Border>
 
@@ -331,7 +367,7 @@
 
             <!-- Version footer -->
             <TextBlock Grid.Row="16"
-                       Text="Systema v1.6.8  ·  For support visit discord.gg/DjxBswDeN8"
+                       Text="Systema v1.6.13  ·  For support visit discord.gg/DjxBswDeN8"
                        Style="{StaticResource BodyText}" Foreground="{StaticResource TextSecondaryBrush}"
                        TextWrapping="Wrap"/>
         </Grid>

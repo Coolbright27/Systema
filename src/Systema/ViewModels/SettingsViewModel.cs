@@ -32,6 +32,7 @@ public partial class SettingsViewModel : ObservableObject
     private readonly SettingsService     _settings;
     private readonly RestorePointService _restoreService;
     private readonly UpdateService       _updateService;
+    private readonly WatchdogService     _watchdog;
     private static readonly LoggerService _log = LoggerService.Instance;
 
     // ── Restore Point ─────────────────────────────────────────────────────────
@@ -70,6 +71,33 @@ public partial class SettingsViewModel : ObservableObject
     {
         _settings.StartWithWindows = value;
         _log.Info("Settings", $"StartWithWindows set to {value}");
+    }
+
+    [ObservableProperty] private bool _keepSystemaRunning;
+    [ObservableProperty] private string _keepRunningStatus = string.Empty;
+
+    partial void OnKeepSystemaRunningChanged(bool value)
+    {
+        _settings.KeepSystemaRunning = value;
+        _log.Info("Settings", $"KeepSystemaRunning set to {value}");
+        try
+        {
+            if (value)
+            {
+                var exePath = System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName ?? string.Empty;
+                _watchdog.Enable(exePath);
+                KeepRunningStatus = "Watchdog task active — Systema will restart if closed.";
+            }
+            else
+            {
+                _watchdog.Disable();
+                KeepRunningStatus = "Watchdog removed — Systema can be closed normally.";
+            }
+        }
+        catch (Exception ex)
+        {
+            KeepRunningStatus = $"Failed: {ex.Message}";
+        }
     }
 
     // ── Export / Import ───────────────────────────────────────────────────────
@@ -220,11 +248,13 @@ public partial class SettingsViewModel : ObservableObject
     public SettingsViewModel(
         SettingsService     settings,
         RestorePointService restoreService,
-        UpdateService       updateService)
+        UpdateService       updateService,
+        WatchdogService     watchdog)
     {
         _settings       = settings;
         _restoreService = restoreService;
         _updateService  = updateService;
+        _watchdog       = watchdog;
 
         // Load persisted values without triggering OnChanged (avoids a redundant write)
         _skipRestorePoint         = _settings.SkipRestorePoint;
@@ -232,6 +262,7 @@ public partial class SettingsViewModel : ObservableObject
         _xboxServicesUserOverride = _settings.XboxServicesUserOverride;
         _startWithWindows         = _settings.StartWithWindows;
         _autoUpdateEnabled        = _settings.AutoUpdateEnabled;
+        _keepSystemaRunning       = _watchdog.IsEnabled; // read live from Task Scheduler
 
         // Subscribe to UpdateService events — must dispatch to UI thread since
         // the auto-update loop runs on a background thread.

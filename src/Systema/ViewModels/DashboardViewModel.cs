@@ -87,6 +87,10 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
     [ObservableProperty] private int    _autoPilotPendingCount;
     [ObservableProperty] private string _autoPilotButtonText = "Checking…";
 
+    // Throttle: re-check auto-pilot status at most once every 30s during refresh ticks
+    private DateTime _lastAutoPilotCheck = DateTime.MinValue;
+    private int      _autoPilotCheckInFlight; // Interlocked flag
+
     /// <summary>Live checklist shown inside the Auto-Pilot card.</summary>
     public ObservableCollection<AutoPilotItem> AutoPilotChecklist { get; } = new();
 
@@ -179,6 +183,17 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
 
         StatusMessage = $"Systema is running · {DateTime.Now:HH:mm}";
 
+        // Re-check Auto-Pilot status every 30 s so changes made in other tabs are
+        // reflected as soon as the user navigates back to the Dashboard.
+        if (!IsAutoPilotRunning &&
+            (DateTime.Now - _lastAutoPilotCheck).TotalSeconds >= 30 &&
+            Interlocked.CompareExchange(ref _autoPilotCheckInFlight, 1, 0) == 0)
+        {
+            _lastAutoPilotCheck = DateTime.Now;
+            _ = CheckAutoPilotStatusAsync().ContinueWith(_ =>
+                Interlocked.Exchange(ref _autoPilotCheckInFlight, 0));
+        }
+
         return Task.CompletedTask;
     }
 
@@ -234,14 +249,13 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
                 // 4. Balanced on battery (only if battery present)
                 if (_powerPlan.HasBattery())
                 {
-                    // We flag it as done if High Perf is active (auto-pilot always sets
-                    // the DC cap alongside it, so if plan is set the cap was too)
-                    if (!planOk) pending++;
+                    bool battOk = !string.IsNullOrEmpty(_settings.BatteryOptimizationMode);
+                    if (!battOk) pending++;
                     items.Add(new AutoPilotItem
                     {
                         Label  = "Balanced on battery",
-                        IsDone = planOk,
-                        Detail = planOk ? "99% DC cap configured" : "Will configure on battery",
+                        IsDone = battOk,
+                        Detail = battOk ? "Enabled — switches to Balanced when unplugged" : "Not configured",
                     });
                 }
 
@@ -344,11 +358,16 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
             await _powerPlan.SetHighPerformanceAsync();
             _log.Info("DashboardViewModel", "Power plan → High Performance");
 
-            // 4. Balanced DC cap on battery (if applicable)
+            // 4. Balanced on battery (if applicable) — set the persisted setting and apply
+            //    immediately if currently on battery. VisualViewModel's PowerModeChanged
+            //    handler reads BatteryOptimizationMode from settings on plug/unplug, so
+            //    it will auto-switch plans even though Auto-Pilot bypasses VisualViewModel.
             if (_powerPlan.HasBattery())
             {
-                await _powerPlan.SetBalancedOnBatteryAsync();
-                _log.Info("DashboardViewModel", "Battery DC cap set to 99%");
+                _settings.BatteryOptimizationMode = "balanced";
+                if (_powerPlan.IsOnBattery())
+                    await _powerPlan.SetBalancedOnBatteryAsync(); // switch to Balanced right now
+                _log.Info("DashboardViewModel", "Battery optimization enabled (Balanced on battery)");
             }
 
             // 5. Game Boost master switch on

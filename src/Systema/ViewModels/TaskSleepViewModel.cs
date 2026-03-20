@@ -127,6 +127,12 @@ public partial class TaskSleepViewModel : ObservableObject
         LoadSettings();
         LoadWhitelist();
 
+        // Explicitly sync service state after loading settings.
+        // CommunityToolkit.Mvvm skips OnIsEnabledChanged when the loaded value
+        // equals the field default (both true), so the service would never start
+        // on subsequent launches without this explicit call.
+        if (IsEnabled) _service.Start();
+
         _monitorTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
         _monitorTimer.Tick += (_, _) => RefreshMonitor();
         _monitorTimer.Start();

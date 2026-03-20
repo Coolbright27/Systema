@@ -68,6 +68,8 @@ public partial class VisualViewModel : ObservableObject, IAutoRefreshable, IDisp
     [ObservableProperty] private bool   _isBatteryPlanActive;
     /// <summary>Which battery optimization is active: "balanced" | "max" | ""</summary>
     private string _activeBatteryOpt = string.Empty;
+    /// <summary>The plan that was active before battery optimization was enabled — restored on plug-in.</summary>
+    private string _planBeforeOpt = string.Empty;
 
     /// <summary>True when a high/ultimate performance plan is currently active.</summary>
     public bool IsHighPerformancePlanActive =>
@@ -152,20 +154,37 @@ public partial class VisualViewModel : ObservableObject, IAutoRefreshable, IDisp
             IsOnBattery = nowOnBattery;
 
             // Use persisted setting — not just the in-memory flag — so optimization
-            // survives app restarts and correctly re-applies after any power plan reset.
-            string activeOpt = _activeBatteryOpt;
+            // survives app restarts and is respected even when set by Auto-Pilot.
+            string activeOpt = !string.IsNullOrEmpty(_activeBatteryOpt)
+                ? _activeBatteryOpt
+                : _settings.BatteryOptimizationMode;
             if (string.IsNullOrEmpty(activeOpt)) return;
+
+            // Sync in-memory flag if it was set externally (e.g. by Auto-Pilot via settings)
+            if (string.IsNullOrEmpty(_activeBatteryOpt))
+            {
+                _activeBatteryOpt  = activeOpt;
+                IsBatteryPlanActive = true;
+            }
 
             if (!nowOnBattery)
             {
-                _log.Info("VisualViewModel", "AC power detected — battery optimization cap inactive while plugged in");
-                StatusMessage = "Plugged in — battery optimization is inactive while on AC power.";
+                // Plugged back in — restore the plan that was active before opt was enabled
+                string restorePlan = !string.IsNullOrEmpty(_planBeforeOpt) ? _planBeforeOpt : "High Performance";
+                _log.Info("VisualViewModel", $"AC power detected — restoring plan: {restorePlan}");
+                StatusMessage = $"Plugged in — restoring {restorePlan} plan…";
+                string planSnapshot = restorePlan;
+                Task.Run(async () =>
+                {
+                    TweakResult result = await _powerPlanService.RestorePlanAsync(planSnapshot);
+                    System.Windows.Application.Current?.Dispatcher.BeginInvoke(() => StatusMessage = result.Message);
+                });
             }
             else
             {
-                // Unplugged — re-apply to ensure the cap is active (guards against Windows resetting it)
-                _log.Info("VisualViewModel", "Battery power detected — re-applying battery optimization");
-                StatusMessage = "On battery — re-applying battery optimization…";
+                // Unplugged — switch to the battery plan (Balanced or Power Saver)
+                _log.Info("VisualViewModel", "Battery power detected — switching to battery plan");
+                StatusMessage = "On battery — switching power plan…";
                 string optSnapshot = activeOpt;
                 Task.Run(async () =>
                 {
@@ -619,21 +638,15 @@ public partial class VisualViewModel : ObservableObject, IAutoRefreshable, IDisp
     {
         IsLoading = true;
         IsOnBattery = _powerPlanService.IsOnBattery();
-
-        // Only apply when actually on battery — the /setdcvalueindex only affects DC mode,
-        // but we warn the user so they know it won't kick in until they unplug.
-        if (!IsOnBattery)
-        {
-            StatusMessage = "⚠ You're currently on AC power. The cap will take effect the next time you switch to battery.";
-            _log.Info("VisualViewModel", "SetBalancedOnBattery called while on AC — applying anyway, effective on next battery use");
-        }
-        else
-        {
-            StatusMessage = "Applying Balanced on Battery (99% CPU cap on battery)...";
-        }
+        StatusMessage = IsOnBattery
+            ? "Switching to Balanced plan…"
+            : "Battery optimization enabled — will switch to Balanced when you unplug.";
 
         try
         {
+            // Save the current plan so we can restore it exactly when plugging back in
+            _planBeforeOpt = await RunOnLargeStackAsync(() => _powerPlanService.GetActivePlan());
+
             var result = await _powerPlanService.SetBalancedOnBatteryAsync();
             ActivePowerPlan = await RunOnLargeStackAsync(() => _powerPlanService.GetActivePlan());
             if (result.Success)
@@ -657,19 +670,15 @@ public partial class VisualViewModel : ObservableObject, IAutoRefreshable, IDisp
     {
         IsLoading = true;
         IsOnBattery = _powerPlanService.IsOnBattery();
-
-        if (!IsOnBattery)
-        {
-            StatusMessage = "⚠ You're on AC power. The 80% CPU cap will take effect the next time you switch to battery.";
-            _log.Info("VisualViewModel", "SetMaxBatteryLife called while on AC — applying anyway, effective on next battery use");
-        }
-        else
-        {
-            StatusMessage = "Applying Max Battery Life...";
-        }
+        StatusMessage = IsOnBattery
+            ? "Switching to Power Saver plan…"
+            : "Battery optimization enabled — will switch to Power Saver when you unplug.";
 
         try
         {
+            // Save the current plan so we can restore it exactly when plugging back in
+            _planBeforeOpt = await RunOnLargeStackAsync(() => _powerPlanService.GetActivePlan());
+
             var result = await _powerPlanService.SetMaxBatteryLifeAsync();
             ActivePowerPlan = await RunOnLargeStackAsync(() => _powerPlanService.GetActivePlan());
             if (result.Success)
@@ -699,6 +708,7 @@ public partial class VisualViewModel : ObservableObject, IAutoRefreshable, IDisp
             ActivePowerPlan     = await RunOnLargeStackAsync(() => _powerPlanService.GetActivePlan());
             IsBatteryPlanActive = false;
             _activeBatteryOpt   = string.Empty;
+            _planBeforeOpt      = string.Empty;
             _settings.BatteryOptimizationMode = string.Empty;
             StatusMessage = result.Message;
         }

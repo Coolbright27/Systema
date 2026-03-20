@@ -157,6 +157,66 @@ public class MemoryService
         return Math.Max(recommended, 4096);
     }
 
+    // ── Free RAM (EmptyWorkingSet + purge standby list) ───────────────────────
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern IntPtr OpenProcess(uint dwDesiredAccess, bool bInheritHandle, int dwProcessId);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool CloseHandle(IntPtr hObject);
+
+    [DllImport("psapi.dll")]
+    private static extern bool EmptyWorkingSet(IntPtr hProcess);
+
+    [DllImport("ntdll.dll")]
+    private static extern uint NtSetSystemInformation(int SystemInformationClass, ref uint SystemInformation, int SystemInformationLength);
+
+    private const uint PROCESS_ALL_ACCESS = 0x1F0FFF;
+    private const int  SystemMemoryListInformation = 0x50;
+    private const uint MemoryPurgeStandbyList = 4;
+    private const uint MemoryFlushModifiedList  = 3;
+
+    /// <summary>
+    /// Flushes process working sets and purges the standby memory list.
+    /// Returns (freedMb, message). Runs on caller's thread — wrap in Task.Run.
+    /// </summary>
+    public (long freedMb, string message) FreeRam()
+    {
+        var (_, beforeMb) = GetRamStats();
+
+        // 1. EmptyWorkingSet on every accessible process
+        int trimmed = 0;
+        foreach (var proc in System.Diagnostics.Process.GetProcesses())
+        {
+            try
+            {
+                var handle = OpenProcess(PROCESS_ALL_ACCESS, false, proc.Id);
+                if (handle == IntPtr.Zero) continue;
+                EmptyWorkingSet(handle);
+                CloseHandle(handle);
+                trimmed++;
+            }
+            catch { /* skip inaccessible processes */ }
+        }
+
+        // 2. Purge standby list (requires SeProfileSingleProcessPrivilege — present when admin)
+        try
+        {
+            uint cmd = MemoryFlushModifiedList;
+            NtSetSystemInformation(SystemMemoryListInformation, ref cmd, sizeof(uint));
+            cmd = MemoryPurgeStandbyList;
+            NtSetSystemInformation(SystemMemoryListInformation, ref cmd, sizeof(uint));
+        }
+        catch (Exception ex) { Log.Warn("MemoryService", $"Standby purge skipped: {ex.Message}"); }
+
+        System.Threading.Thread.Sleep(500); // let the OS reclaim before re-sampling
+        var (_, afterMb) = GetRamStats();
+        long freed = Math.Max(0, afterMb - beforeMb);
+
+        Log.Info("MemoryService", $"FreeRam: trimmed {trimmed} processes, freed ~{freed} MB");
+        return (freed, $"Freed ~{freed:N0} MB from {trimmed} processes.");
+    }
+
     /// <summary>Returns available disk space on C: in MB.</summary>
     public long GetSystemDriveFreeMb()
     {

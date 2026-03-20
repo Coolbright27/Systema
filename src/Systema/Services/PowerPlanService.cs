@@ -81,10 +81,41 @@ public class PowerPlanService
         {
             try
             {
-                RunPowercfg($"/setdcvalueindex SCHEME_CURRENT {ProcessorSubGroup} {MaxProcessorState} 100");
-                RunPowercfg("/setactive SCHEME_CURRENT");
-                _log.Info("PowerPlanService", "Battery optimization stopped — DC CPU cap removed");
-                return TweakResult.Ok("Battery optimization stopped. CPU cap removed — full performance on battery.");
+                // Switch back to High Performance (or Ultimate if available)
+                RunPowercfg("/duplicatescheme e9a42b02-d5df-448d-aa00-03f14749eb61");
+                RunPowercfg($"/setactive e9a42b02-d5df-448d-aa00-03f14749eb61");
+                string plan = GetActivePlan();
+                if (!plan.Contains("Ultimate", StringComparison.OrdinalIgnoreCase))
+                    RunPowercfg($"/setactive {HighPerformanceGuid}");
+
+                _log.Info("PowerPlanService", "Battery optimization stopped — restored High Performance");
+                return TweakResult.Ok("Battery optimization disabled. High Performance plan restored.");
+            }
+            catch (Exception ex)
+            {
+                return TweakResult.FromException(ex);
+            }
+        });
+    }
+
+    /// <summary>
+    /// Switches to High Performance without touching battery optimization state.
+    /// Called by VisualViewModel when the user plugs back in while battery optimization is active.
+    /// </summary>
+    public Task<TweakResult> RestoreHighPerformanceAsync()
+    {
+        return RunOnLargeStackAsync<TweakResult>(() =>
+        {
+            try
+            {
+                RunPowercfg("/duplicatescheme e9a42b02-d5df-448d-aa00-03f14749eb61");
+                RunPowercfg($"/setactive e9a42b02-d5df-448d-aa00-03f14749eb61");
+                string plan = GetActivePlan();
+                if (!plan.Contains("Ultimate", StringComparison.OrdinalIgnoreCase))
+                    RunPowercfg($"/setactive {HighPerformanceGuid}");
+
+                _log.Info("PowerPlanService", "Plugged in — restored High Performance plan");
+                return TweakResult.Ok("Plugged in — High Performance plan restored.");
             }
             catch (Exception ex)
             {
@@ -181,17 +212,28 @@ public class PowerPlanService
     /// Does NOT switch the active power plan — your current plan stays active.
     /// Only affects battery mode; plugged-in performance is unchanged.
     /// </summary>
+    /// <summary>
+    /// If on battery, switches to Balanced immediately.
+    /// If on AC, does nothing — the plan stays whatever it was.
+    /// VisualViewModel.OnPowerModeChanged handles the plug/unplug transitions.
+    /// </summary>
     public Task<TweakResult> SetBalancedOnBatteryAsync()
     {
         return RunOnLargeStackAsync<TweakResult>(() =>
         {
             try
             {
-                // Only modify DC (battery) value on whatever plan is currently active
-                RunPowercfg($"/setdcvalueindex SCHEME_CURRENT {ProcessorSubGroup} {MaxProcessorState} 99");
-                RunPowercfg("/setactive SCHEME_CURRENT"); // commit the change
-                _log.Info("PowerPlanService", "Battery optimization applied — DC CPU cap set to 99%");
-                return TweakResult.Ok("Battery optimization applied: CPU capped at 99% on battery. Your current power plan is unchanged.");
+                if (IsOnBattery())
+                {
+                    RunPowercfg($"/setactive {BalancedGuid}");
+                    _log.Info("PowerPlanService", "On battery — switched active plan to Balanced");
+                    return TweakResult.Ok("Balanced plan activated. Will restore your previous plan when plugged in.");
+                }
+                else
+                {
+                    _log.Info("PowerPlanService", "On AC — battery opt enabled, plan unchanged until you unplug");
+                    return TweakResult.Ok("Battery optimization active. Balanced plan will switch on when you unplug.");
+                }
             }
             catch (Exception ex)
             {
@@ -201,9 +243,8 @@ public class PowerPlanService
     }
 
     /// <summary>
-    /// Caps max processor state to 80% on DC (battery) for aggressive power saving.
-    /// Does NOT switch the active power plan — your current plan stays active.
-    /// Only affects battery mode; plugged-in performance is unchanged.
+    /// If on battery, switches to Power Saver immediately.
+    /// If on AC, does nothing — the plan stays whatever it was.
     /// </summary>
     public Task<TweakResult> SetMaxBatteryLifeAsync()
     {
@@ -211,11 +252,47 @@ public class PowerPlanService
         {
             try
             {
-                // Only modify DC (battery) — cap at 80% for aggressive savings
-                RunPowercfg($"/setdcvalueindex SCHEME_CURRENT {ProcessorSubGroup} {MaxProcessorState} 80");
-                RunPowercfg("/setactive SCHEME_CURRENT"); // commit the change
-                _log.Info("PowerPlanService", "Battery optimization applied — DC CPU cap set to 80% (Max Battery Life)");
-                return TweakResult.Ok("Max battery life applied: CPU capped at 80% on battery. Plugged-in performance is unchanged.");
+                if (IsOnBattery())
+                {
+                    RunPowercfg($"/setactive {PowerSaverGuid}");
+                    _log.Info("PowerPlanService", "On battery — switched active plan to Power Saver");
+                    return TweakResult.Ok("Power Saver plan activated for maximum battery life.");
+                }
+                else
+                {
+                    _log.Info("PowerPlanService", "On AC — battery opt enabled, plan unchanged until you unplug");
+                    return TweakResult.Ok("Battery optimization active. Power Saver plan will switch on when you unplug.");
+                }
+            }
+            catch (Exception ex)
+            {
+                return TweakResult.FromException(ex);
+            }
+        });
+    }
+
+    /// <summary>Restores a named power plan (saved before battery optimization was enabled).</summary>
+    public Task<TweakResult> RestorePlanAsync(string planName)
+    {
+        return RunOnLargeStackAsync<TweakResult>(() =>
+        {
+            try
+            {
+                if (planName.Contains("Ultimate", StringComparison.OrdinalIgnoreCase))
+                {
+                    RunPowercfg("/duplicatescheme e9a42b02-d5df-448d-aa00-03f14749eb61");
+                    RunPowercfg($"/setactive e9a42b02-d5df-448d-aa00-03f14749eb61");
+                }
+                else if (planName.Contains("High", StringComparison.OrdinalIgnoreCase))
+                    RunPowercfg($"/setactive {HighPerformanceGuid}");
+                else if (planName.Contains("Power Saver", StringComparison.OrdinalIgnoreCase))
+                    RunPowercfg($"/setactive {PowerSaverGuid}");
+                else
+                    RunPowercfg($"/setactive {BalancedGuid}");
+
+                string actual = GetActivePlan();
+                _log.Info("PowerPlanService", $"Plan restored to: {actual}");
+                return TweakResult.Ok($"Plugged in — {actual} plan restored.");
             }
             catch (Exception ex)
             {

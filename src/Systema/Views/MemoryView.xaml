@@ -31,27 +31,56 @@
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
 
-                <!-- RAM Card -->
+                <!-- Quick Free RAM Card -->
                 <Border Grid.Column="0" Style="{StaticResource Card}">
                     <StackPanel>
-                        <TextBlock Text="RAM Usage" Style="{StaticResource HeadingMedium}" Margin="0,0,0,12"/>
-                        <Grid Margin="0,0,0,8">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <TextBlock Style="{StaticResource CaptionText}">
-                                <Run Text="{Binding UsedRamMb, Mode=OneWay}"/>
-                                <Run Text=" MB used of "/>
-                                <Run Text="{Binding TotalRamMb, Mode=OneWay}"/>
-                                <Run Text=" MB"/>
-                            </TextBlock>
-                            <TextBlock Grid.Column="1" Style="{StaticResource CaptionText}"
-                                       Text="{Binding AvailableRamMb, StringFormat='{}{0} MB free'}"/>
-                        </Grid>
-                        <ProgressBar Value="{Binding RamUsagePercent, Mode=OneWay}" Maximum="100"
-                                     Style="{StaticResource AccentProgressBar}"
-                                     Foreground="{StaticResource AccentGreenBrush}"/>
+                        <TextBlock Text="Quick Free RAM" Style="{StaticResource HeadingMedium}" Margin="0,0,0,6"/>
+
+                        <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,0,0,10">
+                            Forces every background process to release memory it's holding but not actively
+                            using, then purges Windows' standby list. Useful when RAM is running low or
+                            before starting a memory-heavy task.
+                        </TextBlock>
+
+                        <!-- Live free RAM stat -->
+                        <TextBlock Style="{StaticResource CaptionText}" Margin="0,0,0,12">
+                            <Run Text="{Binding AvailableRamMb, Mode=OneWay, StringFormat='{}{0:N0}'}"/>
+                            <Run Text=" MB free  ·  "/>
+                            <Run Text="{Binding TotalRamMb, Mode=OneWay, StringFormat='{}{0:N0}'}"/>
+                            <Run Text=" MB total"/>
+                        </TextBlock>
+
+                        <!-- Free RAM button — label + enabled state driven by IsFreeing -->
+                        <Button Command="{Binding FreeRamCommand}" HorizontalAlignment="Left">
+                            <Button.Style>
+                                <Style TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
+                                    <Setter Property="Content"    Value="Free RAM Now"/>
+                                    <Setter Property="IsEnabled"  Value="True"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsFreeing}" Value="True">
+                                            <Setter Property="Content"   Value="Flushing…"/>
+                                            <Setter Property="IsEnabled" Value="False"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
+                        </Button>
+
+                        <!-- Status / result text -->
+                        <TextBlock Text="{Binding FreeRamStatus}"
+                                   Foreground="{StaticResource AccentGreenBrush}"
+                                   TextWrapping="Wrap" Margin="0,8,0,0">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionText}">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding FreeRamStatus}" Value="">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
                     </StackPanel>
                 </Border>
 
