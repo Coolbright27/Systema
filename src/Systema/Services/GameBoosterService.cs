@@ -121,8 +121,8 @@ public sealed class GameBoosterService : IDisposable
     // Nagle / NIC power — list of (HKLM-relative path, value name, original value or null=delete)
     private List<(string path, string name, object? val)>? _nagleRestore;
     private List<(string path, string name, object? val)>? _nicPowerRestore;
-    // Wi-Fi disable — names of adapters we disabled (null = feature not used / no adapters disabled)
-    private List<string>? _disabledWifiAdapters;
+    // Wi-Fi disable — true if we stopped WlanSvc to turn off the radio
+    private bool _wifiServiceStopped;
 
     public bool IsEnabled             => _settings.GameBoosterEnabled;
     public bool BoostActive           => _boostActive;
@@ -1171,15 +1171,20 @@ public sealed class GameBoosterService : IDisposable
     }
 
     // ·· Disable Wi-Fi when Ethernet is active ··································
+    //
+    // Strategy: stop the WlanSvc Windows service.
+    // Disabling a network adapter only removes it from the stack — the Wi-Fi radio
+    // stays on and Quick Settings still shows the toggle as enabled.
+    // Stopping WlanSvc turns the radio off entirely, which is what the Quick Settings
+    // Wi-Fi toggle does, and it will show as off/unavailable in Settings.
 
     private void ApplyDisableWifi()
     {
-        _disabledWifiAdapters = null;
+        _wifiServiceStopped = false;
         try
         {
             // Only disable Wi-Fi when at least one wired adapter is up.
-            // Use a broad check — GigabitEthernet, FastEthernet, and plain Ethernet
-            // all count; exclude loopback, tunnels, wireless, and virtual adapters.
+            // Broad check: any non-loopback, non-tunnel, non-wireless, non-virtual Up adapter.
             bool ethernetUp = NetworkInterface.GetAllNetworkInterfaces()
                 .Any(n => n.OperationalStatus == OperationalStatus.Up
                        && n.NetworkInterfaceType != NetworkInterfaceType.Loopback
@@ -1195,103 +1200,40 @@ public sealed class GameBoosterService : IDisposable
                 return;
             }
 
-            // Use `netsh wlan show interfaces` — the authoritative source for Wi-Fi adapters.
-            // NetworkInterface.NetworkInterfaceType can misreport Intel Wi-Fi drivers as Unknown.
-            var wifiAdapters = GetWlanInterfaceNames();
-
-            if (wifiAdapters.Count == 0)
+            // Stop WlanSvc — this turns off the Wi-Fi radio at the Windows level.
+            // Quick Settings will show Wi-Fi as off/unavailable, same as the toggle.
+            using var wlan = new ServiceController("WlanSvc");
+            wlan.Refresh();
+            if (wlan.Status != ServiceControllerStatus.Running)
             {
-                _log.Info("GameBoosterService", "DisableWifi: no active Wi-Fi adapters found");
+                _log.Info("GameBoosterService", "DisableWifi: WlanSvc already stopped — skipping");
                 return;
             }
 
-            _disabledWifiAdapters = new List<string>();
-            foreach (var name in wifiAdapters)
-            {
-                try
-                {
-                    var psi = new ProcessStartInfo("netsh",
-                        $"interface set interface \"{name}\" disable")
-                    { UseShellExecute = false, CreateNoWindow = true };
-                    Process.Start(psi)?.WaitForExit(3000);
-                    _disabledWifiAdapters.Add(name);
-                    _log.Info("GameBoosterService", $"DisableWifi: disabled '{name}'");
-                }
-                catch (Exception ex)
-                {
-                    _log.Warn("GameBoosterService", $"DisableWifi: failed on '{name}': {ex.Message}");
-                }
-            }
+            wlan.Stop();
+            PollForStatus(wlan, ServiceControllerStatus.Stopped, timeoutSeconds: 10);
+            _wifiServiceStopped = true;
+            _log.Info("GameBoosterService", "DisableWifi: WlanSvc stopped — Wi-Fi radio off");
         }
         catch (Exception ex) { _log.Warn("GameBoosterService", $"ApplyDisableWifi failed: {ex.Message}"); }
     }
 
-    /// <summary>
-    /// Runs <c>netsh wlan show interfaces</c> and returns the friendly Name of every
-    /// connected Wi-Fi interface. This is driver-independent — works even when
-    /// NetworkInterface.NetworkInterfaceType mis-classifies Intel Wi-Fi adapters.
-    /// </summary>
-    private static List<string> GetWlanInterfaceNames()
-    {
-        var names = new List<string>();
-        try
-        {
-            var psi = new ProcessStartInfo("netsh", "wlan show interfaces")
-            {
-                UseShellExecute        = false,
-                CreateNoWindow         = true,
-                RedirectStandardOutput = true,
-            };
-            using var proc = Process.Start(psi);
-            if (proc == null) return names;
-            string output = proc.StandardOutput.ReadToEnd();
-            proc.WaitForExit(3000);
-
-            // Each interface block contains a "Name" line like:
-            //   Name                   : Wi-Fi
-            // and a "State" line like:
-            //   State                  : connected
-            // We collect names where the following State is "connected".
-            string? lastName = null;
-            foreach (var rawLine in output.Split('\n'))
-            {
-                var line = rawLine.Trim();
-                if (line.StartsWith("Name", StringComparison.OrdinalIgnoreCase) && line.Contains(':'))
-                {
-                    lastName = line.Substring(line.IndexOf(':') + 1).Trim();
-                }
-                else if (line.StartsWith("State", StringComparison.OrdinalIgnoreCase) && line.Contains(':'))
-                {
-                    var state = line.Substring(line.IndexOf(':') + 1).Trim();
-                    if (lastName != null && state.Equals("connected", StringComparison.OrdinalIgnoreCase))
-                        names.Add(lastName);
-                    lastName = null;
-                }
-            }
-        }
-        catch { /* best effort */ }
-        return names;
-    }
-
     private void RestoreWifi()
     {
-        if (_disabledWifiAdapters == null || _disabledWifiAdapters.Count == 0) return;
-        foreach (var name in _disabledWifiAdapters)
+        if (!_wifiServiceStopped) return;
+        _wifiServiceStopped = false;
+        try
         {
-            try
+            using var wlan = new ServiceController("WlanSvc");
+            wlan.Refresh();
+            if (wlan.Status != ServiceControllerStatus.Running)
             {
-                var psi = new ProcessStartInfo("netsh",
-                    $"interface set interface \"{name}\" enable")
-                { UseShellExecute = false, CreateNoWindow = true };
-                Process.Start(psi)?.WaitForExit(3000);
-                _log.Info("GameBoosterService", $"RestoreWifi: re-enabled '{name}'");
-            }
-            catch (Exception ex)
-            {
-                _log.Warn("GameBoosterService", $"RestoreWifi: failed on '{name}': {ex.Message}");
+                wlan.Start();
+                PollForStatus(wlan, ServiceControllerStatus.Running, timeoutSeconds: 10);
+                _log.Info("GameBoosterService", "RestoreWifi: WlanSvc started — Wi-Fi radio restored");
             }
         }
-        _disabledWifiAdapters = null;
+        catch (Exception ex) { _log.Warn("GameBoosterService", $"RestoreWifi failed: {ex.Message}"); }
     }
 
     // ── Xbox Services Logic ────────────────────────────────────────────────────
