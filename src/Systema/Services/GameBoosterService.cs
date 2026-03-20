@@ -1169,10 +1169,17 @@ public sealed class GameBoosterService : IDisposable
         _disabledWifiAdapters = null;
         try
         {
-            // Only disable Wi-Fi when at least one ethernet/wired adapter is up
+            // Only disable Wi-Fi when at least one wired adapter is up.
+            // Use a broad check — GigabitEthernet, FastEthernet, and plain Ethernet
+            // all count; exclude loopback, tunnels, wireless, and virtual adapters.
             bool ethernetUp = NetworkInterface.GetAllNetworkInterfaces()
-                .Any(n => n.NetworkInterfaceType == NetworkInterfaceType.Ethernet
-                       && n.OperationalStatus    == OperationalStatus.Up);
+                .Any(n => n.OperationalStatus == OperationalStatus.Up
+                       && n.NetworkInterfaceType != NetworkInterfaceType.Loopback
+                       && n.NetworkInterfaceType != NetworkInterfaceType.Tunnel
+                       && n.NetworkInterfaceType != NetworkInterfaceType.Wireless80211
+                       && !n.Description.Contains("Virtual", StringComparison.OrdinalIgnoreCase)
+                       && !n.Description.Contains("VPN",     StringComparison.OrdinalIgnoreCase)
+                       && !n.Description.Contains("TAP",     StringComparison.OrdinalIgnoreCase));
 
             if (!ethernetUp)
             {
@@ -1180,12 +1187,9 @@ public sealed class GameBoosterService : IDisposable
                 return;
             }
 
-            // Collect Wi-Fi adapters that are currently up
-            var wifiAdapters = NetworkInterface.GetAllNetworkInterfaces()
-                .Where(n => n.NetworkInterfaceType == NetworkInterfaceType.Wireless80211
-                         && n.OperationalStatus    == OperationalStatus.Up)
-                .Select(n => n.Name)
-                .ToList();
+            // Use `netsh wlan show interfaces` — the authoritative source for Wi-Fi adapters.
+            // NetworkInterface.NetworkInterfaceType can misreport Intel Wi-Fi drivers as Unknown.
+            var wifiAdapters = GetWlanInterfaceNames();
 
             if (wifiAdapters.Count == 0)
             {
@@ -1212,6 +1216,53 @@ public sealed class GameBoosterService : IDisposable
             }
         }
         catch (Exception ex) { _log.Warn("GameBoosterService", $"ApplyDisableWifi failed: {ex.Message}"); }
+    }
+
+    /// <summary>
+    /// Runs <c>netsh wlan show interfaces</c> and returns the friendly Name of every
+    /// connected Wi-Fi interface. This is driver-independent — works even when
+    /// NetworkInterface.NetworkInterfaceType mis-classifies Intel Wi-Fi adapters.
+    /// </summary>
+    private static List<string> GetWlanInterfaceNames()
+    {
+        var names = new List<string>();
+        try
+        {
+            var psi = new ProcessStartInfo("netsh", "wlan show interfaces")
+            {
+                UseShellExecute        = false,
+                CreateNoWindow         = true,
+                RedirectStandardOutput = true,
+            };
+            using var proc = Process.Start(psi);
+            if (proc == null) return names;
+            string output = proc.StandardOutput.ReadToEnd();
+            proc.WaitForExit(3000);
+
+            // Each interface block contains a "Name" line like:
+            //   Name                   : Wi-Fi
+            // and a "State" line like:
+            //   State                  : connected
+            // We collect names where the following State is "connected".
+            string? lastName = null;
+            foreach (var rawLine in output.Split('\n'))
+            {
+                var line = rawLine.Trim();
+                if (line.StartsWith("Name", StringComparison.OrdinalIgnoreCase) && line.Contains(':'))
+                {
+                    lastName = line.Substring(line.IndexOf(':') + 1).Trim();
+                }
+                else if (line.StartsWith("State", StringComparison.OrdinalIgnoreCase) && line.Contains(':'))
+                {
+                    var state = line.Substring(line.IndexOf(':') + 1).Trim();
+                    if (lastName != null && state.Equals("connected", StringComparison.OrdinalIgnoreCase))
+                        names.Add(lastName);
+                    lastName = null;
+                }
+            }
+        }
+        catch { /* best effort */ }
+        return names;
     }
 
     private void RestoreWifi()

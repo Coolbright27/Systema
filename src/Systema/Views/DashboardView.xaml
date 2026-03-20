@@ -68,7 +68,7 @@
                     </Border>
                     <Border Background="{StaticResource BgSurfaceBrush}" BorderBrush="{StaticResource BorderBrush}"
                             BorderThickness="1" CornerRadius="6" Padding="10,5">
-                        <TextBlock Text="v1.6.14" FontSize="11" FontWeight="SemiBold"
+                        <TextBlock Text="v1.6.15" FontSize="11" FontWeight="SemiBold"
                                    Foreground="{StaticResource TextSecondaryBrush}" FontFamily="Segoe UI"/>
                     </Border>
                 </StackPanel>
