@@ -159,7 +159,7 @@ public partial class BloatwareViewModel : ObservableObject, IAutoRefreshable
         foreach (var app in toRemove)
         {
             StatusMessage = $"Removing {app.DisplayName}...";
-            var result = await _bloatware.RemoveAsync(app.PackageName);
+            var result = await _bloatware.RemoveAsync(app);
             if (result.Success)
             {
                 succeeded++;

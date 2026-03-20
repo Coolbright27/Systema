@@ -1,15 +1,6 @@
-// ════════════════════════════════════════════════════════════════════════════
+﻿// ══════════════════════════════════════════════════════════════════════════════
 // BloatwareEntry.cs  ·  A single detectable pre-installed app
-// ════════════════════════════════════════════════════════════════════════════
-//
-// Represents one pre-installed Microsoft app that Systema can safely remove.
-// IsSelected is INotifyPropertyChanged so a CheckBox can bind TwoWay without
-// the ViewModel having to refresh the whole collection on every tick.
-//
-// RELATED FILES
-//   BloatwareService.cs    — catalogue definition + scan/remove logic
-//   BloatwareViewModel.cs  — drives the Bloatware tab
-// ════════════════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════════════════
 
 using System.ComponentModel;
 
@@ -25,8 +16,22 @@ public class BloatwareEntry : INotifyPropertyChanged
     /// <summary>Plain-English description of what the app does and why it is safe to remove.</summary>
     public string Description { get; init; } = string.Empty;
 
-    /// <summary>Primary AppxPackage name (may be one of several checked).</summary>
+    /// <summary>
+    /// For UWP apps: the AppxPackage name that matched.
+    /// For Win32 apps: the registry DisplayName that matched (used for logging).
+    /// </summary>
     public string PackageName { get; init; } = string.Empty;
+
+    /// <summary>True if this is a Win32 app (detected via registry uninstall keys).</summary>
+    public bool IsWin32 { get; init; }
+
+    /// <summary>Winget package ID used to uninstall Win32 apps (e.g. Dell.SupportAssist).</summary>
+    public string? WingetId { get; init; }
+
+    /// <summary>
+    /// UninstallString from the registry — used as a fallback when winget is unavailable or fails.
+    /// </summary>
+    public string? UninstallString { get; init; }
 
     /// <summary>True once the scanner confirms this package is installed on this machine.</summary>
     public bool IsInstalled { get; set; }
