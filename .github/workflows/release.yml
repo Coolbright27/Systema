@@ -1,0 +1,58 @@
+name: Build & Sign Release
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Install Inno Setup
+        run: choco install innosetup --yes --no-progress
+        shell: pwsh
+
+      - name: Publish app
+        run: dotnet publish src/Systema/Systema.csproj -c Release -r win-x64 --self-contained true -o publish
+        shell: pwsh
+
+      - name: Build installer
+        run: '& "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\systema_setup.iss'
+        shell: pwsh
+
+      - name: Upload unsigned installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: unsigned-installer
+          path: installer/output/*.exe
+
+  sign:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Submit signing request to SignPath
+        uses: signpath/github-action-submit-signing-request@v1
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: systema
+          signing-policy-slug: release-signing
+          artifact-configuration-slug: installer
+          github-artifact-name: unsigned-installer
+          wait-for-completion: true
+          output-artifact-directory: signed
+
+      - name: Upload signed installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: Systema-Signed-Installer
+          path: signed/
