@@ -293,6 +293,13 @@ public class SettingsService
         set => WriteBool(nameof(GameBoosterNicPowerSaving), value);
     }
 
+    /// <summary>Disable Wi-Fi when ethernet is detected at game start (restored on exit).</summary>
+    public bool GameBoosterDisableWifiOnEthernet
+    {
+        get => ReadBool(nameof(GameBoosterDisableWifiOnEthernet), defaultValue: false);
+        set => WriteBool(nameof(GameBoosterDisableWifiOnEthernet), value);
+    }
+
     // ── Updates ───────────────────────────────────────────────────────────────
 
     /// <summary>

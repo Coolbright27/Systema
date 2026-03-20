@@ -96,6 +96,9 @@ public partial class TaskSleepViewModel : ObservableObject
     [ObservableProperty] private int  _trayBriefWakeIntervalMs = 300_000;
     [ObservableProperty] private int  _trayBriefWakeDurationMs = 10_000;
 
+    // ── Brief Wake Concurrency ────────────────────────────────────────────────
+    [ObservableProperty] private int _maxConcurrentBriefWakes = 3;
+
     // ── Monitoring & Enforcement ──────────────────────────────────────────────
     [ObservableProperty] private bool   _enforceSettings  = true;
     [ObservableProperty] private bool   _showAllProcesses = false;
@@ -195,6 +198,8 @@ public partial class TaskSleepViewModel : ObservableObject
     partial void OnTrayNapEnabledChanged(bool value)           => PushSettings();
     partial void OnTrayBriefWakeIntervalMsChanged(int value)   => PushSettings();
     partial void OnTrayBriefWakeDurationMsChanged(int value)   => PushSettings();
+
+    partial void OnMaxConcurrentBriefWakesChanged(int value)   => PushSettings();
 
     partial void OnLowerMemoryPriorityChanged(bool value) => PushSettings();
     partial void OnTrimWorkingSetChanged(bool value)      => PushSettings();
@@ -354,6 +359,7 @@ public partial class TaskSleepViewModel : ObservableObject
         TrayNapEnabled           = TrayNapEnabled,
         TrayBriefWakeIntervalMs  = TrayBriefWakeIntervalMs,
         TrayBriefWakeDurationMs  = TrayBriefWakeDurationMs,
+        MaxConcurrentBriefWakes  = Math.Clamp(MaxConcurrentBriefWakes, 1, 10),
         LowerMemoryPriority     = LowerMemoryPriority,
         TrimWorkingSet          = TrimWorkingSet,
         AdaptiveTick            = AdaptiveTick,
@@ -399,6 +405,7 @@ public partial class TaskSleepViewModel : ObservableObject
             TrayNapEnabled           = ReadBool(key, "TrayNapEnabled",          true);
             TrayBriefWakeIntervalMs  = ReadInt (key, "TrayBriefWakeIntervalMs",  300_000);
             TrayBriefWakeDurationMs  = ReadInt (key, "TrayBriefWakeDurationMs",  10_000);
+            MaxConcurrentBriefWakes  = ReadInt (key, "MaxConcurrentBriefWakes",  3);
             LowerMemoryPriority     = ReadBool(key, "LowerMemoryPriority",   true);
             TrimWorkingSet          = ReadBool(key, "TrimWorkingSet",        true);
             AdaptiveTick            = ReadBool(key, "AdaptiveTick",          true);
@@ -440,6 +447,7 @@ public partial class TaskSleepViewModel : ObservableObject
             key.SetValue("TrayNapEnabled",           TrayNapEnabled       ? 1 : 0, RegistryValueKind.DWord);
             key.SetValue("TrayBriefWakeIntervalMs",  TrayBriefWakeIntervalMs,      RegistryValueKind.DWord);
             key.SetValue("TrayBriefWakeDurationMs",  TrayBriefWakeDurationMs,      RegistryValueKind.DWord);
+            key.SetValue("MaxConcurrentBriefWakes",  MaxConcurrentBriefWakes,      RegistryValueKind.DWord);
             key.SetValue("LowerMemoryPriority",     LowerMemoryPriority  ? 1 : 0, RegistryValueKind.DWord);
             key.SetValue("TrimWorkingSet",          TrimWorkingSet       ? 1 : 0, RegistryValueKind.DWord);
             key.SetValue("AdaptiveTick",            AdaptiveTick         ? 1 : 0, RegistryValueKind.DWord);

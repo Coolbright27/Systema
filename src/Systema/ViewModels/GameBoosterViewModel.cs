@@ -57,6 +57,7 @@ public partial class GameBoosterViewModel : ObservableObject, IAutoRefreshable
     [ObservableProperty] private bool _disableNagleOnBoost;
     [ObservableProperty] private bool _flushDnsOnBoost;
     [ObservableProperty] private bool _nicPowerSavingOnBoost;
+    [ObservableProperty] private bool _disableWifiOnEthernet;
 
     /// <summary>Persists and applies the master switch immediately — no Save click needed.</summary>
     partial void OnGameBoosterEnabledChanged(bool value)
@@ -210,6 +211,7 @@ public partial class GameBoosterViewModel : ObservableObject, IAutoRefreshable
         _settings.GameBoosterDisableNagle          = DisableNagleOnBoost;
         _settings.GameBoosterFlushDns              = FlushDnsOnBoost;
         _settings.GameBoosterNicPowerSaving        = NicPowerSavingOnBoost;
+        _settings.GameBoosterDisableWifiOnEthernet = DisableWifiOnEthernet;
 
         StatusMessage = "Settings saved.";
         _log.Info("GameBoosterViewModel", $"Settings saved — interval={CheckIntervalMinutes}min, killList={lines.Count} entries");
@@ -279,6 +281,7 @@ public partial class GameBoosterViewModel : ObservableObject, IAutoRefreshable
         DisableNagleOnBoost    = _settings.GameBoosterDisableNagle;
         FlushDnsOnBoost        = _settings.GameBoosterFlushDns;
         NicPowerSavingOnBoost  = _settings.GameBoosterNicPowerSaving;
+        DisableWifiOnEthernet  = _settings.GameBoosterDisableWifiOnEthernet;
 
         var killList = _gameBooster.GetKillList();
         KillListItems.Clear();

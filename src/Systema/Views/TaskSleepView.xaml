@@ -551,6 +551,31 @@
 
                     <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,0,0,16"/>
 
+                    <!-- Max concurrent brief wakes -->
+                    <Grid Margin="0,0,0,16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" Margin="0,0,24,0">
+                            <TextBlock Text="Max simultaneous brief wakes"
+                                       Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
+                            <TextBlock Text="Caps how many napped apps can wake at the same time. Lower values reduce CPU spikes from mass wakes. (1–10, default 3)"
+                                       Style="{StaticResource CaptionText}"
+                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                       TextWrapping="Wrap" Margin="0,3,0,0"/>
+                        </StackPanel>
+                        <TextBox Grid.Column="1"
+                                 Text="{Binding MaxConcurrentBriefWakes, UpdateSourceTrigger=LostFocus}"
+                                 Style="{StaticResource ThresholdInput}"/>
+                        <TextBlock Grid.Column="2" Text="apps" VerticalAlignment="Center"
+                                   Margin="6,0,0,0" Style="{StaticResource BodyText}"
+                                   Foreground="{StaticResource TextSecondaryBrush}"/>
+                    </Grid>
+
+                    <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,0,0,16"/>
+
                     <!-- Protect active window -->
                     <Grid Margin="0,0,0,16">
                         <Grid.ColumnDefinitions>

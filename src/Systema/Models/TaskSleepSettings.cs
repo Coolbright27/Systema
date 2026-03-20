@@ -115,6 +115,14 @@ public class TaskSleepSettings
     /// </summary>
     public bool EnforceSettings { get; set; } = true;
 
+    // ── Brief Wake Concurrency ────────────────────────────────────────────────
+    /// <summary>
+    /// Maximum number of napped processes allowed to be in a brief-wake window
+    /// simultaneously. Caps CPU spikes from many processes waking at once.
+    /// Valid range: 1–10. Default: 3.
+    /// </summary>
+    public int MaxConcurrentBriefWakes { get; set; } = 3;
+
     // ── Game mode integration ─────────────────────────────────────────────────
     /// <summary>
     /// When true (set by GameBoosterService via TaskSleepViewModel.SetGameMode),

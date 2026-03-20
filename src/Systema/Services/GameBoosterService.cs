@@ -16,6 +16,7 @@
 // ════════════════════════════════════════════════════════════════════════════
 
 using System.Diagnostics;
+using System.Net.NetworkInformation;
 using System.Runtime.InteropServices;
 using System.ServiceProcess;
 using System.Text.Json;
@@ -120,6 +121,8 @@ public sealed class GameBoosterService : IDisposable
     // Nagle / NIC power — list of (HKLM-relative path, value name, original value or null=delete)
     private List<(string path, string name, object? val)>? _nagleRestore;
     private List<(string path, string name, object? val)>? _nicPowerRestore;
+    // Wi-Fi disable — names of adapters we disabled (null = feature not used / no adapters disabled)
+    private List<string>? _disabledWifiAdapters;
 
     public bool IsEnabled             => _settings.GameBoosterEnabled;
     public bool BoostActive           => _boostActive;
@@ -704,9 +707,10 @@ public sealed class GameBoosterService : IDisposable
         if (_settings.GameBoosterTimerResolution)  ApplyTimerResolution();
         if (_settings.GameBoosterDisableGameBar)   ApplyGameBarDisable();
         if (_settings.GameBoosterGpuProfile)       ApplyMultimediaProfile();
-        if (_settings.GameBoosterDisableNagle)     ApplyDisableNagle();
-        if (_settings.GameBoosterFlushDns)         FlushDns();
-        if (_settings.GameBoosterNicPowerSaving)   ApplyNicPowerSaving();
+        if (_settings.GameBoosterDisableNagle)          ApplyDisableNagle();
+        if (_settings.GameBoosterFlushDns)              FlushDns();
+        if (_settings.GameBoosterNicPowerSaving)        ApplyNicPowerSaving();
+        if (_settings.GameBoosterDisableWifiOnEthernet) ApplyDisableWifi();
 
         // 1. Aggressively trim RAM from background processes:
         //    Step 1 — per-process: remove working-set floor then flush pages to standby list.
@@ -831,6 +835,7 @@ public sealed class GameBoosterService : IDisposable
     private void RestoreBoostOptions()
     {
         // 0. Restore new options (order: reverse of apply)
+        RestoreWifi();
         RestoreNicPowerSaving();
         RestoreNagle();
         RestoreMultimediaProfile();
@@ -1155,6 +1160,79 @@ public sealed class GameBoosterService : IDisposable
         }
         _nicPowerRestore = null;
         _log.Info("GameBoosterService", "NIC power saving restored");
+    }
+
+    // ·· Disable Wi-Fi when Ethernet is active ··································
+
+    private void ApplyDisableWifi()
+    {
+        _disabledWifiAdapters = null;
+        try
+        {
+            // Only disable Wi-Fi when at least one ethernet/wired adapter is up
+            bool ethernetUp = NetworkInterface.GetAllNetworkInterfaces()
+                .Any(n => n.NetworkInterfaceType == NetworkInterfaceType.Ethernet
+                       && n.OperationalStatus    == OperationalStatus.Up);
+
+            if (!ethernetUp)
+            {
+                _log.Info("GameBoosterService", "DisableWifi: no active ethernet — skipping");
+                return;
+            }
+
+            // Collect Wi-Fi adapters that are currently up
+            var wifiAdapters = NetworkInterface.GetAllNetworkInterfaces()
+                .Where(n => n.NetworkInterfaceType == NetworkInterfaceType.Wireless80211
+                         && n.OperationalStatus    == OperationalStatus.Up)
+                .Select(n => n.Name)
+                .ToList();
+
+            if (wifiAdapters.Count == 0)
+            {
+                _log.Info("GameBoosterService", "DisableWifi: no active Wi-Fi adapters found");
+                return;
+            }
+
+            _disabledWifiAdapters = new List<string>();
+            foreach (var name in wifiAdapters)
+            {
+                try
+                {
+                    var psi = new ProcessStartInfo("netsh",
+                        $"interface set interface \"{name}\" disable")
+                    { UseShellExecute = false, CreateNoWindow = true };
+                    Process.Start(psi)?.WaitForExit(3000);
+                    _disabledWifiAdapters.Add(name);
+                    _log.Info("GameBoosterService", $"DisableWifi: disabled '{name}'");
+                }
+                catch (Exception ex)
+                {
+                    _log.Warn("GameBoosterService", $"DisableWifi: failed on '{name}': {ex.Message}");
+                }
+            }
+        }
+        catch (Exception ex) { _log.Warn("GameBoosterService", $"ApplyDisableWifi failed: {ex.Message}"); }
+    }
+
+    private void RestoreWifi()
+    {
+        if (_disabledWifiAdapters == null || _disabledWifiAdapters.Count == 0) return;
+        foreach (var name in _disabledWifiAdapters)
+        {
+            try
+            {
+                var psi = new ProcessStartInfo("netsh",
+                    $"interface set interface \"{name}\" enable")
+                { UseShellExecute = false, CreateNoWindow = true };
+                Process.Start(psi)?.WaitForExit(3000);
+                _log.Info("GameBoosterService", $"RestoreWifi: re-enabled '{name}'");
+            }
+            catch (Exception ex)
+            {
+                _log.Warn("GameBoosterService", $"RestoreWifi: failed on '{name}': {ex.Message}");
+            }
+        }
+        _disabledWifiAdapters = null;
     }
 
     // ── Xbox Services Logic ────────────────────────────────────────────────────

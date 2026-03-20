@@ -484,7 +484,9 @@ public sealed class TaskSleepService : IDisposable
                     bool cpuIdle    = sysCpu < s.SystemCpuTriggerPercent / 2.0;
                     bool wakeNeeded = !_nextBriefWakeAt.TryGetValue(pid, out DateTime nextWake) ||
                                       DateTime.UtcNow >= nextWake;
-                    if (!s.IsGameModeActive && cpuIdle && wakeNeeded)
+                    int activeWakes = _briefWakeEndAt.Count + _trayBriefWakeEndAt.Count;
+                    if (!s.IsGameModeActive && cpuIdle && wakeNeeded &&
+                        activeWakes < s.MaxConcurrentBriefWakes)
                     {
                         _processNames.TryGetValue(pid, out string? nm2);
                         TryRestoreProcess(pid);
@@ -518,7 +520,9 @@ public sealed class TaskSleepService : IDisposable
                     bool cpuIdle    = sysCpu < s.SystemCpuTriggerPercent / 2.0;
                     bool wakeNeeded = !_trayNextBriefWakeAt.TryGetValue(pid, out DateTime nextTrayWake) ||
                                       DateTime.UtcNow >= nextTrayWake;
-                    if (!s.IsGameModeActive && cpuIdle && wakeNeeded)
+                    int activeWakes = _briefWakeEndAt.Count + _trayBriefWakeEndAt.Count;
+                    if (!s.IsGameModeActive && cpuIdle && wakeNeeded &&
+                        activeWakes < s.MaxConcurrentBriefWakes)
                     {
                         _processNames.TryGetValue(pid, out string? nm3);
                         TryRestoreProcess(pid);

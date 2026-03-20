@@ -510,7 +510,7 @@
                     </Grid>
 
                     <!-- Disable NIC power saving -->
-                    <Grid Margin="0,0,0,16">
+                    <Grid Margin="0,0,0,14">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
@@ -522,6 +522,21 @@
                         </StackPanel>
                         <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}"
                                   IsChecked="{Binding NicPowerSavingOnBoost}" VerticalAlignment="Center"/>
+                    </Grid>
+
+                    <!-- Disable Wi-Fi when Ethernet is connected -->
+                    <Grid Margin="0,0,0,16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" Margin="0,0,24,0" VerticalAlignment="Center">
+                            <TextBlock Text="Disable Wi-Fi when ethernet is connected" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
+                            <TextBlock Text="Turns off Wi-Fi at game start if a wired ethernet connection is active. Eliminates background wireless scanning that can cause micro-stutters. Wi-Fi is re-enabled automatically when the game exits — only if it was on beforehand."
+                                       Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,2,0,0"/>
+                        </StackPanel>
+                        <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}"
+                                  IsChecked="{Binding DisableWifiOnEthernet}" VerticalAlignment="Center"/>
                     </Grid>
 
                     <Button Content="Save Boost Actions" Style="{StaticResource PrimaryButton}"
