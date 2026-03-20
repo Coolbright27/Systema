@@ -223,26 +223,86 @@ public sealed class GameBoosterService : IDisposable
     // ── Default services to kill during boost ─────────────────────────────────
     private static readonly string[] DefaultKillList =
     {
-        "Spooler",           // Print Spooler
+        // ── Background downloads / updates ────────────────────────────────────
+        "BITS",              // Background Intelligent Transfer — stops all background downloads
+        "DoSvc",             // Delivery Optimization — stops Windows P2P update bandwidth
+        "wuauserv",          // Windows Update — prevents mid-game update scans & downloads
+        "WaaSMedicSvc",      // Windows Update Medic — update health watchdog
+        "UsoSvc",            // Update Orchestrator — schedules and stages updates
+        "InstallService",    // Microsoft Store Install Service — app install background work
+
+        // ── Search & indexing ─────────────────────────────────────────────────
+        "WSearch",           // Windows Search — indexer I/O spikes
+        "MicrosoftSearchInBing", // Bing search in Start menu
+
+        // ── Telemetry & diagnostics ───────────────────────────────────────────
+        "DiagTrack",         // Connected User Experiences & Telemetry
+        "WerSvc",            // Windows Error Reporting — queues crash reports
+        "wlidsvc",           // Microsoft Account Sign-in Assistant — phone-home telemetry
+        "WdiServiceHost",    // Diagnostic Service Host — background diagnostics
+        "PcaSvc",            // Program Compatibility Assistant — CPU on every app launch
+        "DPS",               // Diagnostic Policy Service — monitors system health
+
+        // ── Print & scan ─────────────────────────────────────────────────────
+        "Spooler",           // Print Spooler — large service, not needed while gaming
         "Fax",               // Fax service
-        "TabletInputService",// Touch keyboard
-        "WSearch",           // Windows Search
-        "SysMain",           // SuperFetch
-        "DiagTrack",         // Telemetry
-        "WerSvc",            // Error reporting
-        "MapsBroker",        // Maps manager
-        "lfsvc",             // Geolocation
-        "RetailDemo",        // Retail demo service
-        "XblGameSave",       // Xbox Live game save
-        "XboxNetApiSvc",     // Xbox Live networking
-        "BITS",              // Background Intelligent Transfer — stops background downloads
-        "DoSvc",             // Delivery Optimization — stops P2P bandwidth use
-        "ssdpsrv",           // SSDP Discovery — stops UPnP scanning overhead
-        "upnphost",          // UPnP Device Host — not needed while gaming
-        "TrkWks",            // Distributed Link Tracking — small I/O overhead
-        "PcaSvc",            // Program Compatibility Assistant — CPU overhead on app launch
-        "WMPNetworkSvc",     // Windows Media Player Network Sharing — unnecessary while gaming
-        "NcaSvc",            // Network Connectivity Assistant — not needed while gaming
+        "PrintNotify",       // Printer Extensions and Notifications
+        "stisvc",            // Windows Image Acquisition (WIA) — scanner service
+
+        // ── Memory manager ────────────────────────────────────────────────────
+        "SysMain",           // Superfetch — prefetches apps into RAM, competes with game
+
+        // ── Network noise ─────────────────────────────────────────────────────
+        "ssdpsrv",           // SSDP Discovery — constant LAN UPnP scanning
+        "upnphost",          // UPnP Device Host
+        "fdPHost",           // Function Discovery Provider Host — network device scanning
+        "FDResPub",          // Function Discovery Resource Publication — broadcasts PC on LAN
+        "lmhosts",           // TCP/IP NetBIOS Helper — legacy NBT lookups
+        "p2pimsvc",          // Peer Networking Identity Manager — P2P overhead
+        "PNRPsvc",           // Peer Name Resolution Protocol — P2P name resolution
+        "PNRPAutoReg",       // PNRP Machine Name Publication — P2P broadcasting
+        "TrkWks",            // Distributed Link Tracking Client — LAN link tracking
+
+        // ── Sync & cloud ──────────────────────────────────────────────────────
+        "CDPSvc",            // Connected Devices Platform — syncs phone, clipboard, timeline
+        "MapsBroker",        // Downloaded Maps Manager — background map tile downloads
+
+        // ── Notifications ─────────────────────────────────────────────────────
+        "WpnService",        // Windows Push Notification System Service — queues toasts
+        "PushToInstall",     // Windows PushToInstall Service
+
+        // ── Hardware / peripheral services not needed while gaming ────────────
+        "TabletInputService",// Touch keyboard / handwriting panel
+        "WbioSrvc",          // Windows Biometric Service — fingerprint / face recognition
+        "SCardSvr",          // Smart Card — only for corporate CAC/PIV cards
+        "ScDeviceEnum",      // Smart Card Device Enumeration
+        "icssvc",            // Windows Mobile Hotspot Service — mobile hotspot management
+        "PhoneSvc",          // Phone Service — CellCore radio management
+        "RmSvc",             // Radio Management Service — manages radios (restored after boost)
+
+        // ── Location & sensors ────────────────────────────────────────────────
+        "lfsvc",             // Geolocation Service
+        "SensorService",     // Sensor Service — orientation, proximity, ambient light
+        "SensrSvc",          // Sensor Monitoring Service
+        "SensorDataService", // Sensor Data Service
+
+        // ── Misc background services ──────────────────────────────────────────
+        "RetailDemo",        // Retail Demo Experience Service
+        "XblGameSave",       // Xbox Live Game Save
+        "XboxNetApiSvc",     // Xbox Live Networking
+        "WMPNetworkSvc",     // Windows Media Player Network Sharing
+        "NcaSvc",            // Network Connectivity Assistant
+        "StorSvc",           // Storage Service — background storage maintenance
+        "DusmSvc",           // Data Usage Subscription Manager
+        "NgcSvc",            // Microsoft Passport Container (Windows Hello)
+        "NgcCtnrSvc",        // Microsoft Passport in the Container
+        "RemoteRegistry",    // Remote Registry — security risk, not needed gaming
+        "RpcLocator",        // Remote Procedure Call Locator — legacy, unused on modern Windows
+        "TapiSrv",           // Telephony — legacy TAPI, old modem applications
+        "ShellHWDetection",  // Shell Hardware Detection — autoplay for USB/optical drives
+        "WMPNetworkSvc",     // Windows Media Player Network Sharing (duplicate guard OK)
+        "XblAuthManager",    // Xbox Live Auth Manager
+        "xbgm",              // Xbox Game Monitoring
     };
 
     // ── Constructor ────────────────────────────────────────────────────────────
