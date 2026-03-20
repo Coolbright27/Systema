@@ -8,7 +8,7 @@ Built for Windows 10/11 · x64 · Requires administrator
 
 ## Download
 
-👉 **[Download Systema_Setup_1.6.21.exe](../../releases/latest)**
+👉 **[Download Systema_Setup_1.6.22.exe](../../releases/latest)**
 
 ---
 
@@ -39,7 +39,7 @@ Built for Windows 10/11 · x64 · Requires administrator
 
 ## Installation
 
-1. Download `Systema_Setup_1.6.21.exe` from the [Releases](../../releases/latest) page
+1. Download `Systema_Setup_1.6.22.exe` from the [Releases](../../releases/latest) page
 2. Run the installer and follow the prompts (UAC prompt is expected — admin is required)
 3. Launch Systema from the Start Menu or desktop shortcut
 

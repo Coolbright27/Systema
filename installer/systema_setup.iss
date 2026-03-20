@@ -3,7 +3,7 @@
 ; ============================================================
 
 #define MyAppName "Systema"
-#define MyAppVersion "1.6.21"
+#define MyAppVersion "1.6.22"
 #define MyAppPublisher "Systema"
 #define MyAppURL "https://github.com/systema-app"
 #define MyAppExeName "Systema.exe"

@@ -221,7 +221,7 @@ public class MemoryService
 
         System.Threading.Thread.Sleep(500); // let the OS reclaim before re-sampling
         var (_, afterMb) = GetRamStats();
-        long freed = Math.Max(0, beforeMb - afterMb);
+        long freed = Math.Max(0, afterMb - beforeMb);
 
         Log.Info("MemoryService", $"FreeRam: trimmed {trimmed} processes, freed ~{freed} MB");
         return (freed, $"Freed ~{freed:N0} MB from {trimmed} processes.");
