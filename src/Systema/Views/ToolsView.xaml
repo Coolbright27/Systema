@@ -111,8 +111,8 @@
 
                     <!-- Encrypted DNS (DoH) toggle -->
                     <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
-                        <ToggleButton IsChecked="{Binding UseEncryptedDns, Mode=TwoWay}"
-                                      Style="{StaticResource ToggleSwitch}"/>
+                        <CheckBox IsChecked="{Binding UseEncryptedDns, Mode=TwoWay}"
+                                  Style="{StaticResource ToggleSwitch}" VerticalAlignment="Center"/>
                         <StackPanel Margin="10,0,0,0" VerticalAlignment="Center">
                             <TextBlock Text="Use Encrypted DNS (DNS over HTTPS)"
                                        Style="{StaticResource BodyText}"/>
