@@ -300,7 +300,7 @@ public sealed class GameBoosterService : IDisposable
     /// Manually activates game boost regardless of game detection.
     /// Auto-disables after 6 hours to prevent leaving services killed indefinitely.
     /// </summary>
-    public void EnableManualBoost()
+    public async Task EnableManualBoostAsync()
     {
         if (!_settings.GameBoosterEnabled) return; // master switch
         _manualBoostActive = true;
@@ -308,22 +308,26 @@ public sealed class GameBoosterService : IDisposable
 
         if (!_boostActive)
         {
-            Action? postLockAction;
-            lock (_lock) postLockAction = ActivateBoost("Manual Boost");
+            // ActivateBoost kills services, writes registry, and flushes memory from 200+
+            // processes — must NOT run on the UI thread or it will freeze the window.
+            Action? postLockAction = await Task.Run(() =>
+            {
+                lock (_lock) return ActivateBoost("Manual Boost");
+            }).ConfigureAwait(true); // resume on UI thread for the DispatcherTimer below
             postLockAction?.Invoke();
         }
 
-        // 6-hour auto-off timer — always restart it so re-enabling resets the clock
+        // 6-hour auto-off timer — must be created on the UI thread (we're back on it after await)
         _manualBoostTimeoutTimer?.Stop();
         _manualBoostTimeoutTimer = new DispatcherTimer(DispatcherPriority.Background)
         {
             Interval = TimeSpan.FromHours(6)
         };
-        _manualBoostTimeoutTimer.Tick += (_, _) =>
+        _manualBoostTimeoutTimer.Tick += async (_, _) =>
         {
             _manualBoostTimeoutTimer?.Stop();
             _log.Info("GameBoosterService", "Manual boost auto-disabled after 6 hours");
-            DisableManualBoost();
+            await DisableManualBoostAsync();
             ManualBoostTimedOut?.Invoke();
             _tray?.ShowBalloon("Game Boost", "Manual boost auto-disabled after 6 hours.",
                 System.Windows.Forms.ToolTipIcon.Info);
@@ -334,17 +338,21 @@ public sealed class GameBoosterService : IDisposable
     }
 
     /// <summary>Manually deactivates boost (also cancels the 6-hour timer).</summary>
-    public void DisableManualBoost()
+    public async Task DisableManualBoostAsync()
     {
         _manualBoostActive = false;
         _manualBoostTimeoutTimer?.Stop();
         _manualBoostTimeoutTimer = null;
 
-        // Only deactivate if no real game is currently running
-        if (_boostActive && FindRunningGame() == null)
+        // FindRunningGame calls Process.GetProcesses() and DeactivateBoost restores services —
+        // both can block for several seconds, so run off the UI thread.
+        if (_boostActive)
         {
-            Action? postLockAction;
-            lock (_lock) postLockAction = DeactivateBoost();
+            Action? postLockAction = await Task.Run(() =>
+            {
+                if (FindRunningGame() != null) return null; // real game still running — don't deactivate
+                lock (_lock) return DeactivateBoost();
+            }).ConfigureAwait(true);
             postLockAction?.Invoke();
         }
 

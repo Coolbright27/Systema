@@ -155,17 +155,18 @@ public partial class GameBoosterViewModel : ObservableObject, IAutoRefreshable
     // ── Commands ──────────────────────────────────────────────────────────────
 
     [RelayCommand]
-    private void ToggleManualBoost()
+    private async Task ToggleManualBoost()
     {
         if (ManualBoostEnabled)
         {
-            _gameBooster.DisableManualBoost();
+            await _gameBooster.DisableManualBoostAsync();
             ManualBoostEnabled = false;
             StatusMessage = "Manual boost disabled.";
         }
         else
         {
-            _gameBooster.EnableManualBoost();
+            StatusMessage = "Activating boost...";
+            await _gameBooster.EnableManualBoostAsync();
             ManualBoostEnabled = true;
             StatusMessage = "Manual boost enabled — auto-disables after 6 hours.";
         }
