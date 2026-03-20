@@ -55,6 +55,7 @@ public partial class MainViewModel : ObservableObject
     public BloatwareViewModel   BloatwareVm   { get; }
 
     private readonly DispatcherTimer _refreshTimer;
+    private readonly DispatcherTimer _heartbeatTimer;   // dedicated 1-second CrashGuard heartbeat
     private static readonly TimeSpan FocusedInterval   = TimeSpan.FromSeconds(1);
     private static readonly TimeSpan UnfocusedInterval = TimeSpan.FromSeconds(5);
 
@@ -80,16 +81,21 @@ public partial class MainViewModel : ObservableObject
         BloatwareVm   = bloatwareVm;
         CurrentView   = dashboardVm;
 
+        // Dedicated 1-second heartbeat — always ticks regardless of app focus or refresh rate.
+        // The refresh timer slows to 5 s when unfocused, which would race the 5-second watchdog
+        // timeout and produce false crash reports whenever boost runs in the background.
+        _heartbeatTimer = new DispatcherTimer(DispatcherPriority.Send)
+        {
+            Interval = TimeSpan.FromSeconds(1)
+        };
+        _heartbeatTimer.Tick += (_, _) => CrashGuard.Heartbeat();
+        _heartbeatTimer.Start();
+
         _refreshTimer = new DispatcherTimer(DispatcherPriority.Background)
         {
             Interval = FocusedInterval
         };
-        _refreshTimer.Tick += async (_, _) =>
-        {
-            // Prove to the CrashGuard watchdog that the UI thread is alive
-            CrashGuard.Heartbeat();
-            await SafeRefreshAsync();
-        };
+        _refreshTimer.Tick += async (_, _) => await SafeRefreshAsync();
         _refreshTimer.Start();
 
         _ = SafeRefreshAsync();
