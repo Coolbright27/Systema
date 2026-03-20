@@ -300,15 +300,6 @@ public class SettingsService
         set => WriteBool(nameof(GameBoosterDisableWifiOnEthernet), value);
     }
 
-    // ── DNS ───────────────────────────────────────────────────────────────────
-
-    /// <summary>When true, DNS-over-HTTPS is applied with no plain-text fallback.</summary>
-    public bool DnsUseEncrypted
-    {
-        get => ReadBool(nameof(DnsUseEncrypted), defaultValue: true);
-        set => WriteBool(nameof(DnsUseEncrypted), value);
-    }
-
     // ── Updates ───────────────────────────────────────────────────────────────
 
     /// <summary>

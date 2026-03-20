@@ -40,45 +40,13 @@ public class DnsService
         @"SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces";
     private const string NetworkAdaptersPath =
         @"SYSTEM\CurrentControlSet\Control\Network\{4D36E972-E325-11CE-BFC1-08002BE10318}";
-    private const string DnsCacheParamsPath =
-        @"SYSTEM\CurrentControlSet\Services\Dnscache\Parameters";
-    private const string DohServersPath =
-        @"SYSTEM\CurrentControlSet\Services\Dnscache\Parameters\DohWellknownServers";
 
     public static readonly List<DnsProfile> Profiles = new()
     {
-        new DnsProfile
-        {
-            Name                 = "Cloudflare (Recommended)",
-            Primary              = "1.1.1.1",
-            Secondary            = "1.0.0.1",
-            SupportsDoH          = true,
-            PrimaryDohTemplate   = "https://cloudflare-dns.com/dns-query",
-            SecondaryDohTemplate = "https://cloudflare-dns.com/dns-query",
-        },
-        new DnsProfile
-        {
-            Name                 = "Google",
-            Primary              = "8.8.8.8",
-            Secondary            = "8.8.4.4",
-            SupportsDoH          = true,
-            PrimaryDohTemplate   = "https://dns.google/dns-query",
-            SecondaryDohTemplate = "https://dns.google/dns-query",
-        },
-        new DnsProfile
-        {
-            Name        = "OpenDNS",
-            Primary     = "208.67.222.222",
-            Secondary   = "208.67.220.220",
-            SupportsDoH = false,
-        },
-        new DnsProfile
-        {
-            Name        = "System Default (DHCP)",
-            Primary     = "",
-            Secondary   = "",
-            SupportsDoH = false,
-        },
+        new DnsProfile { Name = "Cloudflare (Recommended)", Primary = "1.1.1.1",          Secondary = "1.0.0.1",         SupportsDoH = true  },
+        new DnsProfile { Name = "Google",                   Primary = "8.8.8.8",           Secondary = "8.8.4.4",          SupportsDoH = true  },
+        new DnsProfile { Name = "OpenDNS",                  Primary = "208.67.222.222",     Secondary = "208.67.220.220",   SupportsDoH = false },
+        new DnsProfile { Name = "System Default (DHCP)",    Primary = "",                   Secondary = "",                 SupportsDoH = false },
     };
 
     /// <summary>
@@ -115,19 +83,13 @@ public class DnsService
         return "Unknown";
     }
 
-    /// <param name="useEncryptedDns">
-    /// When true, registers DoH templates and disables plain-text fallback for profiles that
-    /// support it. When false, DoH is disabled and standard unencrypted DNS is used.
-    /// </param>
-    public async Task<TweakResult> ApplyProfileAsync(DnsProfile profile, bool useEncryptedDns = true)
+    public async Task<TweakResult> ApplyProfileAsync(DnsProfile profile)
     {
         // Validate Primary DNS before doing anything — prevents corrupt netsh calls.
         if (!string.IsNullOrEmpty(profile.Primary) && string.IsNullOrWhiteSpace(profile.Primary))
             return TweakResult.Fail("Primary DNS address is invalid.");
 
-        Log.Info("DnsService",
-            $"Applying DNS profile: {profile.Name} ({profile.Primary}) — " +
-            $"DoH: {(profile.SupportsDoH && useEncryptedDns ? "on, no fallback" : "off")}");
+        Log.Info("DnsService", $"Applying DNS profile: {profile.Name} ({profile.Primary})");
 
         // Run netsh on a large-stack thread — spawning processes can trigger
         // AV/EDR CreateProcess hooks that exhaust small threadpool stacks.
@@ -157,10 +119,8 @@ public class DnsService
                     }
                 }
 
-                if (profile.SupportsDoH && useEncryptedDns)
-                    EnableDoH(profile);
-                else
-                    DisableDoH();
+                if (profile.SupportsDoH)
+                    EnableDoH();
 
                 Log.Info("DnsService", $"DNS profile applied successfully: {profile.Name}");
                 return TweakResult.Ok($"DNS set to {profile.Name} ({profile.Primary}).");
@@ -310,62 +270,14 @@ public class DnsService
         proc?.WaitForExit(5_000);
     }
 
-    /// <summary>
-    /// Enables DNS-over-HTTPS for the given profile.
-    /// Registers per-IP DoH template URLs in the Windows Dnscache registry,
-    /// sets EnableAutoDoh=2 (auto-upgrade), and AllowFallback=0 (no plain-text fallback).
-    /// </summary>
-    private static void EnableDoH(DnsProfile profile)
+    private static void EnableDoH()
     {
         try
         {
-            // Set global DoH mode: 2 = auto-upgrade to DoH when server template is known
-            using var paramsKey = Registry.LocalMachine.CreateSubKey(DnsCacheParamsPath, true);
-            paramsKey.SetValue("EnableAutoDoh", 2, RegistryValueKind.DWord);
-
-            // Register DoH template for each DNS server IP
-            var servers = new[]
-            {
-                (ip: profile.Primary,   template: profile.PrimaryDohTemplate),
-                (ip: profile.Secondary, template: profile.SecondaryDohTemplate),
-            };
-
-            foreach (var (ip, template) in servers)
-            {
-                if (string.IsNullOrEmpty(ip) || string.IsNullOrEmpty(template)) continue;
-
-                using var serverKey = Registry.LocalMachine.CreateSubKey(
-                    $@"{DohServersPath}\{ip}", true);
-
-                serverKey.SetValue("DohTemplate",  template, RegistryValueKind.String);
-                serverKey.SetValue("AutoUpgrade",  1,        RegistryValueKind.DWord);
-                // AllowFallback = 0 means Windows will NOT fall back to unencrypted DNS
-                serverKey.SetValue("AllowFallback", 0,       RegistryValueKind.DWord);
-            }
-
-            Log.Info("DnsService",
-                $"DoH enabled — templates registered, AllowFallback=0 (no plain-text fallback)");
+            using var key = Registry.LocalMachine.CreateSubKey(
+                @"SYSTEM\CurrentControlSet\Services\Dnscache\Parameters", true);
+            key.SetValue("EnableAutoDoh", 2, RegistryValueKind.DWord);
         }
-        catch (Exception ex)
-        {
-            Log.Warn("DnsService", $"EnableDoH registry write failed: {ex.Message}");
-        }
-    }
-
-    /// <summary>
-    /// Disables DNS-over-HTTPS. Sets EnableAutoDoh=0 so Windows uses plain DNS.
-    /// </summary>
-    private static void DisableDoH()
-    {
-        try
-        {
-            using var paramsKey = Registry.LocalMachine.CreateSubKey(DnsCacheParamsPath, true);
-            paramsKey.SetValue("EnableAutoDoh", 0, RegistryValueKind.DWord);
-            Log.Info("DnsService", "DoH disabled — plain-text DNS in use");
-        }
-        catch (Exception ex)
-        {
-            Log.Warn("DnsService", $"DisableDoH registry write failed: {ex.Message}");
-        }
+        catch { }
     }
 }

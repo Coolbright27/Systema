@@ -8,21 +8,15 @@
 //
 // RELATED FILES
 //   DnsService.cs          — owns the profile list and applies profiles via registry
-//   ToolsViewModel.cs      — profile picker ComboBox is bound to DnsProfile items
+//   NetworkViewModel.cs    — profile picker ComboBox is bound to DnsProfile items
 // ════════════════════════════════════════════════════════════════════════════
 
 namespace Systema.Models;
 
 public class DnsProfile
 {
-    public string  Name                 { get; set; } = string.Empty;
-    public string  Primary              { get; set; } = string.Empty;
-    public string  Secondary            { get; set; } = string.Empty;
-    public bool    SupportsDoH          { get; set; }
-
-    /// <summary>DoH template URL for the primary server (e.g. "https://cloudflare-dns.com/dns-query").</summary>
-    public string? PrimaryDohTemplate   { get; set; }
-
-    /// <summary>DoH template URL for the secondary server.</summary>
-    public string? SecondaryDohTemplate { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string Primary { get; set; } = string.Empty;
+    public string Secondary { get; set; } = string.Empty;
+    public bool SupportsDoH { get; set; }
 }

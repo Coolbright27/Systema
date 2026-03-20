@@ -109,20 +109,6 @@
                         Click "Reset to DHCP" to go back to your internet provider's default.
                     </TextBlock>
 
-                    <!-- Encrypted DNS (DoH) toggle -->
-                    <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
-                        <CheckBox IsChecked="{Binding UseEncryptedDns, Mode=TwoWay}"
-                                  Style="{StaticResource ToggleSwitch}" VerticalAlignment="Center"/>
-                        <StackPanel Margin="10,0,0,0" VerticalAlignment="Center">
-                            <TextBlock Text="Use Encrypted DNS (DNS over HTTPS)"
-                                       Style="{StaticResource BodyText}"/>
-                            <TextBlock Style="{StaticResource CaptionText}"
-                                       Foreground="{StaticResource TextSecondaryBrush}">
-                                Encrypts all DNS queries. No plain-text fallback — only applies to Cloudflare and Google.
-                            </TextBlock>
-                        </StackPanel>
-                    </StackPanel>
-
                     <!-- Current DNS display -->
                     <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
                         <TextBlock Text="Current DNS: " Style="{StaticResource CaptionText}"/>

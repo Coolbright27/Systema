@@ -52,9 +52,8 @@ public partial class ToolsViewModel : ObservableObject, IAutoRefreshable
     // ── DNS Switcher ──────────────────────────────────────────────────────────
     [ObservableProperty] private ObservableCollection<DnsProfile> _dnsProfiles = new();
     [ObservableProperty] private DnsProfile? _selectedDnsProfile;
-    [ObservableProperty] private string _currentDns      = string.Empty;
+    [ObservableProperty] private string _currentDns = string.Empty;
     [ObservableProperty] private bool   _isDnsLoading;
-    [ObservableProperty] private bool   _useEncryptedDns = true;
 
     // ── Realtek Cleaner ───────────────────────────────────────────────────────
     [ObservableProperty] private ObservableCollection<RealtekEntry> _realtekEntries = new();
@@ -93,14 +92,6 @@ public partial class ToolsViewModel : ObservableObject, IAutoRefreshable
         foreach (var p in DnsService.Profiles)
             DnsProfiles.Add(p);
         SelectedDnsProfile = DnsProfiles.FirstOrDefault();
-
-        // Load encrypted DNS preference (default on)
-        _useEncryptedDns = _settings.DnsUseEncrypted;
-    }
-
-    partial void OnUseEncryptedDnsChanged(bool value)
-    {
-        _settings.DnsUseEncrypted = value;
     }
 
     // ── IAutoRefreshable ──────────────────────────────────────────────────────
@@ -176,7 +167,7 @@ public partial class ToolsViewModel : ObservableObject, IAutoRefreshable
         StatusMessage = $"Applying DNS: {SelectedDnsProfile.Name}...";
         try
         {
-            var result = await _dnsService.ApplyProfileAsync(SelectedDnsProfile, UseEncryptedDns);
+            var result = await _dnsService.ApplyProfileAsync(SelectedDnsProfile);
             StatusMessage = result.Message;
             CurrentDns = await Task.Run(() => _dnsService.GetCurrentDns());
         }

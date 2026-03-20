@@ -108,36 +108,14 @@ public static class CrashGuard
                 sb.AppendLine();
                 sb.AppendLine($"  → {breadcrumb}");
                 sb.AppendLine();
-                if (breadcrumb.Contains("XamlParseException", StringComparison.OrdinalIgnoreCase))
-                {
-                    sb.AppendLine("This was a UI initialization error (XamlParseException) — not a native driver crash.");
-                    sb.AppendLine("A XAML style or resource failed to load. This is a Systema bug that has likely");
-                    sb.AppendLine("already been fixed in a newer version.");
-                    sb.AppendLine();
-                    sb.AppendLine("If this keeps happening, try:");
-                    sb.AppendLine("  • Update Systema to the latest version");
-                    sb.AppendLine("  • If already up to date, report this to the developer with this file");
-                }
-                else if (breadcrumb.Contains("UI EXCEPTION", StringComparison.OrdinalIgnoreCase) ||
-                         breadcrumb.Contains("Exception", StringComparison.OrdinalIgnoreCase))
-                {
-                    sb.AppendLine("A .NET exception occurred in the UI. This is likely a Systema bug.");
-                    sb.AppendLine();
-                    sb.AppendLine("If this keeps happening, try:");
-                    sb.AppendLine("  • Update Systema to the latest version");
-                    sb.AppendLine("  • Report this to the developer with this file attached");
-                }
-                else
-                {
-                    sb.AppendLine("No .NET exception was available — the crash was likely caused by");
-                    sb.AppendLine("a native driver (VPN, antivirus, or network filter) triggering an");
-                    sb.AppendLine("AccessViolationException or StackOverflowException that .NET cannot catch.");
-                    sb.AppendLine();
-                    sb.AppendLine("If this keeps happening, try:");
-                    sb.AppendLine("  • Disabling VPN software temporarily");
-                    sb.AppendLine("  • Updating network adapter drivers");
-                    sb.AppendLine("  • Running Systema without third-party antivirus active");
-                }
+                sb.AppendLine("No .NET exception was available — the crash was likely caused by");
+                sb.AppendLine("a native driver (VPN, antivirus, or network filter) triggering an");
+                sb.AppendLine("AccessViolationException or StackOverflowException that .NET cannot catch.");
+                sb.AppendLine();
+                sb.AppendLine("If this keeps happening, try:");
+                sb.AppendLine("  • Disabling VPN software temporarily");
+                sb.AppendLine("  • Updating network adapter drivers");
+                sb.AppendLine("  • Running Systema without third-party antivirus active");
                 sb.AppendLine();
                 sb.AppendLine($"Report saved to: {CrashFilePath}");
 
@@ -242,30 +220,12 @@ public static class CrashGuard
                     Thread.Sleep(2_000);
                     if (!_uiAlive && _activeBreadcrumb != null)
                     {
-                        var crumb = _activeBreadcrumb;
-                        string freezeExplanation;
-                        if (crumb != null && crumb.Contains("XamlParseException", StringComparison.OrdinalIgnoreCase))
-                        {
-                            freezeExplanation =
-                                "A XamlParseException caused the UI thread to stop responding.\n" +
-                                "A XAML style or resource failed to load — this is a Systema bug.\n" +
-                                "Update to the latest version as this is likely already fixed.";
-                        }
-                        else if (crumb != null && (crumb.Contains("UI EXCEPTION", StringComparison.OrdinalIgnoreCase) ||
-                                                   crumb.Contains("Exception", StringComparison.OrdinalIgnoreCase)))
-                        {
-                            freezeExplanation =
-                                "A .NET exception caused the UI thread to stop responding.\n" +
-                                "Update Systema and report this file to the developer if it persists.";
-                        }
-                        else
-                        {
-                            freezeExplanation =
-                                "The UI thread stopped responding for 5+ seconds during a marked operation.\n" +
-                                "This typically means a native driver crashed the thread (AccessViolation)\n" +
-                                "or caused a StackOverflowException that .NET cannot catch.";
-                        }
-                        WriteCrashReport("UI THREAD FREEZE / CRASH DETECTED", crumb ?? string.Empty, freezeExplanation);
+                        WriteCrashReport(
+                            "UI THREAD FREEZE / CRASH DETECTED",
+                            _activeBreadcrumb,
+                            "The UI thread stopped responding for 5+ seconds during a marked operation.\n" +
+                            "This typically means a native driver crashed the thread (AccessViolation)\n" +
+                            "or caused a StackOverflowException that .NET cannot catch.");
                     }
                 }
             }
@@ -323,19 +283,10 @@ public static class CrashGuard
             sb.AppendLine(explanation);
             sb.AppendLine();
             sb.AppendLine("--- Suggestions ---");
-            if (breadcrumb.Contains("XamlParseException", StringComparison.OrdinalIgnoreCase) ||
-                breadcrumb.Contains("UI EXCEPTION", StringComparison.OrdinalIgnoreCase))
-            {
-                sb.AppendLine("• Update Systema to the latest version — this is likely already fixed");
-                sb.AppendLine("• If already up to date, share this report with the developer");
-            }
-            else
-            {
-                sb.AppendLine("• Disable VPN software and try again");
-                sb.AppendLine("• Update network adapter drivers");
-                sb.AppendLine("• Temporarily disable third-party antivirus");
-                sb.AppendLine("• If the problem persists, share this report with the developer");
-            }
+            sb.AppendLine("• Disable VPN software and try again");
+            sb.AppendLine("• Update network adapter drivers");
+            sb.AppendLine("• Temporarily disable third-party antivirus");
+            sb.AppendLine("• If the problem persists, share this report with the developer");
             sb.AppendLine();
             sb.AppendLine($"Report saved to: {CrashFilePath}");
 
