@@ -20,7 +20,7 @@ Built for Windows 10/11 · x64 · Requires administrator
 | 🧠 **Memory Optimiser** | One-click standby RAM flush + startup program impact analyser (High / Medium / Low badges) |
 | 🔒 **Privacy Hardening** | 50+ registry tweaks to disable telemetry, advertising ID, and data collection — all reversible |
 | ⚙️ **Services** | Disable non-essential Windows services (DiagTrack, SysMain, Search indexer, etc.) |
-| 🎮 **Game Boost** | Auto-detects 20+ games and throttles background apps while you play, restores when you quit |
+| 🎮 **Game Boost** | Auto-detects games, anti-cheats, and game-related services to boost performance — throttles background apps while you play and fully restores when you quit |
 | 🧹 **App Cleanup** | Safely removes pre-installed Microsoft bloatware (Candy Crush, Xbox apps, Tips, Mail, etc.) |
 | 😴 **Task Sleep** | Pins background processes to E-cores and drops their CPU/IO/GPU priority when the system is under load |
 | 🌐 **DNS Switcher** | Switch between Cloudflare, Google, or custom DNS with one click |
