@@ -51,6 +51,17 @@ public sealed class GameBoosterService : IDisposable
     private readonly object _lock = new();
     private string? _boostedProcessName;
 
+    // ── P/Invoke: Sleep prevention (kernel32) ─────────────────────────────────
+    // SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED) — same call video
+    // players use to stop the machine sleeping mid-playback. ES_CONTINUOUS makes the
+    // request persistent (survives thread death) until explicitly cleared by calling
+    // SetThreadExecutionState(ES_CONTINUOUS) with no other flags.
+    [DllImport("kernel32.dll")]
+    private static extern uint SetThreadExecutionState(uint esFlags);
+
+    private const uint ES_CONTINUOUS      = 0x80000000;
+    private const uint ES_SYSTEM_REQUIRED = 0x00000001;
+
     // ── P/Invoke: Timer resolution (winmm) ────────────────────────────────────
     [DllImport("winmm.dll")]
     private static extern uint timeBeginPeriod(uint uPeriod);
@@ -108,6 +119,8 @@ public sealed class GameBoosterService : IDisposable
     // ── Saved pre-boost state for restore ─────────────────────────────────────
     private int?   _savedNotificationsEnabled; // null = notifications were already off — don't restore
     private string? _savedPowerPlanGuid;       // null = not changed
+    // Sleep prevention — true if SetThreadExecutionState(ES_SYSTEM_REQUIRED) is currently active
+    private bool _sleepPrevented;
     // Timer resolution
     private bool   _timerResolutionSet;
     // Game Bar / DVR
@@ -806,6 +819,10 @@ public sealed class GameBoosterService : IDisposable
 
     private void ApplyBoostOptions(string gameName)
     {
+        // –1. Prevent system sleep — applied first so it covers the entire boost window,
+        //     including any early exit if the game crashes right after launch.
+        if (_settings.GameBoosterPreventSleep) ApplyPreventSleep();
+
         // 0. New network / system options (applied before the heavy RAM trim)
         if (_settings.GameBoosterTimerResolution)  ApplyTimerResolution();
         if (_settings.GameBoosterDisableGameBar)   ApplyGameBarDisable();
@@ -945,6 +962,10 @@ public sealed class GameBoosterService : IDisposable
 
     private void RestoreBoostOptions()
     {
+        // –1. Remove sleep prevention first — system is free to sleep again immediately
+        //     once the boost ends, regardless of how long the other restores take.
+        RestorePreventSleep();
+
         // 0. Restore new options (order: reverse of apply)
         RestoreBluetooth();
         RestoreWifi();
@@ -1137,6 +1158,28 @@ public sealed class GameBoosterService : IDisposable
             _log.Info("GameBoosterService", "Multimedia system profile restored");
         }
         catch (Exception ex) { _log.Warn("GameBoosterService", $"RestoreMultimediaProfile: {ex.Message}"); }
+    }
+
+    // ·· Sleep Prevention ······················································
+
+    private void ApplyPreventSleep()
+    {
+        // ES_CONTINUOUS | ES_SYSTEM_REQUIRED: keep the machine awake for the duration
+        // of the boost session. The monitor timer would normally let Windows decide when
+        // to sleep; this overrides that for the game session only.
+        SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED);
+        _sleepPrevented = true;
+        _log.Info("GameBoosterService", "Sleep prevention active — system will not sleep while gaming");
+    }
+
+    private void RestorePreventSleep()
+    {
+        if (!_sleepPrevented) return;
+        // ES_CONTINUOUS alone clears all previous SYSTEM_REQUIRED flags, restoring
+        // whatever sleep timeout the user had configured in Power Options.
+        SetThreadExecutionState(ES_CONTINUOUS);
+        _sleepPrevented = false;
+        _log.Info("GameBoosterService", "Sleep prevention cleared — normal sleep timeouts restored");
     }
 
     // ·· Nagle's Algorithm ·····················································

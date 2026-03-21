@@ -554,6 +554,21 @@
                                   IsChecked="{Binding DisableBluetoothOnBoost}" VerticalAlignment="Center"/>
                     </Grid>
 
+                    <!-- Prevent system sleep during boost -->
+                    <Grid Margin="0,0,0,16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" Margin="0,0,24,0" VerticalAlignment="Center">
+                            <TextBlock Text="Prevent sleep while gaming" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
+                            <TextBlock Text="Stops the PC from sleeping or locking during a game session or manual boost. Sleep settings are restored the instant the game exits. Turn this off if you have a long idle-sleep timer you rely on."
+                                       Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,2,0,0"/>
+                        </StackPanel>
+                        <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}"
+                                  IsChecked="{Binding PreventSleepOnBoost}" VerticalAlignment="Center"/>
+                    </Grid>
+
                     <Button Content="Save Boost Actions" Style="{StaticResource PrimaryButton}"
                             Padding="16,8" HorizontalAlignment="Left"
                             Command="{Binding SaveSettingsCommand}"/>

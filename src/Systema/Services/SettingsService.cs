@@ -307,6 +307,18 @@ public class SettingsService
         set => WriteBool(nameof(GameBoosterDisableBluetooth), value);
     }
 
+    /// <summary>
+    /// Prevent the system from sleeping while a game session or manual boost is active.
+    /// Uses SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED) — same mechanism as
+    /// video players. Restored to normal sleep timeouts the moment the boost ends.
+    /// Default: true (on).
+    /// </summary>
+    public bool GameBoosterPreventSleep
+    {
+        get => ReadBool(nameof(GameBoosterPreventSleep), defaultValue: true);
+        set => WriteBool(nameof(GameBoosterPreventSleep), value);
+    }
+
     // ── System Stability tweaks ───────────────────────────────────────────────
 
     /// <summary>Whether the user has disabled Windows Fast Startup (off by default).</summary>

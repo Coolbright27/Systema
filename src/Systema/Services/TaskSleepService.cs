@@ -983,7 +983,7 @@ public sealed class TaskSleepService : IDisposable
                             {
                                 long   delta      = totalTime - prev.TotalTime;
                                 double cpu        = delta / (elapsed * cores * 10_000_000.0) * 100.0;
-                                double clampedCpu = Math.Max(0, Math.Min(100.0 * cores, cpu));
+                                double clampedCpu = Math.Max(0, Math.Min(100.0, cpu)); // normalised to total machine capacity [0-100]
                                 parallelResult[proc.Id] = clampedCpu;
                             }
                         }

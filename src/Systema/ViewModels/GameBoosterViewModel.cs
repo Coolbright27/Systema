@@ -59,6 +59,7 @@ public partial class GameBoosterViewModel : ObservableObject, IAutoRefreshable
     [ObservableProperty] private bool _nicPowerSavingOnBoost;
     [ObservableProperty] private bool _disableWifiOnEthernet;
     [ObservableProperty] private bool _disableBluetoothOnBoost;
+    [ObservableProperty] private bool _preventSleepOnBoost;
 
     /// <summary>Persists and applies the master switch immediately — no Save click needed.</summary>
     partial void OnGameBoosterEnabledChanged(bool value)
@@ -72,9 +73,6 @@ public partial class GameBoosterViewModel : ObservableObject, IAutoRefreshable
     // ── Expander state ─────────────────────────────────────────────────────────
     [ObservableProperty] private bool _showServiceSettings;
     [RelayCommand] private void ToggleServiceSettings() => ShowServiceSettings = !ShowServiceSettings;
-
-    // Keep for legacy compat (not shown in UI anymore, synced from KillListItems)
-    public string KillListText => string.Join("\n", KillListItems.Select(i => i.ServiceName));
 
     // ── Well-known service descriptions ──────────────────────────────────────
     private static readonly Dictionary<string, string> KnownDescriptions =
@@ -215,6 +213,7 @@ public partial class GameBoosterViewModel : ObservableObject, IAutoRefreshable
         _settings.GameBoosterNicPowerSaving        = NicPowerSavingOnBoost;
         _settings.GameBoosterDisableWifiOnEthernet = DisableWifiOnEthernet;
         _settings.GameBoosterDisableBluetooth      = DisableBluetoothOnBoost;
+        _settings.GameBoosterPreventSleep          = PreventSleepOnBoost;
 
         StatusMessage = "Settings saved.";
         _log.Info("GameBoosterViewModel", $"Settings saved — interval={CheckIntervalMinutes}min, killList={lines.Count} entries");
@@ -286,6 +285,7 @@ public partial class GameBoosterViewModel : ObservableObject, IAutoRefreshable
         NicPowerSavingOnBoost  = _settings.GameBoosterNicPowerSaving;
         DisableWifiOnEthernet  = _settings.GameBoosterDisableWifiOnEthernet;
         DisableBluetoothOnBoost = _settings.GameBoosterDisableBluetooth;
+        PreventSleepOnBoost     = _settings.GameBoosterPreventSleep;
 
         var killList = _gameBooster.GetKillList();
         KillListItems.Clear();

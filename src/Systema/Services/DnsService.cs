@@ -164,7 +164,7 @@ public class DnsService
                 }
                 catch { /* registry key may not exist for all interfaces */ }
 
-                if (!string.IsNullOrWhiteSpace(friendlyName))
+                if (!string.IsNullOrWhiteSpace(friendlyName) && !IsVirtualAdapter(friendlyName))
                     names.Add(friendlyName);
             }
         }
@@ -212,7 +212,9 @@ public class DnsService
                     parts[0].Equals("Enabled",   StringComparison.OrdinalIgnoreCase) &&
                     parts[1].Equals("Connected", StringComparison.OrdinalIgnoreCase))
                 {
-                    names.Add(string.Join(" ", parts.Skip(3)));
+                    var ifName = string.Join(" ", parts.Skip(3));
+                    if (!IsVirtualAdapter(ifName))
+                        names.Add(ifName);
                 }
             }
         }
@@ -257,6 +259,21 @@ public class DnsService
             return parts.Length == 0 ? null : string.Join(", ", parts.Take(2));
         }
         catch { return null; }
+    }
+
+    /// <summary>
+    /// Returns true if the adapter friendly name looks like a VPN, TAP, virtual, or loopback
+    /// interface that should not have its DNS rewritten. Consistent with the Wi-Fi disable
+    /// filter in GameBoosterService which excludes Virtual/VPN/TAP descriptions.
+    /// </summary>
+    private static bool IsVirtualAdapter(string adapterName)
+    {
+        return adapterName.Contains("VPN",      StringComparison.OrdinalIgnoreCase)
+            || adapterName.Contains("TAP",      StringComparison.OrdinalIgnoreCase)
+            || adapterName.Contains("Tunnel",   StringComparison.OrdinalIgnoreCase)
+            || adapterName.Contains("Virtual",  StringComparison.OrdinalIgnoreCase)
+            || adapterName.Contains("Loopback", StringComparison.OrdinalIgnoreCase)
+            || adapterName.Contains("WireGuard",StringComparison.OrdinalIgnoreCase);
     }
 
     private static void RunNetsh(string args)
