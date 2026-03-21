@@ -1,11 +1,20 @@
 // ════════════════════════════════════════════════════════════════════════════
-// CoreParkingService.cs  ·  Enables CPU core parking across all power schemes
+// CoreParkingService.cs  ·  Controls CPU core parking across all power schemes
 // ════════════════════════════════════════════════════════════════════════════
 //
-// Writes the CPMINCORES registry value to all active power schemes to enable
-// core parking, and creates a Task Scheduler startup task so the setting
-// survives reboots. Inverted operation (disable) removes the task and resets
-// the value.
+// CPMINCORES is the key power setting: it defines the MINIMUM percentage of
+// logical cores that must remain unparked at all times.
+//
+//   CPMINCORES = 10   → allow parking; keep at least 10 % of cores active
+//                         (Enable path — efficient/optimized parking)
+//   CPMINCORES = 100  → keep ALL cores active; no cores can be parked
+//                         (Disable path — maximum performance, no parking)
+//
+// Setting CPMINCORES = 0 (old disable behaviour) is wrong — it means "park
+// everything", which is MORE aggressive parking, not less.
+//
+// Creates a Task Scheduler startup task (Enable only) so the setting survives
+// reboots and power-plan resets by third-party tools or Windows updates.
 //
 // RELATED FILES
 //   ToolsViewModel.cs  — Core Parking toggle button on the Tools tab
@@ -19,19 +28,20 @@ using Systema.Core;
 namespace Systema.Services;
 
 /// <summary>
-/// Manages forced core parking enforcement on Windows.
+/// Manages CPU core parking enforcement on Windows.
 ///
-/// Core parking allows the OS to power-gate idle CPU cores, reducing thermal load
-/// and improving sustained-load performance (especially on laptops and on systems
-/// where OEM firmware has disabled parking via a custom power plan).
+/// CPMINCORES controls the minimum fraction of logical cores that must remain
+/// unparked. The two states this service enforces:
 ///
-/// This service:
-///   1. Writes the CPMINCORES power-setting value (10 %) across all user power schemes,
-///      which instructs the OS to permit core parking when idle percentage exceeds 10 %.
-///   2. Creates a startup scheduled task ("SystemaCoreParking") so the setting survives
-///      power-plan resets by third-party tools or Windows updates.
+///   Enable  (optimized parking)  — CPMINCORES = 10 %
+///     Allows the OS to park idle cores for power and thermal efficiency, while
+///     keeping at least 10 % of cores always active for responsiveness.
+///     A startup scheduled task keeps this value after power-plan resets.
 ///
-/// On disable, the scheduled task is deleted and CPMINCORES is reset to 0 (OEM default).
+///   Disable (force unpark)       — CPMINCORES = 100 %
+///     Forces all cores to remain active; no cores can be parked. This gives
+///     maximum single-threaded burst performance at the cost of higher idle power.
+///     The task is removed on disable; the registry value persists on its own.
 /// </summary>
 public class CoreParkingService
 {
@@ -84,11 +94,11 @@ public class CoreParkingService
     }
 
     /// <summary>
-    /// Enables forced core parking:
-    ///   - Sets ACSettingIndex and DCSettingIndex = 10 (allow parking from 10 % idle)
-    ///     for CPMINCORES across all user power schemes.
+    /// Enables optimized core parking:
+    ///   - Sets CPMINCORES = 10 % (keep at least 10 % of cores active; OS can park the rest)
+    ///     across all user power schemes via registry and powercfg.
     ///   - Creates (or replaces) the SystemaCoreParking scheduled task so the setting
-    ///     survives reboots and power-plan resets.
+    ///     survives reboots and power-plan resets by third-party tools.
     /// </summary>
     public Task<TweakResult> EnableForcedCoreParking() => Task.Run(() =>
     {
@@ -115,19 +125,24 @@ public class CoreParkingService
     });
 
     /// <summary>
-    /// Disables forced core parking:
-    ///   - Deletes the SystemaCoreParking scheduled task.
-    ///   - Resets ACSettingIndex and DCSettingIndex back to 0 across all user power schemes.
+    /// Disables core parking by forcing all cores to stay unparked:
+    ///   - Sets CPMINCORES = 100 % so the OS must keep every core active.
+    ///   - Deletes the SystemaCoreParking scheduled task (no longer needed).
+    ///
+    /// Note: CPMINCORES = 0 would be wrong here — that means "minimum 0 cores
+    /// must stay active", which allows maximum parking. We want 100 (no parking).
     /// </summary>
     public Task<TweakResult> DisableForcedCoreParking() => Task.Run(() =>
     {
         try
         {
+            // 100 % = keep all cores unparked. Apply before deleting the task so
+            // the change takes effect immediately via powercfg /setactive.
+            int schemesUpdated = ApplyCoreParking(minCoresPercent: 100);
+
             DeleteScheduledTask();
 
-            int schemesUpdated = ApplyCoreParking(minCoresPercent: 0);
-
-            string msg = $"Core parking enforcement removed — {schemesUpdated} scheme(s) reset.";
+            string msg = $"Core parking disabled — all cores forced unparked across {schemesUpdated} scheme(s). Startup task removed.";
             return TweakResult.Ok(msg);
         }
         catch (Exception ex)
