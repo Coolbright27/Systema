@@ -525,7 +525,7 @@
                     </Grid>
 
                     <!-- Disable Wi-Fi when Ethernet is connected -->
-                    <Grid Margin="0,0,0,16">
+                    <Grid Margin="0,0,0,14">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
@@ -537,6 +537,21 @@
                         </StackPanel>
                         <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}"
                                   IsChecked="{Binding DisableWifiOnEthernet}" VerticalAlignment="Center"/>
+                    </Grid>
+
+                    <!-- Disable Bluetooth radio -->
+                    <Grid Margin="0,0,0,16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" Margin="0,0,24,0" VerticalAlignment="Center">
+                            <TextBlock Text="Disable Bluetooth while gaming" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
+                            <TextBlock Text="Turns off the Bluetooth radio at game start to reduce wireless interrupt overhead. Bluetooth is automatically re-enabled when the game exits — only if it was on before the game launched. Disable this if you use a Bluetooth controller or headset."
+                                       Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,2,0,0"/>
+                        </StackPanel>
+                        <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}"
+                                  IsChecked="{Binding DisableBluetoothOnBoost}" VerticalAlignment="Center"/>
                     </Grid>
 
                     <Button Content="Save Boost Actions" Style="{StaticResource PrimaryButton}"

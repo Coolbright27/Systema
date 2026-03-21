@@ -300,6 +300,13 @@ public class SettingsService
         set => WriteBool(nameof(GameBoosterDisableWifiOnEthernet), value);
     }
 
+    /// <summary>Disable Bluetooth radio at game start (restored on exit, only if it was on).</summary>
+    public bool GameBoosterDisableBluetooth
+    {
+        get => ReadBool(nameof(GameBoosterDisableBluetooth), defaultValue: false);
+        set => WriteBool(nameof(GameBoosterDisableBluetooth), value);
+    }
+
     // ── Updates ───────────────────────────────────────────────────────────────
 
     /// <summary>

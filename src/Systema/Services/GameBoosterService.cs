@@ -123,6 +123,8 @@ public sealed class GameBoosterService : IDisposable
     private List<(string path, string name, object? val)>? _nicPowerRestore;
     // Wi-Fi disable — true if we turned the software radio off via WLAN API
     private bool _wifiRadioDisabled;
+    // Bluetooth disable — true if we turned the radio off (so we know to restore it)
+    private bool _bluetoothRadioDisabled;
 
     public bool IsEnabled             => _settings.GameBoosterEnabled;
     public bool BoostActive           => _boostActive;
@@ -816,6 +818,10 @@ public sealed class GameBoosterService : IDisposable
         // thread so the DispatcherTimer tick (or lock-holding background thread) is not stalled.
         if (_settings.GameBoosterDisableWifiOnEthernet)
             _ = System.Threading.Tasks.Task.Run(ApplyDisableWifi);
+        // Bluetooth uses SetupAPI device enable/disable — can briefly stall while the
+        // driver stack unloads, so fire on a threadpool thread like Wi-Fi.
+        if (_settings.GameBoosterDisableBluetooth)
+            _ = System.Threading.Tasks.Task.Run(ApplyDisableBluetooth);
 
         // 1. Aggressively trim RAM from background processes:
         //    Step 1 — per-process: remove working-set floor then flush pages to standby list.
@@ -940,6 +946,7 @@ public sealed class GameBoosterService : IDisposable
     private void RestoreBoostOptions()
     {
         // 0. Restore new options (order: reverse of apply)
+        RestoreBluetooth();
         RestoreWifi();
         RestoreNicPowerSaving();
         RestoreNagle();
@@ -1413,6 +1420,156 @@ public sealed class GameBoosterService : IDisposable
         }
         finally { WlanCloseHandle(hClient, IntPtr.Zero); }
     }
+
+    // ── Bluetooth Radio ────────────────────────────────────────────────────────
+
+    private void ApplyDisableBluetooth()
+    {
+        _bluetoothRadioDisabled = false;
+        try
+        {
+            // Only disable if the Bluetooth radio is currently on.
+            // If it was already off, _bluetoothRadioDisabled stays false and RestoreBluetooth
+            // will be a no-op — we never turn on something the user had deliberately turned off.
+            if (!IsBluetoothRadioPresent())
+            {
+                _log.Info("GameBoosterService", "DisableBluetooth: no active Bluetooth radio — skipping");
+                return;
+            }
+
+            _bluetoothRadioDisabled = SetBluetoothRadioEnabled(false);
+            _log.Info("GameBoosterService",
+                _bluetoothRadioDisabled
+                    ? "DisableBluetooth: Bluetooth radio disabled"
+                    : "DisableBluetooth: SetupAPI call failed — radio unchanged");
+        }
+        catch (Exception ex) { _log.Warn("GameBoosterService", $"ApplyDisableBluetooth failed: {ex.Message}"); }
+    }
+
+    private void RestoreBluetooth()
+    {
+        if (!_bluetoothRadioDisabled) return; // was already off before boost — don't touch it
+        _bluetoothRadioDisabled = false;
+        try
+        {
+            bool ok = SetBluetoothRadioEnabled(true);
+            _log.Info("GameBoosterService",
+                ok ? "RestoreBluetooth: Bluetooth radio re-enabled"
+                   : "RestoreBluetooth: SetupAPI call failed — radio may need manual toggle");
+        }
+        catch (Exception ex) { _log.Warn("GameBoosterService", $"RestoreBluetooth failed: {ex.Message}"); }
+    }
+
+    /// <summary>
+    /// Returns true if at least one Bluetooth radio device is present and currently enabled.
+    /// Uses SetupDiGetClassDevs with DIGCF_PRESENT, which only returns active (non-disabled) devices.
+    /// </summary>
+    private static bool IsBluetoothRadioPresent()
+    {
+        var guid = BtRadioClassGuid;
+        IntPtr devs = SetupDiGetClassDevsW(ref guid, IntPtr.Zero, IntPtr.Zero, DIGCF_PRESENT);
+        if (devs == SetupDiInvalidHandle) return false;
+        try
+        {
+            var info = new SpDevinfoData { cbSize = (uint)Marshal.SizeOf<SpDevinfoData>() };
+            return SetupDiEnumDeviceInfo(devs, 0, ref info); // true = at least one device found
+        }
+        finally { SetupDiDestroyDeviceInfoList(devs); }
+    }
+
+    /// <summary>
+    /// Enables or disables all Bluetooth radio devices via the SetupAPI device property-change
+    /// installer (same mechanism as Device Manager Enable/Disable).
+    /// Returns true if at least one device was successfully toggled.
+    /// </summary>
+    private static bool SetBluetoothRadioEnabled(bool enable)
+    {
+        var guid = BtRadioClassGuid;
+        // When re-enabling: don't use DIGCF_PRESENT — disabled devices are not "present".
+        // When disabling: DIGCF_PRESENT filters to only the active radio (safer).
+        uint flags = enable ? 0u : DIGCF_PRESENT;
+        IntPtr devs = SetupDiGetClassDevsW(ref guid, IntPtr.Zero, IntPtr.Zero, flags);
+        if (devs == SetupDiInvalidHandle) return false;
+
+        bool any = false;
+        try
+        {
+            var info = new SpDevinfoData { cbSize = (uint)Marshal.SizeOf<SpDevinfoData>() };
+            for (uint i = 0; SetupDiEnumDeviceInfo(devs, i, ref info); i++)
+            {
+                var p = new SpPropchangeParams
+                {
+                    // SP_CLASSINSTALL_HEADER fields (cbSize = 2 DWORDs = 8 bytes)
+                    HeaderCbSize      = 8,
+                    InstallFunction   = DIF_PROPERTYCHANGE,
+                    StateChange       = enable ? DICS_ENABLE : DICS_DISABLE,
+                    Scope             = DICS_FLAG_GLOBAL,
+                    HwProfile         = 0,
+                };
+                if (SetupDiSetClassInstallParamsW(devs, ref info, ref p, (uint)Marshal.SizeOf<SpPropchangeParams>()))
+                    if (SetupDiCallClassInstaller(DIF_PROPERTYCHANGE, devs, ref info))
+                        any = true;
+
+                // Reset cbSize for the next iteration (SetupDiCallClassInstaller may clear it)
+                info.cbSize = (uint)Marshal.SizeOf<SpDevinfoData>();
+            }
+        }
+        finally { SetupDiDestroyDeviceInfoList(devs); }
+        return any;
+    }
+
+    // ── Bluetooth SetupAPI P/Invoke ────────────────────────────────────────────
+
+    // Bluetooth Radios device class GUID — matches all Bluetooth radio adapters in Device Manager
+    private static readonly Guid BtRadioClassGuid = new("{e0cbf06c-cd8b-4647-bb8a-263b43f0f974}");
+    private static readonly IntPtr SetupDiInvalidHandle = new(-1);
+
+    private const uint DIGCF_PRESENT       = 0x00000002;
+    private const uint DICS_ENABLE         = 0x00000001;
+    private const uint DICS_DISABLE        = 0x00000002;
+    private const uint DICS_FLAG_GLOBAL    = 0x00000001;
+    private const uint DIF_PROPERTYCHANGE  = 0x00000012;
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct SpDevinfoData
+    {
+        public uint   cbSize;
+        public Guid   ClassGuid;
+        public uint   DevInst;
+        public IntPtr Reserved;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct SpPropchangeParams
+    {
+        // Inline SP_CLASSINSTALL_HEADER (2 DWORDs)
+        public uint HeaderCbSize;
+        public uint InstallFunction;
+        // SP_PROPCHANGE_PARAMS fields
+        public uint StateChange;   // DICS_ENABLE / DICS_DISABLE
+        public uint Scope;         // DICS_FLAG_GLOBAL
+        public uint HwProfile;     // 0 = current profile
+    }
+
+    [DllImport("setupapi.dll", SetLastError = true)]
+    private static extern IntPtr SetupDiGetClassDevsW(
+        ref Guid ClassGuid, IntPtr Enumerator, IntPtr hwndParent, uint Flags);
+
+    [DllImport("setupapi.dll", SetLastError = true)]
+    private static extern bool SetupDiEnumDeviceInfo(
+        IntPtr DeviceInfoSet, uint MemberIndex, ref SpDevinfoData DeviceInfoData);
+
+    [DllImport("setupapi.dll", SetLastError = true)]
+    private static extern bool SetupDiSetClassInstallParamsW(
+        IntPtr DeviceInfoSet, ref SpDevinfoData DeviceInfoData,
+        ref SpPropchangeParams ClassInstallParams, uint ClassInstallParamsSize);
+
+    [DllImport("setupapi.dll", SetLastError = true)]
+    private static extern bool SetupDiCallClassInstaller(
+        uint InstallFunction, IntPtr DeviceInfoSet, ref SpDevinfoData DeviceInfoData);
+
+    [DllImport("setupapi.dll", SetLastError = true)]
+    private static extern bool SetupDiDestroyDeviceInfoList(IntPtr DeviceInfoSet);
 
     // ── Xbox Services Logic ────────────────────────────────────────────────────
 
