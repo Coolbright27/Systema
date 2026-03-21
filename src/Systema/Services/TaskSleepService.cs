@@ -50,6 +50,10 @@ public sealed class TaskSleepService : IDisposable
     private Dictionary<string, TaskSleepAppRule> _appRules = new(StringComparer.OrdinalIgnoreCase);
     private readonly object   _settingsLock = new();
 
+    // ── Dynamically detected AV process names (populated at Start() via SecurityCenter2) ──
+    // These are always protected regardless of user settings — they supplement the static list.
+    private HashSet<string> _detectedAvProcessNames = new(StringComparer.OrdinalIgnoreCase);
+
     // ── Per-process state (monitor-thread only) ───────────────────────────────
 
     // pid -> original priority class before we lowered it
@@ -136,19 +140,14 @@ public sealed class TaskSleepService : IDisposable
     public void WakeProcess(string processName)
         => _wakeRequests.Enqueue(processName.ToLowerInvariant());
 
-    // ── System / security processes we will never touch ───────────────────────
-    private static readonly HashSet<string> SystemProcessNames =
+    // ── Security / AV processes — ALWAYS protected, regardless of any user setting ──
+    // These are checked unconditionally in ShouldSkip AND in the re-enforce step.
+    // Add process names here when an AV vendor's processes are found to be touched.
+    // WMI SecurityCenter2 detection also supplements this list at runtime.
+    private static readonly HashSet<string> SecurityCriticalProcessNames =
         new(StringComparer.OrdinalIgnoreCase)
     {
-        // Core OS
-        "System", "Idle", "Registry", "smss", "csrss", "wininit", "winlogon",
-        "lsass", "lsaiso", "services", "svchost", "ntoskrnl", "dwm", "conhost",
-        "fontdrvhost", "sihost", "taskhostw", "ctfmon", "RuntimeBroker",
-        "WmiPrvSE", "SearchIndexer", "spoolsv", "WUDFHost",
-        "audiodg", "LsaIso", "WerFault", "WerFaultSecure",
-        // Installers / component servicing — throttling mid-install can corrupt packages
-        "TrustedInstaller", "msiexec", "wermgr", "setup", "SetupHost",
-        // ── Windows Defender ─────────────────────────────────────────────────
+        // ── Windows Defender / Security ───────────────────────────────────────
         "MsMpEng",                // Defender antivirus engine — real-time scanning
         "NisSrv",                 // Network Inspection Service — network threat detection
         "MpCmdRun",               // Defender command-line scanner
@@ -158,8 +157,20 @@ public sealed class TaskSleepService : IDisposable
         "SgrmBroker",             // System Guard Runtime Monitor — firmware/boot integrity
         "SecHealthUI",            // Windows Security app UI
         // ── Bitdefender ──────────────────────────────────────────────────────
-        "bdagent", "bdservicehost", "bdntwrk", "bdredline", "vsserv",
-        "vsservppl", "bdwtxag", "bdupdater",
+        "bdagent",        // Bitdefender main agent
+        "bdservicehost",  // Bitdefender service host
+        "bdntwrk",        // Bitdefender network filter
+        "bdredline",      // Bitdefender real-time scanning
+        "vsserv",         // Bitdefender virus shield service
+        "vsservppl",      // Bitdefender protected process light
+        "bdwtxag",        // Bitdefender web traffic agent
+        "bdupdater",      // Bitdefender updater
+        "bdmcon",         // Bitdefender management console
+        "BDVpnService",   // Bitdefender VPN service
+        "BDVpnHelper",    // Bitdefender VPN helper
+        "bdqdiag",        // Bitdefender diagnostics
+        "bdagentopt",     // Bitdefender optimizer agent
+        "ProductAgentService", // Bitdefender product agent
         // ── ESET ─────────────────────────────────────────────────────────────
         "ekrn",    // ESET kernel service — real-time protection engine
         "egui",    // ESET GUI
@@ -196,6 +207,20 @@ public sealed class TaskSleepService : IDisposable
         "uiWatchDog", "coreServiceShell",
         // ── Sophos ───────────────────────────────────────────────────────────
         "SophosAgent", "SophosNtpService", "SAVMainUI",
+    };
+
+    // ── System / security processes we will never touch ───────────────────────
+    private static readonly HashSet<string> SystemProcessNames =
+        new(StringComparer.OrdinalIgnoreCase)
+    {
+        // Core OS
+        "System", "Idle", "Registry", "smss", "csrss", "wininit", "winlogon",
+        "lsass", "lsaiso", "services", "svchost", "ntoskrnl", "dwm", "conhost",
+        "fontdrvhost", "sihost", "taskhostw", "ctfmon", "RuntimeBroker",
+        "WmiPrvSE", "SearchIndexer", "spoolsv", "WUDFHost",
+        "audiodg", "LsaIso", "WerFault", "WerFaultSecure",
+        // Installers / component servicing — throttling mid-install can corrupt packages
+        "TrustedInstaller", "msiexec", "wermgr", "setup", "SetupHost",
         // ── Windows Shell — throttling any of these breaks Start, taskbar, or Explorer ──
         "explorer",                   // shell, file manager, taskbar host
         "StartMenuExperienceHost",    // Start menu (Windows 11)
@@ -348,6 +373,10 @@ public sealed class TaskSleepService : IDisposable
     {
         if (_running) return;
         _running = true;
+
+        // Detect registered 3rd-party antivirus products so their processes are protected.
+        // Run on a background thread — WMI can be slow and we don't want to block startup.
+        _ = System.Threading.Tasks.Task.Run(DetectRegisteredAntiviruses);
 
         _monitorThread = new Thread(MonitorLoop, 8 * 1024 * 1024)
         {
@@ -832,6 +861,20 @@ public sealed class TaskSleepService : IDisposable
         {
             foreach (int pid in _throttledPids.Keys.ToList())
             {
+                _processNames.TryGetValue(pid, out string? nm);
+
+                // If a security/AV process somehow ended up in the throttle list
+                // (e.g. it was running when settings changed), restore it and evict it
+                // immediately instead of fighting it in a priority loop.
+                if (nm != null && IsSecurityCritical(nm))
+                {
+                    TryRestoreProcess(pid);
+                    _throttledAt.Remove(pid);
+                    _log.Warn("TaskSleepService",
+                        $"Re-enforce: security process {nm} (PID {pid}) found in throttle list — restored and evicted");
+                    continue;
+                }
+
                 IntPtr h = OpenProcess(
                     PROCESS_SET_INFORMATION | PROCESS_QUERY_LIMITED_INFORMATION, false, pid);
                 if (h == IntPtr.Zero) continue;
@@ -841,7 +884,6 @@ public sealed class TaskSleepService : IDisposable
                     if (current != 0 && current != IDLE_PRIORITY_CLASS)
                     {
                         SetPriorityClass(h, IDLE_PRIORITY_CLASS);
-                        _processNames.TryGetValue(pid, out string? nm);
                         AddEvent(nm ?? $"PID {pid}", pid, "Re-enforced", "process raised its own priority");
                         _log.Info("TaskSleepService", $"Re-enforced priority: PID {pid}");
                     }
@@ -1148,16 +1190,28 @@ public sealed class TaskSleepService : IDisposable
 
     // ── Process filtering ──────────────────────────────────────────────────────
 
-    private static bool ShouldSkip(
+    private bool ShouldSkip(
         Process proc, HashSet<int> protectedPids, TaskSleepSettings s,
         Dictionary<string, TaskSleepAppRule> rules)
     {
         if (proc.Id <= 4) return true;
+        // Security/AV processes are ALWAYS protected — not gated on ExcludeSystemServices.
+        // This prevents the app from fighting with antivirus software that manages its own priority.
+        if (IsSecurityCritical(proc.ProcessName)) return true;
         if (s.ExcludeSystemServices && IsSystemProcess(proc)) return true;
         if (s.IgnoreForeground && protectedPids.Contains(proc.Id)) return true;
         if (rules.TryGetValue(proc.ProcessName, out var rule) && rule.IsBlacklisted) return true;
         return false;
     }
+
+    /// <summary>
+    /// Returns true if the process name matches a known security/AV process that must
+    /// never be throttled. Checks both the static hardcoded list and any AV detected
+    /// at runtime via Windows Security Center.
+    /// </summary>
+    private bool IsSecurityCritical(string processName) =>
+        SecurityCriticalProcessNames.Contains(processName) ||
+        _detectedAvProcessNames.Contains(processName);
 
     private static bool IsSystemProcess(Process proc)
     {
@@ -1168,6 +1222,55 @@ public sealed class TaskSleepService : IDisposable
         // that must never be touched; everything else (including non-critical session 0
         // processes) is eligible for throttling.
         return SystemProcessNames.Contains(proc.ProcessName);
+    }
+
+    /// <summary>
+    /// Queries Windows Security Center (ROOT\SecurityCenter2\AntiVirusProduct) to discover
+    /// which 3rd-party antivirus products are registered. Extracts the executable name from
+    /// each product's signed path and adds it to <see cref="_detectedAvProcessNames"/> so
+    /// those processes are always protected even if they are not in the static list.
+    /// </summary>
+    private void DetectRegisteredAntiviruses()
+    {
+        try
+        {
+            using var searcher = new ManagementObjectSearcher(
+                @"root\SecurityCenter2",
+                "SELECT displayName, pathToSignedProductExe FROM AntiVirusProduct");
+
+            foreach (ManagementObject av in searcher.Get())
+            {
+                var displayName = av["displayName"] as string ?? "unknown";
+                var exePath     = av["pathToSignedProductExe"] as string ?? "";
+
+                if (!string.IsNullOrEmpty(exePath))
+                {
+                    var exeName = System.IO.Path.GetFileNameWithoutExtension(exePath);
+                    if (!string.IsNullOrEmpty(exeName) &&
+                        !SecurityCriticalProcessNames.Contains(exeName))
+                    {
+                        _detectedAvProcessNames.Add(exeName);
+                        _log.Info("TaskSleepService",
+                            $"SecurityCenter2: registered AV '{displayName}' → protecting '{exeName}'");
+                    }
+                    else
+                    {
+                        _log.Info("TaskSleepService",
+                            $"SecurityCenter2: registered AV '{displayName}' (already in static list)");
+                    }
+                }
+                else
+                {
+                    _log.Info("TaskSleepService",
+                        $"SecurityCenter2: registered AV '{displayName}' (no exe path available)");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _log.Warn("TaskSleepService",
+                $"SecurityCenter2 AV detection failed — falling back to static list only: {ex.Message}");
+        }
     }
 
     // ── Foreground process tree ────────────────────────────────────────────────
