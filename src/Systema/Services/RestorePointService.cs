@@ -148,9 +148,13 @@ public class RestorePointService
                     RedirectStandardError  = true,
                 };
                 ps.Start();
-                string err = ps.StandardError.ReadToEnd();
-                string out_ = ps.StandardOutput.ReadToEnd();
+                // Read both streams concurrently before WaitForExit — sequential reads
+                // deadlock if either pipe buffer fills while the other is being drained.
+                var errTask  = Task.Run(() => ps.StandardError.ReadToEnd());
+                var outTask  = Task.Run(() => ps.StandardOutput.ReadToEnd());
                 ps.WaitForExit();
+                string err  = errTask.Result;
+                string out_ = outTask.Result;
 
                 return ps.ExitCode == 0
                     ? TweakResult.Ok("Restore point deleted.")

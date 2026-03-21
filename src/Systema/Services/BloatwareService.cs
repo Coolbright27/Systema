@@ -243,7 +243,7 @@ public class BloatwareService
             ps.Start();
             var stdoutTask = ps.StandardOutput.ReadToEndAsync();
             var stderrTask = ps.StandardError.ReadToEndAsync();
-            ps.WaitForExit();
+            await ps.WaitForExitAsync(); // async — don't block a thread pool thread
             string output = await stdoutTask;
             await stderrTask; // drain
 

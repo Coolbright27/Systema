@@ -209,12 +209,22 @@ public class OptionalFeaturesService
                     return TweakResult.Fail("DISM timed out after 10 minutes. The feature change may still be running in the background.");
 
                 if (proc.ExitCode == 0 || proc.ExitCode == 3010)
-                    return TweakResult.Ok(output.Length > 200 ? output[..200] : output);
+                {
+                    // Return a clean status rather than raw DISM output (which is mostly
+                    // header noise and not useful in a status message).
+                    string op       = args.Contains("/Enable-Feature", StringComparison.OrdinalIgnoreCase) ? "enabled" : "disabled";
+                    string reboot   = proc.ExitCode == 3010 ? " A restart is required to apply the change." : "";
+                    return TweakResult.Ok($"Feature {op} successfully.{reboot}");
+                }
 
                 if (proc.ExitCode == 2)
                     return TweakResult.Ok("Feature already removed or not present.");
 
-                return TweakResult.Fail($"DISM exited with code {proc.ExitCode}. {errOut[..Math.Min(200, errOut.Length)]}");
+                // Log the full error for diagnostics; surface a truncated version in the UI.
+                string fullErr = string.IsNullOrWhiteSpace(errOut) ? output : errOut;
+                LoggerService.Instance.Warn("OptionalFeaturesService",
+                    $"DISM exited {proc.ExitCode} for args [{args}]: {fullErr}");
+                return TweakResult.Fail($"DISM exited with code {proc.ExitCode}. {fullErr[..Math.Min(300, fullErr.Length)]}");
             }
             catch (Exception ex)
             {

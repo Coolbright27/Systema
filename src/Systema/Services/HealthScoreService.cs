@@ -46,8 +46,10 @@ public class HealthScoreService
     private readonly Queue<SystemHealthScore> _scoreHistory = new();
     private const int ScoreHistoryDepth = 3;
 
-    // Last-known sub-scores used as timeout fallbacks — better than a hardcoded 70
-    // because they reflect the actual system state from the most recent successful scan.
+    // Last-known sub-scores used as timeout fallbacks.
+    // Seeded with realistic defaults: CPU/RAM/Startup start at 70 (neutral assumption),
+    // Security starts at 50 (deliberately pessimistic — unknown security state should
+    // pull the overall score down until the first real scan completes).
     private int _lastCpuScore      = 70;
     private int _lastRamScore      = 70;
     private int _lastStartupScore  = 70;

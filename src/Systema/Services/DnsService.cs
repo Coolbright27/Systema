@@ -46,7 +46,7 @@ public class DnsService
         new DnsProfile { Name = "Cloudflare (Recommended)", Primary = "1.1.1.1",          Secondary = "1.0.0.1",         SupportsDoH = true  },
         new DnsProfile { Name = "Google",                   Primary = "8.8.8.8",           Secondary = "8.8.4.4",          SupportsDoH = true  },
         new DnsProfile { Name = "OpenDNS",                  Primary = "208.67.222.222",     Secondary = "208.67.220.220",   SupportsDoH = false },
-        new DnsProfile { Name = "System Default (DHCP)",    Primary = "",                   Secondary = "",                 SupportsDoH = false },
+        new DnsProfile { Name = "System Default (DHCP)",    Primary = "",                   Secondary = "",                 SupportsDoH = false }, // Empty Primary = DHCP mode — ApplyProfileAsync uses netsh source=dhcp
     };
 
     /// <summary>
