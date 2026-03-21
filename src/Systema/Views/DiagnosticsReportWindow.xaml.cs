@@ -201,7 +201,7 @@ public partial class DiagnosticsReportWindow : Window
     {
         try
         {
-            var report = LoggerService.Instance.GetDiagnosticsReport(errorCount: 10, logLines: 80);
+            var report = LoggerService.Instance.GetDiagnosticsReport(errorCount: 10, logLines: 200);
             System.Windows.Clipboard.SetText(report);
 
             // Flash button

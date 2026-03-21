@@ -220,33 +220,38 @@ public class LoggerService
     /// Includes system info, the last <paramref name="errorCount"/> errors with full stack
     /// traces, and the last <paramref name="logLines"/> session log entries.
     /// </summary>
-    public string GetDiagnosticsReport(int errorCount = 5, int logLines = 50)
+    public string GetDiagnosticsReport(int errorCount = 10, int logLines = 200)
     {
         var sb       = new StringBuilder();
         var now      = DateTime.Now;
         var version  = GetDiagVersion();
-        var osInfo   = GetDiagOs();
 
         // ── Header ──────────────────────────────────────────────────────────
         sb.AppendLine("╔══════════════════════════════════════════════════════════════╗");
         sb.AppendLine($"║           SYSTEMA DIAGNOSTIC REPORT v{version,-15}         ║");
         sb.AppendLine("╚══════════════════════════════════════════════════════════════╝");
         sb.AppendLine();
-        sb.AppendLine($"Generated: {now:yyyy-MM-dd HH:mm:ss}");
-        sb.AppendLine($"Version:   Systema v{version}");
-        sb.AppendLine($"OS:        {osInfo}");
-        sb.AppendLine($"Runtime:   .NET {Environment.Version}");
-        sb.AppendLine($"CPU cores: {Environment.ProcessorCount}");
-        sb.AppendLine($"RAM:       {GetDiagRamMb()} MB total");
-        sb.AppendLine($"Working:   {Environment.WorkingSet / 1024 / 1024} MB (process)");
-        sb.AppendLine($"GPU:       {GetDiagGpu()}");
-        sb.AppendLine($"Disk C:    {GetDiagDisk()}");
-        sb.AppendLine($"CPU:       {GetDiagCpuName()}");
-        sb.AppendLine($"Display:   {GetDiagDisplay()}");
-        sb.AppendLine($"Free RAM:  {GetDiagFreeRamMb()} MB available");
-        sb.AppendLine($"Processes: {GetDiagProcessCount()} running");
-        sb.AppendLine($"Uptime:    {GetDiagUptime()}");
-        sb.AppendLine($"Log file:  {_logPath}");
+        sb.AppendLine($"Generated : {now:yyyy-MM-dd HH:mm:ss}");
+        sb.AppendLine($"Version   : Systema v{version}");
+        sb.AppendLine($"Log file  : {_logPath}");
+        sb.AppendLine();
+        sb.AppendLine("── Hardware ─────────────────────────────────────────────────");
+        sb.AppendLine($"OS        : {GetDiagOs()}");
+        sb.AppendLine($"CPU       : {GetDiagCpuName()}");
+        sb.AppendLine($"CPU cores : {Environment.ProcessorCount} logical — {GetDiagECoreInfo()}");
+        sb.AppendLine($"RAM       : {GetDiagRamMb()} MB total, {GetDiagFreeRamMb()} MB free");
+        sb.AppendLine($"GPU       : {GetDiagGpu()}");
+        sb.AppendLine($"Display   : {GetDiagScreenHz()}");
+        sb.AppendLine($"Disk C:   : {GetDiagDisk()}");
+        sb.AppendLine();
+        sb.AppendLine("── Power & Runtime ──────────────────────────────────────────");
+        sb.AppendLine($"Power plan: {GetDiagPowerPlan()}");
+        sb.AppendLine($"Battery   : {GetDiagBattery()}");
+        sb.AppendLine($"Runtime   : .NET {Environment.Version}");
+        sb.AppendLine($"Process   : {Environment.WorkingSet / 1024 / 1024} MB working set");
+        sb.AppendLine($"Processes : {GetDiagProcessCount()} running");
+        sb.AppendLine($"Uptime    : {GetDiagUptime()}");
+        sb.AppendLine($"Machine   : {Environment.MachineName} / {Environment.UserName}");
         sb.AppendLine();
 
         // ── About Systema ────────────────────────────────────────────────────
@@ -351,7 +356,7 @@ public class LoggerService
         }
 
         // ── Recent session log ───────────────────────────────────────────────
-        sb.AppendLine($"══════════════ SESSION LOG (last {logLines} entries) ══════════════");
+        sb.AppendLine($"══════════════ SESSION LOG (last {logLines} entries) ═══════════════════");
         sb.AppendLine();
         var recentLog = GetRecentLog(logLines);
         sb.AppendLine(string.IsNullOrEmpty(recentLog) ? "(no log entries)" : recentLog);
@@ -382,10 +387,13 @@ public class LoggerService
                 @"SOFTWARE\Microsoft\Windows NT\CurrentVersion");
             if (key != null)
             {
-                var name    = key.GetValue("ProductName")        as string ?? "Windows";
-                var display = key.GetValue("DisplayVersion")     as string ?? "";
-                var build   = key.GetValue("CurrentBuildNumber") as string ?? "";
-                return $"{name} {display} (Build {build})".Trim();
+                var display  = key.GetValue("DisplayVersion")     as string ?? "";
+                var build    = key.GetValue("CurrentBuildNumber") as string ?? "";
+                var edition  = key.GetValue("EditionID")          as string ?? "";
+                int buildNum = int.TryParse(build, out var b) ? b : 0;
+                // ProductName still says "Windows 10" even on Win 11 — fix from build number
+                var winVer   = buildNum >= 22000 ? "Windows 11" : "Windows 10";
+                return $"{winVer} {edition} {display} (Build {build})".Trim();
             }
         }
         catch { }
@@ -890,6 +898,170 @@ public class LoggerService
             sb.AppendLine($"  (error reading changes log: {ex.Message})");
         }
         return sb.ToString();
+    }
+
+    // ── Extra P/Invoke for diagnostics ───────────────────────────────────────
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool GetLogicalProcessorInformationEx(int relationship, IntPtr buffer, ref uint returnedLength);
+
+    [DllImport("user32.dll", CharSet = CharSet.Ansi)]
+    private static extern bool EnumDisplaySettingsA(string? deviceName, int modeNum, ref DiagDevMode lpDevMode);
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Ansi)]
+    private struct DiagDevMode
+    {
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)] public string DeviceName;
+        public ushort SpecVersion, DriverVersion, Size, DriverExtra;
+        public uint   Fields;
+        public int    PositionX, PositionY;
+        public uint   DisplayOrientation, DisplayFixedOutput;
+        public short  Color, Duplex, YResolution, TTOption, Collate;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)] public string FormName;
+        public ushort LogPixels;
+        public uint   BitsPerPel, PelsWidth, PelsHeight, DisplayFlags, DisplayFrequency;
+    }
+
+    /// <summary>
+    /// Returns battery/power-line state (e.g. "Plugged in (AC), 100%" or "On battery, 63%").
+    /// Returns "N/A (desktop)" for machines with no battery.
+    /// </summary>
+    private static string GetDiagBattery()
+    {
+        try
+        {
+            var ps   = System.Windows.Forms.SystemInformation.PowerStatus;
+            var line = ps.PowerLineStatus switch
+            {
+                System.Windows.Forms.PowerLineStatus.Online  => "Plugged in (AC)",
+                System.Windows.Forms.PowerLineStatus.Offline => "On battery",
+                _                                            => "Unknown power source"
+            };
+            float pct = ps.BatteryLifePercent;
+            var batStr = pct >= 0f && pct <= 1f ? $"{(int)(pct * 100)}%" : "N/A (no battery)";
+            return $"{line}, {batStr}";
+        }
+        catch { return "Unknown"; }
+    }
+
+    /// <summary>
+    /// Returns the active Windows power plan name from the registry GUID.
+    /// </summary>
+    private static string GetDiagPowerPlan()
+    {
+        try
+        {
+            using var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(
+                @"SYSTEM\CurrentControlSet\Control\Power\User\PowerSchemes");
+            var guid = (key?.GetValue("ActivePowerScheme") as string ?? "").ToUpperInvariant();
+            return guid switch
+            {
+                "381B4222-F694-41F0-9685-FF5BB260DF2E" => "Balanced",
+                "8C5E7FDA-E8BF-4A96-9A85-A6E23A8C635C" => "High Performance",
+                "A1841308-3541-4FAB-BC81-F71556F20B4A" => "Power Saver",
+                "E9A42B02-D5DF-448D-AA00-03F14749EB61" => "Ultimate Performance",
+                ""                                      => "Unknown",
+                _                                       => $"Custom ({guid[..8]}…)"
+            };
+        }
+        catch { return "Unknown"; }
+    }
+
+    /// <summary>
+    /// Uses GetLogicalProcessorInformationEx to count physical P-cores vs E-cores.
+    /// Returns a one-line summary, e.g. "Hybrid: 2 P-cores + 8 E-cores (10 physical)"
+    /// or "Homogeneous: 8 cores (no E-cores)".
+    /// </summary>
+    private static string GetDiagECoreInfo()
+    {
+        try
+        {
+            const int RelationProcessorCore = 0;
+            uint length = 0;
+            GetLogicalProcessorInformationEx(RelationProcessorCore, IntPtr.Zero, ref length);
+            if (length == 0) return $"Unknown (err={Marshal.GetLastWin32Error()})";
+
+            var buf = Marshal.AllocHGlobal((int)length);
+            try
+            {
+                if (!GetLogicalProcessorInformationEx(RelationProcessorCore, buf, ref length))
+                    return $"Detection failed (err={Marshal.GetLastWin32Error()})";
+
+                var effClasses = new List<byte>();
+                uint offset = 0;
+                while (offset < length)
+                {
+                    uint size = (uint)Marshal.ReadInt32(buf, (int)(offset + 4));
+                    if (size == 0) break;
+                    byte effClass = Marshal.ReadByte(buf, (int)(offset + 9));
+                    effClasses.Add(effClass);
+                    offset += size;
+                }
+
+                if (effClasses.Count == 0) return "No cores found";
+
+                byte minClass = effClasses.Min();
+                byte maxClass = effClasses.Max();
+
+                if (minClass == maxClass)
+                    return $"Homogeneous: {effClasses.Count} physical cores (no E-cores, class={minClass})";
+
+                int eCoreCount = effClasses.Count(c => c == minClass);
+                int pCoreCount = effClasses.Count(c => c == maxClass);
+                return $"Hybrid: {pCoreCount} P-cores + {eCoreCount} E-cores ({effClasses.Count} physical cores total)";
+            }
+            finally { Marshal.FreeHGlobal(buf); }
+        }
+        catch (Exception ex) { return $"Error: {ex.Message}"; }
+    }
+
+    /// <summary>
+    /// Returns refresh rate(s) for all connected monitors, e.g. "Primary 1920x1080@60Hz | DISPLAY2 2560x1440@144Hz".
+    /// </summary>
+    private static string GetDiagScreenHz()
+    {
+        try
+        {
+            var parts = new List<string>();
+            foreach (var screen in System.Windows.Forms.Screen.AllScreens)
+            {
+                var dm = new DiagDevMode { Size = (ushort)Marshal.SizeOf<DiagDevMode>() };
+                if (EnumDisplaySettingsA(screen.DeviceName, -1, ref dm))
+                {
+                    var name = screen.Primary ? "Primary" : (screen.DeviceName.Split('\\').LastOrDefault() ?? "Monitor");
+                    parts.Add($"{name} {dm.PelsWidth}x{dm.PelsHeight}@{dm.DisplayFrequency}Hz");
+                }
+            }
+            return parts.Count > 0 ? string.Join(" | ", parts) : "Unknown";
+        }
+        catch { return "Unknown"; }
+    }
+
+    /// <summary>
+    /// Logs a compact system-specs block to the session log at startup.
+    /// Call this once from App.xaml.cs right after the admin check passes.
+    /// The result ends up in the log file so users don't have to generate
+    /// the full diagnostic report for us to know their hardware.
+    /// </summary>
+    public void LogSystemInfo()
+    {
+        _ = System.Threading.Tasks.Task.Run(() =>
+        {
+            try
+            {
+                Info("System", "══════ Startup System Info ══════");
+                Info("System", $"OS:       {GetDiagOs()}");
+                Info("System", $"CPU:      {GetDiagCpuName()} — {Environment.ProcessorCount} logical — {GetDiagECoreInfo()}");
+                Info("System", $"RAM:      {GetDiagRamMb()} MB total, {GetDiagFreeRamMb()} MB free");
+                Info("System", $"GPU:      {GetDiagGpu()}");
+                Info("System", $"Display:  {GetDiagScreenHz()}");
+                Info("System", $"Power:    {GetDiagPowerPlan()} | {GetDiagBattery()}");
+                Info("System", $"Disk C:   {GetDiagDisk()}");
+                Info("System", $"Runtime:  .NET {Environment.Version} | Machine: {Environment.MachineName}");
+                Info("System", "═════════════════════════════════");
+            }
+            catch { /* never throw from logger */ }
+        });
     }
 
     /// <summary>

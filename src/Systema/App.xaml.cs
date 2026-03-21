@@ -117,6 +117,10 @@ public partial class App : Application
 
         Log.Info("App", "Admin check passed — composing services");
 
+        // Log system hardware info to the session log so any user's log file
+        // is self-contained — no need to ask for a separate diagnostic report.
+        Log.LogSystemInfo();
+
         try
         {
             // ── Manual DI composition root ──
