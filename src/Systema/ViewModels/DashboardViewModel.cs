@@ -17,8 +17,9 @@
 //   7. Preview updates        — blocked
 //   8. CPU core efficiency    — forced core parking enabled
 //   9. Launch on startup      — Systema starts with Windows
+//  10. SMBv1 removed          — uninstalls the insecure legacy SMBv1 protocol if present
 //
-// The button is disabled (greyed) once all 9 items are already applied.
+// The button is disabled (greyed) once all items are already applied.
 // It shows "Optimizing…" with loading state while running.
 //
 // RELATED FILES
@@ -34,6 +35,7 @@ using CommunityToolkit.Mvvm.Input;
 using Systema.Core;
 using Systema.Services;
 using static Systema.Core.ThreadHelper;
+using System.IO;
 
 namespace Systema.ViewModels;
 
@@ -57,6 +59,7 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
     private readonly WindowsUpdateTweaksService _wuTweaks;
     private readonly CoreParkingService         _corePark;
     private readonly SettingsService            _settings;
+    private readonly OptionalFeaturesService    _optFeatures;
     private static readonly LoggerService _log = LoggerService.Instance;
 
     // ── Status pills ──────────────────────────────────────────────────────────
@@ -105,7 +108,8 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
         PowerPlanService           powerPlan,
         WindowsUpdateTweaksService wuTweaks,
         CoreParkingService         corePark,
-        SettingsService            settings)
+        SettingsService            settings,
+        OptionalFeaturesService    optFeatures)
     {
         _gameBooster    = gameBooster;
         _taskSleepVm    = taskSleepVm;
@@ -116,6 +120,7 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
         _wuTweaks       = wuTweaks;
         _corePark       = corePark;
         _settings       = settings;
+        _optFeatures    = optFeatures;
 
         _ = InitAsync();
     }
@@ -311,6 +316,18 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
                     IsDone = startOk,
                     Detail = startOk ? "Enabled" : "Disabled",
                 });
+
+                // 10. SMBv1 removed — insecure legacy protocol
+                bool smb1Gone = !_optFeatures.IsSMBv1Present();
+                if (!smb1Gone) pending++;
+                items.Add(new AutoPilotItem
+                {
+                    Label  = "SMBv1 removed",
+                    IsDone = smb1Gone,
+                    Detail = smb1Gone
+                        ? "Removed — not installed"
+                        : "Present — insecure legacy protocol (will be removed by Optimize)",
+                });
             });
 
             // All registry/powercfg calls are done — now update the UI thread properties
@@ -394,6 +411,19 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
             // 9. Launch on startup
             _settings.StartWithWindows = true;
             _log.Info("DashboardViewModel", "Start with Windows enabled");
+
+            // 10. Remove SMBv1 if present (DISM — may take 1-3 minutes)
+            if (_optFeatures.IsSMBv1Present())
+            {
+                StatusMessage = "Removing SMBv1 (insecure legacy protocol)… this may take a few minutes.";
+                _log.Info("DashboardViewModel", "SMBv1 present — removing via DISM");
+                var smb1Result = await _optFeatures.RemoveSMBv1Async();
+                _log.Info("DashboardViewModel", $"SMBv1 removal: {smb1Result.Message}");
+            }
+            else
+            {
+                _log.Info("DashboardViewModel", "SMBv1 not present — skipping removal");
+            }
 
             _log.Info("DashboardViewModel", "Auto-Pilot completed successfully");
             StatusMessage = "Auto-Pilot complete — your PC is fully optimized.";

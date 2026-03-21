@@ -392,8 +392,18 @@
                                             </Grid.ColumnDefinitions>
                                             <!-- Name + description -->
                                             <StackPanel Grid.Column="0" Margin="0,0,16,0">
-                                                <TextBlock Text="{Binding Name}"
-                                                           Style="{StaticResource BodyText}" FontSize="12"/>
+                                                <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
+                                                    <TextBlock Text="{Binding Name}"
+                                                               Style="{StaticResource BodyText}" FontSize="12"
+                                                               Margin="0,0,8,0"/>
+                                                    <Border CornerRadius="4" Padding="5,2" VerticalAlignment="Center"
+                                                            Background="#1AFF3B00" BorderBrush="{StaticResource AccentRedBrush}"
+                                                            BorderThickness="1"
+                                                            Visibility="{Binding IsRecommendedToRemove, Converter={StaticResource BoolToVis}}">
+                                                        <TextBlock Text="REMOVE RECOMMENDED" FontSize="8" FontWeight="Bold"
+                                                                   Foreground="{StaticResource AccentRedBrush}"/>
+                                                    </Border>
+                                                </StackPanel>
                                                 <TextBlock Text="{Binding Description}"
                                                            Style="{StaticResource CaptionText}"
                                                            TextWrapping="Wrap" MaxWidth="400"

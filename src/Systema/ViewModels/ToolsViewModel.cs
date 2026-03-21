@@ -4,15 +4,15 @@
 //
 // Aggregates one-shot tweak commands that don't belong to other tabs: Realtek
 // Audio Manager removal, CPU core parking toggle, DNS flush, Windows Update
-// insider/preview block, restore point creation, and Process Lasso ProBalance
-// settings. Each command delegates to its respective service.
+// insider/preview block, Fast Startup disable, NTFS last-access timestamp
+// disable, and restore point creation. Each command delegates to its service.
 //
 // RELATED FILES
 //   RealtekCleanerService.cs       — wmic silent uninstall of Realtek Audio Manager
 //   CoreParkingService.cs          — writes CPMINCORES and creates startup task
 //   DnsService.cs                  — DNS flush helper
 //   WindowsUpdateTweaksService.cs  — Group Policy registry blocks for insider builds
-//   ProcessLassoService.cs         — reads/writes ProBalance registry settings
+//   SystemStabilityService.cs      — Fast Startup and NTFS last-access tweaks
 //   RestorePointService.cs         — WMI restore point creation
 //   Views/ToolsView.xaml           — binds all tweak buttons
 // ════════════════════════════════════════════════════════════════════════════
@@ -37,6 +37,7 @@ public partial class ToolsViewModel : ObservableObject, IAutoRefreshable
     private readonly SettingsService              _settings;
     private readonly DnsService                   _dnsService;
     private readonly WindowsUpdateTweaksService   _wuTweaks;
+    private readonly SystemStabilityService       _stability;
 
     private static readonly LoggerService _log = LoggerService.Instance;
 
@@ -71,6 +72,14 @@ public partial class ToolsViewModel : ObservableObject, IAutoRefreshable
     [ObservableProperty] private bool _blockPreviewUpdates;
     [ObservableProperty] private bool _isPreviewUpdatesLoading;
 
+    // ── Fast Startup ──────────────────────────────────────────────────────────
+    [ObservableProperty] private bool _fastStartupDisabled;
+    [ObservableProperty] private bool _isFastStartupLoading;
+
+    // ── NTFS Last-Access Timestamps ───────────────────────────────────────────
+    [ObservableProperty] private bool _ntfsLastAccessDisabled;
+    [ObservableProperty] private bool _isNtfsLastAccessLoading;
+
     // ── Constructor ───────────────────────────────────────────────────────────
 
     public ToolsViewModel(
@@ -79,7 +88,8 @@ public partial class ToolsViewModel : ObservableObject, IAutoRefreshable
         RestorePointService          restore,
         SettingsService              settings,
         DnsService                   dnsService,
-        WindowsUpdateTweaksService   wuTweaks)
+        WindowsUpdateTweaksService   wuTweaks,
+        SystemStabilityService       stability)
     {
         _realtek     = realtek;
         _coreParking = coreParking;
@@ -87,6 +97,7 @@ public partial class ToolsViewModel : ObservableObject, IAutoRefreshable
         _settings    = settings;
         _dnsService  = dnsService;
         _wuTweaks    = wuTweaks;
+        _stability   = stability;
 
         // Populate DNS profiles
         foreach (var p in DnsService.Profiles)
@@ -105,11 +116,13 @@ public partial class ToolsViewModel : ObservableObject, IAutoRefreshable
         if (Interlocked.CompareExchange(ref _isRefreshing, 1, 0) != 0) return;
         try
         {
-            bool parkingOn       = await Task.Run(() => _coreParking.IsCoreParkingEnforced());
-            bool hasRealtek      = await Task.Run(() => _realtek.HasRealtekHardware());
-            string currentDns    = await Task.Run(() => _dnsService.GetCurrentDns());
-            bool savedParkingPref = _settings.CoreParkingEnabled;
-            bool previewBlocked  = await Task.Run(() => _wuTweaks.IsPreviewUpdatesBlocked());
+            bool parkingOn         = await Task.Run(() => _coreParking.IsCoreParkingEnforced());
+            bool hasRealtek        = await Task.Run(() => _realtek.HasRealtekHardware());
+            string currentDns      = await Task.Run(() => _dnsService.GetCurrentDns());
+            bool savedParkingPref  = _settings.CoreParkingEnabled;
+            bool previewBlocked    = await Task.Run(() => _wuTweaks.IsPreviewUpdatesBlocked());
+            bool fastStartupOff    = await Task.Run(() => _stability.IsFastStartupDisabled());
+            bool ntfsLastAccessOff = await Task.Run(() => _stability.IsNtfsLastAccessDisabled());
 
             Application.Current?.Dispatcher.BeginInvoke(() =>
             {
@@ -127,6 +140,10 @@ public partial class ToolsViewModel : ObservableObject, IAutoRefreshable
                     // Keep persisted pref in sync with actual state
                     if (_settings.BlockPreviewUpdatesEnabled != previewBlocked)
                         _settings.BlockPreviewUpdatesEnabled = previewBlocked;
+
+                    // Fast Startup + NTFS: reflect actual registry state.
+                    FastStartupDisabled    = fastStartupOff;
+                    NtfsLastAccessDisabled = ntfsLastAccessOff;
 
                     // Scan Realtek entries only if we haven't scanned yet in this session
                     // and Realtek hardware is detected
@@ -360,5 +377,91 @@ public partial class ToolsViewModel : ObservableObject, IAutoRefreshable
             _loading = false;
         }
         finally { IsPreviewUpdatesLoading = false; }
+    }
+
+    // ── Fast Startup callbacks ────────────────────────────────────────────────
+
+    partial void OnFastStartupDisabledChanged(bool value)
+    {
+        if (_loading) return;
+        _ = ExecuteFastStartupToggleAsync(value);
+    }
+
+    private async Task ExecuteFastStartupToggleAsync(bool disable)
+    {
+        IsFastStartupLoading = true;
+        StatusMessage = disable ? "Disabling Fast Startup..." : "Re-enabling Fast Startup...";
+        try
+        {
+            TweakResult result = disable
+                ? await _stability.DisableFastStartupAsync()
+                : await _stability.EnableFastStartupAsync();
+
+            StatusMessage = result.Message;
+
+            if (result.Success)
+            {
+                _settings.FastStartupDisabled = disable;
+            }
+            else
+            {
+                _loading = true;
+                FastStartupDisabled = !disable;
+                _loading = false;
+            }
+        }
+        catch (Exception ex)
+        {
+            _log.Error("ToolsViewModel", $"FastStartup toggle ({disable}) failed", ex);
+            StatusMessage = $"Error: {ex.Message}";
+            _loading = true;
+            FastStartupDisabled = !disable;
+            _loading = false;
+        }
+        finally { IsFastStartupLoading = false; }
+    }
+
+    // ── NTFS Last-Access callbacks ────────────────────────────────────────────
+
+    partial void OnNtfsLastAccessDisabledChanged(bool value)
+    {
+        if (_loading) return;
+        _ = ExecuteNtfsLastAccessToggleAsync(value);
+    }
+
+    private async Task ExecuteNtfsLastAccessToggleAsync(bool disable)
+    {
+        IsNtfsLastAccessLoading = true;
+        StatusMessage = disable
+            ? "Disabling NTFS last-access timestamps..."
+            : "Re-enabling NTFS last-access timestamps...";
+        try
+        {
+            TweakResult result = disable
+                ? await _stability.DisableNtfsLastAccessAsync()
+                : await _stability.EnableNtfsLastAccessAsync();
+
+            StatusMessage = result.Message;
+
+            if (result.Success)
+            {
+                _settings.NtfsLastAccessDisabled = disable;
+            }
+            else
+            {
+                _loading = true;
+                NtfsLastAccessDisabled = !disable;
+                _loading = false;
+            }
+        }
+        catch (Exception ex)
+        {
+            _log.Error("ToolsViewModel", $"NtfsLastAccess toggle ({disable}) failed", ex);
+            StatusMessage = $"Error: {ex.Message}";
+            _loading = true;
+            NtfsLastAccessDisabled = !disable;
+            _loading = false;
+        }
+        finally { IsNtfsLastAccessLoading = false; }
     }
 }

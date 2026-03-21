@@ -307,6 +307,22 @@ public class SettingsService
         set => WriteBool(nameof(GameBoosterDisableBluetooth), value);
     }
 
+    // ── System Stability tweaks ───────────────────────────────────────────────
+
+    /// <summary>Whether the user has disabled Windows Fast Startup (off by default).</summary>
+    public bool FastStartupDisabled
+    {
+        get => ReadBool(nameof(FastStartupDisabled), defaultValue: false);
+        set => WriteBool(nameof(FastStartupDisabled), value);
+    }
+
+    /// <summary>Whether the user has disabled NTFS last-access timestamp updates (off by default).</summary>
+    public bool NtfsLastAccessDisabled
+    {
+        get => ReadBool(nameof(NtfsLastAccessDisabled), defaultValue: false);
+        set => WriteBool(nameof(NtfsLastAccessDisabled), value);
+    }
+
     // ── Updates ───────────────────────────────────────────────────────────────
 
     /// <summary>

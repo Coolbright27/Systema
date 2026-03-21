@@ -27,6 +27,14 @@ public class OptionalFeaturesService
         "Internet-Explorer-Optional-amd64"
     };
 
+    // Features flagged as unsafe/obsolete — surfaces a "REMOVE RECOMMENDED" badge in the UI
+    private static readonly HashSet<string> RecommendedToRemove = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "SMB1Protocol",
+        "SMB1Protocol-Server",
+        "SMB1Protocol-Client",
+    };
+
     /// <summary>Human-readable descriptions for known Windows optional features.</summary>
     private static readonly Dictionary<string, string> FeatureDescriptions = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -143,9 +151,10 @@ public class OptionalFeaturesService
                             FeatureDescriptions.TryGetValue(currentFeature, out string? desc);
                             features.Add(new OptionalFeatureInfo
                             {
-                                Name        = currentFeature,
-                                State       = state,
-                                Description = desc ?? string.Empty
+                                Name                  = currentFeature,
+                                State                 = state,
+                                Description           = desc ?? string.Empty,
+                                IsRecommendedToRemove = RecommendedToRemove.Contains(currentFeature),
                             });
                         }
                         currentFeature = null;
@@ -167,6 +176,21 @@ public class OptionalFeaturesService
             return features;
         });
     }
+
+    /// <summary>
+    /// Fast (no DISM) check for whether the SMBv1 feature is still installed.
+    /// Uses mrxsmb10.sys presence as the indicator — DISM removes this driver file
+    /// when the SMB1Protocol feature is uninstalled.
+    /// </summary>
+    public bool IsSMBv1Present()
+    {
+        string driversDir = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.System), "drivers");
+        return File.Exists(Path.Combine(driversDir, "mrxsmb10.sys"));
+    }
+
+    /// <summary>Removes the SMBv1 protocol feature via DISM.</summary>
+    public Task<TweakResult> RemoveSMBv1Async() => DisableFeatureAsync("SMB1Protocol");
 
     public async Task<TweakResult> DisableFeatureAsync(string featureName)
     {

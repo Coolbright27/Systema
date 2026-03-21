@@ -19,9 +19,13 @@
                 <RowDefinition Height="16"/>   <!-- 5: spacer -->
                 <RowDefinition Height="Auto"/> <!-- 6: Core Parking card -->
                 <RowDefinition Height="16"/>   <!-- 7: spacer -->
-                <RowDefinition Height="Auto"/> <!-- 8: Realtek card -->
+                <RowDefinition Height="Auto"/> <!-- 8: Fast Startup card -->
                 <RowDefinition Height="16"/>   <!-- 9: spacer -->
-                <RowDefinition Height="Auto"/> <!-- 10: status bar -->
+                <RowDefinition Height="Auto"/> <!-- 10: NTFS Last-Access card -->
+                <RowDefinition Height="16"/>   <!-- 11: spacer -->
+                <RowDefinition Height="Auto"/> <!-- 12: Realtek card -->
+                <RowDefinition Height="16"/>   <!-- 13: spacer -->
+                <RowDefinition Height="Auto"/> <!-- 14: status bar -->
             </Grid.RowDefinitions>
 
             <!-- ===== HEADER ===== -->
@@ -209,8 +213,129 @@
                 </StackPanel>
             </Border>
 
+            <!-- ===== CARD: Disable Fast Startup ===== -->
+            <Border Grid.Row="8" Style="{StaticResource Card}">
+                <StackPanel>
+
+                    <!-- Header row with toggle -->
+                    <Grid Margin="0,0,0,10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+
+                        <StackPanel Grid.Column="0">
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                <TextBlock Text="Disable Fast Startup"
+                                           Style="{StaticResource HeadingMedium}"/>
+                                <Border Background="{StaticResource AccentYellowBrush}" CornerRadius="4"
+                                        Padding="6,2" Margin="10,0,0,0" VerticalAlignment="Center">
+                                    <TextBlock Text="MODERATE" FontSize="9" FontWeight="Bold" Foreground="#0D0F14"/>
+                                </Border>
+                            </StackPanel>
+                            <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" MaxWidth="600">
+                                Windows Fast Startup saves a kernel snapshot on shutdown to speed up the next boot.
+                                Disabling it forces a full clean shutdown each time, preventing driver state corruption,
+                                ensuring firmware updates apply correctly, and fixing shutdown/reboot issues on some PCs.
+                            </TextBlock>
+                        </StackPanel>
+
+                        <CheckBox Grid.Column="1" VerticalAlignment="Center"
+                                  Style="{StaticResource ToggleSwitch}"
+                                  IsChecked="{Binding FastStartupDisabled, Mode=TwoWay}"/>
+                    </Grid>
+
+                    <!-- Status indicator -->
+                    <TextBlock Margin="0,2,0,0">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionText}">
+                                <Setter Property="Text" Value="Status: OFF  —  Fast Startup is enabled (Windows default)"/>
+                                <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding FastStartupDisabled}" Value="True">
+                                        <Setter Property="Text" Value="Status: ON ✓  —  Fast Startup is disabled (full clean shutdown)"/>
+                                        <Setter Property="Foreground" Value="{StaticResource AccentGreenBrush}"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+
+                    <!-- Loading indicator -->
+                    <StackPanel Orientation="Horizontal" Margin="0,6,0,0"
+                                Visibility="{Binding IsFastStartupLoading, Converter={StaticResource BoolToVis}}">
+                        <ProgressBar IsIndeterminate="True" Width="160" Height="4"
+                                     Style="{StaticResource AccentProgressBar}" Margin="0,0,10,0"
+                                     VerticalAlignment="Center"/>
+                        <TextBlock Text="Applying..." Style="{StaticResource CaptionText}" VerticalAlignment="Center"/>
+                    </StackPanel>
+
+                </StackPanel>
+            </Border>
+
+            <!-- ===== CARD: Disable NTFS Last-Access Timestamps ===== -->
+            <Border Grid.Row="10" Style="{StaticResource Card}">
+                <StackPanel>
+
+                    <!-- Header row with toggle -->
+                    <Grid Margin="0,0,0,10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+
+                        <StackPanel Grid.Column="0">
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                <TextBlock Text="Disable NTFS Last-Access Timestamps"
+                                           Style="{StaticResource HeadingMedium}"/>
+                                <Border Background="{StaticResource AccentGreenBrush}" CornerRadius="4"
+                                        Padding="6,2" Margin="10,0,0,0" VerticalAlignment="Center">
+                                    <TextBlock Text="SAFE" FontSize="9" FontWeight="Bold" Foreground="#0D0F14"/>
+                                </Border>
+                            </StackPanel>
+                            <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" MaxWidth="600">
+                                NTFS normally updates the "Date Accessed" timestamp on every file read, causing
+                                unnecessary disk writes on every open. Disabling this reduces background disk
+                                activity, lowers SSD write amplification, and can improve responsiveness on
+                                systems with many small files (e.g. development machines).
+                            </TextBlock>
+                        </StackPanel>
+
+                        <CheckBox Grid.Column="1" VerticalAlignment="Center"
+                                  Style="{StaticResource ToggleSwitch}"
+                                  IsChecked="{Binding NtfsLastAccessDisabled, Mode=TwoWay}"/>
+                    </Grid>
+
+                    <!-- Status indicator -->
+                    <TextBlock Margin="0,2,0,0">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionText}">
+                                <Setter Property="Text" Value="Status: OFF  —  Last-access timestamps are written on every read (default)"/>
+                                <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding NtfsLastAccessDisabled}" Value="True">
+                                        <Setter Property="Text" Value="Status: ON ✓  —  Last-access timestamp writes are disabled"/>
+                                        <Setter Property="Foreground" Value="{StaticResource AccentGreenBrush}"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+
+                    <!-- Loading indicator -->
+                    <StackPanel Orientation="Horizontal" Margin="0,6,0,0"
+                                Visibility="{Binding IsNtfsLastAccessLoading, Converter={StaticResource BoolToVis}}">
+                        <ProgressBar IsIndeterminate="True" Width="160" Height="4"
+                                     Style="{StaticResource AccentProgressBar}" Margin="0,0,10,0"
+                                     VerticalAlignment="Center"/>
+                        <TextBlock Text="Applying..." Style="{StaticResource CaptionText}" VerticalAlignment="Center"/>
+                    </StackPanel>
+
+                </StackPanel>
+            </Border>
+
             <!-- ===== CARD: Remove Realtek Bloat ===== -->
-            <Border Grid.Row="8" Style="{StaticResource Card}"
+            <Border Grid.Row="12" Style="{StaticResource Card}"
                     Visibility="{Binding HasRealtekHardware, Converter={StaticResource BoolToVis}}">
                 <StackPanel>
 
@@ -300,7 +425,7 @@
             </Border>
 
             <!-- ===== STATUS BAR ===== -->
-            <Grid Grid.Row="10" Margin="0,8,0,0">
+            <Grid Grid.Row="14" Margin="0,8,0,0">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>

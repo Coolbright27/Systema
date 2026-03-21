@@ -13,7 +13,8 @@
 //   GameBoosterViewModel  ← GameBoosterService (→ ServiceControlService, SettingsService, ProcessLassoService)
 //   SettingsViewModel     ← SettingsService
 //   ToolsViewModel        ← RealtekCleanerService, CoreParkingService, RestorePointService,
-//                           SettingsService, DnsService, WindowsUpdateTweaksService
+//                           SettingsService, DnsService, WindowsUpdateTweaksService,
+//                           SystemStabilityService
 //   TaskSleepViewModel    ← (self-contained; creates TaskSleepService internally)
 //   NetworkViewModel      ← DnsService, DefenderService  [wired inside MainViewModel if present]
 //
@@ -140,6 +141,7 @@ public partial class App : Application
             var realtekService      = new RealtekCleanerService();
             var coreParkingService  = new CoreParkingService();
             var wuTweaksService     = new WindowsUpdateTweaksService();
+            var stabilityService    = new SystemStabilityService();
             var bloatwareService    = new BloatwareService();
             _updateService          = new UpdateService(settingsService);
             var watchdogService     = new WatchdogService();
@@ -160,7 +162,7 @@ public partial class App : Application
             var dashboardVm   = new DashboardViewModel(
                 gameboosterService, taskSleepVm, serviceControl,
                 memoryService, dnsService, powerPlanService,
-                wuTweaksService, coreParkingService, settingsService);
+                wuTweaksService, coreParkingService, settingsService, optFeatures);
 
             var memoryVm      = new MemoryViewModel(memoryService, startupService);
             var servicesVm    = new ServicesViewModel(serviceControl, optFeatures, restoreService, settingsService);
@@ -168,7 +170,8 @@ public partial class App : Application
             var gameBoosterVm = new GameBoosterViewModel(gameboosterService, settingsService);
             var settingsVm    = new SettingsViewModel(settingsService, restoreService, _updateService, watchdogService);
             var toolsVm       = new ToolsViewModel(
-                realtekService, coreParkingService, restoreService, settingsService, dnsService, wuTweaksService);
+                realtekService, coreParkingService, restoreService,
+                settingsService, dnsService, wuTweaksService, stabilityService);
             var bloatwareVm   = new BloatwareViewModel(bloatwareService, restoreService, settingsService);
 
             _mainVm = new MainViewModel(dashboardVm, memoryVm, servicesVm,
