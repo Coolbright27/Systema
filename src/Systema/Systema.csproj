@@ -11,7 +11,7 @@
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
     <AssemblyName>Systema</AssemblyName>
     <RootNamespace>Systema</RootNamespace>
-    <Version>1.6.32</Version>
+    <Version>1.6.33</Version>
     <Company>Systema</Company>
     <Product>Systema Optimization Suite</Product>
     <Description>High-performance Windows optimization suite</Description>
