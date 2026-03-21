@@ -1,5 +1,5 @@
 // ════════════════════════════════════════════════════════════════════════════
-// GameBoosterService.cs  ·  Auto-detects 20+ game processes and applies boost
+// GameBoosterService.cs  ·  Auto-detects games, anti-cheats, and game-related services
 // ════════════════════════════════════════════════════════════════════════════
 //
 // Monitors running processes on a DispatcherTimer to detect game launches and

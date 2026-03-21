@@ -267,9 +267,9 @@ public class LoggerService
         sb.AppendLine("                     features. Creates a restore point first.");
         sb.AppendLine("  Visual           — Toggles Windows animations and switches power plans");
         sb.AppendLine("                     (Balanced / High Performance / Ultimate Performance).");
-        sb.AppendLine("  Game Boost       — Auto-detects 20+ games and pauses background");
-        sb.AppendLine("                     services while you play, then restores them when");
-        sb.AppendLine("                     you quit. Can also run manually.");
+        sb.AppendLine("  Game Boost       — Auto-detects games, anti-cheats, and game-related");
+        sb.AppendLine("                     services to boost performance — throttles background");
+        sb.AppendLine("                     apps while you play and fully restores when you quit.");
         sb.AppendLine("  App Cleanup      — Removes optional pre-installed Microsoft UWP apps");
         sb.AppendLine("                     (e.g. Candy Crush, Xbox apps, Tips, Mail). Safe");
         sb.AppendLine("                     list only — nothing that breaks Windows or the Store.");

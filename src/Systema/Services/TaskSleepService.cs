@@ -1502,47 +1502,74 @@ public sealed class TaskSleepService : IDisposable
 
     private long BuildECoreMask()
     {
+        // Uses GetLogicalProcessorInformationEx(RelationProcessorCore) to read the
+        // EfficiencyClass of every physical core. WMI's NumberOfEfficiencyClasses
+        // property is unreliable on older Windows 10 builds and causes "Invalid query".
         try
         {
-            int totalLogical = Environment.ProcessorCount;
-            if (totalLogical <= 1) return 0;
+            if (Environment.ProcessorCount <= 1) return 0;
 
-            int pCoreLogicalCount = 0;
-            int eCoreLogicalCount = 0;
+            const int RelationProcessorCore = 0;
 
-            using var cpuSearcher = new ManagementObjectSearcher(
-                "SELECT NumberOfCores, NumberOfLogicalProcessors, NumberOfEfficiencyClasses " +
-                "FROM Win32_Processor");
+            uint bufSize = 0;
+            GetLogicalProcessorInformationEx(RelationProcessorCore, IntPtr.Zero, ref bufSize);
 
-            foreach (ManagementObject cpu in cpuSearcher.Get())
+            IntPtr buf = Marshal.AllocHGlobal((int)bufSize);
+            try
             {
-                uint effClasses = Convert.ToUInt32(cpu["NumberOfEfficiencyClasses"] ?? 1u);
-                uint logicals   = Convert.ToUInt32(cpu["NumberOfLogicalProcessors"] ?? (uint)totalLogical);
-                uint cores      = Convert.ToUInt32(cpu["NumberOfCores"] ?? logicals);
+                if (!GetLogicalProcessorInformationEx(RelationProcessorCore, buf, ref bufSize))
+                    return 0;
 
-                if (effClasses < 2)
+                // Collect (efficiencyClass, affinityMask) for every physical core.
+                // SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX layout (x64):
+                //   +0  DWORD Relationship
+                //   +4  DWORD Size
+                //   +8  PROCESSOR_RELATIONSHIP:
+                //         +0  BYTE  Flags
+                //         +1  BYTE  EfficiencyClass
+                //         +2  BYTE  Reserved[20]
+                //         +22 WORD  GroupCount
+                //         +24 GROUP_AFFINITY[GroupCount]:
+                //               +0  ULONG_PTR Mask   (8 bytes x64)
+                //               +8  WORD      Group
+                //               +10 WORD      Reserved[3]
+                var cores = new List<(byte effClass, ulong mask)>();
+                int offset = 0;
+                while (offset < (int)bufSize)
                 {
-                    pCoreLogicalCount += (int)logicals;
-                    continue;
+                    int  rel  = Marshal.ReadInt32(buf, offset);
+                    uint size = (uint)Marshal.ReadInt32(buf, offset + 4);
+
+                    if (rel == RelationProcessorCore)
+                    {
+                        byte   effClass  = Marshal.ReadByte(buf, offset + 9);
+                        ushort groupCount = (ushort)Marshal.ReadInt16(buf, offset + 30);
+                        // First GROUP_AFFINITY.Mask is at offset + 32
+                        ulong affinityMask = (ulong)Marshal.ReadInt64(buf, offset + 32);
+                        cores.Add((effClass, affinityMask));
+                    }
+
+                    offset += (int)size;
                 }
 
-                bool hyperthreading = logicals > cores;
-                int  pLogicals      = hyperthreading ? (int)(cores * 2) : (int)cores;
-                int  eLogicals      = (int)logicals - pLogicals;
+                if (cores.Count == 0) return 0;
 
-                pCoreLogicalCount += pLogicals;
-                eCoreLogicalCount += eLogicals;
+                byte minClass = cores.Min(c => c.effClass);
+                byte maxClass = cores.Max(c => c.effClass);
+                if (minClass == maxClass) return 0; // homogeneous CPU, no E-cores
+
+                // E-cores are the least powerful cores — lowest EfficiencyClass value.
+                long eCoreMask = 0;
+                foreach (var (effClass, mask) in cores)
+                    if (effClass == minClass)
+                        eCoreMask |= (long)mask;
+
+                return eCoreMask;
             }
-
-            if (eCoreLogicalCount <= 0) return 0;
-
-            long mask = 0;
-            for (int i = pCoreLogicalCount; i < pCoreLogicalCount + eCoreLogicalCount; i++)
+            finally
             {
-                if (i >= 64) break;
-                mask |= (1L << i);
+                Marshal.FreeHGlobal(buf);
             }
-            return mask;
         }
         catch (Exception ex)
         {
@@ -1770,6 +1797,10 @@ public sealed class TaskSleepService : IDisposable
     [DllImport("kernel32.dll", SetLastError = true)]
     private static extern bool SetProcessWorkingSetSize(IntPtr hProcess,
         IntPtr dwMinimumWorkingSetSize, IntPtr dwMaximumWorkingSetSize);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool GetLogicalProcessorInformationEx(
+        int relationshipType, IntPtr buffer, ref uint returnedLength);
 
     private delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
 

@@ -54,7 +54,11 @@ public partial class BloatwareViewModel : ObservableObject, IAutoRefreshable
     /// <summary>Inverse of IsRemoving — used to enable/disable UI elements.</summary>
     public bool IsNotRemoving => !IsRemoving;
 
+    /// <summary>Inverse of IsLoading — used to disable Rescan while a scan is in progress.</summary>
+    public bool IsNotLoading => !IsLoading;
+
     partial void OnIsRemovingChanged(bool value) => OnPropertyChanged(nameof(IsNotRemoving));
+    partial void OnIsLoadingChanged(bool value)  => OnPropertyChanged(nameof(IsNotLoading));
 
     public int SelectedCount => Apps.Count(a => a.IsSelected);
 
@@ -142,8 +146,10 @@ public partial class BloatwareViewModel : ObservableObject, IAutoRefreshable
             var rp = await _restore.CreateAsync("Systema — Before App Cleanup");
             if (!rp.Success)
             {
-                StatusMessage = $"Warning: Could not create restore point ({rp.Message}). Proceeding anyway.";
-                _log.Warn("BloatwareViewModel", $"Restore point creation failed: {rp.Message}");
+                var raw   = rp.Message?.Replace("\0", "").Trim() ?? "";
+                var rpMsg = raw.Length > 0 ? raw : "unknown error";
+                StatusMessage = $"Warning: Could not create restore point ({rpMsg}). Proceeding anyway.";
+                _log.Warn("BloatwareViewModel", $"Restore point creation failed: {rpMsg}");
             }
             else
             {
