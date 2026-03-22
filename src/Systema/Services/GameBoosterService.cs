@@ -47,7 +47,7 @@ public sealed class GameBoosterService : IDisposable
     private bool _manualBoostActive;
     private DateTime _manualBoostStartedAt;
     private DispatcherTimer? _manualBoostTimeoutTimer;
-    private readonly List<string> _killedServices = new();
+    private readonly List<string> _killedServices  = new();
     private readonly object _lock = new();
     private string? _boostedProcessName;
 
@@ -318,6 +318,30 @@ public sealed class GameBoosterService : IDisposable
         "WMPNetworkSvc",     // Windows Media Player Network Sharing (duplicate guard OK)
         "XblAuthManager",    // Xbox Live Auth Manager
         "xbgm",              // Xbox Game Monitoring
+
+        // ── Remote access (not needed while gaming locally) ───────────────────
+        "TermService",       // Remote Desktop Services — RDP host server
+        "SessionEnv",        // Remote Desktop Configuration — RDP session setup
+        "UmRdpService",      // Remote Desktop Device Redirector — RDP device mapping
+        "WinRM",             // Windows Remote Management — remote PS / WMI access
+
+        // ── Backup & diagnostics ──────────────────────────────────────────────
+        "SDRSVC",            // Windows Backup — backup scheduling and management
+        "wbengine",          // Block Level Backup Engine — active backup I/O
+        "WdiSystemHost",     // Diagnostic System Host — diagnostic scenario runner
+        "WdiServiceHost",    // Diagnostic Service Host — WDI scenario host (duplicate guard OK)
+
+        // ── NFC / payments / mixed reality ────────────────────────────────────
+        "WalletService",         // Wallet Service — NFC passes and contactless payments
+        "SEMgrSvc",              // Payments and NFC/SE Manager — secure element
+        "MixedRealityOpenXRSvc", // Mixed Reality OpenXR — VR/AR runtime overhead
+        "spectrum",              // Windows Perception Service — spatial awareness / VR
+
+        // ── Misc low-value background workers ────────────────────────────────
+        "wisvc",             // Windows Insider Service — Insider preview notifications
+        "AppMgmt",           // Application Management — MSI Group Policy installs
+        "CscService",        // Offline Files — corporate file-sync cache manager
+        "TokenBroker",       // Web Account Manager — background web-auth token refresh
     };
 
     // ── Constructor ────────────────────────────────────────────────────────────
@@ -462,7 +486,6 @@ public sealed class GameBoosterService : IDisposable
 
     /// <summary>Returns the effective kill list (user overrides or default).</summary>
     public List<string> GetKillList() => _settings.GameBoosterKillList ?? new List<string>(DefaultKillList);
-
     public void SetKillList(List<string> list) => _settings.GameBoosterKillList = list;
 
     // ── Game Detection ─────────────────────────────────────────────────────────
@@ -725,6 +748,7 @@ public sealed class GameBoosterService : IDisposable
             }
         }
         _killedServices.Clear();
+
         CrashGuard.Clear();
 
         // Return UI/tray notifications as an action to fire outside the lock.

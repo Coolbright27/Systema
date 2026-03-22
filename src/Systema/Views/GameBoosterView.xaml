@@ -378,6 +378,8 @@
                                 Command="{Binding ResetKillListCommand}"/>
                     </StackPanel>
                     </StackPanel><!-- end collapsible service settings -->
+
+
                 </StackPanel>
             </Border>
 

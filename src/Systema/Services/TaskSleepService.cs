@@ -279,6 +279,32 @@ public sealed class TaskSleepService : IDisposable
         "PnkBstrB",         // PunkBuster background service
         "EQU8",             // EQU8 anti-cheat
         "mhyprot2",         // MiHoYo anti-cheat (Genshin / Honkai)
+        // ── GPU driver processes — throttling causes frame drops / display glitches ──
+        "NVDisplay.Container",  // NVIDIA display driver container
+        "nvcontainer",          // NVIDIA component container (multiple instances)
+        "nvWmi64",              // NVIDIA WMI provider (driver telemetry bridge)
+        "nvsphelper64",         // NVIDIA ShadowPlay helper
+        "nvsphelper32",         // NVIDIA ShadowPlay helper (32-bit)
+        "NvBackend",            // NVIDIA GeForce Experience backend
+        "NvContainerLocalSystem", // NVIDIA system-level container
+        "igfxEM",               // Intel HD Graphics event monitor
+        "igfxHK",               // Intel HD Graphics hotkey service
+        "igfxTray",             // Intel HD Graphics tray icon
+        "GfxUI",                // Intel Graphics UI
+        "atieclxx",             // AMD External Events Client — GPU event handler
+        "atiesrxx",             // AMD External Events Server
+        "RadeonSoftware",       // AMD Radeon Software overlay
+        "RadeonsoftwareSlimService", // AMD Radeon slim service
+        // ── Audio driver processes — throttling causes crackle / latency spikes ──
+        "RtkAudUService64",     // Realtek HD Audio UAD service (64-bit)
+        "RtkAudUService32",     // Realtek HD Audio UAD service (32-bit)
+        "RtkNGUI64",            // Realtek audio control panel
+        "RAVCpl64",             // Realtek audio manager
+        "RAVBg64",              // Realtek audio background helper
+        "WavesSvc64",           // Waves Audio MaxxAudio service (common on Dell/HP)
+        "WavesSvc",             // Waves Audio service (32-bit)
+        "WavesAPO64Service",    // Waves APO audio processing service
+        "audiodg",              // Windows audio device graph (already listed, guard)
         // This app itself
         "Systema"
     };

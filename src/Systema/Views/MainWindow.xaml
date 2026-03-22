@@ -81,6 +81,11 @@
                         <TextBlock Text="SYSTEMA" FontWeight="Bold" FontSize="14"
                                    Foreground="{StaticResource TextPrimaryBrush}"
                                    VerticalAlignment="Center"/>
+                        <Border Background="#1A00B4FF" BorderBrush="#4000B4FF" BorderThickness="1"
+                                CornerRadius="4" Padding="5,1" Margin="6,0,0,0" VerticalAlignment="Center">
+                            <TextBlock Text="BETA" FontSize="9" FontWeight="Bold"
+                                       Foreground="#00B4FF" VerticalAlignment="Center"/>
+                        </Border>
                     </StackPanel>
 
                     <!-- Window Buttons -->

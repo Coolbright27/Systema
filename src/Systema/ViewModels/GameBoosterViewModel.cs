@@ -42,7 +42,7 @@ public partial class GameBoosterViewModel : ObservableObject, IAutoRefreshable
     [ObservableProperty] private bool   _xboxOverride;
 
     // Kill list as structured items
-    [ObservableProperty] private ObservableCollection<KillListEntry> _killListItems = new();
+    [ObservableProperty] private ObservableCollection<KillListEntry>    _killListItems     = new();
 
     // ── Master switch ─────────────────────────────────────────────────────────
     [ObservableProperty] private bool _gameBoosterEnabled;
@@ -199,6 +199,7 @@ public partial class GameBoosterViewModel : ObservableObject, IAutoRefreshable
                                   .ToList();
 
         _settings.GameBoosterKillList = lines.Count > 0 ? lines : null;
+
         _settings.XboxServicesUserOverride = XboxOverride;
 
         // Boost options
