@@ -124,6 +124,18 @@ public sealed class TaskSleepService : IDisposable
     // child PID → parent PID so we can restore children when the parent is restored
     private readonly Dictionary<int, int> _parentOfNapChild = new();
 
+    // ── Deep sleep escalation ─────────────────────────────────────────────────
+    // pid → DateTime when the process first entered minimize-nap.
+    // Used to escalate from 60 s brief wakes to 5-minute deep-sleep wakes after
+    // the app has been minimized for longer than MinimizeDeepSleepThresholdMs.
+    private readonly Dictionary<int, DateTime> _minimizeNapSince = new();
+
+    // ── AV fight-back detection ────────────────────────────────────────────────
+    // pid → (number of times it raised its own priority back, window start time).
+    // If count reaches 3 within 60 s the process is restored permanently and its
+    // name is added to _detectedAvProcessNames so it is never napped again.
+    private readonly Dictionary<int, (int Count, DateTime WindowStart)> _reEnforceCount = new();
+
     // ── WASAPI exclusive mode ─────────────────────────────────────────────────
     // Set to UtcNow when exclusive audio mode is detected; cleared after 15 s idle.
     private DateTime _exclusiveModeDetectedAt = DateTime.MinValue;
@@ -553,12 +565,14 @@ public sealed class TaskSleepService : IDisposable
                 // Process exited — always clean up
                 shouldRestore = true; restoreReason = "process exited";
                 _minimizedNapPids.Remove(pid); _nextBriefWakeAt.Remove(pid); _briefWakeEndAt.Remove(pid);
+                _minimizeNapSince.Remove(pid);
             }
             else if (protectedPids.Contains(pid))
             {
                 // User brought the app to foreground — wake it permanently
                 shouldRestore = true; restoreReason = "opened by user";
                 _minimizedNapPids.Remove(pid); _nextBriefWakeAt.Remove(pid); _briefWakeEndAt.Remove(pid);
+                _minimizeNapSince.Remove(pid);
             }
             else if (_minimizedNapPids.Contains(pid))
             {
@@ -574,6 +588,7 @@ public sealed class TaskSleepService : IDisposable
                     shouldRestore = true;
                     restoreReason = hasAudio ? "audio detected" : "app un-minimized";
                     _minimizedNapPids.Remove(pid); _nextBriefWakeAt.Remove(pid); _briefWakeEndAt.Remove(pid);
+                    _minimizeNapSince.Remove(pid); // clear deep-sleep timer
                 }
                 else
                 {
@@ -588,9 +603,19 @@ public sealed class TaskSleepService : IDisposable
                         _processNames.TryGetValue(pid, out string? nm2);
                         TryRestoreProcess(pid);
                         _throttledAt.Remove(pid);
-                        _briefWakeEndAt[pid]  = DateTime.UtcNow.AddMilliseconds(s.MinimizedBriefWakeDurationMs);
-                        _nextBriefWakeAt[pid] = DateTime.UtcNow.AddMilliseconds(s.MinimizedBriefWakeIntervalMs);
-                        AddEvent(nm2 ?? $"PID {pid}", pid, "Brief Wake", $"CPU {sysCpu:F0}%");
+                        _briefWakeEndAt[pid] = DateTime.UtcNow.AddMilliseconds(s.MinimizedBriefWakeDurationMs);
+
+                        // Deep sleep: if minimized longer than threshold, use the longer interval
+                        double minimizedForMs = _minimizeNapSince.TryGetValue(pid, out DateTime napSince)
+                            ? (DateTime.UtcNow - napSince).TotalMilliseconds : 0;
+                        int wakeIntervalMs = minimizedForMs >= s.MinimizeDeepSleepThresholdMs
+                            ? s.MinimizeDeepSleepWakeIntervalMs
+                            : s.MinimizedBriefWakeIntervalMs;
+                        _nextBriefWakeAt[pid] = DateTime.UtcNow.AddMilliseconds(wakeIntervalMs);
+
+                        string wakeLabel = minimizedForMs >= s.MinimizeDeepSleepThresholdMs
+                            ? "Deep Wake" : "Brief Wake";
+                        AddEvent(nm2 ?? $"PID {pid}", pid, wakeLabel, $"CPU {sysCpu:F0}%");
                     }
                     // else: continue napping — no action
                 }
@@ -775,6 +800,7 @@ public sealed class TaskSleepService : IDisposable
                                 _cpuAtThrottle.TryAdd(proc.Id, mnCpu);
                                 _throttledAt[proc.Id]     = DateTime.UtcNow;
                                 _minimizedNapPids.Add(proc.Id);
+                                _minimizeNapSince.TryAdd(proc.Id, DateTime.UtcNow); // deep-sleep timer
                                 _nextBriefWakeAt[proc.Id] =
                                     DateTime.UtcNow.AddMilliseconds(s.MinimizedBriefWakeIntervalMs);
                                 _briefWakeEndAt.Remove(proc.Id);
@@ -918,9 +944,55 @@ public sealed class TaskSleepService : IDisposable
                     uint current = GetPriorityClass(h);
                     if (current != 0 && current != IDLE_PRIORITY_CLASS)
                     {
-                        SetPriorityClass(h, IDLE_PRIORITY_CLASS);
-                        AddEvent(nm ?? $"PID {pid}", pid, "Re-enforced", "process raised its own priority");
-                        _log.Info("TaskSleepService", $"Re-enforced priority: PID {pid}");
+                        // ── Fight-back detection ───────────────────────────────────────────────
+                        // If a process keeps restoring its own priority, it's likely self-protecting
+                        // (e.g. AV, DRM). Track the count; after 3 fights in 60 s, restore it
+                        // permanently and add its name to the AV protection list.
+                        bool fightBack = false;
+                        if (_reEnforceCount.TryGetValue(pid, out var rc))
+                        {
+                            if ((DateTime.UtcNow - rc.WindowStart).TotalSeconds <= 60)
+                                _reEnforceCount[pid] = (rc.Count + 1, rc.WindowStart);
+                            else
+                                _reEnforceCount[pid] = (1, DateTime.UtcNow); // new window
+                        }
+                        else
+                        {
+                            _reEnforceCount[pid] = (1, DateTime.UtcNow);
+                        }
+
+                        if (_reEnforceCount[pid].Count >= 3)
+                        {
+                            // Self-protecting process — restore permanently, never touch again
+                            fightBack = true;
+                            if (nm != null)
+                            {
+                                _detectedAvProcessNames.Add(nm);
+                                _log.Warn("TaskSleepService",
+                                    $"Fight-back detected: {nm} (PID {pid}) raised its own priority " +
+                                    $"3+ times in 60 s — permanently restored and added to protection list");
+                            }
+                            TryRestoreProcess(pid);
+                            _throttledAt.Remove(pid);
+                            _minimizedNapPids.Remove(pid);
+                            _trayNapPids.Remove(pid);
+                            _minimizeNapSince.Remove(pid);
+                            _reEnforceCount.Remove(pid);
+                            AddEvent(nm ?? $"PID {pid}", pid, "Fight-back", "permanently unprotected from nap");
+                        }
+
+                        if (!fightBack)
+                        {
+                            SetPriorityClass(h, IDLE_PRIORITY_CLASS);
+                            AddEvent(nm ?? $"PID {pid}", pid, "Re-enforced", "process raised its own priority");
+                            _log.Info("TaskSleepService", $"Re-enforced priority: PID {pid}");
+                        }
+                    }
+                    else
+                    {
+                        // Process is behaving — clear its fight-back window so it doesn't
+                        // accumulate stale counts across multiple separate throttle sessions.
+                        _reEnforceCount.Remove(pid);
                     }
                 }
                 catch (Exception ex) { _log.Warn("TaskSleepService", $"Re-enforce failed for PID {pid}: {ex.Message}"); }
@@ -1081,6 +1153,8 @@ public sealed class TaskSleepService : IDisposable
             _napChildPids.Remove(pid);
             _parentOfNapChild.Remove(pid);
             _accessDeniedPids.TryRemove(pid, out _);
+            _minimizeNapSince.Remove(pid);
+            _reEnforceCount.Remove(pid);
         }
     }
 

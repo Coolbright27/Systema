@@ -537,6 +537,78 @@
                                   VerticalAlignment="Top"/>
                     </Grid>
 
+                    <!-- Minimize Nap: brief wake interval -->
+                    <Grid Margin="16,0,0,12"
+                          Visibility="{Binding MinimizeNapEnabled, Converter={StaticResource BoolToVis}}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" Margin="0,0,24,0">
+                            <TextBlock Text="Brief wake every"
+                                       Style="{StaticResource CaptionText}" FontWeight="SemiBold"/>
+                            <TextBlock Text="How often (in seconds) a sleeping minimized app is briefly unthrottled."
+                                       Style="{StaticResource CaptionText}"
+                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                       TextWrapping="Wrap" Margin="0,2,0,0"/>
+                        </StackPanel>
+                        <TextBox Grid.Column="1"
+                                 Text="{Binding MinimizedBriefWakeIntervalSeconds, UpdateSourceTrigger=LostFocus}"
+                                 Style="{StaticResource ThresholdInput}"/>
+                        <TextBlock Grid.Column="2" Text="sec" VerticalAlignment="Center"
+                                   Margin="6,0,0,0" Style="{StaticResource BodyText}"
+                                   Foreground="{StaticResource TextSecondaryBrush}"/>
+                    </Grid>
+
+                    <!-- Minimize Nap: brief wake duration -->
+                    <Grid Margin="16,0,0,12"
+                          Visibility="{Binding MinimizeNapEnabled, Converter={StaticResource BoolToVis}}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" Margin="0,0,24,0">
+                            <TextBlock Text="Wake lasts for"
+                                       Style="{StaticResource CaptionText}" FontWeight="SemiBold"/>
+                            <TextBlock Text="How long (in seconds) the brief wake window stays open before re-throttling."
+                                       Style="{StaticResource CaptionText}"
+                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                       TextWrapping="Wrap" Margin="0,2,0,0"/>
+                        </StackPanel>
+                        <TextBox Grid.Column="1"
+                                 Text="{Binding MinimizedBriefWakeDurationSeconds, UpdateSourceTrigger=LostFocus}"
+                                 Style="{StaticResource ThresholdInput}"/>
+                        <TextBlock Grid.Column="2" Text="sec" VerticalAlignment="Center"
+                                   Margin="6,0,0,0" Style="{StaticResource BodyText}"
+                                   Foreground="{StaticResource TextSecondaryBrush}"/>
+                    </Grid>
+
+                    <!-- Minimize Nap: deep sleep threshold -->
+                    <Grid Margin="16,0,0,16"
+                          Visibility="{Binding MinimizeNapEnabled, Converter={StaticResource BoolToVis}}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" Margin="0,0,24,0">
+                            <TextBlock Text="Deep sleep after"
+                                       Style="{StaticResource CaptionText}" FontWeight="SemiBold"/>
+                            <TextBlock Text="Switch to 5-minute wakes once an app has been minimized this long without being opened. Default: 10 minutes."
+                                       Style="{StaticResource CaptionText}"
+                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                       TextWrapping="Wrap" Margin="0,2,0,0"/>
+                        </StackPanel>
+                        <TextBox Grid.Column="1"
+                                 Text="{Binding MinimizeDeepSleepThresholdMinutes, UpdateSourceTrigger=LostFocus}"
+                                 Style="{StaticResource ThresholdInput}"/>
+                        <TextBlock Grid.Column="2" Text="min" VerticalAlignment="Center"
+                                   Margin="6,0,0,0" Style="{StaticResource BodyText}"
+                                   Foreground="{StaticResource TextSecondaryBrush}"/>
+                    </Grid>
+
                     <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,0,0,16"/>
 
                     <!-- Tray Nap -->
@@ -557,6 +629,54 @@
                                   IsChecked="{Binding TrayNapEnabled, Mode=TwoWay}"
                                   Style="{StaticResource ToggleSwitch}"
                                   VerticalAlignment="Top"/>
+                    </Grid>
+
+                    <!-- Tray Nap: brief wake interval -->
+                    <Grid Margin="16,0,0,12"
+                          Visibility="{Binding TrayNapEnabled, Converter={StaticResource BoolToVis}}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" Margin="0,0,24,0">
+                            <TextBlock Text="Tray wake every"
+                                       Style="{StaticResource CaptionText}" FontWeight="SemiBold"/>
+                            <TextBlock Text="How often (in minutes) a tray-only app is briefly unthrottled. Default: 5 minutes."
+                                       Style="{StaticResource CaptionText}"
+                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                       TextWrapping="Wrap" Margin="0,2,0,0"/>
+                        </StackPanel>
+                        <TextBox Grid.Column="1"
+                                 Text="{Binding TrayBriefWakeIntervalMinutes, UpdateSourceTrigger=LostFocus}"
+                                 Style="{StaticResource ThresholdInput}"/>
+                        <TextBlock Grid.Column="2" Text="min" VerticalAlignment="Center"
+                                   Margin="6,0,0,0" Style="{StaticResource BodyText}"
+                                   Foreground="{StaticResource TextSecondaryBrush}"/>
+                    </Grid>
+
+                    <!-- Tray Nap: brief wake duration -->
+                    <Grid Margin="16,0,0,16"
+                          Visibility="{Binding TrayNapEnabled, Converter={StaticResource BoolToVis}}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" Margin="0,0,24,0">
+                            <TextBlock Text="Tray wake lasts for"
+                                       Style="{StaticResource CaptionText}" FontWeight="SemiBold"/>
+                            <TextBlock Text="How long (in seconds) the tray brief wake window stays open. Default: 10 seconds."
+                                       Style="{StaticResource CaptionText}"
+                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                       TextWrapping="Wrap" Margin="0,2,0,0"/>
+                        </StackPanel>
+                        <TextBox Grid.Column="1"
+                                 Text="{Binding TrayBriefWakeDurationSeconds, UpdateSourceTrigger=LostFocus}"
+                                 Style="{StaticResource ThresholdInput}"/>
+                        <TextBlock Grid.Column="2" Text="sec" VerticalAlignment="Center"
+                                   Margin="6,0,0,0" Style="{StaticResource BodyText}"
+                                   Foreground="{StaticResource TextSecondaryBrush}"/>
                     </Grid>
 
                     <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,0,0,16"/>

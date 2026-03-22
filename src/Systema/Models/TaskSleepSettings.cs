@@ -90,6 +90,19 @@ public class TaskSleepSettings
     /// </summary>
     public int MinimizedBriefWakeDurationMs { get; set; } = 10_000;
 
+    /// <summary>
+    /// How long (ms) a minimized app must stay napped before switching to deep sleep
+    /// (longer wake interval). Default: 600 000 ms (10 minutes).
+    /// </summary>
+    public int MinimizeDeepSleepThresholdMs { get; set; } = 600_000;
+
+    /// <summary>
+    /// Wake interval (ms) used once a minimized app enters deep sleep mode
+    /// (has been napped longer than MinimizeDeepSleepThresholdMs).
+    /// Default: 300 000 ms (5 minutes).
+    /// </summary>
+    public int MinimizeDeepSleepWakeIntervalMs { get; set; } = 300_000;
+
     // ── Tray Nap ──────────────────────────────────────────────────────────────
     /// <summary>
     /// When true, processes with no visible windows (living only in the system tray)

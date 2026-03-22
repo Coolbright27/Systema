@@ -74,9 +74,11 @@ public partial class TaskSleepViewModel : ObservableObject
     [ObservableProperty] private bool _persistentNapEnabled = true;
 
     // ── Minimize Nap ──────────────────────────────────────────────────────────
-    [ObservableProperty] private bool _minimizeNapEnabled          = true;
-    [ObservableProperty] private int  _minimizedBriefWakeIntervalMs = 60_000;
-    [ObservableProperty] private int  _minimizedBriefWakeDurationMs = 10_000;
+    [ObservableProperty] private bool _minimizeNapEnabled              = true;
+    [ObservableProperty] private int  _minimizedBriefWakeIntervalMs    = 60_000;
+    [ObservableProperty] private int  _minimizedBriefWakeDurationMs    = 10_000;
+    [ObservableProperty] private int  _minimizeDeepSleepThresholdMs    = 600_000;
+    [ObservableProperty] private int  _minimizeDeepSleepWakeIntervalMs = 300_000;
 
     // ── Advanced: Memory / Tick ────────────────────────────────────────────────
     [ObservableProperty] private bool _lowerMemoryPriority = true;
@@ -194,9 +196,11 @@ public partial class TaskSleepViewModel : ObservableObject
     partial void OnMoveToECoresChanged(bool value)          => PushSettings();
     partial void OnPersistentNapEnabledChanged(bool value)  => PushSettings();
 
-    partial void OnMinimizeNapEnabledChanged(bool value)           => PushSettings();
-    partial void OnMinimizedBriefWakeIntervalMsChanged(int value)  => PushSettings();
-    partial void OnMinimizedBriefWakeDurationMsChanged(int value)  => PushSettings();
+    partial void OnMinimizeNapEnabledChanged(bool value)              => PushSettings();
+    partial void OnMinimizedBriefWakeIntervalMsChanged(int value)    => PushSettings();
+    partial void OnMinimizedBriefWakeDurationMsChanged(int value)    => PushSettings();
+    partial void OnMinimizeDeepSleepThresholdMsChanged(int value)    => PushSettings();
+    partial void OnMinimizeDeepSleepWakeIntervalMsChanged(int value) => PushSettings();
 
     partial void OnTrayNapEnabledChanged(bool value)           => PushSettings();
     partial void OnTrayBriefWakeIntervalMsChanged(int value)   => PushSettings();
@@ -209,7 +213,44 @@ public partial class TaskSleepViewModel : ObservableObject
     partial void OnAdaptiveTickChanged(bool value)        => PushSettings();
 
     partial void OnEnforceSettingsChanged(bool value)  => PushSettings();
-    partial void OnSoftNapEnabledChanged(bool value) => PushSettings();
+    partial void OnSoftNapEnabledChanged(bool value)   => PushSettings();
+
+    // ── Human-friendly helpers for XAML bindings (convert ms ↔ seconds/minutes) ─
+
+    /// <summary>MinimizedBriefWakeIntervalMs in whole seconds for the UI text box.</summary>
+    public int MinimizedBriefWakeIntervalSeconds
+    {
+        get => MinimizedBriefWakeIntervalMs / 1000;
+        set { MinimizedBriefWakeIntervalMs = Math.Max(value, 1) * 1000; OnPropertyChanged(); }
+    }
+
+    /// <summary>MinimizedBriefWakeDurationMs in whole seconds for the UI text box.</summary>
+    public int MinimizedBriefWakeDurationSeconds
+    {
+        get => MinimizedBriefWakeDurationMs / 1000;
+        set { MinimizedBriefWakeDurationMs = Math.Max(value, 1) * 1000; OnPropertyChanged(); }
+    }
+
+    /// <summary>MinimizeDeepSleepThresholdMs in whole minutes for the UI text box.</summary>
+    public int MinimizeDeepSleepThresholdMinutes
+    {
+        get => MinimizeDeepSleepThresholdMs / 60_000;
+        set { MinimizeDeepSleepThresholdMs = Math.Max(value, 1) * 60_000; OnPropertyChanged(); }
+    }
+
+    /// <summary>TrayBriefWakeIntervalMs in whole minutes for the UI text box.</summary>
+    public int TrayBriefWakeIntervalMinutes
+    {
+        get => TrayBriefWakeIntervalMs / 60_000;
+        set { TrayBriefWakeIntervalMs = Math.Max(value, 1) * 60_000; OnPropertyChanged(); }
+    }
+
+    /// <summary>TrayBriefWakeDurationMs in whole seconds for the UI text box.</summary>
+    public int TrayBriefWakeDurationSeconds
+    {
+        get => TrayBriefWakeDurationMs / 1000;
+        set { TrayBriefWakeDurationMs = Math.Max(value, 1) * 1000; OnPropertyChanged(); }
+    }
 
     [RelayCommand]
     private void ToggleAdvanced() => IsAdvancedExpanded = !IsAdvancedExpanded;
@@ -361,9 +402,11 @@ public partial class TaskSleepViewModel : ObservableObject
         DetectECores            = DetectECores,
         MoveToECores            = MoveToECores,
         PersistentNapEnabled    = PersistentNapEnabled,
-        MinimizeNapEnabled           = MinimizeNapEnabled,
-        MinimizedBriefWakeIntervalMs = MinimizedBriefWakeIntervalMs,
-        MinimizedBriefWakeDurationMs = MinimizedBriefWakeDurationMs,
+        MinimizeNapEnabled              = MinimizeNapEnabled,
+        MinimizedBriefWakeIntervalMs    = MinimizedBriefWakeIntervalMs,
+        MinimizedBriefWakeDurationMs    = MinimizedBriefWakeDurationMs,
+        MinimizeDeepSleepThresholdMs    = Math.Max(MinimizeDeepSleepThresholdMs, 60_000),
+        MinimizeDeepSleepWakeIntervalMs = Math.Max(MinimizeDeepSleepWakeIntervalMs, 10_000),
         TrayNapEnabled           = TrayNapEnabled,
         TrayBriefWakeIntervalMs  = TrayBriefWakeIntervalMs,
         TrayBriefWakeDurationMs  = TrayBriefWakeDurationMs,
@@ -408,9 +451,11 @@ public partial class TaskSleepViewModel : ObservableObject
             DetectECores            = ReadBool(key, "DetectECores",          true);
             MoveToECores            = ReadBool(key, "MoveToECores",          true);
             PersistentNapEnabled    = ReadBool(key, "PersistentNapEnabled",  true);
-            MinimizeNapEnabled           = ReadBool(key, "MinimizeNapEnabled",          true);
-            MinimizedBriefWakeIntervalMs = Math.Clamp(ReadInt(key, "MinimizedBriefWakeIntervalMs", 60_000), 1_000, 3_600_000);
-            MinimizedBriefWakeDurationMs = Math.Clamp(ReadInt(key, "MinimizedBriefWakeDurationMs", 10_000), 500, 300_000);
+            MinimizeNapEnabled              = ReadBool(key, "MinimizeNapEnabled",              true);
+            MinimizedBriefWakeIntervalMs    = Math.Clamp(ReadInt(key, "MinimizedBriefWakeIntervalMs",    60_000), 1_000, 3_600_000);
+            MinimizedBriefWakeDurationMs    = Math.Clamp(ReadInt(key, "MinimizedBriefWakeDurationMs",    10_000), 500, 300_000);
+            MinimizeDeepSleepThresholdMs    = Math.Clamp(ReadInt(key, "MinimizeDeepSleepThresholdMs",   600_000), 60_000, 3_600_000);
+            MinimizeDeepSleepWakeIntervalMs = Math.Clamp(ReadInt(key, "MinimizeDeepSleepWakeIntervalMs", 300_000), 10_000, 3_600_000);
             TrayNapEnabled           = ReadBool(key, "TrayNapEnabled",          true);
             TrayBriefWakeIntervalMs  = Math.Clamp(ReadInt(key, "TrayBriefWakeIntervalMs",  300_000), 1_000, 3_600_000);
             TrayBriefWakeDurationMs  = Math.Clamp(ReadInt(key, "TrayBriefWakeDurationMs",  10_000), 500, 300_000);
@@ -451,9 +496,11 @@ public partial class TaskSleepViewModel : ObservableObject
             key.SetValue("DetectECores",            DetectECores         ? 1 : 0, RegistryValueKind.DWord);
             key.SetValue("MoveToECores",            MoveToECores         ? 1 : 0, RegistryValueKind.DWord);
             key.SetValue("PersistentNapEnabled",    PersistentNapEnabled ? 1 : 0, RegistryValueKind.DWord);
-            key.SetValue("MinimizeNapEnabled",           MinimizeNapEnabled      ? 1 : 0, RegistryValueKind.DWord);
-            key.SetValue("MinimizedBriefWakeIntervalMs", MinimizedBriefWakeIntervalMs,     RegistryValueKind.DWord);
-            key.SetValue("MinimizedBriefWakeDurationMs", MinimizedBriefWakeDurationMs,     RegistryValueKind.DWord);
+            key.SetValue("MinimizeNapEnabled",              MinimizeNapEnabled      ? 1 : 0, RegistryValueKind.DWord);
+            key.SetValue("MinimizedBriefWakeIntervalMs",    MinimizedBriefWakeIntervalMs,     RegistryValueKind.DWord);
+            key.SetValue("MinimizedBriefWakeDurationMs",    MinimizedBriefWakeDurationMs,     RegistryValueKind.DWord);
+            key.SetValue("MinimizeDeepSleepThresholdMs",    MinimizeDeepSleepThresholdMs,     RegistryValueKind.DWord);
+            key.SetValue("MinimizeDeepSleepWakeIntervalMs", MinimizeDeepSleepWakeIntervalMs,  RegistryValueKind.DWord);
             key.SetValue("TrayNapEnabled",           TrayNapEnabled       ? 1 : 0, RegistryValueKind.DWord);
             key.SetValue("TrayBriefWakeIntervalMs",  TrayBriefWakeIntervalMs,      RegistryValueKind.DWord);
             key.SetValue("TrayBriefWakeDurationMs",  TrayBriefWakeDurationMs,      RegistryValueKind.DWord);
