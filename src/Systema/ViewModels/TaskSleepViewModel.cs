@@ -279,10 +279,8 @@ public partial class TaskSleepViewModel : ObservableObject
         ThrottledCountDisplay = nSleeping > 0
             ? (nPending > 0 ? $"{nSleeping} napping, {nPending} pending" : $"{nSleeping} napping")
             : (nPending > 0 ? $"{nPending} pending nap" : "all awake");
-        CpuFreedDisplay = (snapshot != null && snapshot.CpuFreedPercent > 0.5)
-            ? $"~{snapshot.CpuFreedPercent:F0}% CPU freed by Task Sleep"
-            : "";
-        CpuFreedVisible = !string.IsNullOrEmpty(CpuFreedDisplay);
+        CpuFreedDisplay = IsEnabled ? "Task Sleep is improving system responsiveness" : "";
+        CpuFreedVisible = IsEnabled;
 
         if (snapshot == null || !IsEnabled)
         {

@@ -1986,12 +1986,39 @@ public sealed class TaskSleepService : IDisposable
                 });
             }
 
+            // Collapse identically-named processes (e.g. firefox.exe child processes) into
+            // one row so the list doesn't show 15 "firefox" entries.  CPU is summed;
+            // IsThrottled/IsProtected/IsPendingNap are true if ANY member matches.
+            var grouped = snapshots
+                .GroupBy(p => p.Name, StringComparer.OrdinalIgnoreCase)
+                .Select(g =>
+                {
+                    // Prefer the throttled representative so status/duration are meaningful
+                    var rep = g.FirstOrDefault(p => p.IsThrottled)
+                           ?? g.FirstOrDefault(p => p.IsPendingNap)
+                           ?? g.First();
+                    return new ProcessSnapshot
+                    {
+                        Pid          = rep.Pid,
+                        Name         = rep.Name,
+                        CpuPercent   = g.Sum(p => p.CpuPercent),
+                        IsThrottled  = g.Any(p => p.IsThrottled),
+                        IsProtected  = g.Any(p => p.IsProtected),
+                        IsPendingNap = g.Any(p => p.IsPendingNap),
+                        StatusLabel  = rep.StatusLabel,
+                        CoreLabel    = rep.CoreLabel,
+                        ThrottledFor = rep.ThrottledFor,
+                    };
+                })
+                .ToList();
+
             // Sort: throttled first, then by CPU descending
-            snapshots.Sort((a, b) =>
+            grouped.Sort((a, b) =>
             {
                 int tc = b.IsThrottled.CompareTo(a.IsThrottled);
                 return tc != 0 ? tc : b.CpuPercent.CompareTo(a.CpuPercent);
             });
+            snapshots = grouped;
 
             var events = _eventLog.ToArray();
             var recentEvents = (IReadOnlyList<MonitorEvent>)
