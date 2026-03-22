@@ -179,8 +179,10 @@
                         </Grid>
                     </Border>
 
-                    <!-- Rows -->
-                    <ItemsControl Grid.Row="1" ItemsSource="{Binding StartupItems}" MaxHeight="280">
+                    <!-- Rows — scrollable; no MaxHeight so every item is reachable -->
+                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto"
+                                  MaxHeight="520" CanContentScroll="False">
+                    <ItemsControl ItemsSource="{Binding StartupItems}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
                                 <Border Padding="16,8" BorderBrush="{StaticResource BorderBrush}"
@@ -290,6 +292,7 @@
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
+                    </ScrollViewer>
                 </Grid>
             </Border>
 

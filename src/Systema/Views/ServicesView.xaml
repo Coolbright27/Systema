@@ -123,7 +123,7 @@
                             <TextBlock Text="MODERATE" FontSize="9" FontWeight="Bold" Foreground="#0D0F14"/>
                         </Border>
                     </StackPanel>
-                    <Button Grid.Column="1" Content="Disable Unused Services"
+                    <Button Grid.Column="1" Content="Disable Recommended Services"
                             Style="{StaticResource DangerButton}" Padding="14,6"
                             Command="{Binding DisableAllRecommendedCommand}"
                             ToolTip="Disables all services marked RECOMMENDED in one click"/>

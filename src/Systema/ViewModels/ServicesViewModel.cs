@@ -240,7 +240,7 @@ public partial class ServicesViewModel : ObservableObject, IAutoRefreshable
         var names = string.Join("\n  • ", recommended.Select(s => s.DisplayName));
         var confirm = MessageBox.Show(
             $"This will disable {recommended.Count} background service{(recommended.Count == 1 ? "" : "s")} that are safe to turn off for most users:\n\n  • {names}\n\nYou can re-enable any service here at any time.\n\nProceed?",
-            "Disable Unused Services",
+            "Disable Recommended Services",
             MessageBoxButton.OKCancel,
             MessageBoxImage.Information,
             MessageBoxResult.OK);

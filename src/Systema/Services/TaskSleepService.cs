@@ -1933,10 +1933,21 @@ public sealed class TaskSleepService : IDisposable
             var throttledKeys = _throttledPids.Keys.ToHashSet();
 
             // Always include all throttled processes.
-            // If "all processes" would be desired, include top 15 CPU consumers too.
+            // Also include top CPU consumers, but skip system/AV processes — they can't
+            // be napped anyway and just clutter the UI with svchost/audiodg/etc.
             var pids = new HashSet<int>(throttledKeys);
-            foreach (var kv in _lastCpuPercent.OrderByDescending(kv => kv.Value).Take(15))
+            int added = 0;
+            foreach (var kv in _lastCpuPercent.OrderByDescending(kv => kv.Value))
+            {
+                if (added >= 15) break;
+                _processNames.TryGetValue(kv.Key, out string? pn);
+                if (pn != null && (SystemProcessNames.Contains(pn) ||
+                                   SecurityCriticalProcessNames.Contains(pn) ||
+                                   _detectedAvProcessNames.Contains(pn)))
+                    continue; // skip system/AV — not user-visible in process list
                 pids.Add(kv.Key);
+                added++;
+            }
 
             // Also include processes that are in the 30-second grace period (about to be napped)
             foreach (int gPid in _minimizeGraceSince.Keys) pids.Add(gPid);
