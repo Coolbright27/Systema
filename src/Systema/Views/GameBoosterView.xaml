@@ -76,7 +76,7 @@
                         </TextBlock.Style>
                     </TextBlock>
                     <CheckBox Style="{StaticResource ToggleSwitch}"
-                              IsChecked="{Binding GameBoosterEnabled}" VerticalAlignment="Center"
+                              IsChecked="{Binding GameBoosterEnabled, Mode=TwoWay}" VerticalAlignment="Center"
                               ToolTip="Master switch — turn off to disable all game detection and boosting"/>
                 </StackPanel>
             </Grid>
@@ -272,7 +272,7 @@
                             </TextBlock>
                         </StackPanel>
                         <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}"
-                                  IsChecked="{Binding XboxOverride}" VerticalAlignment="Center"/>
+                                  IsChecked="{Binding XboxOverride, Mode=TwoWay}" VerticalAlignment="Center"/>
                     </Grid>
 
                     <!-- Services to Pause — collapsible section -->
@@ -401,7 +401,7 @@
                                        Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,2,0,0"/>
                         </StackPanel>
                         <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}"
-                                  IsChecked="{Binding FreeMemoryOnBoost}" VerticalAlignment="Center"/>
+                                  IsChecked="{Binding FreeMemoryOnBoost, Mode=TwoWay}" VerticalAlignment="Center"/>
                     </Grid>
 
                     <!-- Suppress notifications -->
@@ -416,7 +416,7 @@
                                        Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,2,0,0"/>
                         </StackPanel>
                         <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}"
-                                  IsChecked="{Binding SuppressNotifications}" VerticalAlignment="Center"/>
+                                  IsChecked="{Binding SuppressNotifications, Mode=TwoWay}" VerticalAlignment="Center"/>
                     </Grid>
 
                     <!-- High Performance power plan -->
@@ -431,7 +431,7 @@
                                        Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,2,0,0"/>
                         </StackPanel>
                         <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}"
-                                  IsChecked="{Binding HighPerfPowerPlan}" VerticalAlignment="Center"/>
+                                  IsChecked="{Binding HighPerfPowerPlan, Mode=TwoWay}" VerticalAlignment="Center"/>
                     </Grid>
 
                     <!-- 1 ms timer resolution -->
@@ -446,7 +446,7 @@
                                        Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,2,0,0"/>
                         </StackPanel>
                         <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}"
-                                  IsChecked="{Binding TimerResolutionOnBoost}" VerticalAlignment="Center"/>
+                                  IsChecked="{Binding TimerResolutionOnBoost, Mode=TwoWay}" VerticalAlignment="Center"/>
                     </Grid>
 
                     <!-- Disable Game Bar & DVR -->
@@ -461,7 +461,7 @@
                                        Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,2,0,0"/>
                         </StackPanel>
                         <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}"
-                                  IsChecked="{Binding DisableGameBar}" VerticalAlignment="Center"/>
+                                  IsChecked="{Binding DisableGameBar, Mode=TwoWay}" VerticalAlignment="Center"/>
                     </Grid>
 
                     <!-- GPU & multimedia system profile -->
@@ -476,7 +476,7 @@
                                        Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,2,0,0"/>
                         </StackPanel>
                         <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}"
-                                  IsChecked="{Binding GpuProfileOnBoost}" VerticalAlignment="Center"/>
+                                  IsChecked="{Binding GpuProfileOnBoost, Mode=TwoWay}" VerticalAlignment="Center"/>
                     </Grid>
 
                     <!-- Disable Nagle's algorithm -->
@@ -491,7 +491,7 @@
                                        Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,2,0,0"/>
                         </StackPanel>
                         <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}"
-                                  IsChecked="{Binding DisableNagleOnBoost}" VerticalAlignment="Center"/>
+                                  IsChecked="{Binding DisableNagleOnBoost, Mode=TwoWay}" VerticalAlignment="Center"/>
                     </Grid>
 
                     <!-- Flush DNS cache -->
@@ -506,7 +506,7 @@
                                        Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,2,0,0"/>
                         </StackPanel>
                         <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}"
-                                  IsChecked="{Binding FlushDnsOnBoost}" VerticalAlignment="Center"/>
+                                  IsChecked="{Binding FlushDnsOnBoost, Mode=TwoWay}" VerticalAlignment="Center"/>
                     </Grid>
 
                     <!-- Disable NIC power saving -->
@@ -521,7 +521,7 @@
                                        Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,2,0,0"/>
                         </StackPanel>
                         <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}"
-                                  IsChecked="{Binding NicPowerSavingOnBoost}" VerticalAlignment="Center"/>
+                                  IsChecked="{Binding NicPowerSavingOnBoost, Mode=TwoWay}" VerticalAlignment="Center"/>
                     </Grid>
 
                     <!-- Disable Wi-Fi when Ethernet is connected -->
@@ -536,7 +536,7 @@
                                        Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,2,0,0"/>
                         </StackPanel>
                         <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}"
-                                  IsChecked="{Binding DisableWifiOnEthernet}" VerticalAlignment="Center"/>
+                                  IsChecked="{Binding DisableWifiOnEthernet, Mode=TwoWay}" VerticalAlignment="Center"/>
                     </Grid>
 
                     <!-- Disable Bluetooth radio -->
@@ -551,7 +551,7 @@
                                        Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,2,0,0"/>
                         </StackPanel>
                         <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}"
-                                  IsChecked="{Binding DisableBluetoothOnBoost}" VerticalAlignment="Center"/>
+                                  IsChecked="{Binding DisableBluetoothOnBoost, Mode=TwoWay}" VerticalAlignment="Center"/>
                     </Grid>
 
                     <!-- Prevent system sleep during boost -->
@@ -566,7 +566,7 @@
                                        Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,2,0,0"/>
                         </StackPanel>
                         <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}"
-                                  IsChecked="{Binding PreventSleepOnBoost}" VerticalAlignment="Center"/>
+                                  IsChecked="{Binding PreventSleepOnBoost, Mode=TwoWay}" VerticalAlignment="Center"/>
                     </Grid>
 
                     <Button Content="Save Boost Actions" Style="{StaticResource PrimaryButton}"

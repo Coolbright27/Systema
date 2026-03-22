@@ -268,24 +268,50 @@ public partial class GameBoosterViewModel : ObservableObject, IAutoRefreshable
 
     private void LoadSettings()
     {
-        CheckIntervalMinutes   = _settings.GameCheckIntervalMinutes;
-        XboxOverride           = _settings.XboxServicesUserOverride;
-        GamesInstalled         = _gameBooster.GamesInstalled;
-        BoostActive            = _gameBooster.BoostActive;
-        ActiveGameName         = _gameBooster.ActiveGameName ?? "—";
-        GameBoosterEnabled     = _settings.GameBoosterEnabled;
-        FreeMemoryOnBoost      = _settings.GameBoosterFreeMemory;
-        SuppressNotifications  = _settings.GameBoosterSuppressNotifications;
-        HighPerfPowerPlan      = _settings.GameBoosterHighPerfPowerPlan;
-        TimerResolutionOnBoost = _settings.GameBoosterTimerResolution;
-        DisableGameBar         = _settings.GameBoosterDisableGameBar;
-        GpuProfileOnBoost      = _settings.GameBoosterGpuProfile;
-        DisableNagleOnBoost    = _settings.GameBoosterDisableNagle;
-        FlushDnsOnBoost        = _settings.GameBoosterFlushDns;
-        NicPowerSavingOnBoost  = _settings.GameBoosterNicPowerSaving;
-        DisableWifiOnEthernet  = _settings.GameBoosterDisableWifiOnEthernet;
+        // Load all values via the public property setters first.
+        CheckIntervalMinutes    = _settings.GameCheckIntervalMinutes;
+        XboxOverride            = _settings.XboxServicesUserOverride;
+        GamesInstalled          = _gameBooster.GamesInstalled;
+        BoostActive             = _gameBooster.BoostActive;
+        ActiveGameName          = _gameBooster.ActiveGameName ?? "—";
+        FreeMemoryOnBoost       = _settings.GameBoosterFreeMemory;
+        SuppressNotifications   = _settings.GameBoosterSuppressNotifications;
+        HighPerfPowerPlan       = _settings.GameBoosterHighPerfPowerPlan;
+        TimerResolutionOnBoost  = _settings.GameBoosterTimerResolution;
+        DisableGameBar          = _settings.GameBoosterDisableGameBar;
+        GpuProfileOnBoost       = _settings.GameBoosterGpuProfile;
+        DisableNagleOnBoost     = _settings.GameBoosterDisableNagle;
+        FlushDnsOnBoost         = _settings.GameBoosterFlushDns;
+        NicPowerSavingOnBoost   = _settings.GameBoosterNicPowerSaving;
+        DisableWifiOnEthernet   = _settings.GameBoosterDisableWifiOnEthernet;
         DisableBluetoothOnBoost = _settings.GameBoosterDisableBluetooth;
         PreventSleepOnBoost     = _settings.GameBoosterPreventSleep;
+        GameBoosterEnabled      = _settings.GameBoosterEnabled;
+
+        // Force every binding to re-evaluate unconditionally. CommunityToolkit.Mvvm's setter
+        // skips OnPropertyChanged when the new value equals the current field value. This is
+        // normally fine, but WPF's ToggleSwitch custom style relies on IsChecked triggers that
+        // only fire on PropertyChanged notifications. If a saved value matches the C# field
+        // default (e.g. both false), no notification is sent and the visual state can be
+        // wrong. Raising here guarantees the toggle always renders the persisted state.
+        OnPropertyChanged(nameof(CheckIntervalMinutes));
+        OnPropertyChanged(nameof(XboxOverride));
+        OnPropertyChanged(nameof(GamesInstalled));
+        OnPropertyChanged(nameof(BoostActive));
+        OnPropertyChanged(nameof(ActiveGameName));
+        OnPropertyChanged(nameof(FreeMemoryOnBoost));
+        OnPropertyChanged(nameof(SuppressNotifications));
+        OnPropertyChanged(nameof(HighPerfPowerPlan));
+        OnPropertyChanged(nameof(TimerResolutionOnBoost));
+        OnPropertyChanged(nameof(DisableGameBar));
+        OnPropertyChanged(nameof(GpuProfileOnBoost));
+        OnPropertyChanged(nameof(DisableNagleOnBoost));
+        OnPropertyChanged(nameof(FlushDnsOnBoost));
+        OnPropertyChanged(nameof(NicPowerSavingOnBoost));
+        OnPropertyChanged(nameof(DisableWifiOnEthernet));
+        OnPropertyChanged(nameof(DisableBluetoothOnBoost));
+        OnPropertyChanged(nameof(PreventSleepOnBoost));
+        OnPropertyChanged(nameof(GameBoosterEnabled));
 
         var killList = _gameBooster.GetKillList();
         KillListItems.Clear();
