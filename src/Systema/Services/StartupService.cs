@@ -89,8 +89,22 @@ public class StartupService
 
     // ── Private helpers ───────────────────────────────────────────────────────
 
+    // Paths that indicate a built-in Windows OS component rather than a user app.
+    // Entries whose command expands to one of these directories are skipped when
+    // reading the HKLM (machine-wide) Run key so the list stays user-relevant.
+    private static readonly string[] _systemDirFragments =
+    {
+        @"\windows\system32\",
+        @"\windows\syswow64\",
+        @"\windows\systemapps\",
+        @"\windowsapps\",
+        @"\windows\immersivecontrolpanel\",
+    };
+
     private IEnumerable<StartupItem> GetRegistryStartupItems(RegistryKey hive, string hiveName)
     {
+        bool isMachine = hiveName.Equals("HKLM", StringComparison.OrdinalIgnoreCase);
+
         foreach (var path in _registryPaths)
         {
             using var key = hive.OpenSubKey(path, false);
@@ -98,6 +112,18 @@ public class StartupService
             foreach (var name in key.GetValueNames())
             {
                 var cmd = key.GetValue(name)?.ToString() ?? "";
+
+                // For machine-wide entries, skip anything that lives inside
+                // core Windows directories — those are OS components, not user apps.
+                if (isMachine)
+                {
+                    var lower = cmd.ToLowerInvariant();
+                    bool isSystem = false;
+                    foreach (var frag in _systemDirFragments)
+                        if (lower.Contains(frag)) { isSystem = true; break; }
+                    if (isSystem) continue;
+                }
+
                 yield return new StartupItem
                 {
                     Name        = name,
@@ -121,6 +147,11 @@ public class StartupService
             {
                 try
                 {
+                    // Skip all built-in Windows / Microsoft system tasks — they are not
+                    // user-managed startup programs and would flood the list.
+                    if (task.Path.StartsWith(@"\Microsoft\", StringComparison.OrdinalIgnoreCase))
+                        continue;
+
                     bool hasLogonTrigger = false;
                     foreach (var trigger in task.Definition.Triggers)
                     {
