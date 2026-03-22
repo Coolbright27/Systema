@@ -124,6 +124,16 @@
                                     </TextBlock.Style>
                                 </TextBlock>
                             </Border>
+                            <!-- CPU freed pill — hidden when nothing is napped -->
+                            <Border CornerRadius="10" Padding="8,3"
+                                    Background="#0C6EE7B7"
+                                    Margin="8,0,0,0"
+                                    VerticalAlignment="Center"
+                                    Visibility="{Binding CpuFreedVisible, Converter={StaticResource BoolToVis}}">
+                                <TextBlock Text="{Binding CpuFreedDisplay}"
+                                           FontSize="11" FontWeight="SemiBold"
+                                           Foreground="#6EE7B7"/>
+                            </Border>
                         </WrapPanel>
 
                         <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
@@ -658,6 +668,28 @@
                         </StackPanel>
                         <CheckBox Grid.Column="1"
                                   IsChecked="{Binding LowerCpuPriority, Mode=TwoWay}"
+                                  Style="{StaticResource ToggleSwitch}"
+                                  VerticalAlignment="Top"/>
+                    </Grid>
+
+                    <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,12,0,12"/>
+
+                    <!-- Soft Nap mode -->
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" Margin="0,0,24,0">
+                            <TextBlock Text="Soft Nap mode"
+                                       Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
+                            <TextBlock Text="Uses Below Normal priority instead of Idle, and Low I/O instead of Very Low. Napped apps stay slightly more responsive. Minimize Nap and Tray Nap always use full throttle regardless of this setting."
+                                       Style="{StaticResource CaptionText}"
+                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                       TextWrapping="Wrap" Margin="0,3,0,0"/>
+                        </StackPanel>
+                        <CheckBox Grid.Column="1"
+                                  IsChecked="{Binding SoftNapEnabled, Mode=TwoWay}"
                                   Style="{StaticResource ToggleSwitch}"
                                   VerticalAlignment="Top"/>
                     </Grid>

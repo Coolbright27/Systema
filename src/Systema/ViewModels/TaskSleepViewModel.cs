@@ -101,6 +101,9 @@ public partial class TaskSleepViewModel : ObservableObject
 
     // ── Monitoring & Enforcement ──────────────────────────────────────────────
     [ObservableProperty] private bool   _enforceSettings  = true;
+    [ObservableProperty] private bool   _softNapEnabled   = false;
+    [ObservableProperty] private string _cpuFreedDisplay  = "";
+    [ObservableProperty] private bool   _cpuFreedVisible  = false;
     [ObservableProperty] private bool   _showAllProcesses = false;
     [ObservableProperty] private string _systemCpuDisplay      = "System CPU: —";
     [ObservableProperty] private string _throttledCountDisplay = "0 napping";
@@ -206,6 +209,7 @@ public partial class TaskSleepViewModel : ObservableObject
     partial void OnAdaptiveTickChanged(bool value)        => PushSettings();
 
     partial void OnEnforceSettingsChanged(bool value)  => PushSettings();
+    partial void OnSoftNapEnabledChanged(bool value) => PushSettings();
 
     [RelayCommand]
     private void ToggleAdvanced() => IsAdvancedExpanded = !IsAdvancedExpanded;
@@ -234,6 +238,10 @@ public partial class TaskSleepViewModel : ObservableObject
         ThrottledCountDisplay = nSleeping > 0
             ? (nPending > 0 ? $"{nSleeping} napping, {nPending} pending" : $"{nSleeping} napping")
             : (nPending > 0 ? $"{nPending} pending nap" : "all awake");
+        CpuFreedDisplay = (snapshot != null && snapshot.CpuFreedPercent > 0.5)
+            ? $"~{snapshot.CpuFreedPercent:F0}% CPU freed by Task Sleep"
+            : "";
+        CpuFreedVisible = !string.IsNullOrEmpty(CpuFreedDisplay);
 
         if (snapshot == null || !IsEnabled)
         {
@@ -370,6 +378,7 @@ public partial class TaskSleepViewModel : ObservableObject
                                       IsBlacklisted = true
                                   }).ToList(),
         EnforceSettings         = EnforceSettings,
+        SoftNapEnabled          = SoftNapEnabled,
         IsGameModeActive        = _isGameModeActive,
     };
 
@@ -410,6 +419,7 @@ public partial class TaskSleepViewModel : ObservableObject
             TrimWorkingSet          = ReadBool(key, "TrimWorkingSet",        true);
             AdaptiveTick            = ReadBool(key, "AdaptiveTick",          true);
             EnforceSettings         = ReadBool(key, "EnforceSettings",       true);
+            SoftNapEnabled = ReadBool(key, "SoftNapEnabled", false);
         }
         catch (Exception ex)
         {
@@ -452,6 +462,7 @@ public partial class TaskSleepViewModel : ObservableObject
             key.SetValue("TrimWorkingSet",          TrimWorkingSet       ? 1 : 0, RegistryValueKind.DWord);
             key.SetValue("AdaptiveTick",            AdaptiveTick         ? 1 : 0, RegistryValueKind.DWord);
             key.SetValue("EnforceSettings",         EnforceSettings      ? 1 : 0, RegistryValueKind.DWord);
+            key.SetValue("SoftNapEnabled", SoftNapEnabled ? 1 : 0, RegistryValueKind.DWord);
         }
         catch (Exception ex)
         {

@@ -23,5 +23,6 @@ public record MonitorSnapshot(
     int                            TotalThrottled,
     long                           FreeRamMb,
     bool                           RamPressure,
+    double                         CpuFreedPercent,
     IReadOnlyList<ProcessSnapshot> Processes,
     IReadOnlyList<MonitorEvent>    RecentEvents);

@@ -115,6 +115,15 @@ public class TaskSleepSettings
     /// </summary>
     public bool EnforceSettings { get; set; } = true;
 
+    // ── Soft Nap Mode ─────────────────────────────────────────────────────────
+    /// <summary>
+    /// When true, CPU throttle is reduced to Below Normal (instead of Idle) and
+    /// I/O priority to Low (instead of Very Low). Keeps napped apps more responsive
+    /// at the cost of slightly less CPU headroom for the foreground. Off by default.
+    /// Does not affect minimize-nap or tray-nap — those always use full throttle.
+    /// </summary>
+    public bool SoftNapEnabled { get; set; } = false;
+
     // ── Brief Wake Concurrency ────────────────────────────────────────────────
     /// <summary>
     /// Maximum number of napped processes allowed to be in a brief-wake window

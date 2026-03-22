@@ -109,6 +109,25 @@ public sealed class TaskSleepService : IDisposable
     private readonly Dictionary<int, DateTime> _minimizeGraceSince   = new();
     private readonly Dictionary<int, DateTime> _trayGraceSince       = new();
 
+    // ── Access denied backoff ─────────────────────────────────────────────────
+    // pid → (consecutive denied count, last denial time). If count >= 3 and < 60 s
+    // since last denial, ShouldSkip returns true so we stop hammering protected procs.
+    private readonly ConcurrentDictionary<int, (int Count, DateTime LastFail)> _accessDeniedPids = new();
+
+    // ── CPU savings tracking ───────────────────────────────────────────────────
+    // pid → CPU% at the moment it was throttled, used to compute CpuFreedPercent
+    private readonly Dictionary<int, double> _cpuAtThrottle = new();
+
+    // ── Child process nap state ────────────────────────────────────────────────
+    // PIDs napped because their parent was minimize/tray-napped (not CPU-triggered)
+    private readonly HashSet<int> _napChildPids = new();
+    // child PID → parent PID so we can restore children when the parent is restored
+    private readonly Dictionary<int, int> _parentOfNapChild = new();
+
+    // ── WASAPI exclusive mode ─────────────────────────────────────────────────
+    // Set to UtcNow when exclusive audio mode is detected; cleared after 15 s idle.
+    private DateTime _exclusiveModeDetectedAt = DateTime.MinValue;
+
     // ── E-core detection (lazy, cached) ──────────────────────────────────────
     private bool    _eCoresDetected;
     private bool    _hasECores;
@@ -332,6 +351,8 @@ public sealed class TaskSleepService : IDisposable
     // ── Priority class constants ───────────────────────────────────────────────
     private const uint IDLE_PRIORITY_CLASS   = 0x00000040;
     private const uint NORMAL_PRIORITY_CLASS = 0x00000020;
+    private const uint BELOW_NORMAL_PRIORITY_CLASS = 0x00004000;
+    private const int  IO_PRIORITY_LOW              = 1;
 
     // ── Process access rights ──────────────────────────────────────────────────
     private const uint PROCESS_SET_INFORMATION           = 0x0200;
@@ -479,6 +500,10 @@ public sealed class TaskSleepService : IDisposable
 
         Process[] all     = Process.GetProcesses();
         var       livePids = new HashSet<int>(all.Select(p => p.Id));
+
+        // Build parent→child map for child process napping (minimize/tray nap)
+        Dictionary<int, int> parentMap = (s.MinimizeNapEnabled || s.TrayNapEnabled)
+            ? BuildParentMap() : new Dictionary<int, int>();
 
         // 3. Collect per-process CPU samples (QUERY_LIMITED access only)
         var cpuMap = SampleAllProcessCpu(all);
@@ -635,7 +660,9 @@ public sealed class TaskSleepService : IDisposable
                 _processNames.TryGetValue(pid, out string? name);
                 TryRestoreProcess(pid);
                 _throttledAt.Remove(pid);
+                _cpuAtThrottle.Remove(pid);
                 _restoredAt[pid] = DateTime.UtcNow; // cooldown: block re-throttle for 5 s
+                RestoreNapChildren(pid);
                 AddEvent(name ?? $"PID {pid}", pid, "Woke up", restoreReason);
             }
         }
@@ -742,14 +769,17 @@ public sealed class TaskSleepService : IDisposable
                         if (graceElapsed)
                         {
                             _minimizeGraceSince.Remove(proc.Id);
-                            if (TryThrottle(proc, s, rules))
+                            if (TryThrottle(proc, s, rules, forceMaxThrottle: true))
                             {
+                                _lastCpuPercent.TryGetValue(proc.Id, out double mnCpu);
+                                _cpuAtThrottle.TryAdd(proc.Id, mnCpu);
                                 _throttledAt[proc.Id]     = DateTime.UtcNow;
                                 _minimizedNapPids.Add(proc.Id);
                                 _nextBriefWakeAt[proc.Id] =
                                     DateTime.UtcNow.AddMilliseconds(s.MinimizedBriefWakeIntervalMs);
                                 _briefWakeEndAt.Remove(proc.Id);
                                 AddEvent(proc.ProcessName, proc.Id, "Minimize Nap", "app minimized");
+                                NapChildProcesses(proc.Id, all, parentMap, protectedPids, audioPids, s, rules);
                             }
                         }
                         continue; // don't also apply CPU throttle logic
@@ -777,14 +807,17 @@ public sealed class TaskSleepService : IDisposable
                         if (graceElapsed)
                         {
                             _trayGraceSince.Remove(proc.Id);
-                            if (TryThrottle(proc, s, rules))
+                            if (TryThrottle(proc, s, rules, forceMaxThrottle: true))
                             {
+                                _lastCpuPercent.TryGetValue(proc.Id, out double tnCpu);
+                                _cpuAtThrottle.TryAdd(proc.Id, tnCpu);
                                 _throttledAt[proc.Id]         = DateTime.UtcNow;
                                 _trayNapPids.Add(proc.Id);
                                 _trayNextBriefWakeAt[proc.Id] =
                                     DateTime.UtcNow.AddMilliseconds(s.TrayBriefWakeIntervalMs);
                                 _trayBriefWakeEndAt.Remove(proc.Id);
                                 AddEvent(proc.ProcessName, proc.Id, "Tray Nap", "no visible window");
+                                NapChildProcesses(proc.Id, all, parentMap, protectedPids, audioPids, s, rules);
                             }
                         }
                         continue; // don't also CPU-throttle
@@ -820,6 +853,7 @@ public sealed class TaskSleepService : IDisposable
                             _throttledAt[proc.Id] = DateTime.UtcNow;
                             _overThresholdSince.Remove(proc.Id);
                             _lastCpuPercent.TryGetValue(proc.Id, out double agCpu);
+                            _cpuAtThrottle.TryAdd(proc.Id, agCpu);
                             AddEvent(proc.ProcessName, proc.Id, "Napping",
                                 $"background waster — CPU {agCpu:F1}%");
                         }
@@ -843,6 +877,7 @@ public sealed class TaskSleepService : IDisposable
                             _throttledAt[proc.Id] = DateTime.UtcNow;
                             _overThresholdSince.Remove(proc.Id);
                             _lastCpuPercent.TryGetValue(proc.Id, out double cpu);
+                            _cpuAtThrottle.TryAdd(proc.Id, cpu);
                             AddEvent(proc.ProcessName, proc.Id, "Napping", $"CPU {cpu:F1}%");
                         }
                     }
@@ -967,7 +1002,16 @@ public sealed class TaskSleepService : IDisposable
                 try
                 {
                     IntPtr h = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, proc.Id);
-                    if (h == IntPtr.Zero) return;
+                    if (h == IntPtr.Zero)
+                    {
+                        // Track consecutive access denials for the backoff system
+                        int err = Marshal.GetLastWin32Error();
+                        if (err == 5 /* ERROR_ACCESS_DENIED */)
+                            _accessDeniedPids.AddOrUpdate(proc.Id,
+                                (1, DateTime.UtcNow),
+                                (_, old) => (old.Count + 1, DateTime.UtcNow));
+                        return;
+                    }
 
                     try
                     {
@@ -993,7 +1037,15 @@ public sealed class TaskSleepService : IDisposable
                     }
                     finally { CloseHandle(h); }
                 }
-                catch { /* access denied or process exited — skip */ }
+                catch
+                {
+                    // Track access-denied failures for backoff logic (ShouldSkip)
+                    int err = Marshal.GetLastWin32Error();
+                    if (err == 5 /* ERROR_ACCESS_DENIED */ || err == 0)
+                        _accessDeniedPids.AddOrUpdate(proc.Id,
+                            (1, DateTime.UtcNow),
+                            (_, old) => (old.Count + 1, DateTime.UtcNow));
+                }
             });
 
         // Merge back into non-concurrent monitor-thread dicts
@@ -1025,13 +1077,17 @@ public sealed class TaskSleepService : IDisposable
             _trayBriefWakeEndAt.Remove(pid);
             _minimizeGraceSince.Remove(pid);
             _trayGraceSince.Remove(pid);
+            _cpuAtThrottle.Remove(pid);
+            _napChildPids.Remove(pid);
+            _parentOfNapChild.Remove(pid);
+            _accessDeniedPids.TryRemove(pid, out _);
         }
     }
 
     // ── Throttle / Restore ─────────────────────────────────────────────────────
 
     private bool TryThrottle(Process proc, TaskSleepSettings s,
-        Dictionary<string, TaskSleepAppRule> rules)
+        Dictionary<string, TaskSleepAppRule> rules, bool forceMaxThrottle = false)
     {
         IntPtr handle = OpenProcess(
             PROCESS_SET_INFORMATION | PROCESS_QUERY_LIMITED_INFORMATION,
@@ -1045,16 +1101,20 @@ public sealed class TaskSleepService : IDisposable
             if (original == 0) return false;
 
             // ── Determine effective settings (per-app overrides global) ────────
-            bool   lowerCpu    = s.LowerCpuPriority;
-            bool   lowerGpu    = s.LowerGpuPriority;
-            bool   lowerIo     = s.LowerIoPriority;
-            bool   moveToECores = s.MoveToECores;
-            bool   effMode     = s.EnableEfficiencyMode;
-            uint   cpuClass    = IDLE_PRIORITY_CLASS;
+            // forceMaxThrottle = true for minimize-nap and tray-nap (full throttle always)
+            // forceMaxThrottle = false for CPU-triggered throttle (follows user settings)
+            bool   lowerCpu    = forceMaxThrottle || s.LowerCpuPriority;
+            bool   lowerGpu    = forceMaxThrottle || s.LowerGpuPriority;
+            bool   lowerIo     = forceMaxThrottle || s.LowerIoPriority;
+            bool   lowerMem    = forceMaxThrottle || s.LowerMemoryPriority;
+            bool   moveToECores = forceMaxThrottle ? (s.MoveToECores && s.DetectECores) : s.MoveToECores;
+            bool   effMode     = forceMaxThrottle || s.EnableEfficiencyMode;
+            // Soft nap: use lighter throttle classes when user requests it (not for force-max)
+            uint   cpuClass    = (!forceMaxThrottle && s.SoftNapEnabled) ? BELOW_NORMAL_PRIORITY_CLASS : IDLE_PRIORITY_CLASS;
             var    gpuClass    = KMTSCHEDULINGPRIORITYCLASS.Idle;
-            int    ioLevel     = IO_PRIORITY_VERY_LOW;
+            int    ioLevel     = (!forceMaxThrottle && s.SoftNapEnabled) ? IO_PRIORITY_LOW : IO_PRIORITY_VERY_LOW;
 
-            if (rules.TryGetValue(proc.ProcessName, out var rule))
+            if (!forceMaxThrottle && rules.TryGetValue(proc.ProcessName, out var rule))
             {
                 if (rule.CpuPriority != null)
                     { lowerCpu = true; cpuClass = ParseCpuPriorityClass(rule.CpuPriority); }
@@ -1115,7 +1175,7 @@ public sealed class TaskSleepService : IDisposable
                 }
             }
 
-            if (s.LowerMemoryPriority)
+            if (lowerMem)
             {
                 SetMemoryPriority(handle, MEMORY_PRIORITY_VERY_LOW);
                 _throttledPids.TryAdd(proc.Id, storedOriginal);
@@ -1146,6 +1206,7 @@ public sealed class TaskSleepService : IDisposable
         if (handle == IntPtr.Zero)
         {
             _originalAffinities.TryRemove(pid, out _);
+            _cpuAtThrottle.Remove(pid);
             return;
         }
 
@@ -1186,6 +1247,10 @@ public sealed class TaskSleepService : IDisposable
         _trayBriefWakeEndAt.Clear();
         _minimizeGraceSince.Clear();
         _trayGraceSince.Clear();
+        _cpuAtThrottle.Clear();
+        _napChildPids.Clear();
+        _parentOfNapChild.Clear();
+        _accessDeniedPids.Clear();
     }
 
     // ── Process filtering ──────────────────────────────────────────────────────
@@ -1195,6 +1260,11 @@ public sealed class TaskSleepService : IDisposable
         Dictionary<string, TaskSleepAppRule> rules)
     {
         if (proc.Id <= 4) return true;
+        // Access denied backoff: if OpenProcess has been denied 3+ times in the last 60 s,
+        // stop attempting to throttle this process (kernel-protected or elevated process).
+        if (_accessDeniedPids.TryGetValue(proc.Id, out var denied) &&
+            denied.Count >= 3 &&
+            (DateTime.UtcNow - denied.LastFail).TotalSeconds < 60) return true;
         // Security/AV processes are ALWAYS protected — not gated on ExcludeSystemServices.
         // This prevents the app from fighting with antivirus software that manages its own priority.
         if (IsSecurityCritical(proc.ProcessName)) return true;
@@ -1274,6 +1344,83 @@ public sealed class TaskSleepService : IDisposable
     }
 
     // ── Foreground process tree ────────────────────────────────────────────────
+
+    /// <summary>
+    /// Builds a map of child PID → parent PID using a single Toolhelp32 snapshot.
+    /// Used to nap child processes when their parent is minimize/tray-napped.
+    /// </summary>
+    private static Dictionary<int, int> BuildParentMap()
+    {
+        var map = new Dictionary<int, int>();
+        try
+        {
+            IntPtr snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+            if (snap == IntPtr.Zero || snap == new IntPtr(-1)) return map;
+            try
+            {
+                var e = new PROCESSENTRY32 { dwSize = (uint)Marshal.SizeOf<PROCESSENTRY32>() };
+                if (Process32First(snap, ref e))
+                    do { map[(int)e.th32ProcessID] = (int)e.th32ParentProcessID; }
+                    while (Process32Next(snap, ref e));
+            }
+            finally { CloseHandle(snap); }
+        }
+        catch { }
+        return map;
+    }
+
+    /// <summary>
+    /// Naps all child processes of a newly-napped parent (minimize/tray nap).
+    /// Children are skipped if they are foreground-protected, playing audio, or whitelisted.
+    /// </summary>
+    private void NapChildProcesses(int parentPid, Process[] all, Dictionary<int, int> parentMap,
+        HashSet<int> protectedPids, HashSet<int> audioPids, TaskSleepSettings s,
+        Dictionary<string, TaskSleepAppRule> rules)
+    {
+        foreach (var child in all)
+        {
+            try
+            {
+                if (!parentMap.TryGetValue(child.Id, out int childParent) || childParent != parentPid) continue;
+                if (_throttledPids.ContainsKey(child.Id)) continue;
+                if (ShouldSkip(child, protectedPids, s, rules)) continue;
+                bool hasAudio = audioPids.Contains(child.Id) ||
+                    AlwaysActiveProcessNames.Contains(child.ProcessName);
+                if (hasAudio) continue;
+
+                if (TryThrottle(child, s, rules, forceMaxThrottle: true))
+                {
+                    _throttledAt[child.Id] = DateTime.UtcNow;
+                    _napChildPids.Add(child.Id);
+                    _parentOfNapChild[child.Id] = parentPid;
+                    _lastCpuPercent.TryGetValue(child.Id, out double childCpu);
+                    _cpuAtThrottle.TryAdd(child.Id, childCpu);
+                    AddEvent(child.ProcessName, child.Id, "Child Nap", $"parent napped");
+                }
+            }
+            catch { }
+        }
+    }
+
+    /// <summary>
+    /// Restores all child processes that were napped as a result of the given parent being napped.
+    /// Called when the parent is restored (user opened the app, audio detected, etc.).
+    /// </summary>
+    private void RestoreNapChildren(int parentPid)
+    {
+        var children = _parentOfNapChild
+            .Where(kv => kv.Value == parentPid)
+            .Select(kv => kv.Key)
+            .ToList();
+        foreach (int childPid in children)
+        {
+            _napChildPids.Remove(childPid);
+            _parentOfNapChild.Remove(childPid);
+            _cpuAtThrottle.Remove(childPid);
+            TryRestoreProcess(childPid);
+            _throttledAt.Remove(childPid);
+        }
+    }
 
     private static uint GetForegroundPid()
     {
@@ -1422,7 +1569,7 @@ public sealed class TaskSleepService : IDisposable
     /// Queries Windows Core Audio to find all PIDs with an Active audio session on any
     /// render (playback) endpoint.  Returns an empty set if COM fails for any reason.
     /// </summary>
-    private static HashSet<int> SampleActiveAudioPids()
+    private HashSet<int> SampleActiveAudioPids()
     {
         var pids = new HashSet<int>();
         try
@@ -1434,6 +1581,7 @@ public sealed class TaskSleepService : IDisposable
                     out IMMDeviceCollection devices) != 0) return pids;
 
             devices.GetCount(out uint deviceCount);
+            bool anyExclusive = false;
             for (uint d = 0; d < deviceCount; d++)
             {
                 if (devices.Item(d, out IMMDevice device) != 0) continue;
@@ -1468,8 +1616,17 @@ public sealed class TaskSleepService : IDisposable
                     }
                 }
 
+                // If the device is active but has no sessions at all, a process likely
+                // has exclusive WASAPI access (bypasses IAudioSessionManager2 entirely).
+                if (sessionCount == 0) anyExclusive = true;
+
                 try { Marshal.ReleaseComObject(mgr2Obj); } catch { }
             }
+
+            if (anyExclusive)
+                _exclusiveModeDetectedAt = DateTime.UtcNow;
+            else if ((DateTime.UtcNow - _exclusiveModeDetectedAt).TotalSeconds > 15)
+                _exclusiveModeDetectedAt = DateTime.MinValue; // reset after 15 s idle
         }
         catch { /* COM unavailable — return empty set */ }
         return pids;
@@ -1766,9 +1923,16 @@ public sealed class TaskSleepService : IDisposable
             var recentEvents = (IReadOnlyList<MonitorEvent>)
                 (events.Length > 50 ? events[^50..] : events);
 
+            // Sum up CPU% that throttled processes were using before being napped
+            double cpuFreed = 0;
+            foreach (int tpid in throttledKeys)
+                if (_cpuAtThrottle.TryGetValue(tpid, out double savedCpu))
+                    cpuFreed += savedCpu;
+            cpuFreed = Math.Min(cpuFreed, 100.0); // cap at 100%
+
             _latestSnapshot = new MonitorSnapshot(
                 sysCpu, throttledKeys.Count,
-                freeRamMb, ramPressure,
+                freeRamMb, ramPressure, cpuFreed,
                 snapshots.AsReadOnly(), recentEvents);
         }
         catch (Exception ex)
