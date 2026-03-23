@@ -703,12 +703,14 @@ public sealed class TaskSleepService : IDisposable
             if (shouldRestore)
             {
                 _processNames.TryGetValue(pid, out string? name);
+                bool isNapChild = _parentOfNapChild.ContainsKey(pid);
                 TryRestoreProcess(pid);
                 _throttledAt.Remove(pid);
                 _cpuAtThrottle.Remove(pid);
                 _restoredAt[pid] = DateTime.UtcNow; // cooldown: block re-throttle for 5 s
                 RestoreNapChildren(pid);
-                AddEvent(name ?? $"PID {pid}", pid, "Woke up", restoreReason);
+                if (!isNapChild)
+                    AddEvent(name ?? $"PID {pid}", pid, "Woke up", restoreReason);
             }
         }
 
@@ -1949,7 +1951,11 @@ public sealed class TaskSleepService : IDisposable
                     pendingLabel = $"~{(int)Math.Ceiling(remSec)}s";
                 }
 
-                string statusLabel = isThrottled ? "Napping"
+                bool isDeepSleep = isThrottled
+                    && _minimizeNapSince.TryGetValue(pid, out DateTime napSince2)
+                    && (now - napSince2).TotalMilliseconds >= s.MinimizeDeepSleepThresholdMs;
+
+                string statusLabel = isThrottled ? (isDeepSleep ? "Deep Sleep" : "Napping")
                                    : isProtected ? "Active"
                                    : isPending   ? "Pending"
                                    : "";
