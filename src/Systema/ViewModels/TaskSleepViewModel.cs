@@ -131,6 +131,15 @@ public partial class TaskSleepViewModel : ObservableObject
         _service = new TaskSleepService(BuildSettings());
         _service.StatusChanged += msg =>
             Application.Current?.Dispatcher.BeginInvoke(() => StatusMessage = msg);
+        _service.ProcessAutoWhitelisted += name =>
+            Application.Current?.Dispatcher.BeginInvoke(() =>
+            {
+                if (!Whitelist.Any(n => n.Equals(name, StringComparison.OrdinalIgnoreCase)))
+                {
+                    Whitelist.Add(name);
+                    SaveAndPushWhitelist();
+                }
+            });
 
         LoadSettings();
         LoadWhitelist();
@@ -250,6 +259,22 @@ public partial class TaskSleepViewModel : ObservableObject
     {
         get => TrayBriefWakeDurationMs / 1000;
         set { TrayBriefWakeDurationMs = Math.Max(value, 1) * 1000; OnPropertyChanged(); }
+    }
+
+    public int TimeOverQuotaSeconds
+    {
+        get => TimeOverQuotaMs / 1000;
+        set { TimeOverQuotaMs = Math.Max(value, 1) * 1000; OnPropertyChanged(); }
+    }
+    public int MinAdjustmentDurationSeconds
+    {
+        get => MinAdjustmentDurationMs / 1000;
+        set { MinAdjustmentDurationMs = Math.Max(value, 1) * 1000; OnPropertyChanged(); }
+    }
+    public int MaxAdjustmentDurationSeconds
+    {
+        get => MaxAdjustmentDurationMs / 1000;
+        set { MaxAdjustmentDurationMs = Math.Max(value, 1) * 1000; OnPropertyChanged(); }
     }
 
     [RelayCommand]

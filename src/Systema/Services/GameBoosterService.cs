@@ -689,6 +689,10 @@ public sealed class GameBoosterService : IDisposable
         // Apply new boost options (memory, notifications, power plan)
         ApplyBoostOptions(gameName);
 
+        // All risky operations complete — clear the crash sentinel so a normal GC pause
+        // during the boost session doesn't trigger a false crash report.
+        CrashGuard.Clear();
+
         // Return UI/tray notifications as an action to fire outside the lock.
         // Firing events inside a lock risks deadlock if any UI handler calls back into this service.
         var capturedGameName = gameName;

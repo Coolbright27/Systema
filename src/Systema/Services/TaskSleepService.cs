@@ -130,6 +130,12 @@ public sealed class TaskSleepService : IDisposable
     // the app has been minimized for longer than MinimizeDeepSleepThresholdMs.
     private readonly Dictionary<int, DateTime> _minimizeNapSince = new();
 
+    // ── Priority fight-back tracking ──────────────────────────────────────────
+    // pid → (count of times it raised its own priority back, window start).
+    // If a process raises its own priority 3+ times in 60 s it is permanently
+    // restored and added to the user whitelist so we never touch it again.
+    private readonly Dictionary<int, (int Count, DateTime WindowStart)> _priorityFightback = new();
+
     // ── WASAPI exclusive mode ─────────────────────────────────────────────────
     // Set to UtcNow when exclusive audio mode is detected; cleared after 15 s idle.
     private DateTime _exclusiveModeDetectedAt = DateTime.MinValue;
@@ -154,6 +160,12 @@ public sealed class TaskSleepService : IDisposable
     public MonitorSnapshot? GetLatestSnapshot() => _latestSnapshot;
 
     public event Action<string>? StatusChanged;
+
+    /// <summary>
+    /// Fired when a process is permanently whitelisted due to repeated priority fight-back.
+    /// Argument is the process name. Subscribe in the ViewModel to persist it to the user whitelist.
+    /// </summary>
+    public event Action<string>? ProcessAutoWhitelisted;
 
     // ── Manual wake requests (UI → monitor thread, thread-safe) ──────────────
     private readonly System.Collections.Concurrent.ConcurrentQueue<string> _wakeRequests = new();
@@ -966,9 +978,47 @@ public sealed class TaskSleepService : IDisposable
                     uint current = GetPriorityClass(h);
                     if (current != 0 && current != IDLE_PRIORITY_CLASS)
                     {
-                        SetPriorityClass(h, IDLE_PRIORITY_CLASS);
-                        AddEvent(nm ?? $"PID {pid}", pid, "Re-enforced", "process raised its own priority");
-                        _log.Info("TaskSleepService", $"Re-enforced priority: PID {pid}");
+                        // Track how many times this process has raised its own priority
+                        if (_priorityFightback.TryGetValue(pid, out var fb))
+                        {
+                            if ((DateTime.UtcNow - fb.WindowStart).TotalSeconds <= 60)
+                                _priorityFightback[pid] = (fb.Count + 1, fb.WindowStart);
+                            else
+                                _priorityFightback[pid] = (1, DateTime.UtcNow);
+                        }
+                        else
+                        {
+                            _priorityFightback[pid] = (1, DateTime.UtcNow);
+                        }
+
+                        if (_priorityFightback[pid].Count >= 3)
+                        {
+                            // Process keeps fighting back — permanently restore and whitelist it
+                            TryRestoreProcess(pid);
+                            _throttledAt.Remove(pid);
+                            _minimizedNapPids.Remove(pid);
+                            _trayNapPids.Remove(pid);
+                            _minimizeNapSince.Remove(pid);
+                            _priorityFightback.Remove(pid);
+                            if (nm != null)
+                            {
+                                _detectedAvProcessNames.Add(nm);
+                                ProcessAutoWhitelisted?.Invoke(nm);
+                            }
+                            AddEvent(nm ?? $"PID {pid}", pid, "Auto-whitelisted", "raised own priority 3× — removed from nap");
+                            _log.Info("TaskSleepService", $"Auto-whitelisted {nm ?? $"PID {pid}"} after repeated priority fight-back");
+                        }
+                        else
+                        {
+                            SetPriorityClass(h, IDLE_PRIORITY_CLASS);
+                            AddEvent(nm ?? $"PID {pid}", pid, "Re-enforced", "process raised its own priority");
+                            _log.Info("TaskSleepService", $"Re-enforced priority: PID {pid}");
+                        }
+                    }
+                    else
+                    {
+                        // Process stayed at idle — reset its fight-back counter
+                        _priorityFightback.Remove(pid);
                     }
                 }
                 catch (Exception ex) { _log.Warn("TaskSleepService", $"Re-enforce failed for PID {pid}: {ex.Message}"); }
@@ -1130,6 +1180,7 @@ public sealed class TaskSleepService : IDisposable
             _parentOfNapChild.Remove(pid);
             _accessDeniedPids.TryRemove(pid, out _);
             _minimizeNapSince.Remove(pid);
+            _priorityFightback.Remove(pid);
         }
     }
 
