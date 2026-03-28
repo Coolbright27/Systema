@@ -130,11 +130,14 @@ public sealed class TaskSleepService : IDisposable
     // the app has been minimized for longer than MinimizeDeepSleepThresholdMs.
     private readonly Dictionary<int, DateTime> _minimizeNapSince = new();
 
-    // ── Priority fight-back tracking ──────────────────────────────────────────
-    // pid → (count of times it raised its own priority back, window start).
-    // If a process raises its own priority 3+ times in 60 s it is permanently
-    // restored and added to the user whitelist so we never touch it again.
-    private readonly Dictionary<int, (int Count, DateTime WindowStart)> _priorityFightback = new();
+    // ── Re-enforce tracking ───────────────────────────────────────────────────
+    // Counts how many times the re-enforce step had to push each process back.
+    // If it happens 3+ times in 60 s the process is restored and skipped permanently.
+    private readonly ReEnforceCounter _reEnforceCounter = new();
+
+    // Process names that have been permanently skipped for this session after
+    // hitting the re-enforce threshold. Persisted to the user whitelist via event.
+    private readonly HashSet<string> _napSuppressed = new(StringComparer.OrdinalIgnoreCase);
 
     // ── WASAPI exclusive mode ─────────────────────────────────────────────────
     // Set to UtcNow when exclusive audio mode is detected; cleared after 15 s idle.
@@ -978,34 +981,25 @@ public sealed class TaskSleepService : IDisposable
                     uint current = GetPriorityClass(h);
                     if (current != 0 && current != IDLE_PRIORITY_CLASS)
                     {
-                        // Track how many times this process has raised its own priority
-                        if (_priorityFightback.TryGetValue(pid, out var fb))
-                        {
-                            if ((DateTime.UtcNow - fb.WindowStart).TotalSeconds <= 60)
-                                _priorityFightback[pid] = (fb.Count + 1, fb.WindowStart);
-                            else
-                                _priorityFightback[pid] = (1, DateTime.UtcNow);
-                        }
-                        else
-                        {
-                            _priorityFightback[pid] = (1, DateTime.UtcNow);
-                        }
+                        // Count how many times this process has pushed back against its nap.
+                        // After 3 times in 60 s, stop napping it and add it to the whitelist.
+                        bool thresholdHit = _reEnforceCounter.Record(pid, TimeSpan.FromSeconds(60), 3);
 
-                        if (_priorityFightback[pid].Count >= 3)
+                        if (thresholdHit)
                         {
-                            // Process keeps fighting back — permanently restore and whitelist it
                             TryRestoreProcess(pid);
                             _throttledAt.Remove(pid);
                             _minimizedNapPids.Remove(pid);
                             _trayNapPids.Remove(pid);
                             _minimizeNapSince.Remove(pid);
-                            _priorityFightback.Remove(pid);
+                            _reEnforceCounter.Reset(pid);
                             if (nm != null)
                             {
+                                _napSuppressed.Add(nm);
                                 ProcessAutoWhitelisted?.Invoke(nm);
                             }
                             AddEvent(nm ?? $"PID {pid}", pid, "Auto-whitelisted", "raised own priority 3× — removed from nap");
-                            _log.Info("TaskSleepService", $"Auto-whitelisted {nm ?? $"PID {pid}"} after repeated priority fight-back");
+                            _log.Info("TaskSleepService", $"Auto-whitelisted {nm ?? $"PID {pid}"} after repeated re-enforce");
                         }
                         else
                         {
@@ -1016,8 +1010,8 @@ public sealed class TaskSleepService : IDisposable
                     }
                     else
                     {
-                        // Process stayed at idle — reset its fight-back counter
-                        _priorityFightback.Remove(pid);
+                        // Process stayed at idle — reset its counter
+                        _reEnforceCounter.Reset(pid);
                     }
                 }
                 catch (Exception ex) { _log.Warn("TaskSleepService", $"Re-enforce failed for PID {pid}: {ex.Message}"); }
@@ -1179,7 +1173,7 @@ public sealed class TaskSleepService : IDisposable
             _parentOfNapChild.Remove(pid);
             _accessDeniedPids.TryRemove(pid, out _);
             _minimizeNapSince.Remove(pid);
-            _priorityFightback.Remove(pid);
+            _reEnforceCounter.Reset(pid);
         }
     }
 
@@ -1367,6 +1361,8 @@ public sealed class TaskSleepService : IDisposable
         // Security/AV processes are ALWAYS protected — not gated on ExcludeSystemServices.
         // This prevents the app from fighting with antivirus software that manages its own priority.
         if (IsSecurityCritical(proc.ProcessName)) return true;
+        // Processes that have been auto-whitelisted this session (hit re-enforce threshold).
+        if (_napSuppressed.Contains(proc.ProcessName)) return true;
         if (s.ExcludeSystemServices && IsSystemProcess(proc)) return true;
         if (s.IgnoreForeground && protectedPids.Contains(proc.Id)) return true;
         if (rules.TryGetValue(proc.ProcessName, out var rule) && rule.IsBlacklisted) return true;
