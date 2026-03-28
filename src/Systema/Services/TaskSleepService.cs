@@ -1002,7 +1002,6 @@ public sealed class TaskSleepService : IDisposable
                             _priorityFightback.Remove(pid);
                             if (nm != null)
                             {
-                                _detectedAvProcessNames.Add(nm);
                                 ProcessAutoWhitelisted?.Invoke(nm);
                             }
                             AddEvent(nm ?? $"PID {pid}", pid, "Auto-whitelisted", "raised own priority 3× — removed from nap");
