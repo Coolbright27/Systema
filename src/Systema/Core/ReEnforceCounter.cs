@@ -11,11 +11,13 @@
 //   TaskSleepService.cs  — sole consumer
 //   Systema.Tests/       — unit tests
 
+using System.Collections.Concurrent;
+
 namespace Systema.Core;
 
 internal sealed class ReEnforceCounter
 {
-    private readonly Dictionary<int, (int Count, DateTime WindowStart)> _state = new();
+    private readonly ConcurrentDictionary<int, (int Count, DateTime WindowStart)> _state = new();
 
     /// <summary>
     /// Records one re-enforce event for <paramref name="pid"/>.
@@ -26,21 +28,14 @@ internal sealed class ReEnforceCounter
     {
         var now = DateTime.UtcNow;
 
-        if (_state.TryGetValue(pid, out var entry))
-        {
-            // Still inside the current window — increment
-            if (now - entry.WindowStart <= window)
-                _state[pid] = (entry.Count + 1, entry.WindowStart);
-            else
-                // Window expired — start a fresh one
-                _state[pid] = (1, now);
-        }
-        else
-        {
-            _state[pid] = (1, now);
-        }
+        var updated = _state.AddOrUpdate(
+            pid,
+            _ => (1, now),
+            (_, entry) => now - entry.WindowStart <= window
+                ? (entry.Count + 1, entry.WindowStart)
+                : (1, now));
 
-        return _state[pid].Count >= threshold;
+        return updated.Count >= threshold;
     }
 
     /// <summary>Returns the current count for <paramref name="pid"/>, or 0 if not tracked.</summary>
@@ -48,5 +43,5 @@ internal sealed class ReEnforceCounter
         _state.TryGetValue(pid, out var entry) ? entry.Count : 0;
 
     /// <summary>Removes all tracking state for <paramref name="pid"/>.</summary>
-    public void Reset(int pid) => _state.Remove(pid);
+    public void Reset(int pid) => _state.TryRemove(pid, out _);
 }

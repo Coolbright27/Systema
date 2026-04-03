@@ -102,7 +102,7 @@ public class HealthScoreService
         if (startupTask.IsCompletedSuccessfully)   _lastStartupScore  = startupScore;
         if (securityTask.IsCompletedSuccessfully)  _lastSecurityScore = securityScore;
 
-        int overall = (cpuScore + ramScore + startupScore + securityScore) / 4;
+        int overall = (int)Math.Round((cpuScore + ramScore + startupScore + securityScore) / 4.0);
 
         // Push raw result into rolling history, keep last ScoreHistoryDepth entries
         _scoreHistory.Enqueue(new SystemHealthScore

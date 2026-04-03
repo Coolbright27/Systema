@@ -3,7 +3,7 @@
 ; ============================================================
 
 #define MyAppName "Systema"
-#define MyAppVersion "1.7.2"
+#define MyAppVersion "1.7.6"
 #define MyAppPublisher "Systema"
 #define MyAppURL "https://github.com/systema-app"
 #define MyAppExeName "Systema.exe"
@@ -25,7 +25,7 @@ AllowNoIcons=yes
 LicenseFile=
 OutputDir=.\output
 OutputBaseFilename=Systema_Setup_{#MyAppVersion}
-SetupIconFile=
+SetupIconFile=..\src\Systema\Assets\logo.ico
 Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern

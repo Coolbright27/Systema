@@ -250,7 +250,7 @@ public class BloatwareService
             foreach (var line in output.Split('\n', StringSplitOptions.RemoveEmptyEntries))
                 names.Add(line.Trim());
         }
-        catch { }
+        catch (Exception ex) { _log.Warn("BloatwareService", $"GetInstalledPackageNames failed: {ex.Message}"); }
         return names;
     }
 }

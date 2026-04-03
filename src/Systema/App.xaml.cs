@@ -162,7 +162,7 @@ public partial class App : Application
             var dashboardVm   = new DashboardViewModel(
                 gameboosterService, taskSleepVm, serviceControl,
                 memoryService, dnsService, powerPlanService,
-                wuTweaksService, coreParkingService, settingsService, optFeatures);
+                wuTweaksService, coreParkingService, settingsService, optFeatures, stabilityService);
 
             var memoryVm      = new MemoryViewModel(memoryService, startupService);
             var servicesVm    = new ServicesViewModel(serviceControl, optFeatures, restoreService, settingsService);
@@ -261,6 +261,7 @@ public partial class App : Application
     {
         Log.Info("App", "User requested exit from tray");
         CrashGuard.Stop();
+        _mainVm?.Dispose();
         _trayService?.Dispose();
         _mainWindow?.Close();
         _updateService?.StopAutoUpdate();
@@ -387,6 +388,7 @@ public partial class App : Application
     protected override void OnExit(ExitEventArgs e)
     {
         CrashGuard.Stop();
+        _mainVm?.Dispose();
         _trayService?.Dispose();
         Log.Info("App", $"Systema exiting with code {e.ApplicationExitCode}");
         base.OnExit(e);

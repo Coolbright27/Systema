@@ -110,6 +110,12 @@ public class SystemStabilityService
     });
 
     // ── NTFS Last-Access Timestamps ───────────────────────────────────────────
+    //
+    // NtfsDisableLastAccessUpdate controls whether NTFS updates the "last accessed"
+    // timestamp on every file read. Disabling reduces unnecessary disk writes.
+    // Values: 0 = enabled, 1 = user-disabled, 2 = system-disabled, 3 = system-enabled
+    // On modern Windows the value is read at boot — a reboot is needed for changes
+    // to take full effect.
 
     private const string NtfsKey =
         @"SYSTEM\CurrentControlSet\Control\FileSystem";
@@ -124,7 +130,7 @@ public class SystemStabilityService
         {
             using var key = Registry.LocalMachine.OpenSubKey(NtfsKey);
             if (key?.GetValue("NtfsDisableLastAccessUpdate") is int v)
-                return v == 1 || v == 2; // user- or system-managed disabled
+                return v == 1 || v == 2;
             return false;
         }
         catch (Exception ex)
@@ -138,6 +144,7 @@ public class SystemStabilityService
     /// Disables NTFS last-access timestamp updates (NtfsDisableLastAccessUpdate = 1).
     /// Windows will no longer update the "Date Accessed" field on every file read,
     /// reducing unnecessary disk writes and improving SSD longevity.
+    /// A reboot is needed for this to take full effect on modern Windows.
     /// </summary>
     public Task<TweakResult> DisableNtfsLastAccessAsync() => Task.Run(() =>
     {
@@ -151,8 +158,7 @@ public class SystemStabilityService
             key.SetValue("NtfsDisableLastAccessUpdate", 1, RegistryValueKind.DWord);
             Log.Info("SystemStability", "NTFS last-access timestamps disabled (NtfsDisableLastAccessUpdate=1)");
             return TweakResult.Ok(
-                "NTFS last-access timestamps disabled. Windows will no longer write to every " +
-                "file on read, reducing unnecessary disk activity and SSD wear.");
+                "NTFS last-access timestamps disabled. A reboot is needed for this to take full effect.");
         }
         catch (Exception ex)
         {
@@ -163,6 +169,7 @@ public class SystemStabilityService
 
     /// <summary>
     /// Re-enables NTFS last-access timestamp updates (NtfsDisableLastAccessUpdate = 0).
+    /// A reboot is needed for this to take full effect on modern Windows.
     /// </summary>
     public Task<TweakResult> EnableNtfsLastAccessAsync() => Task.Run(() =>
     {
@@ -175,7 +182,7 @@ public class SystemStabilityService
 
             key.SetValue("NtfsDisableLastAccessUpdate", 0, RegistryValueKind.DWord);
             Log.Info("SystemStability", "NTFS last-access timestamps re-enabled (NtfsDisableLastAccessUpdate=0)");
-            return TweakResult.Ok("NTFS last-access timestamps re-enabled.");
+            return TweakResult.Ok("NTFS last-access timestamps re-enabled. A reboot is needed for this to take full effect.");
         }
         catch (Exception ex)
         {

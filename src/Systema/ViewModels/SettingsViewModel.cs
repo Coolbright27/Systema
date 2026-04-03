@@ -27,13 +27,20 @@ using Systema.Views;
 
 namespace Systema.ViewModels;
 
-public partial class SettingsViewModel : ObservableObject
+public partial class SettingsViewModel : ObservableObject, IDisposable
 {
     private readonly SettingsService     _settings;
     private readonly RestorePointService _restoreService;
     private readonly UpdateService       _updateService;
     private readonly WatchdogService     _watchdog;
     private static readonly LoggerService _log = LoggerService.Instance;
+
+    // Event handlers stored for cleanup in Dispose()
+    private readonly Action<string> _onStatusChanged;
+    private readonly Action<bool>   _onUpdateAvailableChanged;
+    private readonly Action<bool>   _onIsDownloadingChanged;
+    private readonly Action<int>    _onDownloadProgressChanged;
+    private readonly Action<bool>   _onIsReadyToInstallChanged;
 
     // ── Restore Point ─────────────────────────────────────────────────────────
 
@@ -78,7 +85,6 @@ public partial class SettingsViewModel : ObservableObject
 
     partial void OnKeepSystemaRunningChanged(bool value)
     {
-        _settings.KeepSystemaRunning = value;
         _log.Info("Settings", $"KeepSystemaRunning set to {value}");
         try
         {
@@ -93,6 +99,8 @@ public partial class SettingsViewModel : ObservableObject
                 _watchdog.Disable();
                 KeepRunningStatus = "Watchdog removed — Systema can be closed normally.";
             }
+            // Persist only after the operation succeeds
+            _settings.KeepSystemaRunning = value;
         }
         catch (Exception ex)
         {
@@ -208,7 +216,7 @@ public partial class SettingsViewModel : ObservableObject
         if (IsCheckingUpdate) return;
         IsCheckingUpdate = true;
         try   { await _updateService.CheckNowAsync(); }
-        catch { /* UpdateService handles its own errors */ }
+        catch (Exception ex) { _log.Warn("SettingsViewModel", $"CheckForUpdates failed: {ex.Message}"); }
         finally { IsCheckingUpdate = false; }
     }
 
@@ -220,7 +228,7 @@ public partial class SettingsViewModel : ObservableObject
     private async Task InstallNowAsync()
     {
         try { await _updateService.InstallNowAsync(); }
-        catch { /* UpdateService handles its own errors */ }
+        catch (Exception ex) { _log.Warn("SettingsViewModel", $"InstallNow failed: {ex.Message}"); }
     }
 
     private bool CanInstallNow() => IsReadyToInstall && !IsDownloadingUpdate;
@@ -241,6 +249,54 @@ public partial class SettingsViewModel : ObservableObject
     {
         _log.Info("Settings", "User opened Diagnostic Report window");
         DiagnosticsReportWindow.Show();
+    }
+
+    // ── Reset All Settings ───────────────────────────────────────────────────
+
+    [RelayCommand]
+    private void ResetAllSettings()
+    {
+        var result = MessageBox.Show(
+            "This will reset ALL Systema settings to their defaults and restart the app.\n\nAre you sure?",
+            "Reset All Settings",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning);
+
+        if (result != MessageBoxResult.Yes) return;
+
+        try
+        {
+            // Delete all Systema registry keys (includes TaskSleep sub-key)
+            try { Microsoft.Win32.Registry.CurrentUser.DeleteSubKeyTree(@"Software\Systema", throwOnMissingSubKey: false); }
+            catch (Exception ex) { _log.Warn("Settings", $"Registry delete failed: {ex.Message}"); }
+
+            // Delete Task Sleep whitelist JSON
+            var rulesPath = System.IO.Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                "Systema", "tasksleep_rules.json");
+            if (File.Exists(rulesPath))
+                try { File.Delete(rulesPath); } catch { }
+
+            _log.Info("Settings", "All settings reset to defaults — restarting");
+
+            // Restart the app
+            var exePath = System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName;
+            if (!string.IsNullOrEmpty(exePath))
+            {
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = exePath,
+                    UseShellExecute = true,
+                    Verb = "runas"
+                });
+            }
+            Application.Current.Shutdown();
+        }
+        catch (Exception ex)
+        {
+            _log.Error("Settings", "Reset failed", ex);
+            MessageBox.Show($"Reset failed: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
     }
 
     // ── Constructor ───────────────────────────────────────────────────────────
@@ -266,19 +322,31 @@ public partial class SettingsViewModel : ObservableObject
 
         // Subscribe to UpdateService events — must dispatch to UI thread since
         // the auto-update loop runs on a background thread.
-        _updateService.StatusChanged += status =>
-            Application.Current.Dispatcher.Invoke(() => UpdateStatus = status);
+        // Handlers stored as fields so Dispose() can unsubscribe them.
+        _onStatusChanged = status =>
+            Application.Current?.Dispatcher.Invoke(() => UpdateStatus = status);
+        _onUpdateAvailableChanged = available =>
+            Application.Current?.Dispatcher.Invoke(() => UpdateAvailable = available);
+        _onIsDownloadingChanged = downloading =>
+            Application.Current?.Dispatcher.Invoke(() => IsDownloadingUpdate = downloading);
+        _onDownloadProgressChanged = pct =>
+            Application.Current?.Dispatcher.Invoke(() => DownloadProgress = pct);
+        _onIsReadyToInstallChanged = ready =>
+            Application.Current?.Dispatcher.Invoke(() => IsReadyToInstall = ready);
 
-        _updateService.UpdateAvailableChanged += available =>
-            Application.Current.Dispatcher.Invoke(() => UpdateAvailable = available);
+        _updateService.StatusChanged           += _onStatusChanged;
+        _updateService.UpdateAvailableChanged  += _onUpdateAvailableChanged;
+        _updateService.IsDownloadingChanged    += _onIsDownloadingChanged;
+        _updateService.DownloadProgressChanged += _onDownloadProgressChanged;
+        _updateService.IsReadyToInstallChanged += _onIsReadyToInstallChanged;
+    }
 
-        _updateService.IsDownloadingChanged += downloading =>
-            Application.Current.Dispatcher.Invoke(() => IsDownloadingUpdate = downloading);
-
-        _updateService.DownloadProgressChanged += pct =>
-            Application.Current.Dispatcher.Invoke(() => DownloadProgress = pct);
-
-        _updateService.IsReadyToInstallChanged += ready =>
-            Application.Current.Dispatcher.Invoke(() => IsReadyToInstall = ready);
+    public void Dispose()
+    {
+        _updateService.StatusChanged           -= _onStatusChanged;
+        _updateService.UpdateAvailableChanged  -= _onUpdateAvailableChanged;
+        _updateService.IsDownloadingChanged    -= _onIsDownloadingChanged;
+        _updateService.DownloadProgressChanged -= _onDownloadProgressChanged;
+        _updateService.IsReadyToInstallChanged -= _onIsReadyToInstallChanged;
     }
 }

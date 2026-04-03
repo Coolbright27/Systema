@@ -128,13 +128,20 @@ public partial class VisualViewModel : ObservableObject, IAutoRefreshable, IDisp
             if (_isOnBattery)
             {
                 string optSnapshot = savedOpt;
-                Task.Run(async () =>
+                _ = Task.Run(async () =>
                 {
-                    TweakResult result = optSnapshot == "max"
-                        ? await _powerPlanService.SetMaxBatteryLifeAsync()
-                        : await _powerPlanService.SetBalancedOnBatteryAsync();
-                    System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
-                        StatusMessage = result.Success ? "Battery optimization re-applied." : result.Message);
+                    try
+                    {
+                        TweakResult result = optSnapshot == "max"
+                            ? await _powerPlanService.SetMaxBatteryLifeAsync()
+                            : await _powerPlanService.SetBalancedOnBatteryAsync();
+                        System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
+                            StatusMessage = result.Success ? "Battery optimization re-applied." : result.Message);
+                    }
+                    catch (Exception ex)
+                    {
+                        _log.Error("VisualViewModel", "Battery optimization re-apply failed", ex);
+                    }
                 });
             }
         }

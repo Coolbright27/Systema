@@ -27,7 +27,9 @@
                 <RowDefinition Height="16"/>    <!-- 13: spacer -->
                 <RowDefinition Height="Auto"/>  <!-- 14: Updates card -->
                 <RowDefinition Height="20"/>    <!-- 15: spacer -->
-                <RowDefinition Height="Auto"/>  <!-- 16: version footer -->
+                <RowDefinition Height="Auto"/>  <!-- 16: Reset All Settings card -->
+                <RowDefinition Height="20"/>    <!-- 17: spacer -->
+                <RowDefinition Height="Auto"/>  <!-- 18: version footer -->
             </Grid.RowDefinitions>
 
             <!-- Page header -->
@@ -365,9 +367,33 @@
                 </StackPanel>
             </Border>
 
+            <!-- Reset All Settings -->
+            <Border Grid.Row="16" Background="{StaticResource BgSurfaceBrush}" BorderBrush="{StaticResource BorderBrush}"
+                    BorderThickness="1" CornerRadius="10" Padding="24,20" Margin="0,0,0,24">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0" Margin="0,0,24,0">
+                        <TextBlock Text="Reset all settings"
+                                   Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
+                        <TextBlock Text="Resets every Systema setting to factory defaults and restarts the app. This cannot be undone."
+                                   Style="{StaticResource CaptionText}"
+                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                   TextWrapping="Wrap" Margin="0,4,0,0"/>
+                    </StackPanel>
+                    <Button Grid.Column="1" Content="Reset to Defaults"
+                            Command="{Binding ResetAllSettingsCommand}"
+                            Style="{StaticResource GhostButton}"
+                            Foreground="#F87171"
+                            VerticalAlignment="Center"/>
+                </Grid>
+            </Border>
+
             <!-- Version footer -->
-            <TextBlock Grid.Row="16"
-                       Text="Systema v1.7.0  ·  For support visit discord.gg/DjxBswDeN8"
+            <TextBlock Grid.Row="18"
+                       Text="Systema v1.7.6  ·  For support visit discord.gg/DjxBswDeN8"
                        Style="{StaticResource BodyText}" Foreground="{StaticResource TextSecondaryBrush}"
                        TextWrapping="Wrap"/>
         </Grid>

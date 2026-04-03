@@ -24,11 +24,17 @@ using Systema.Views;
 
 namespace Systema.ViewModels;
 
-public partial class GameBoosterViewModel : ObservableObject, IAutoRefreshable
+public partial class GameBoosterViewModel : ObservableObject, IAutoRefreshable, IDisposable
 {
     private readonly GameBoosterService _gameBooster;
     private readonly SettingsService    _settings;
     private static readonly LoggerService _log = LoggerService.Instance;
+
+    // Event handlers stored for cleanup in Dispose()
+    private readonly Action<string> _onBoostActivated;
+    private readonly Action         _onBoostDeactivated;
+    private readonly Action<bool>   _onGamesInstalledChanged;
+    private readonly Action         _onManualBoostTimedOut;
 
     // ── Observable properties ─────────────────────────────────────────────────
 
@@ -102,21 +108,37 @@ public partial class GameBoosterViewModel : ObservableObject, IAutoRefreshable
         _gameBooster = gameBooster;
         _settings    = settings;
 
-        // Wire service events -> UI updates (always marshal to UI thread)
-        _gameBooster.BoostActivated += gameName =>
+        // Wire service events -> UI updates (always marshal to UI thread).
+        // Handlers are stored as fields so Dispose() can unsubscribe them.
+        _onBoostActivated = gameName =>
             Application.Current?.Dispatcher.BeginInvoke(() => OnBoostActivated(gameName));
-        _gameBooster.BoostDeactivated +=
+        _onBoostDeactivated =
             () => Application.Current?.Dispatcher.BeginInvoke(OnBoostDeactivated);
-        _gameBooster.GamesInstalledChanged += v =>
+        _onGamesInstalledChanged = v =>
             Application.Current?.Dispatcher.BeginInvoke(() => { GamesInstalled = v; });
-        _gameBooster.ManualBoostTimedOut +=
+        _onManualBoostTimedOut =
             () => Application.Current?.Dispatcher.BeginInvoke(() =>
             {
                 ManualBoostEnabled = false;
                 StatusMessage = "Manual boost auto-disabled after 6 hours.";
             });
 
-        LoadSettings();
+        _gameBooster.BoostActivated      += _onBoostActivated;
+        _gameBooster.BoostDeactivated    += _onBoostDeactivated;
+        _gameBooster.GamesInstalledChanged += _onGamesInstalledChanged;
+        _gameBooster.ManualBoostTimedOut += _onManualBoostTimedOut;
+
+        try
+        {
+            LoadSettings();
+        }
+        catch (Exception ex)
+        {
+            // Unsubscribe on failure so handlers don't leak on a half-constructed VM
+            Dispose();
+            LoggerService.Instance.Error("GameBoosterViewModel", "LoadSettings failed in constructor", ex);
+            throw;
+        }
     }
 
     // ── IAutoRefreshable ──────────────────────────────────────────────────────
@@ -324,6 +346,14 @@ public partial class GameBoosterViewModel : ObservableObject, IAutoRefreshable
                 Description = KnownDescriptions.TryGetValue(name, out var desc) ? desc : "Windows service"
             });
         }
+    }
+
+    public void Dispose()
+    {
+        _gameBooster.BoostActivated      -= _onBoostActivated;
+        _gameBooster.BoostDeactivated    -= _onBoostDeactivated;
+        _gameBooster.GamesInstalledChanged -= _onGamesInstalledChanged;
+        _gameBooster.ManualBoostTimedOut -= _onManualBoostTimedOut;
     }
 
     private void OnBoostActivated(string gameName)

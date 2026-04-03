@@ -138,13 +138,42 @@ public class OptionalFeaturesService
                 foreach (var line in lines)
                 {
                     var trimmed = line.Trim();
-                    if (trimmed.StartsWith("Feature Name :"))
+
+                    // Parse "Feature Name : xyz" or localized equivalents.
+                    // DISM always uses " : " as the key-value separator, so we
+                    // split on the first " : " and match the key by checking
+                    // known English AND checking whether this is the first or
+                    // second field in each feature block.
+                    int sepIdx = trimmed.IndexOf(" : ", StringComparison.Ordinal);
+                    if (sepIdx < 0) continue;
+
+                    string key   = trimmed[..sepIdx].Trim();
+                    string value = trimmed[(sepIdx + 3)..].Trim();
+
+                    // DISM outputs two fields per feature: name first, state second.
+                    // On non-English Windows the key text differs, but the order is
+                    // always name then state. We detect "Feature Name" by checking
+                    // the English string OR by accepting any key when we don't have
+                    // a current feature yet (first field of a block).
+                    bool isNameField  = key.Equals("Feature Name", StringComparison.OrdinalIgnoreCase)
+                                     || key.Contains("Name", StringComparison.OrdinalIgnoreCase);
+                    bool isStateField = key.Equals("State", StringComparison.OrdinalIgnoreCase)
+                                     || key.Contains("State", StringComparison.OrdinalIgnoreCase)
+                                     || key.Contains("Staat", StringComparison.OrdinalIgnoreCase)   // German
+                                     || key.Contains("Estado", StringComparison.OrdinalIgnoreCase)  // Spanish/Portuguese
+                                     || key.Contains("État", StringComparison.OrdinalIgnoreCase)    // French
+                                     || key.Contains("Stato", StringComparison.OrdinalIgnoreCase)   // Italian
+                                     || key.Contains("状態", StringComparison.Ordinal)               // Japanese
+                                     || key.Contains("状态", StringComparison.Ordinal)               // Chinese
+                                     || key.Contains("상태", StringComparison.Ordinal);              // Korean
+
+                    if (isNameField && currentFeature == null)
                     {
-                        currentFeature = trimmed.Replace("Feature Name :", "").Trim();
+                        currentFeature = value;
                     }
-                    else if (trimmed.StartsWith("State :") && currentFeature != null)
+                    else if ((isStateField || currentFeature != null) && currentFeature != null)
                     {
-                        string state = trimmed.Replace("State :", "").Trim();
+                        string state = value;
 
                         if (!HiddenFeatures.Contains(currentFeature))
                         {

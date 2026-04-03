@@ -125,10 +125,16 @@ public sealed class TaskSleepService : IDisposable
     private readonly Dictionary<int, int> _parentOfNapChild = new();
 
     // ── Deep sleep escalation ─────────────────────────────────────────────────
-    // pid → DateTime when the process first entered minimize-nap.
-    // Used to escalate from 60 s brief wakes to 5-minute deep-sleep wakes after
-    // the app has been minimized for longer than MinimizeDeepSleepThresholdMs.
+    // pid → DateTime when the process first entered minimize-nap or tray-nap.
+    // Used to escalate from normal brief wakes to longer deep-sleep wakes after
+    // the app has been napped for longer than the deep sleep threshold.
     private readonly Dictionary<int, DateTime> _minimizeNapSince = new();
+
+    // ── CPU cap via Job Objects ───────────────────────────────────────────────
+    // pid → Job Object handle. When a process is napped and CPU cap is enabled,
+    // a job with a hard CPU rate limit is created and the process assigned to it.
+    // Closing the job handle on restore releases the cap.
+    private readonly Dictionary<int, IntPtr> _cpuCapJobs = new();
 
     // ── Re-enforce tracking ───────────────────────────────────────────────────
     // Counts how many times the re-enforce step had to push each process back.
@@ -154,6 +160,26 @@ public sealed class TaskSleepService : IDisposable
     private DateTime _prevSysSample;
     private double   _lastSystemCpuPercent;
     private bool     _systemTimesWarned;
+
+    // ── Beta: I/O counters for network / disk guard ────────────────────────
+    // pid → (ReadBytes, WriteBytes, OtherBytes, sampleTime) from GetProcessIoCounters
+    private readonly Dictionary<int, (long ReadBytes, long WriteBytes, long OtherBytes, DateTime SampleTime)> _ioSamples = new();
+    // pid → last computed net KB/s and disk KB/s
+    private readonly Dictionary<int, (double NetKBps, double DiskKBps)> _lastIoRates = new();
+
+    // ── Beta: Smart aggressive nap detection ─────────────────────────────────
+    // pid → consecutive ticks where CPU was below the smart threshold
+    private readonly Dictionary<int, int> _lowCpuTickCount = new();
+
+    // ── Beta: Notification grace period ──────────────────────────────────────
+    // pid → last known window title (for change detection)
+    private readonly Dictionary<int, string> _lastWindowTitle = new();
+    // pid → UTC timestamp when title last changed (grace start)
+    private readonly Dictionary<int, DateTime> _titleChangedAt = new();
+
+    // ── Beta: Battery mode ───────────────────────────────────────────────────
+    private bool _isOnBattery;
+    private DateTime _lastBatteryCheck = DateTime.MinValue;
 
     // ── Monitoring ────────────────────────────────────────────────────────────
     private readonly ConcurrentQueue<MonitorEvent> _eventLog = new();
@@ -538,6 +564,10 @@ public sealed class TaskSleepService : IDisposable
             }
         }
 
+        // 0b. Beta: Battery mode — check power status
+        if (s.BatteryModeEnabled) RefreshBatteryStatus();
+        bool onBattery = s.BatteryModeEnabled && _isOnBattery;
+
         // 1. Sample total system CPU
         double sysCpu = SampleSystemCpu();
 
@@ -547,6 +577,20 @@ public sealed class TaskSleepService : IDisposable
 
         Process[] all     = Process.GetProcesses();
         var       livePids = new HashSet<int>(all.Select(p => p.Id));
+
+        // 2b. Beta: Multi-monitor awareness — protect apps visible on any monitor
+        if (s.MultiMonitorAwarenessEnabled)
+        {
+            foreach (int pid in GetVisibleOnAnyMonitorPids())
+                protectedPids.Add(pid);
+        }
+
+        // 2c. Beta: Process group awareness — protect all instances of foreground app's name
+        if (s.ProcessGroupAwarenessEnabled)
+        {
+            foreach (int pid in GetProcessGroupPids(foregroundPid, all))
+                protectedPids.Add(pid);
+        }
 
         // Build parent→child map for child process napping (minimize/tray nap)
         Dictionary<int, int> parentMap = (s.MinimizeNapEnabled || s.TrayNapEnabled)
@@ -600,15 +644,13 @@ public sealed class TaskSleepService : IDisposable
                 // Process exited — always clean up
                 shouldRestore = true; restoreReason = "process exited";
                 _minimizedNapPids.Remove(pid); _nextBriefWakeAt.Remove(pid); _briefWakeEndAt.Remove(pid);
-                _minimizeNapSince.Remove(pid);
-            }
+                _minimizeNapSince.Remove(pid);            }
             else if (protectedPids.Contains(pid))
             {
                 // User brought the app to foreground — wake it permanently
                 shouldRestore = true; restoreReason = "opened by user";
                 _minimizedNapPids.Remove(pid); _nextBriefWakeAt.Remove(pid); _briefWakeEndAt.Remove(pid);
-                _minimizeNapSince.Remove(pid);
-            }
+                _minimizeNapSince.Remove(pid);            }
             else if (_minimizedNapPids.Contains(pid))
             {
                 // ── Minimize-napped process: separate restore logic ───────────────
@@ -684,9 +726,20 @@ public sealed class TaskSleepService : IDisposable
                         _processNames.TryGetValue(pid, out string? nm3);
                         TryRestoreProcess(pid);
                         _throttledAt.Remove(pid);
-                        _trayBriefWakeEndAt[pid]  = DateTime.UtcNow.AddMilliseconds(s.TrayBriefWakeDurationMs);
-                        _trayNextBriefWakeAt[pid] = DateTime.UtcNow.AddMilliseconds(s.TrayBriefWakeIntervalMs);
-                        AddEvent(nm3 ?? $"PID {pid}", pid, "Tray Wake", $"CPU {sysCpu:F0}%");
+                        _trayBriefWakeEndAt[pid] = DateTime.UtcNow.AddMilliseconds(s.TrayBriefWakeDurationMs);
+
+                        // Deep sleep: if tray-napped longer than threshold, use the longer interval
+                        double nappedForMs = _minimizeNapSince.TryGetValue(pid, out DateTime trayNapSince)
+                            ? (DateTime.UtcNow - trayNapSince).TotalMilliseconds : 0;
+                        bool trayDeepSleep = s.TrayDeepSleepEnabled &&
+                            nappedForMs >= s.TrayDeepSleepThresholdMs;
+                        int trayWakeIntervalMs = trayDeepSleep
+                            ? s.TrayDeepSleepWakeIntervalMs
+                            : s.TrayBriefWakeIntervalMs;
+                        _trayNextBriefWakeAt[pid] = DateTime.UtcNow.AddMilliseconds(trayWakeIntervalMs);
+
+                        string wakeLabel = trayDeepSleep ? "Tray Deep Wake" : "Tray Wake";
+                        AddEvent(nm3 ?? $"PID {pid}", pid, wakeLabel, $"CPU {sysCpu:F0}%");
                     }
                 }
                 // Do NOT fall through to PersistentNap / time-based restore for tray-napped procs
@@ -737,11 +790,13 @@ public sealed class TaskSleepService : IDisposable
             if (!trayPids.Contains(gPid)) _trayGraceSince.Remove(gPid);
 
         // 6. Consider throttling new processes
-        bool systemOverThreshold = sysCpu >= s.SystemCpuTriggerPercent;
+        // Battery mode halves the CPU trigger so we nap more aggressively
+        int effectiveCpuTrigger = onBattery ? s.SystemCpuTriggerPercent / 2 : s.SystemCpuTriggerPercent;
+        bool systemOverThreshold = sysCpu >= effectiveCpuTrigger;
         long freeRamMb  = GetAvailableRamMb();
         bool ramPressure = freeRamMb < 4096; // < 4 GB free = memory is genuinely constrained
         // Throttle when CPU is high OR RAM is low — skip entirely when both are comfortable
-        bool shouldConsiderThrottling = systemOverThreshold || ramPressure;
+        bool shouldConsiderThrottling = systemOverThreshold || ramPressure || onBattery;
 
         foreach (var proc in all)
         {
@@ -802,7 +857,7 @@ public sealed class TaskSleepService : IDisposable
                             // App opened a window during wake — free it permanently
                             _trayNapPids.Remove(proc.Id);
                             _trayNextBriefWakeAt.Remove(proc.Id);
-                        }
+                            _minimizeNapSince.Remove(proc.Id);                        }
                     }
                     continue;
                 }
@@ -813,7 +868,41 @@ public sealed class TaskSleepService : IDisposable
                 if (_restoredAt.TryGetValue(proc.Id, out DateTime rt) &&
                     (DateTime.UtcNow - rt).TotalMilliseconds < 5_000) continue;
 
-                // ── Minimize-nap: throttle minimized apps after 30 s grace period ──
+                // ── Beta: Network activity guard — skip processes with active net I/O ──
+                if (s.NetworkActivityGuardEnabled)
+                {
+                    SampleProcessIoRates(proc.Id, out double netKB, out _);
+                    if (netKB >= s.NetworkActivityThresholdKBps)
+                    {
+                        _overThresholdSince.Remove(proc.Id);
+                        continue;
+                    }
+                }
+
+                // ── Beta: Disk I/O guard — skip processes with active disk I/O ──
+                if (s.DiskIoGuardEnabled)
+                {
+                    SampleProcessIoRates(proc.Id, out _, out double diskKB);
+                    if (diskKB >= s.DiskIoThresholdKBps)
+                    {
+                        _overThresholdSince.Remove(proc.Id);
+                        continue;
+                    }
+                }
+
+                // ── Beta: Notification grace period — skip processes that just changed title ──
+                if (s.NotificationGracePeriodEnabled &&
+                    IsInNotificationGrace(proc.Id, s.NotificationGracePeriodMs))
+                {
+                    _overThresholdSince.Remove(proc.Id);
+                    continue;
+                }
+
+                // ── Beta: Battery mode — use shorter grace period ──
+                int effectiveMinimizeGraceMs = onBattery
+                    ? s.BatteryMinimizeGraceMs : MinimizeTrayGraceMs;
+
+                // ── Minimize-nap: throttle minimized apps after grace period ──
                 if (s.MinimizeNapEnabled && minimizedPids.Contains(proc.Id))
                 {
                     bool hasAudio = audioPids.Contains(proc.Id) ||
@@ -826,7 +915,7 @@ public sealed class TaskSleepService : IDisposable
 
                         bool graceElapsed =
                             (DateTime.UtcNow - _minimizeGraceSince[proc.Id]).TotalMilliseconds
-                            >= MinimizeTrayGraceMs;
+                            >= effectiveMinimizeGraceMs;
 
                         if (graceElapsed)
                         {
@@ -841,8 +930,9 @@ public sealed class TaskSleepService : IDisposable
                                 _nextBriefWakeAt[proc.Id] =
                                     DateTime.UtcNow.AddMilliseconds(s.MinimizedBriefWakeIntervalMs);
                                 _briefWakeEndAt.Remove(proc.Id);
-                                AddEvent(proc.ProcessName, proc.Id, "Minimize Nap", "app minimized");
-                                NapChildProcesses(proc.Id, all, parentMap, protectedPids, audioPids, s, rules);
+                                string napDetail = onBattery ? "app minimized (battery mode)" : "app minimized";
+                                AddEvent(proc.ProcessName, proc.Id, "Minimize Nap", napDetail);
+                                if (s.NapChildrenEnabled) NapChildProcesses(proc.Id, all, parentMap, protectedPids, audioPids, s, rules);
                             }
                         }
                         continue; // don't also apply CPU throttle logic
@@ -851,7 +941,7 @@ public sealed class TaskSleepService : IDisposable
                     _minimizeGraceSince.Remove(proc.Id);
                 }
 
-                // ── Tray-nap: throttle tray-only processes after 30 s grace period ──
+                // ── Tray-nap: throttle tray-only processes after grace period ──
                 if (s.TrayNapEnabled && trayPids.Contains(proc.Id) &&
                     !_trayNapPids.Contains(proc.Id))
                 {
@@ -863,9 +953,11 @@ public sealed class TaskSleepService : IDisposable
                         if (!_trayGraceSince.ContainsKey(proc.Id))
                             _trayGraceSince[proc.Id] = DateTime.UtcNow;
 
+                        int effectiveTrayGraceMs = onBattery
+                            ? s.BatteryMinimizeGraceMs : MinimizeTrayGraceMs;
                         bool graceElapsed =
                             (DateTime.UtcNow - _trayGraceSince[proc.Id]).TotalMilliseconds
-                            >= MinimizeTrayGraceMs;
+                            >= effectiveTrayGraceMs;
 
                         if (graceElapsed)
                         {
@@ -879,14 +971,46 @@ public sealed class TaskSleepService : IDisposable
                                 _trayNextBriefWakeAt[proc.Id] =
                                     DateTime.UtcNow.AddMilliseconds(s.TrayBriefWakeIntervalMs);
                                 _trayBriefWakeEndAt.Remove(proc.Id);
-                                AddEvent(proc.ProcessName, proc.Id, "Tray Nap", "no visible window");
-                                NapChildProcesses(proc.Id, all, parentMap, protectedPids, audioPids, s, rules);
+                                _minimizeNapSince.TryAdd(proc.Id, DateTime.UtcNow); // deep-sleep timer
+                                string trayDetail = onBattery ? "no visible window (battery mode)" : "no visible window";
+                                AddEvent(proc.ProcessName, proc.Id, "Tray Nap", trayDetail);
+                                if (s.NapChildrenEnabled) NapChildProcesses(proc.Id, all, parentMap, protectedPids, audioPids, s, rules);
                             }
                         }
                         continue; // don't also CPU-throttle
                     }
                     // Has audio → clear grace, fall through; eligible for CPU throttle if high
                     _trayGraceSince.Remove(proc.Id);
+                }
+
+                // ── Beta: Smart aggressive nap — detect processes idle for N ticks ──
+                if (s.SmartAggressiveNapEnabled &&
+                    !trayPids.Contains(proc.Id) &&
+                    !minimizedPids.Contains(proc.Id))
+                {
+                    if (cpuMap.TryGetValue(proc.Id, out double smartCpu) &&
+                        smartCpu < s.SmartAggressiveCpuThresholdPercent)
+                    {
+                        int idleTicks = _lowCpuTickCount.GetValueOrDefault(proc.Id) + 1;
+                        _lowCpuTickCount[proc.Id] = idleTicks;
+
+                        if (idleTicks >= s.SmartAggressiveTickCount)
+                        {
+                            _lowCpuTickCount.Remove(proc.Id);
+                            if (TryThrottle(proc, s, rules))
+                            {
+                                _throttledAt[proc.Id] = DateTime.UtcNow;
+                                _cpuAtThrottle.TryAdd(proc.Id, smartCpu);
+                                AddEvent(proc.ProcessName, proc.Id, "Smart Nap",
+                                    $"idle {idleTicks} ticks — CPU {smartCpu:F1}%");
+                            }
+                            continue;
+                        }
+                    }
+                    else
+                    {
+                        _lowCpuTickCount.Remove(proc.Id);
+                    }
                 }
 
                 // ── Aggressive nap: known background wasters — throttle even when CPU is low ──
@@ -925,7 +1049,7 @@ public sealed class TaskSleepService : IDisposable
                 }
 
                 // ── CPU / RAM throttle logic (original) ────────────────────────────
-                if (shouldConsiderThrottling &&
+                if (s.CpuTriggeredNapEnabled && shouldConsiderThrottling &&
                     cpuMap.TryGetValue(proc.Id, out double procCpu) &&
                     procCpu >= s.ProcessCpuStartPercent)
                 {
@@ -992,7 +1116,7 @@ public sealed class TaskSleepService : IDisposable
                             _minimizedNapPids.Remove(pid);
                             _trayNapPids.Remove(pid);
                             _minimizeNapSince.Remove(pid);
-                            _reEnforceCounter.Reset(pid);
+                                                       _reEnforceCounter.Reset(pid);
                             if (nm != null)
                             {
                                 _napSuppressed.Add(nm);
@@ -1174,6 +1298,13 @@ public sealed class TaskSleepService : IDisposable
             _accessDeniedPids.TryRemove(pid, out _);
             _minimizeNapSince.Remove(pid);
             _reEnforceCounter.Reset(pid);
+            RemoveCpuCap(pid);
+            // Beta state cleanup
+            _ioSamples.Remove(pid);
+            _lastIoRates.Remove(pid);
+            _lowCpuTickCount.Remove(pid);
+            _lastWindowTitle.Remove(pid);
+            _titleChangedAt.Remove(pid);
         }
     }
 
@@ -1280,6 +1411,11 @@ public sealed class TaskSleepService : IDisposable
                 // Immediately reclaim the process's physical RAM pages so the OS can
                 // give them to the foreground app without waiting for the pager.
                 if (s.TrimWorkingSet) TrimProcessWorkingSet(handle);
+
+                // Apply hard CPU cap via Job Object when enabled
+                if (s.NappedCpuCapEnabled && s.NappedCpuCapPercent > 0)
+                    ApplyCpuCap(proc.Id, Math.Clamp(s.NappedCpuCapPercent, 1, 100));
+
                 _log.Info("TaskSleepService", $"Throttled: {proc.ProcessName} (PID {proc.Id})");
             }
 
@@ -1300,6 +1436,7 @@ public sealed class TaskSleepService : IDisposable
         {
             _originalAffinities.TryRemove(pid, out _);
             _cpuAtThrottle.Remove(pid);
+            RemoveCpuCap(pid);
             return;
         }
 
@@ -1314,6 +1451,9 @@ public sealed class TaskSleepService : IDisposable
             if (_originalAffinities.TryRemove(pid, out UIntPtr origAffinity))
                 SetProcessAffinityMask(handle, origAffinity);
 
+            // Release CPU cap job object
+            RemoveCpuCap(pid);
+
             _log.Info("TaskSleepService", $"Restored: PID {pid}");
         }
         catch (Exception ex)
@@ -1323,6 +1463,63 @@ public sealed class TaskSleepService : IDisposable
         finally { CloseHandle(handle); }
     }
 
+    /// <summary>
+    /// Creates a Windows Job Object with a hard CPU rate cap and assigns the process to it.
+    /// Uses kernel-level enforcement — the OS itself caps the process's CPU time slices.
+    /// </summary>
+    private void ApplyCpuCap(int pid, int capPercent)
+    {
+        if (_cpuCapJobs.ContainsKey(pid)) return; // already capped
+        try
+        {
+            IntPtr hProcess = OpenProcess(PROCESS_SET_INFORMATION | PROCESS_QUERY_LIMITED_INFORMATION, false, pid);
+            if (hProcess == IntPtr.Zero) return;
+            try
+            {
+                IntPtr hJob = CreateJobObjectW(IntPtr.Zero, null);
+                if (hJob == IntPtr.Zero) return;
+
+                var info = new JOBOBJECT_CPU_RATE_CONTROL_INFORMATION
+                {
+                    ControlFlags = JOB_OBJECT_CPU_RATE_CONTROL_ENABLE | JOB_OBJECT_CPU_RATE_CONTROL_HARD_CAP,
+                    CpuRate      = (uint)(capPercent * 100) // hundredths of a percent
+                };
+
+                if (!SetInformationJobObject(hJob, JobObjectCpuRateControlInformation,
+                        ref info, Marshal.SizeOf<JOBOBJECT_CPU_RATE_CONTROL_INFORMATION>()))
+                {
+                    CloseHandle(hJob);
+                    return;
+                }
+
+                if (AssignProcessToJobObject(hJob, hProcess))
+                {
+                    _cpuCapJobs[pid] = hJob;
+                }
+                else
+                {
+                    // Assignment can fail if the process is in a non-nestable job (rare on Win10+)
+                    CloseHandle(hJob);
+                }
+            }
+            finally { CloseHandle(hProcess); }
+        }
+        catch (Exception ex)
+        {
+            _log.Warn("TaskSleepService", $"ApplyCpuCap PID {pid} failed: {ex.Message}");
+        }
+    }
+
+    /// <summary>Releases the CPU cap by closing the Job Object handle.</summary>
+    private void RemoveCpuCap(int pid)
+    {
+        if (_cpuCapJobs.Remove(pid, out IntPtr hJob))
+        {
+            try { CloseHandle(hJob); }
+            catch { /* best effort */ }
+        }
+    }
+
     private void RestoreAll()
     {
         foreach (int pid in _throttledPids.Keys.ToList())
@@ -1330,6 +1527,10 @@ public sealed class TaskSleepService : IDisposable
             TryRestoreProcess(pid);
             _throttledAt.Remove(pid);
         }
+        // Release all CPU cap job handles
+        foreach (var kvp in _cpuCapJobs)
+            try { CloseHandle(kvp.Value); } catch { }
+        _cpuCapJobs.Clear();
         _overThresholdSince.Clear();
         _originalAffinities.Clear();
         _minimizedNapPids.Clear();
@@ -1647,6 +1848,181 @@ public sealed class TaskSleepService : IDisposable
                 tray.Add(kv.Key);
         }
         return tray;
+    }
+
+    // ── Beta: Multi-monitor awareness ──────────────────────────────────────
+
+    /// <summary>
+    /// Returns PIDs of all processes that have a visible, non-iconic window on ANY monitor.
+    /// These should be added to the protected set so they are never napped.
+    /// </summary>
+    private static HashSet<int> GetVisibleOnAnyMonitorPids()
+    {
+        var pids = new HashSet<int>();
+        try
+        {
+            EnumWindows((hWnd, _) =>
+            {
+                if (IsWindowVisible(hWnd) && !IsIconic(hWnd))
+                {
+                    uint exStyle = GetWindowLong(hWnd, GWL_EXSTYLE);
+                    if ((exStyle & WS_EX_TOOLWINDOW) == 0)
+                    {
+                        GetWindowThreadProcessId(hWnd, out uint pid);
+                        if (pid > 4) pids.Add((int)pid);
+                    }
+                }
+                return true;
+            }, IntPtr.Zero);
+        }
+        catch { /* best-effort */ }
+        return pids;
+    }
+
+    // ── Beta: Process group awareness ────────────────────────────────────────
+
+    /// <summary>
+    /// Given the foreground PID, finds its process name and returns PIDs of ALL processes
+    /// with the same name. E.g. if chrome.exe is focused, protects all chrome.exe instances.
+    /// </summary>
+    private static HashSet<int> GetProcessGroupPids(uint foregroundPid, Process[] all)
+    {
+        var result = new HashSet<int>();
+        if (foregroundPid == 0) return result;
+
+        string? fgName = null;
+        foreach (var p in all)
+        {
+            try
+            {
+                if (p.Id == (int)foregroundPid)
+                {
+                    fgName = p.ProcessName;
+                    break;
+                }
+            }
+            catch { }
+        }
+        if (fgName == null) return result;
+
+        foreach (var p in all)
+        {
+            try
+            {
+                if (string.Equals(p.ProcessName, fgName, StringComparison.OrdinalIgnoreCase))
+                    result.Add(p.Id);
+            }
+            catch { }
+        }
+        return result;
+    }
+
+    // ── Beta: I/O rate sampling (network + disk) ─────────────────────────────
+
+    /// <summary>
+    /// Samples I/O counters for a process and computes net KB/s and disk KB/s since last sample.
+    /// Returns true if rates were computed (false on first sample or error).
+    /// </summary>
+    private bool SampleProcessIoRates(int pid, out double netKBps, out double diskKBps)
+    {
+        netKBps = 0; diskKBps = 0;
+        IntPtr h = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid);
+        if (h == IntPtr.Zero) return false;
+        try
+        {
+            if (!GetProcessIoCounters(h, out IO_COUNTERS counters)) return false;
+
+            long readBytes  = (long)counters.ReadTransferCount;
+            long writeBytes = (long)counters.WriteTransferCount;
+            long otherBytes = (long)counters.OtherTransferCount;
+            var  now        = DateTime.UtcNow;
+
+            if (_ioSamples.TryGetValue(pid, out var prev))
+            {
+                double elapsed = (now - prev.SampleTime).TotalSeconds;
+                if (elapsed > 0.1)
+                {
+                    // "Other" I/O is typically network (Winsock, named pipes, etc.)
+                    // "Read/Write" includes both disk and network — we attribute Other to network
+                    double otherDelta = Math.Max(0, otherBytes - prev.OtherBytes);
+                    netKBps  = otherDelta / 1024.0 / elapsed;
+
+                    double readDelta  = Math.Max(0, readBytes  - prev.ReadBytes);
+                    double writeDelta = Math.Max(0, writeBytes - prev.WriteBytes);
+                    diskKBps = (readDelta + writeDelta) / 1024.0 / elapsed;
+
+                    _lastIoRates[pid] = (netKBps, diskKBps);
+                }
+            }
+            _ioSamples[pid] = (readBytes, writeBytes, otherBytes, now);
+            return _lastIoRates.ContainsKey(pid);
+        }
+        finally { CloseHandle(h); }
+    }
+
+    // ── Beta: Notification grace (window title change detection) ─────────────
+
+    /// <summary>
+    /// Checks if a process's main window title changed since last tick.
+    /// If so, records the change time for grace period calculation.
+    /// Returns true if the process is within its notification grace period.
+    /// </summary>
+    private bool IsInNotificationGrace(int pid, int gracePeriodMs)
+    {
+        // Find the process's first visible window and get its title
+        string currentTitle = "";
+        try
+        {
+            EnumWindows((hWnd, _) =>
+            {
+                GetWindowThreadProcessId(hWnd, out uint wPid);
+                if ((int)wPid == pid && IsWindowVisible(hWnd))
+                {
+                    int len = GetWindowTextLength(hWnd);
+                    if (len > 0)
+                    {
+                        var sb = new System.Text.StringBuilder(len + 1);
+                        GetWindowText(hWnd, sb, sb.Capacity);
+                        currentTitle = sb.ToString();
+                        return false; // stop enumerating
+                    }
+                }
+                return true;
+            }, IntPtr.Zero);
+        }
+        catch { return false; }
+
+        if (string.IsNullOrEmpty(currentTitle)) return false;
+
+        bool titleChanged = _lastWindowTitle.TryGetValue(pid, out string? prevTitle) &&
+                            prevTitle != currentTitle;
+        _lastWindowTitle[pid] = currentTitle;
+
+        if (titleChanged)
+            _titleChangedAt[pid] = DateTime.UtcNow;
+
+        if (_titleChangedAt.TryGetValue(pid, out DateTime changedAt))
+        {
+            if ((DateTime.UtcNow - changedAt).TotalMilliseconds < gracePeriodMs)
+                return true;
+            _titleChangedAt.Remove(pid);
+        }
+        return false;
+    }
+
+    // ── Beta: Battery mode check ─────────────────────────────────────────────
+
+    /// <summary>Checks battery status (cached for 10 s).</summary>
+    private void RefreshBatteryStatus()
+    {
+        if ((DateTime.UtcNow - _lastBatteryCheck).TotalSeconds < 10) return;
+        _lastBatteryCheck = DateTime.UtcNow;
+        try
+        {
+            var ps = System.Windows.Forms.SystemInformation.PowerStatus;
+            _isOnBattery = ps.PowerLineStatus == System.Windows.Forms.PowerLineStatus.Offline;
+        }
+        catch { _isOnBattery = false; }
     }
 
     /// <summary>Returns PIDs with an active audio session; result is cached for 5 s.</summary>
@@ -1997,9 +2373,15 @@ public sealed class TaskSleepService : IDisposable
                     pendingLabel = $"~{(int)Math.Ceiling(remSec)}s";
                 }
 
-                bool isDeepSleep = isThrottled
-                    && _minimizeNapSince.TryGetValue(pid, out DateTime napSince2)
-                    && (now - napSince2).TotalMilliseconds >= s.MinimizeDeepSleepThresholdMs;
+                bool isDeepSleep = false;
+                if (isThrottled && _minimizeNapSince.TryGetValue(pid, out DateTime napSince2))
+                {
+                    double nappedMs = (now - napSince2).TotalMilliseconds;
+                    bool isTray = _trayNapPids.Contains(pid);
+                    isDeepSleep = isTray
+                        ? (s.TrayDeepSleepEnabled && nappedMs >= s.TrayDeepSleepThresholdMs)
+                        : (nappedMs >= s.MinimizeDeepSleepThresholdMs);
+                }
 
                 string statusLabel = isThrottled ? (isDeepSleep ? "Deep Sleep" : "Napping")
                                    : isProtected ? "Active"
@@ -2281,6 +2663,60 @@ public sealed class TaskSleepService : IDisposable
     {
         public uint MemoryPriority;
     }
+
+    // ── Job Object CPU rate control (P/Invoke) ──────────────────────────────
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern IntPtr CreateJobObjectW(IntPtr lpJobAttributes, string? lpName);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool AssignProcessToJobObject(IntPtr hJob, IntPtr hProcess);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool SetInformationJobObject(
+        IntPtr hJob, int jobObjectInformationClass,
+        ref JOBOBJECT_CPU_RATE_CONTROL_INFORMATION lpJobObjectInformation,
+        int cbJobObjectInformationLength);
+
+    private const int JobObjectCpuRateControlInformation = 15;
+    private const uint JOB_OBJECT_CPU_RATE_CONTROL_ENABLE   = 0x1;
+    private const uint JOB_OBJECT_CPU_RATE_CONTROL_HARD_CAP = 0x4;
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct JOBOBJECT_CPU_RATE_CONTROL_INFORMATION
+    {
+        public uint ControlFlags;
+        public uint CpuRate; // in hundredths of a percent (5% = 500)
+    }
+
+    // ── Beta: I/O counters P/Invoke ─────────────────────────────────────────
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetProcessIoCounters(IntPtr hProcess, out IO_COUNTERS lpIoCounters);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct IO_COUNTERS
+    {
+        public ulong ReadOperationCount;
+        public ulong WriteOperationCount;
+        public ulong OtherOperationCount;
+        public ulong ReadTransferCount;
+        public ulong WriteTransferCount;
+        public ulong OtherTransferCount;
+    }
+
+    // ── Beta: Window title P/Invoke ──────────────────────────────────────────
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern int GetWindowText(IntPtr hWnd, System.Text.StringBuilder lpString, int nMaxCount);
+
+    [DllImport("user32.dll")]
+    private static extern int GetWindowTextLength(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool IsWindowVisible(IntPtr hWnd);
 
     // ── Windows Core Audio COM interfaces (minimal vtable-accurate declarations) ─
 

@@ -101,7 +101,11 @@ public class TelemetryService
                     };
                     using var proc = Process.Start(psi);
                     if (proc == null) { Log.Warn("Telemetry", $"schtasks.exe failed to start for task {task}"); continue; }
-                    proc.WaitForExit(3000);
+                    bool exited = proc.WaitForExit(3000);
+                    if (!exited)
+                        Log.Warn("Telemetry", $"schtasks.exe timed out disabling task {task}");
+                    else if (proc.ExitCode != 0)
+                        Log.Warn("Telemetry", $"schtasks.exe exited {proc.ExitCode} disabling task {task}");
                 }
                 catch (Exception ex) { Log.Warn("Telemetry", $"Failed to disable task {task}", ex); }
             }
@@ -205,7 +209,11 @@ public class TelemetryService
                     };
                     using var proc = Process.Start(psi);
                     if (proc == null) { Log.Warn("Telemetry", $"schtasks.exe failed to start for task {task}"); continue; }
-                    proc.WaitForExit(3000);
+                    bool exited = proc.WaitForExit(3000);
+                    if (!exited)
+                        Log.Warn("Telemetry", $"schtasks.exe timed out re-enabling task {task}");
+                    else if (proc.ExitCode != 0)
+                        Log.Warn("Telemetry", $"schtasks.exe exited {proc.ExitCode} re-enabling task {task}");
                 }
                 catch (Exception ex) { Log.Warn("Telemetry", $"Failed to re-enable task {task}", ex); }
             }

@@ -241,6 +241,13 @@ public partial class MemoryViewModel : ObservableObject, IAutoRefreshable
             AvailableRamMb = avail;
             OnPropertyChanged(nameof(UsedRamMb));
             OnPropertyChanged(nameof(RamUsagePercent));
+
+            // Clear status after 8 seconds so stale messages don't linger
+            _ = Task.Delay(8000).ContinueWith(_ =>
+                System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
+                {
+                    if (FreeRamStatus == msg) FreeRamStatus = string.Empty;
+                }));
         }
         catch (Exception ex)
         {

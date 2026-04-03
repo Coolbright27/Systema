@@ -33,7 +33,7 @@ public partial class ServicesViewModel : ObservableObject, IAutoRefreshable
     private readonly SettingsService         _settings;
     private static readonly LoggerService    _log = LoggerService.Instance;
     private int _isRefreshing;
-    private bool _hasLoadedFeaturesOnce;
+    private volatile bool _hasLoadedFeaturesOnce;
 
     [ObservableProperty] private ObservableCollection<ServiceInfo> _services = new();
     [ObservableProperty] private ObservableCollection<OptionalFeatureInfo> _optionalFeatures = new();
@@ -303,10 +303,8 @@ public partial class ServicesViewModel : ObservableObject, IAutoRefreshable
                 ? $"Removed: {featureName}. {(result.Message.Contains("3010") || result.Message.Contains("reboot") ? "Restart required." : "")}"
                 : result.Message;
 
-            // Refresh the features list
-            _hasLoadedFeaturesOnce = false;
+            // Refresh the features list (don't reset the flag — just reload directly)
             await LoadFeaturesAsync();
-            _hasLoadedFeaturesOnce = true;
         }
         catch (Exception ex)
         {
@@ -329,9 +327,8 @@ public partial class ServicesViewModel : ObservableObject, IAutoRefreshable
                 ? $"Restored: {featureName}. {(result.Message.Contains("3010") || result.Message.Contains("reboot") ? "Restart required." : "")}"
                 : result.Message;
 
-            _hasLoadedFeaturesOnce = false;
+            // Refresh the features list (don't reset the flag — just reload directly)
             await LoadFeaturesAsync();
-            _hasLoadedFeaturesOnce = true;
         }
         catch (Exception ex)
         {

@@ -77,7 +77,7 @@ public class AnimationService
             SendMessageTimeout(HWND_BROADCAST, WM_SETTINGCHANGE, IntPtr.Zero, "WindowMetrics",
                 0x0002 /*SMTO_ABORTIFHUNG*/, 1000, out _);
         }
-        catch { }
+        catch (Exception ex) { Log.Warn("AnimationService", $"BroadcastSettingChange failed: {ex.Message}"); }
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -603,7 +603,7 @@ public class AnimationService
             using var key = Registry.CurrentUser.CreateSubKey(VisualFxKey, true);
             key.SetValue("VisualFXSetting", mode, RegistryValueKind.DWord);
         }
-        catch { }
+        catch (Exception ex) { Log.Warn("AnimationService", $"SetVisualFxMode failed: {ex.Message}"); }
     }
 
     private static byte[] GetDefaultMask()

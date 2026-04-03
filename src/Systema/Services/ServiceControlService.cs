@@ -273,7 +273,7 @@ public class ServiceControlService
                 _ => "Unknown"
             };
         }
-        catch { return "Unknown"; }
+        catch (Exception ex) { Log.Warn("ServiceControl", $"GetStartType({serviceName}) failed: {ex.Message}"); return "Unknown"; }
     }
 
     // ── Service state changes ─────────────────────────────────────────────────
@@ -388,11 +388,17 @@ public class ServiceControlService
                             PollForStatus(svc, ServiceControllerStatus.Stopped, timeoutSeconds: 8);
                         }
                     }
-                    catch { /* service may not be stoppable */ }
+                    catch (Exception ex) { Log.Warn("ServiceControl", $"Could not stop telemetry service '{svcName}': {ex.Message}"); }
 
                     using var key = Registry.LocalMachine.OpenSubKey(
                         $@"SYSTEM\CurrentControlSet\Services\{svcName}", true);
-                    key?.SetValue("Start", 4, RegistryValueKind.DWord);
+                    if (key != null)
+                        key.SetValue("Start", 4, RegistryValueKind.DWord);
+                    else
+                    {
+                        Log.Warn("ServiceControl", $"Cannot open registry key for telemetry service '{svcName}' — Start value not written");
+                        failed.Add(svcName);
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -422,7 +428,7 @@ public class ServiceControlService
                         $@"SYSTEM\CurrentControlSet\Services\{svcName}", true);
                     key?.SetValue("Start", 2, RegistryValueKind.DWord);
                 }
-                catch { /* ignore */ }
+                catch (Exception ex) { Log.Warn("ServiceControl", $"Could not restore telemetry service '{svcName}': {ex.Message}"); }
             }
             return TweakResult.Ok("Telemetry services restored.");
         });
@@ -449,8 +455,7 @@ public class ServiceControlService
                     FileName  = "schtasks.exe",
                     Arguments = $"/Change /TN \"{task}\" /Disable",
                     UseShellExecute        = false,
-                    CreateNoWindow         = true,
-                    RedirectStandardOutput = true
+                    CreateNoWindow         = true
                 };
                 using var proc = System.Diagnostics.Process.Start(psi);
                 if (proc == null)
@@ -458,9 +463,13 @@ public class ServiceControlService
                     Log.Warn("ServiceControl", $"schtasks.exe failed to start for task: {task}");
                     continue;
                 }
-                proc.WaitForExit(5000);
+                bool exited = proc.WaitForExit(5000);
+                if (!exited)
+                    Log.Warn("ServiceControl", $"schtasks.exe timed out disabling task: {task}");
+                else if (proc.ExitCode != 0)
+                    Log.Warn("ServiceControl", $"schtasks.exe exited {proc.ExitCode} disabling task: {task}");
             }
-            catch { /* skip */ }
+            catch (Exception ex) { Log.Warn("ServiceControl", $"Failed to disable telemetry task '{task}': {ex.Message}"); }
         }
     }
 
@@ -477,7 +486,7 @@ public class ServiceControlService
                 if ((int)(key?.GetValue("Start") ?? 2) == 4)
                     disabledCount++;
             }
-            catch { }
+            catch (Exception ex) { Log.Warn("ServiceControl", $"AreTelemetryServicesDisabled check failed for '{svcName}': {ex.Message}"); }
         }
         return disabledCount >= TelemetryServices.Length;
     }

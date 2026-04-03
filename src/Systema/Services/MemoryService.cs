@@ -116,22 +116,18 @@ public class MemoryService
     {
         try
         {
-            using var cts  = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(3));
-            var        ct   = cts.Token;
-            var        task = Task.Run(() =>
+            var task = Task.Run(() =>
             {
                 using var searcher = new ManagementObjectSearcher(
                     "SELECT AllocatedBaseSize, CurrentUsage FROM Win32_PageFileUsage");
                 long totalAllocated = 0, totalUsed = 0;
-                ct.ThrowIfCancellationRequested();
                 foreach (ManagementObject obj in searcher.Get())
                 {
-                    ct.ThrowIfCancellationRequested();
                     totalAllocated += Convert.ToInt64(obj["AllocatedBaseSize"]);
                     totalUsed      += Convert.ToInt64(obj["CurrentUsage"]);
                 }
                 return (totalAllocated, totalUsed);
-            }, ct);
+            });
 
             // 3-second guard — WMI can hang indefinitely on some machines
             if (task.Wait(TimeSpan.FromSeconds(3)))
@@ -139,10 +135,6 @@ public class MemoryService
 
             Log.Warn("MemoryService", "GetCurrentPagefileUsageMb WMI query timed out after 3 s — returning (0,0)");
             return (0, 0);
-        }
-        catch (OperationCanceledException)
-        {
-            Log.Warn("MemoryService", "GetCurrentPagefileUsageMb WMI query cancelled after 3 s — returning (0,0)");
         }
         catch (Exception ex)
         {
@@ -152,19 +144,32 @@ public class MemoryService
     }
 
     /// <summary>Returns the recommended pagefile size in MB based on installed RAM.</summary>
-    public int GetRecommendedPagefileMb()
+    public int GetRecommendedPagefileMb() => GetRecommendedPagefileMb(GetTotalRamMb());
+
+    /// <summary>
+    /// Returns the recommended pagefile size in MB and the detected RAM in MB so
+    /// callers can display both values together without a second P/Invoke call.
+    /// </summary>
+    public (int recommendedMb, long ramMb) GetRecommendedPagefileWithRam()
     {
         long ramMb = GetTotalRamMb();
-        // Tiered pagefile recommendations based on installed RAM
-        if (ramMb >= 13000 && ramMb <= 16384)   // 13-16 GB → 32 GB pagefile
-            return 32768;
-        if (ramMb > 16384 && ramMb <= 26999)    // 16-27 GB → 24 GB pagefile
-            return 24576;
-        if (ramMb >= 27000 && ramMb <= 32768)   // 27-32 GB → 16 GB pagefile
-            return 16384;
-        // Default: 1.5× RAM, capped at 32 GB, floor 4 GB
-        int recommended = (int)Math.Min(ramMb * 1.5, 32768);
-        return Math.Max(recommended, 4096);
+        return (GetRecommendedPagefileMb(ramMb), ramMb);
+    }
+
+    private static int GetRecommendedPagefileMb(long ramMb)
+    {
+        // Tiered pagefile recommendations based on installed RAM.
+        // Upper bounds are generous (+5 %) to absorb BIOS/reporting variance so a
+        // nominally-16 GB system (which may report anywhere from 15.5–16.4 GB) always
+        // lands in the correct tier.
+        if (ramMb < 9000)                        // < 8 GB  → 1.5× RAM, floor 4 GB
+        {
+            int fallback = (int)Math.Min(ramMb * 1.5, 32768);
+            return Math.Max(fallback, 4096);
+        }
+        if (ramMb < 17500)   return 32768;       //  8–16 GB  → 32 GB pagefile
+        if (ramMb < 27500)   return 24576;       // 16–24 GB  → 24 GB pagefile
+        return 16384;                            // 24 GB+    → 16 GB pagefile
     }
 
     // ── Free RAM (EmptyWorkingSet + purge standby list) ───────────────────────

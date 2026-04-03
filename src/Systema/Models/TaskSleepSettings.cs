@@ -28,6 +28,18 @@ public class TaskSleepSettings
     public bool ExcludeSystemServices   { get; set; } = true;
     public bool EnableEfficiencyMode    { get; set; } = true;
 
+    /// <summary>
+    /// When true, background processes that exceed the CPU threshold are throttled.
+    /// Off by default — minimize-nap and tray-nap handle most cases without this.
+    /// </summary>
+    public bool CpuTriggeredNapEnabled { get; set; } = true;
+
+    /// <summary>
+    /// When true, child processes of a napped app are also napped automatically.
+    /// Off by default.
+    /// </summary>
+    public bool NapChildrenEnabled { get; set; } = false;
+
     // ── CPU Thresholds ────────────────────────────────────────────────────────
     public int SystemCpuTriggerPercent { get; set; } = 12;   // activate only when total CPU > this
     public int ProcessCpuStartPercent  { get; set; } = 7;    // throttle process when it exceeds this
@@ -120,6 +132,119 @@ public class TaskSleepSettings
     /// How long (ms) the brief wake window lasts for tray-napped processes. Default: 10 s.
     /// </summary>
     public int TrayBriefWakeDurationMs { get; set; } = 10_000;
+
+    /// <summary>
+    /// When true, tray-napped processes escalate to deep sleep after TrayDeepSleepThresholdMs,
+    /// using an even longer wake interval (TrayDeepSleepWakeIntervalMs). Default: true.
+    /// </summary>
+    public bool TrayDeepSleepEnabled { get; set; } = true;
+
+    /// <summary>
+    /// How long (ms) a tray-napped process must be napped before escalating to deep sleep.
+    /// Default: 600 000 ms (10 minutes).
+    /// </summary>
+    public int TrayDeepSleepThresholdMs { get; set; } = 600_000;
+
+    /// <summary>
+    /// Wake interval (ms) used once a tray-napped app enters deep sleep mode.
+    /// Default: 600 000 ms (10 minutes) — even rarer than the normal tray wake.
+    /// </summary>
+    public int TrayDeepSleepWakeIntervalMs { get; set; } = 600_000;
+
+    // ── CPU Cap ──────────────────────────────────────────────────────────────
+    /// <summary>
+    /// When true, napped processes are placed in a Windows Job Object with a hard CPU
+    /// rate limit. This enforces a real CPU ceiling instead of just lowering priority.
+    /// Default: true.
+    /// </summary>
+    public bool NappedCpuCapEnabled { get; set; } = true;
+
+    /// <summary>
+    /// Maximum CPU usage (percent, 1–100) for napped processes. Uses Job Object
+    /// CPU rate control — a real kernel-level cap. Default: 5%.
+    /// </summary>
+    public int NappedCpuCapPercent { get; set; } = 5;
+
+    // ── Beta Features ────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// When true, apps visible on ANY monitor are protected from napping, not just
+    /// the foreground window. Uses EnumWindows to find all non-iconic visible windows
+    /// across all displays. On by default.
+    /// </summary>
+    public bool MultiMonitorAwarenessEnabled { get; set; } = true;
+
+    /// <summary>
+    /// When true, processes with significant network I/O are protected from napping
+    /// (e.g. downloads, uploads, streaming). Off by default.
+    /// </summary>
+    public bool NetworkActivityGuardEnabled { get; set; } = false;
+
+    /// <summary>
+    /// Network I/O threshold in KB/s. Processes exceeding this are protected from napping.
+    /// Default: 50 KB/s.
+    /// </summary>
+    public int NetworkActivityThresholdKBps { get; set; } = 50;
+
+    /// <summary>
+    /// When true, all instances of the foreground app's process name are protected.
+    /// E.g. if one Chrome window is focused, all chrome.exe instances are protected. On by default.
+    /// </summary>
+    public bool ProcessGroupAwarenessEnabled { get; set; } = true;
+
+    /// <summary>
+    /// When true, processes with significant disk I/O are protected from napping
+    /// (e.g. saving, compiling, file operations). Off by default.
+    /// </summary>
+    public bool DiskIoGuardEnabled { get; set; } = false;
+
+    /// <summary>
+    /// Disk I/O threshold in KB/s. Processes exceeding this are protected from napping.
+    /// Default: 100 KB/s.
+    /// </summary>
+    public int DiskIoThresholdKBps { get; set; } = 100;
+
+    /// <summary>
+    /// When true, processes that have been consistently idle (below 1% CPU for 5+ ticks)
+    /// are escalated to aggressive nap even if they don't match the AggressiveNapTargets list.
+    /// Off by default.
+    /// </summary>
+    public bool SmartAggressiveNapEnabled { get; set; } = false;
+
+    /// <summary>
+    /// CPU threshold for smart aggressive nap detection. Processes below this % for
+    /// SmartAggressiveTickCount consecutive ticks are candidates. Default: 1%.
+    /// </summary>
+    public int SmartAggressiveCpuThresholdPercent { get; set; } = 1;
+
+    /// <summary>
+    /// How many consecutive ticks a process must be below SmartAggressiveCpuThresholdPercent
+    /// before it's napped aggressively. Default: 5 ticks.
+    /// </summary>
+    public int SmartAggressiveTickCount { get; set; } = 5;
+
+    /// <summary>
+    /// When true, a process whose window title changes (indicating a notification or update)
+    /// gets a grace period before being napped. Off by default.
+    /// </summary>
+    public bool NotificationGracePeriodEnabled { get; set; } = false;
+
+    /// <summary>
+    /// How long (ms) to wait after a window title change before allowing nap. Default: 15 s.
+    /// </summary>
+    public int NotificationGracePeriodMs { get; set; } = 15_000;
+
+    /// <summary>
+    /// When true, nap thresholds are lowered on battery power to extend battery life.
+    /// Reduces CPU trigger by half, enables aggressive napping, and shortens grace periods.
+    /// Off by default.
+    /// </summary>
+    public bool BatteryModeEnabled { get; set; } = false;
+
+    /// <summary>
+    /// On battery, minimize-nap grace period is reduced to this value (ms). Default: 10 s.
+    /// </summary>
+    public int BatteryMinimizeGraceMs { get; set; } = 10_000;
 
     // ── Monitoring ────────────────────────────────────────────────────────────
     /// <summary>

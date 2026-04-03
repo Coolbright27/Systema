@@ -51,10 +51,13 @@ public partial class ProcessViewModel : ObservableObject, IAutoRefreshable
         try
         {
             var list = await _processService.GetBackgroundProcessesAsync();
+            int total = list.Count;
             Processes.Clear();
             foreach (var p in list.Take(50))
                 Processes.Add(p);
-            StatusMessage = $"{Processes.Count} background processes.";
+            StatusMessage = total > 50
+                ? $"Showing top 50 of {total} background processes."
+                : $"{total} background processes.";
         }
         catch (Exception ex)
         {

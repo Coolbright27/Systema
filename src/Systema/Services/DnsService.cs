@@ -86,7 +86,8 @@ public class DnsService
     public async Task<TweakResult> ApplyProfileAsync(DnsProfile profile)
     {
         // Validate Primary DNS before doing anything — prevents corrupt netsh calls.
-        if (!string.IsNullOrEmpty(profile.Primary) && string.IsNullOrWhiteSpace(profile.Primary))
+        // A non-empty but whitespace-only primary address is invalid.
+        if (!string.IsNullOrEmpty(profile.Primary) && !System.Net.IPAddress.TryParse(profile.Primary.Trim(), out _))
             return TweakResult.Fail("Primary DNS address is invalid.");
 
         Log.Info("DnsService", $"Applying DNS profile: {profile.Name} ({profile.Primary})");
@@ -162,7 +163,7 @@ public class DnsService
                     using var connKey = netKey?.OpenSubKey($@"{guid}\Connection");
                     friendlyName = connKey?.GetValue("Name") as string;
                 }
-                catch { /* registry key may not exist for all interfaces */ }
+                catch (Exception ex) { Log.Warn("DnsService", $"Could not read adapter name for interface: {ex.Message}"); }
 
                 if (!string.IsNullOrWhiteSpace(friendlyName) && !IsVirtualAdapter(friendlyName))
                     names.Add(friendlyName);
@@ -218,7 +219,7 @@ public class DnsService
                 }
             }
         }
-        catch { /* swallow — caller handles empty list */ }
+        catch (Exception ex) { Log.Warn("DnsService", $"GetAdapterNamesViaNetsh failed: {ex.Message}"); }
         return names;
     }
 
@@ -240,7 +241,7 @@ public class DnsService
             if (!string.IsNullOrEmpty(dhcpIp) && dhcpIp != "0.0.0.0")
                 return true;
         }
-        catch { }
+        catch (Exception ex) { Log.Warn("DnsService", $"HasActiveIp check failed: {ex.Message}"); }
         return false;
     }
 
@@ -258,7 +259,7 @@ public class DnsService
             var parts = raw.Split(new[] { ',', ' ' }, StringSplitOptions.RemoveEmptyEntries);
             return parts.Length == 0 ? null : string.Join(", ", parts.Take(2));
         }
-        catch { return null; }
+        catch (Exception ex) { Log.Warn("DnsService", $"ReadDnsValue({valueName}) failed: {ex.Message}"); return null; }
     }
 
     /// <summary>
@@ -268,12 +269,21 @@ public class DnsService
     /// </summary>
     private static bool IsVirtualAdapter(string adapterName)
     {
-        return adapterName.Contains("VPN",      StringComparison.OrdinalIgnoreCase)
-            || adapterName.Contains("TAP",      StringComparison.OrdinalIgnoreCase)
-            || adapterName.Contains("Tunnel",   StringComparison.OrdinalIgnoreCase)
-            || adapterName.Contains("Virtual",  StringComparison.OrdinalIgnoreCase)
-            || adapterName.Contains("Loopback", StringComparison.OrdinalIgnoreCase)
-            || adapterName.Contains("WireGuard",StringComparison.OrdinalIgnoreCase);
+        return adapterName.Contains("VPN",        StringComparison.OrdinalIgnoreCase)
+            || adapterName.Contains("TAP",        StringComparison.OrdinalIgnoreCase)
+            || adapterName.Contains("Tunnel",     StringComparison.OrdinalIgnoreCase)
+            || adapterName.Contains("Virtual",    StringComparison.OrdinalIgnoreCase)
+            || adapterName.Contains("Loopback",   StringComparison.OrdinalIgnoreCase)
+            || adapterName.Contains("WireGuard",  StringComparison.OrdinalIgnoreCase)
+            || adapterName.Contains("Cisco",      StringComparison.OrdinalIgnoreCase)
+            || adapterName.Contains("Fortinet",   StringComparison.OrdinalIgnoreCase)
+            || adapterName.Contains("FortiClient", StringComparison.OrdinalIgnoreCase)
+            || adapterName.Contains("Pulse Secure",StringComparison.OrdinalIgnoreCase)
+            || adapterName.Contains("GlobalProtect",StringComparison.OrdinalIgnoreCase)
+            || adapterName.Contains("OpenVPN",    StringComparison.OrdinalIgnoreCase)
+            || adapterName.Contains("Wintun",     StringComparison.OrdinalIgnoreCase)
+            || adapterName.Contains("Windscribe", StringComparison.OrdinalIgnoreCase)
+            || adapterName.Contains("NordLynx",   StringComparison.OrdinalIgnoreCase);
     }
 
     private static void RunNetsh(string args)
@@ -295,6 +305,6 @@ public class DnsService
                 @"SYSTEM\CurrentControlSet\Services\Dnscache\Parameters", true);
             key.SetValue("EnableAutoDoh", 2, RegistryValueKind.DWord);
         }
-        catch { }
+        catch (Exception ex) { Log.Warn("DnsService", $"EnableDoH failed: {ex.Message}"); }
     }
 }

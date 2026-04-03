@@ -37,7 +37,7 @@ using Systema.Views;
 
 namespace Systema.ViewModels;
 
-public partial class MainViewModel : ObservableObject
+public partial class MainViewModel : ObservableObject, IDisposable
 {
     [ObservableProperty] private object? _currentView;
     [ObservableProperty] private string  _activeSection = "Dashboard";
@@ -190,5 +190,15 @@ public partial class MainViewModel : ObservableObject
             CrashReportWindow.ShowError(ex, $"{section} — Load Error");
             CrashGuard.Clear();
         }
+    }
+
+    public void Dispose()
+    {
+        _refreshTimer.Stop();
+        _heartbeatTimer.Stop();
+        TaskSleepVm?.Dispose();
+        VisualVm?.Dispose();
+        GameBoosterVm?.Dispose();
+        SettingsVm?.Dispose();
     }
 }

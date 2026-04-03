@@ -208,7 +208,10 @@ public class StartupService
             {
                 // Registry items: "disable" by moving the value to a sibling -Disabled key
                 var hive     = item.RegistryKey.StartsWith("HKCU") ? Registry.CurrentUser : Registry.LocalMachine;
-                var basePath = item.RegistryKey.Substring(item.RegistryKey.IndexOf('\\') + 1);
+                int slashIdx = item.RegistryKey.IndexOf('\\');
+                if (slashIdx < 0)
+                    return TweakResult.Fail($"Malformed registry key: {item.RegistryKey}");
+                var basePath = item.RegistryKey.Substring(slashIdx + 1);
                 var disabled = basePath.Replace("\\Run", "\\Run-Disabled");
 
                 if (enabled)

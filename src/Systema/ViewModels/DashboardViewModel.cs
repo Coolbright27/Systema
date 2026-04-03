@@ -60,6 +60,7 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
     private readonly CoreParkingService         _corePark;
     private readonly SettingsService            _settings;
     private readonly OptionalFeaturesService    _optFeatures;
+    private readonly SystemStabilityService     _stability;
     private static readonly LoggerService _log = LoggerService.Instance;
 
     // ── Status pills ──────────────────────────────────────────────────────────
@@ -109,7 +110,8 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
         WindowsUpdateTweaksService wuTweaks,
         CoreParkingService         corePark,
         SettingsService            settings,
-        OptionalFeaturesService    optFeatures)
+        OptionalFeaturesService    optFeatures,
+        SystemStabilityService     stability)
     {
         _gameBooster    = gameBooster;
         _taskSleepVm    = taskSleepVm;
@@ -121,6 +123,7 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
         _corePark       = corePark;
         _settings       = settings;
         _optFeatures    = optFeatures;
+        _stability      = stability;
 
         _ = InitAsync();
     }
@@ -175,7 +178,7 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
                 ? "Protected"
                 : "Collecting data";
         }
-        catch { DataCollectionStatus = "Unknown"; }
+        catch (Exception ex) { _log.Warn("DashboardViewModel", $"Telemetry status check failed: {ex.Message}"); DataCollectionStatus = "Unknown"; }
 
         // RAM ────────────────────────────────────────────────────────
         try
@@ -184,19 +187,27 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
             long used   = total - avail;
             RamUsageText = $"{used / 1024.0:F1} / {total / 1024.0:F1} GB";
         }
-        catch { RamUsageText = "—"; }
+        catch (Exception ex) { _log.Warn("DashboardViewModel", $"RAM stats failed: {ex.Message}"); RamUsageText = "—"; }
 
         StatusMessage = $"Systema is running · {DateTime.Now:HH:mm}";
 
         // Re-check Auto-Pilot status every 30 s so changes made in other tabs are
         // reflected as soon as the user navigates back to the Dashboard.
+        // Acquire the Interlocked gate FIRST, then check the time inside the gate
+        // to avoid a race where two ticks both pass the >= 30 s check.
         if (!IsAutoPilotRunning &&
-            (DateTime.Now - _lastAutoPilotCheck).TotalSeconds >= 30 &&
             Interlocked.CompareExchange(ref _autoPilotCheckInFlight, 1, 0) == 0)
         {
-            _lastAutoPilotCheck = DateTime.Now;
-            _ = CheckAutoPilotStatusAsync().ContinueWith(_ =>
-                Interlocked.Exchange(ref _autoPilotCheckInFlight, 0));
+            if ((DateTime.Now - _lastAutoPilotCheck).TotalSeconds >= 30)
+            {
+                _lastAutoPilotCheck = DateTime.Now;
+                _ = CheckAutoPilotStatusAsync().ContinueWith(_ =>
+                    Interlocked.Exchange(ref _autoPilotCheckInFlight, 0));
+            }
+            else
+            {
+                Interlocked.Exchange(ref _autoPilotCheckInFlight, 0);
+            }
         }
 
         return Task.CompletedTask;
@@ -216,7 +227,7 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
             {
                 // 1. Page file
                 var (initMb, _, isManaged) = _memoryService.GetPagefileSettings();
-                int  recommended = _memoryService.GetRecommendedPagefileMb();
+                var (recommended, ramMb)   = _memoryService.GetRecommendedPagefileWithRam();
                 bool pgOk = !isManaged && initMb >= recommended - 512;
                 if (!pgOk) pending++;
                 items.Add(new AutoPilotItem
@@ -224,8 +235,8 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
                     Label  = "Page file",
                     IsDone = pgOk,
                     Detail = pgOk
-                        ? $"Optimized ({initMb / 1024} GB)"
-                        : $"Recommended: {recommended / 1024} GB",
+                        ? $"Optimized — {initMb / 1024} GB (based on your {ramMb / 1024} GB RAM)"
+                        : $"Set to {recommended / 1024} GB (based on your {ramMb / 1024} GB RAM)",
                 });
 
                 // 2. Data collection
@@ -328,6 +339,16 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
                         ? "Removed — not installed"
                         : "Present — insecure legacy protocol (will be removed by Optimize)",
                 });
+
+                // 11. NTFS last-access timestamps disabled
+                bool ntfsOk = _stability.IsNtfsLastAccessDisabled();
+                if (!ntfsOk) pending++;
+                items.Add(new AutoPilotItem
+                {
+                    Label  = "NTFS last-access timestamps",
+                    IsDone = ntfsOk,
+                    Detail = ntfsOk ? "Disabled — reduces unnecessary disk writes" : "Enabled (default) — click Optimize to disable",
+                });
             });
 
             // All registry/powercfg calls are done — now update the UI thread properties
@@ -362,10 +383,10 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
         {
             _log.Info("DashboardViewModel", "Auto-Pilot started");
 
-            // 1. Page file — set to recommended size
-            int recommended = _memoryService.GetRecommendedPagefileMb();
+            // 1. Page file — set to recommended size based on installed RAM
+            var (recommended, ramMb) = _memoryService.GetRecommendedPagefileWithRam();
             await _memoryService.ConfigurePagefileAsync(recommended, recommended);
-            _log.Info("DashboardViewModel", $"Page file set to {recommended / 1024} GB");
+            _log.Info("DashboardViewModel", $"Page file set to {recommended / 1024} GB (RAM: {ramMb / 1024} GB)");
 
             // 2. Disable data collection (telemetry services + tasks)
             await _serviceControl.DisableAllTelemetryServicesAsync();
@@ -423,6 +444,13 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
             else
             {
                 _log.Info("DashboardViewModel", "SMBv1 not present — skipping removal");
+            }
+
+            // 11. Disable NTFS last-access timestamps
+            if (!_stability.IsNtfsLastAccessDisabled())
+            {
+                await _stability.DisableNtfsLastAccessAsync();
+                _log.Info("DashboardViewModel", "NTFS last-access timestamps disabled");
             }
 
             _log.Info("DashboardViewModel", "Auto-Pilot completed successfully");
