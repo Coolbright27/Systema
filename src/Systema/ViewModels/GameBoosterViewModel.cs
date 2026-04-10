@@ -66,6 +66,7 @@ public partial class GameBoosterViewModel : ObservableObject, IAutoRefreshable, 
     [ObservableProperty] private bool _disableWifiOnEthernet;
     [ObservableProperty] private bool _disableBluetoothOnBoost;
     [ObservableProperty] private bool _preventSleepOnBoost;
+    [ObservableProperty] private bool _disableSearchIndexingOnBoost;
 
     /// <summary>Persists and applies the master switch immediately — no Save click needed.</summary>
     partial void OnGameBoosterEnabledChanged(bool value)
@@ -237,6 +238,7 @@ public partial class GameBoosterViewModel : ObservableObject, IAutoRefreshable, 
         _settings.GameBoosterDisableWifiOnEthernet = DisableWifiOnEthernet;
         _settings.GameBoosterDisableBluetooth      = DisableBluetoothOnBoost;
         _settings.GameBoosterPreventSleep          = PreventSleepOnBoost;
+        _settings.GameBoosterDisableSearchIndexing = DisableSearchIndexingOnBoost;
 
         StatusMessage = "Settings saved.";
         _log.Info("GameBoosterViewModel", $"Settings saved — interval={CheckIntervalMinutes}min, killList={lines.Count} entries");
@@ -309,6 +311,7 @@ public partial class GameBoosterViewModel : ObservableObject, IAutoRefreshable, 
         DisableWifiOnEthernet   = _settings.GameBoosterDisableWifiOnEthernet;
         DisableBluetoothOnBoost = _settings.GameBoosterDisableBluetooth;
         PreventSleepOnBoost     = _settings.GameBoosterPreventSleep;
+        DisableSearchIndexingOnBoost = _settings.GameBoosterDisableSearchIndexing;
         GameBoosterEnabled      = _settings.GameBoosterEnabled;
 
         // Force every binding to re-evaluate unconditionally. CommunityToolkit.Mvvm's setter
@@ -334,6 +337,7 @@ public partial class GameBoosterViewModel : ObservableObject, IAutoRefreshable, 
         OnPropertyChanged(nameof(DisableWifiOnEthernet));
         OnPropertyChanged(nameof(DisableBluetoothOnBoost));
         OnPropertyChanged(nameof(PreventSleepOnBoost));
+        OnPropertyChanged(nameof(DisableSearchIndexingOnBoost));
         OnPropertyChanged(nameof(GameBoosterEnabled));
 
         var killList = _gameBooster.GetKillList();

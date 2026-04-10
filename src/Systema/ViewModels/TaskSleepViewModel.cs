@@ -112,6 +112,7 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
     [ObservableProperty] private int _maxConcurrentBriefWakes = 3;
 
     // ── Beta Features ────────────────────────────────────────────────────────
+    [ObservableProperty] private bool _elevatedProcessGuardEnabled   = true;
     [ObservableProperty] private bool _multiMonitorAwarenessEnabled  = true;
     [ObservableProperty] private bool _networkActivityGuardEnabled   = false;
     [ObservableProperty] private int  _networkActivityThresholdKBps  = 50;
@@ -123,8 +124,10 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
     [ObservableProperty] private int  _smartAggressiveTickCount      = 5;
     [ObservableProperty] private bool _notificationGracePeriodEnabled = false;
     [ObservableProperty] private int  _notificationGracePeriodMs     = 15_000;
-    [ObservableProperty] private bool _batteryModeEnabled            = false;
-    [ObservableProperty] private int  _batteryMinimizeGraceMs        = 10_000;
+    [ObservableProperty] private bool _backgroundNapEnabled          = true;
+    [ObservableProperty] private int  _backgroundNapAfterMs          = 180_000;
+    [ObservableProperty] private bool _idleNapEnabled                = true;
+    [ObservableProperty] private int  _idleNapAfterMs                = 120_000;
 
     // ── Monitoring & Enforcement ──────────────────────────────────────────────
     [ObservableProperty] private bool   _enforceSettings  = true;
@@ -134,6 +137,10 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
     [ObservableProperty] private bool   _showAllProcesses = false;
     [ObservableProperty] private string _systemCpuDisplay      = "System CPU: —";
     [ObservableProperty] private string _throttledCountDisplay = "0 napping";
+
+    // ── Aggressiveness preset (replaces individual CPU threshold controls) ─────
+    // 0=Balanced, 1=Aggressive, 2=Maximum, 3=Light
+    [ObservableProperty] private int _aggressivenessLevel = 0;
 
     // ── UI State ──────────────────────────────────────────────────────────────
     [ObservableProperty] private bool _isAdvancedExpanded = false;
@@ -253,6 +260,7 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
     partial void OnMaxConcurrentBriefWakesChanged(int value)   => PushSettings();
 
     // ── Beta feature callbacks ────────────────────────────────────────────────
+    partial void OnElevatedProcessGuardEnabledChanged(bool value)        => PushSettings();
     partial void OnMultiMonitorAwarenessEnabledChanged(bool value)       => PushSettings();
     partial void OnNetworkActivityGuardEnabledChanged(bool value)        => PushSettings();
     partial void OnNetworkActivityThresholdKBpsChanged(int value)        => PushSettings();
@@ -264,8 +272,10 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
     partial void OnSmartAggressiveTickCountChanged(int value)            => PushSettings();
     partial void OnNotificationGracePeriodEnabledChanged(bool value)     => PushSettings();
     partial void OnNotificationGracePeriodMsChanged(int value)           => PushSettings();
-    partial void OnBatteryModeEnabledChanged(bool value)                 => PushSettings();
-    partial void OnBatteryMinimizeGraceMsChanged(int value)              => PushSettings();
+    partial void OnBackgroundNapEnabledChanged(bool value)               => PushSettings();
+    partial void OnBackgroundNapAfterMsChanged(int value)                => PushSettings();
+    partial void OnIdleNapEnabledChanged(bool value)                     => PushSettings();
+    partial void OnIdleNapAfterMsChanged(int value)                      => PushSettings();
 
     partial void OnLowerMemoryPriorityChanged(bool value) => PushSettings();
     partial void OnTrimWorkingSetChanged(bool value)      => PushSettings();
@@ -273,6 +283,55 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
 
     partial void OnEnforceSettingsChanged(bool value)  => PushSettings();
     partial void OnSoftNapEnabledChanged(bool value)   => PushSettings();
+
+    partial void OnAggressivenessLevelChanged(int value)
+    {
+        ApplyAggressivenessPreset(value);
+        PushSettings();
+    }
+
+    /// <summary>
+    /// Sets CPU thresholds and timing based on a simple preset level.
+    /// 0=Balanced (default), 1=Aggressive, 2=Maximum, 3=Light
+    /// </summary>
+    private void ApplyAggressivenessPreset(int level)
+    {
+        switch (level)
+        {
+            case 3: // Light — only naps very heavy background apps
+                SystemCpuTriggerPercent = 25;
+                ProcessCpuStartPercent  = 15;
+                ProcessCpuStopPercent   = 8;
+                TimeOverQuotaMs         = 3000;
+                MinAdjustmentDurationMs = 3000;
+                MaxAdjustmentDurationMs = 60_000;
+                break;
+            case 0: // Balanced — good for most users (default)
+                SystemCpuTriggerPercent = 12;
+                ProcessCpuStartPercent  = 7;
+                ProcessCpuStopPercent   = 3;
+                TimeOverQuotaMs         = 1500;
+                MinAdjustmentDurationMs = 5000;
+                MaxAdjustmentDurationMs = 30_000;
+                break;
+            case 1: // Aggressive — for gaming or low-end PCs
+                SystemCpuTriggerPercent = 5;
+                ProcessCpuStartPercent  = 3;
+                ProcessCpuStopPercent   = 1;
+                TimeOverQuotaMs         = 500;
+                MinAdjustmentDurationMs = 2000;
+                MaxAdjustmentDurationMs = 10_000;
+                break;
+            case 2: // Maximum — naps nearly everything possible
+                SystemCpuTriggerPercent = 1;
+                ProcessCpuStartPercent  = 1;
+                ProcessCpuStopPercent   = 0;
+                TimeOverQuotaMs         = 200;
+                MinAdjustmentDurationMs = 1000;
+                MaxAdjustmentDurationMs = 5000;
+                break;
+        }
+    }
 
     // ── Human-friendly helpers for XAML bindings (convert ms ↔ seconds/minutes) ─
 
@@ -332,12 +391,6 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
         set { NotificationGracePeriodMs = Math.Max(value, 1) * 1000; OnPropertyChanged(); }
     }
 
-    /// <summary>BatteryMinimizeGraceMs in whole seconds for the UI.</summary>
-    public int BatteryMinimizeGraceSeconds
-    {
-        get => BatteryMinimizeGraceMs / 1000;
-        set { BatteryMinimizeGraceMs = Math.Max(value, 1) * 1000; OnPropertyChanged(); }
-    }
 
     public int TimeOverQuotaSeconds
     {
@@ -500,10 +553,10 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
         TimeOverQuotaMs         = TimeOverQuotaMs,
         MinAdjustmentDurationMs = MinAdjustmentDurationMs,
         MaxAdjustmentDurationMs = MaxAdjustmentDurationMs,
-        LowerGpuPriority        = LowerGpuPriority,
-        LowerIoPriority         = LowerIoPriority,
-        DetectECores            = DetectECores,
-        MoveToECores            = MoveToECores,
+        LowerGpuPriority        = true, // always on — no user benefit from disabling
+        LowerIoPriority         = true,
+        DetectECores            = true,
+        MoveToECores            = true,
         PersistentNapEnabled    = PersistentNapEnabled,
         MinimizeNapEnabled              = MinimizeNapEnabled,
         MinimizedBriefWakeIntervalMs    = MinimizedBriefWakeIntervalMs,
@@ -520,6 +573,7 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
         NappedCpuCapPercent         = Math.Clamp(NappedCpuCapPercent, 1, 100),
         MaxConcurrentBriefWakes     = Math.Clamp(MaxConcurrentBriefWakes, 1, 10),
         // Beta features
+        ElevatedProcessGuardEnabled        = ElevatedProcessGuardEnabled,
         MultiMonitorAwarenessEnabled       = MultiMonitorAwarenessEnabled,
         NetworkActivityGuardEnabled        = NetworkActivityGuardEnabled,
         NetworkActivityThresholdKBps       = Math.Clamp(NetworkActivityThresholdKBps, 1, 10_000),
@@ -531,10 +585,13 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
         SmartAggressiveTickCount           = Math.Clamp(SmartAggressiveTickCount, 2, 30),
         NotificationGracePeriodEnabled     = NotificationGracePeriodEnabled,
         NotificationGracePeriodMs          = Math.Clamp(NotificationGracePeriodMs, 1_000, 120_000),
-        BatteryModeEnabled                 = BatteryModeEnabled,
-        BatteryMinimizeGraceMs             = Math.Clamp(BatteryMinimizeGraceMs, 1_000, 60_000),
-        LowerMemoryPriority     = LowerMemoryPriority,
-        TrimWorkingSet          = TrimWorkingSet,
+        BackgroundNapEnabled               = BackgroundNapEnabled,
+        BackgroundNapAfterMs               = Math.Clamp(BackgroundNapAfterMs, 30_000, 600_000),
+        IdleNapEnabled                     = IdleNapEnabled,
+        IdleNapCpuThreshold                = 0.5,
+        IdleNapAfterMs                     = Math.Clamp(IdleNapAfterMs, 30_000, 600_000),
+        LowerMemoryPriority     = true, // always on
+        TrimWorkingSet          = true,
         AdaptiveTick            = AdaptiveTick,
         // Whitelist entries are stored as blacklist (IsBlacklisted=true) AppRules internally
         AppRules                = Whitelist.Select(name => new TaskSleepAppRule
@@ -587,14 +644,16 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
             TrayDeepSleepThresholdMs    = Math.Clamp(ReadInt(key, "TrayDeepSleepThresholdMs",    600_000), 60_000, 3_600_000);
             TrayDeepSleepWakeIntervalMs = Math.Clamp(ReadInt(key, "TrayDeepSleepWakeIntervalMs", 600_000), 60_000, 3_600_000);
             NappedCpuCapEnabled         = ReadBool(key, "NappedCpuCapEnabled",         true);
-            NappedCpuCapPercent         = Math.Clamp(ReadInt(key, "NappedCpuCapPercent", 5), 1, 100);
+            NappedCpuCapPercent         = Math.Clamp(ReadInt(key, "NappedCpuCapPercent", 3), 1, 100);
             MaxConcurrentBriefWakes     = Math.Clamp(ReadInt(key, "MaxConcurrentBriefWakes",  3), 1, 10);
             LowerMemoryPriority     = ReadBool(key, "LowerMemoryPriority",   true);
             TrimWorkingSet          = ReadBool(key, "TrimWorkingSet",        true);
             AdaptiveTick            = ReadBool(key, "AdaptiveTick",          true);
             EnforceSettings         = ReadBool(key, "EnforceSettings",       true);
             SoftNapEnabled = ReadBool(key, "SoftNapEnabled", false);
+            AggressivenessLevel = Math.Clamp(ReadInt(key, "AggressivenessLevel", 0), 0, 3);
             // Beta features
+            ElevatedProcessGuardEnabled        = ReadBool(key, "ElevatedProcessGuardEnabled",        true);
             MultiMonitorAwarenessEnabled       = ReadBool(key, "MultiMonitorAwarenessEnabled",       true);
             NetworkActivityGuardEnabled        = ReadBool(key, "NetworkActivityGuardEnabled",        false);
             NetworkActivityThresholdKBps       = Math.Clamp(ReadInt(key, "NetworkActivityThresholdKBps",  50), 1, 10_000);
@@ -606,8 +665,10 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
             SmartAggressiveTickCount           = Math.Clamp(ReadInt(key, "SmartAggressiveTickCount",          5), 2, 30);
             NotificationGracePeriodEnabled     = ReadBool(key, "NotificationGracePeriodEnabled",     false);
             NotificationGracePeriodMs          = Math.Clamp(ReadInt(key, "NotificationGracePeriodMs",    15_000), 1_000, 120_000);
-            BatteryModeEnabled                 = ReadBool(key, "BatteryModeEnabled",                 false);
-            BatteryMinimizeGraceMs             = Math.Clamp(ReadInt(key, "BatteryMinimizeGraceMs",       10_000), 1_000, 60_000);
+            BackgroundNapEnabled               = ReadBool(key, "BackgroundNapEnabled",               true);
+            BackgroundNapAfterMs               = Math.Clamp(ReadInt(key, "BackgroundNapAfterMs",         180_000), 30_000, 600_000);
+            IdleNapEnabled                     = ReadBool(key, "IdleNapEnabled",                     true);
+            IdleNapAfterMs                     = Math.Clamp(ReadInt(key, "IdleNapAfterMs",               120_000), 30_000, 600_000);
         }
         catch (Exception ex)
         {
@@ -660,7 +721,9 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
             key.SetValue("AdaptiveTick",            AdaptiveTick         ? 1 : 0, RegistryValueKind.DWord);
             key.SetValue("EnforceSettings",         EnforceSettings      ? 1 : 0, RegistryValueKind.DWord);
             key.SetValue("SoftNapEnabled", SoftNapEnabled ? 1 : 0, RegistryValueKind.DWord);
+            key.SetValue("AggressivenessLevel", AggressivenessLevel, RegistryValueKind.DWord);
             // Beta features
+            key.SetValue("ElevatedProcessGuardEnabled",        ElevatedProcessGuardEnabled        ? 1 : 0, RegistryValueKind.DWord);
             key.SetValue("MultiMonitorAwarenessEnabled",       MultiMonitorAwarenessEnabled       ? 1 : 0, RegistryValueKind.DWord);
             key.SetValue("NetworkActivityGuardEnabled",        NetworkActivityGuardEnabled        ? 1 : 0, RegistryValueKind.DWord);
             key.SetValue("NetworkActivityThresholdKBps",       NetworkActivityThresholdKBps,                RegistryValueKind.DWord);
@@ -672,8 +735,10 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
             key.SetValue("SmartAggressiveTickCount",           SmartAggressiveTickCount,                    RegistryValueKind.DWord);
             key.SetValue("NotificationGracePeriodEnabled",     NotificationGracePeriodEnabled     ? 1 : 0, RegistryValueKind.DWord);
             key.SetValue("NotificationGracePeriodMs",          NotificationGracePeriodMs,                   RegistryValueKind.DWord);
-            key.SetValue("BatteryModeEnabled",                 BatteryModeEnabled                 ? 1 : 0, RegistryValueKind.DWord);
-            key.SetValue("BatteryMinimizeGraceMs",             BatteryMinimizeGraceMs,                      RegistryValueKind.DWord);
+            key.SetValue("BackgroundNapEnabled",               BackgroundNapEnabled               ? 1 : 0, RegistryValueKind.DWord);
+            key.SetValue("BackgroundNapAfterMs",               BackgroundNapAfterMs,                        RegistryValueKind.DWord);
+            key.SetValue("IdleNapEnabled",                     IdleNapEnabled                     ? 1 : 0, RegistryValueKind.DWord);
+            key.SetValue("IdleNapAfterMs",                     IdleNapAfterMs,                              RegistryValueKind.DWord);
         }
         catch (Exception ex)
         {
@@ -690,15 +755,15 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
             if (!File.Exists(RulesFilePath)) return;
             // Support both old format (List<TaskSleepAppRule>) and new format (List<string>)
             var json = File.ReadAllText(RulesFilePath);
-            if (json.TrimStart().StartsWith("[\""))
+            // Try new format first (string list), fall back to old object format
+            try
             {
-                // New format: simple string list
                 var names = JsonSerializer.Deserialize<List<string>>(json);
                 if (names != null)
                     foreach (var n in names)
                         if (!string.IsNullOrWhiteSpace(n)) Whitelist.Add(n.ToLowerInvariant());
             }
-            else
+            catch
             {
                 // Old format: migrate — only keep entries marked as blacklisted (never-nap)
                 var models = JsonSerializer.Deserialize<List<TaskSleepAppRule>>(json);

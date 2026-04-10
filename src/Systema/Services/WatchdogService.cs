@@ -79,11 +79,12 @@ public class WatchdogService
             logon.Repetition.StopAtDurationEnd = false;
             td.Triggers.Add(logon);
 
-            // PowerShell one-liner: only launch if not already running
-            var psCmd = $"if (-not (Get-Process -Name 'Systema' -ErrorAction SilentlyContinue)) {{ Start-Process '{exePath}' }}";
-            td.Actions.Add(new ExecAction(
-                "powershell.exe",
-                $"-WindowStyle Hidden -NonInteractive -Command \"{psCmd}\""));
+            // Use cmd.exe with tasklist instead of PowerShell to avoid the
+            // visible console window flash that -WindowStyle Hidden doesn't prevent.
+            // tasklist exits 0 when the process exists; we use "|| start" so
+            // Systema.exe is only launched when tasklist reports it is NOT running.
+            string cmdArgs = $"/c tasklist /FI \"IMAGENAME eq Systema.exe\" /NH | findstr /I \"Systema.exe\" >nul || start \"\" \"{exePath}\"";
+            td.Actions.Add(new ExecAction("cmd.exe", cmdArgs));
 
             ts.RootFolder.RegisterTaskDefinition(
                 TaskName, td,

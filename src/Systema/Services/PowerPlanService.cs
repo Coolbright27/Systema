@@ -82,6 +82,9 @@ public class PowerPlanService
         {
             try
             {
+                // Remove the 80% DC CPU cap first
+                RestoreMaxProcessorState();
+
                 // Switch back to High Performance (or Ultimate if available)
                 RunPowercfg($"/duplicatescheme {UltimatePerformanceGuid}");
                 RunPowercfg($"/setactive {UltimatePerformanceGuid}");
@@ -89,8 +92,8 @@ public class PowerPlanService
                 if (!plan.Contains("Ultimate", StringComparison.OrdinalIgnoreCase))
                     RunPowercfg($"/setactive {HighPerformanceGuid}");
 
-                _log.Info("PowerPlanService", "Battery optimization stopped — restored High Performance");
-                return TweakResult.Ok("Battery optimization disabled. High Performance plan restored.");
+                _log.Info("PowerPlanService", "Battery optimization stopped — restored High Performance + 100% CPU");
+                return TweakResult.Ok("Battery optimization disabled. High Performance plan restored, CPU cap removed.");
             }
             catch (Exception ex)
             {
@@ -253,16 +256,25 @@ public class PowerPlanService
         {
             try
             {
+                // Cap maximum processor state to 80% on DC (battery) power for ALL plans.
+                // This is the key piece — Power Saver alone doesn't cap CPU %, but
+                // powercfg /setdcvalueindex applies a real kernel-level cap.
+                foreach (string planGuid in new[] { PowerSaverGuid, BalancedGuid, HighPerformanceGuid })
+                {
+                    RunPowercfg($"/setdcvalueindex {planGuid} {ProcessorSubGroup} {MaxProcessorState} 80");
+                }
+                _log.Info("PowerPlanService", "CPU capped to 80% on DC power across all plans");
+
                 if (IsOnBattery())
                 {
                     RunPowercfg($"/setactive {PowerSaverGuid}");
-                    _log.Info("PowerPlanService", "On battery — switched active plan to Power Saver");
-                    return TweakResult.Ok("Power Saver plan activated for maximum battery life.");
+                    _log.Info("PowerPlanService", "On battery — switched active plan to Power Saver + 80% CPU cap");
+                    return TweakResult.Ok("Power Saver + 80% CPU cap activated for maximum battery life.");
                 }
                 else
                 {
-                    _log.Info("PowerPlanService", "On AC — battery opt enabled, plan unchanged until you unplug");
-                    return TweakResult.Ok("Battery optimization active. Power Saver plan will switch on when you unplug.");
+                    _log.Info("PowerPlanService", "On AC — battery opt enabled, 80% DC cap set, plan unchanged until you unplug");
+                    return TweakResult.Ok("Battery optimization active. Power Saver + 80% CPU cap will apply when you unplug.");
                 }
             }
             catch (Exception ex)
@@ -270,6 +282,20 @@ public class PowerPlanService
                 return TweakResult.FromException(ex);
             }
         });
+    }
+
+    /// <summary>Removes the 80% DC processor cap — restores 100% max state on battery.</summary>
+    public void RestoreMaxProcessorState()
+    {
+        try
+        {
+            foreach (string planGuid in new[] { PowerSaverGuid, BalancedGuid, HighPerformanceGuid })
+            {
+                RunPowercfg($"/setdcvalueindex {planGuid} {ProcessorSubGroup} {MaxProcessorState} 100");
+            }
+            _log.Info("PowerPlanService", "CPU cap restored to 100% on DC power across all plans");
+        }
+        catch (Exception ex) { _log.Warn("PowerPlanService", $"RestoreMaxProcessorState failed: {ex.Message}"); }
     }
 
     /// <summary>Restores a named power plan (saved before battery optimization was enabled).</summary>

@@ -29,4 +29,5 @@ public class ProcessSnapshot
     public string StatusLabel  { get; init; } = ""; // "Napping" | "Active" | "Pending" | ""
     public string CoreLabel    { get; init; } = ""; // "E-cores" | "All Cores"
     public string ThrottledFor { get; init; } = ""; // "5s", "2m 3s", "" when not throttled
+    public string SkipReason   { get; init; } = ""; // Why the process isn't napped (e.g. "Foreground", "Audio active")
 }

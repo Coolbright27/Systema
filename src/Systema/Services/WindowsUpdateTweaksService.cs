@@ -10,6 +10,7 @@
 //   ToolsViewModel.cs  — Windows Update tweak toggle on the Tools tab
 // ════════════════════════════════════════════════════════════════════════════
 
+using System.Diagnostics;
 using Microsoft.Win32;
 using Systema.Core;
 
@@ -94,6 +95,9 @@ public class WindowsUpdateTweaksService
                 // 16 = General Availability Channel (stable), 2/4/8 = Insider rings.
                 key.SetValue("BranchReadinessLevel",           16, RegistryValueKind.DWord);
 
+                // Force a Group Policy refresh so Windows Update picks up the change now
+                RunGpUpdate();
+
                 Log.Info("WUTweaks", "Preview update block applied — ManagePreviewBuilds=1, PolicyValue=0, BranchReadinessLevel=16");
                 return TweakResult.Ok(
                     "Preview updates blocked. Windows Update is locked to the stable release " +
@@ -109,6 +113,9 @@ public class WindowsUpdateTweaksService
 
     /// <summary>
     /// Removes the preview build block, restoring default Windows Update behaviour.
+    /// Deletes the individual values AND the WindowsUpdate policy key itself if empty,
+    /// because Group Policy still reads an empty key as "managed" on some Windows builds.
+    /// Also runs <c>gpupdate /force</c> so the policy change takes effect immediately.
     /// </summary>
     public async Task<TweakResult> AllowPreviewUpdatesAsync()
     {
@@ -123,13 +130,21 @@ public class WindowsUpdateTweaksService
                 {
                     key.DeleteValue("ManagePreviewBuilds",            throwOnMissingValue: false);
                     key.DeleteValue("ManagePreviewBuildsPolicyValue", throwOnMissingValue: false);
-                    // Must also remove BranchReadinessLevel — leaving it at 16 while the
-                    // ManagePreviewBuilds policy is gone still restricts channel selection,
-                    // which can confuse Windows Update on Insider-enrolled machines.
                     key.DeleteValue("BranchReadinessLevel",           throwOnMissingValue: false);
+
+                    // If the key is now empty, delete it entirely — an empty policy key
+                    // can still be read as "managed" by the Windows Update client.
+                    if (key.ValueCount == 0 && key.SubKeyCount == 0)
+                    {
+                        key.Close();
+                        Registry.LocalMachine.DeleteSubKey(WuPolicyKey, throwOnMissingSubKey: false);
+                    }
                 }
 
-                Log.Info("WUTweaks", "Preview update block removed — all three policy values deleted");
+                // Force a Group Policy refresh so Windows Update picks up the change now
+                RunGpUpdate();
+
+                Log.Info("WUTweaks", "Preview update block removed — policy key cleaned and gpupdate forced");
                 return TweakResult.Ok(
                     "Preview update block removed. Windows Update behaviour restored to system default.");
             }
@@ -139,5 +154,22 @@ public class WindowsUpdateTweaksService
                 return TweakResult.FromException(ex);
             }
         });
+    }
+
+    private static void RunGpUpdate()
+    {
+        try
+        {
+            var psi = new ProcessStartInfo
+            {
+                FileName        = "gpupdate.exe",
+                Arguments       = "/force",
+                UseShellExecute = false,
+                CreateNoWindow  = true,
+            };
+            using var proc = System.Diagnostics.Process.Start(psi);
+            proc?.WaitForExit(30_000);
+        }
+        catch { /* best-effort */ }
     }
 }

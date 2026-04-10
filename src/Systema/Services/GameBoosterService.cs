@@ -138,6 +138,8 @@ public sealed class GameBoosterService : IDisposable
     private bool _wifiRadioDisabled;
     // Bluetooth disable — true if we turned the radio off (so we know to restore it)
     private bool _bluetoothRadioDisabled;
+    // Search indexing — true if WSearch was running before boost and we stopped it
+    private bool _searchIndexingWasRunning;
 
     public bool IsEnabled             => _settings.GameBoosterEnabled;
     public bool BoostActive           => _boostActive;
@@ -674,7 +676,9 @@ public sealed class GameBoosterService : IDisposable
             }
             catch (Exception ex)
             {
-                _log.Warn("GameBoosterService", $"Could not kill {svcName}: {ex.Message}");
+                // Service not installed — skip silently; only warn for actual errors
+                if (!ex.Message.Contains("was not found"))
+                    _log.Warn("GameBoosterService", $"Could not stop {svcName}: {ex.Message}");
             }
         }
 
@@ -748,7 +752,8 @@ public sealed class GameBoosterService : IDisposable
             }
             catch (Exception ex)
             {
-                _log.Warn("GameBoosterService", $"Could not restore {svcName}: {ex.Message}");
+                if (!ex.Message.Contains("was not found"))
+                    _log.Warn("GameBoosterService", $"Could not restore {svcName}: {ex.Message}");
             }
         }
         _killedServices.Clear();
@@ -947,7 +952,35 @@ public sealed class GameBoosterService : IDisposable
             catch (Exception ex) { _log.Warn("GameBoosterService", $"SuppressNotifications failed: {ex.Message}"); }
         }
 
-        // 4. Switch to High Performance power plan
+        // 4. Disable Windows Search Indexing — suspend, stop, and disable the service
+        if (_settings.GameBoosterDisableSearchIndexing)
+        {
+            try
+            {
+                using var svc = new ServiceController("WSearch");
+                bool wasRunning = svc.Status == ServiceControllerStatus.Running ||
+                                  svc.Status == ServiceControllerStatus.StartPending;
+                if (wasRunning)
+                {
+                    _searchIndexingWasRunning = true;
+                    svc.Stop();
+                    try { svc.WaitForStatus(ServiceControllerStatus.Stopped, TimeSpan.FromSeconds(8)); } catch { }
+                    // Also set to Disabled so it doesn't restart mid-game
+                    using var key = Registry.LocalMachine.OpenSubKey(
+                        @"SYSTEM\CurrentControlSet\Services\WSearch", true);
+                    key?.SetValue("Start", 4, RegistryValueKind.DWord);
+                    _log.Info("GameBoosterService", "Search indexing disabled for game boost");
+                }
+                else
+                {
+                    _searchIndexingWasRunning = false;
+                    _log.Info("GameBoosterService", "Search indexing already stopped — skipping");
+                }
+            }
+            catch (Exception ex) { _log.Warn("GameBoosterService", $"DisableSearchIndexing failed: {ex.Message}"); }
+        }
+
+        // 5. Switch to High Performance power plan
         if (_settings.GameBoosterHighPerfPowerPlan)
         {
             try
@@ -1017,7 +1050,29 @@ public sealed class GameBoosterService : IDisposable
             finally { _savedNotificationsEnabled = null; }
         }
 
-        // 2. Restore power plan
+        // 2. Restore Search Indexing — only if it was running before boost
+        if (_searchIndexingWasRunning)
+        {
+            try
+            {
+                // Set back to Auto start
+                using var key = Registry.LocalMachine.OpenSubKey(
+                    @"SYSTEM\CurrentControlSet\Services\WSearch", true);
+                key?.SetValue("Start", 2, RegistryValueKind.DWord);
+                // Start the service
+                using var svc = new ServiceController("WSearch");
+                if (svc.Status == ServiceControllerStatus.Stopped)
+                {
+                    svc.Start();
+                    try { svc.WaitForStatus(ServiceControllerStatus.Running, TimeSpan.FromSeconds(8)); } catch { }
+                }
+                _log.Info("GameBoosterService", "Search indexing restored after boost");
+            }
+            catch (Exception ex) { _log.Warn("GameBoosterService", $"RestoreSearchIndexing failed: {ex.Message}"); }
+            finally { _searchIndexingWasRunning = false; }
+        }
+
+        // 3. Restore power plan
         if (_savedPowerPlanGuid != null)
         {
             try

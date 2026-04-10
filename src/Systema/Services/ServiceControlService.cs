@@ -39,6 +39,8 @@ public class ServiceControlService
         "wbengine",       // Block Level Backup Engine — needed if using Windows Backup
         "SCardSvr",       // Smart Card — needed if user has a smart card reader
         "SCPolicySvc",    // Smart Card Removal Policy — needed with smart cards
+        "SysMain",        // SuperFetch — useful on systems with less RAM
+        "WSearch",        // Windows Search — disabling slows File Explorer search
     };
 
     public static readonly List<(string ServiceName, string DisplayName, string Description, string Tooltip)> OptimizableServices = new()
@@ -181,6 +183,11 @@ public class ServiceControlService
         ("wisvc",             "Windows Insider Service",
             "Connects this PC to the Windows Insider Program to receive pre-release preview builds from Microsoft.",
             "Safe to disable if you're not enrolled in the Insider Program."),
+
+        // ── Parental Controls ────────────────────────────────────────────────
+        ("WpcMonSvc",         "Parental Controls",
+            "Monitors and logs all web browsing, app usage, and screen time — even when no child account is configured.",
+            "Safe to disable if you don't use Windows Family Safety / parental controls."),
     };
 
     // ── Telemetry service list (for master toggle) ──
@@ -195,6 +202,9 @@ public class ServiceControlService
     // Cache: avoids re-querying all services on every 1-second refresh tick.
     private (DateTime Time, List<ServiceInfo> Data) _statusCache;
     private static readonly TimeSpan StatusCacheTtl = TimeSpan.FromSeconds(5);
+
+    /// <summary>Forces the next GetServiceStatuses call to re-query all services.</summary>
+    public void InvalidateCache() => _statusCache = default;
 
     public List<ServiceInfo> GetServiceStatuses(bool gamesInstalled = false)
     {
@@ -226,7 +236,9 @@ public class ServiceControlService
             }
             catch (Exception ex)
             {
-                Log.Warn("ServiceControl", $"Could not query service '{name}': {ex.Message}");
+                // Service not installed on this machine — expected for optional Windows features, not a warning
+                if (!ex.Message.Contains("was not found"))
+                    Log.Warn("ServiceControl", $"Could not query service '{name}': {ex.Message}");
                 result.Add(new ServiceInfo
                 {
                     ServiceName   = name,
@@ -312,6 +324,7 @@ public class ServiceControlService
                 if (key == null)
                     return TweakResult.Fail($"Cannot open registry key for {serviceName} — access denied or service not found.");
                 key.SetValue("Start", 4, RegistryValueKind.DWord);
+                InvalidateCache();
                 Log.Info("ServiceControl", $"Service disabled: {serviceName}");
                 Log.LogChange("Service Disabled", serviceName);
                 return TweakResult.Ok($"{serviceName} disabled.");
@@ -337,6 +350,7 @@ public class ServiceControlService
                 if (key == null)
                     return TweakResult.Fail($"Cannot open registry key for {serviceName} — access denied or service not found.");
                 key.SetValue("Start", 3, RegistryValueKind.DWord);
+                InvalidateCache();
                 Log.LogChange("Service Set Manual", serviceName);
                 return TweakResult.Ok($"{serviceName} set to Manual.");
             }
@@ -355,6 +369,7 @@ public class ServiceControlService
                 if (key == null)
                     return TweakResult.Fail($"Cannot open registry key for {serviceName} — access denied or service not found.");
                 key.SetValue("Start", 2, RegistryValueKind.DWord);
+                InvalidateCache();
                 Log.Info("ServiceControl", $"Service re-enabled: {serviceName}");
                 Log.LogChange("Service Re-enabled", serviceName);
                 return TweakResult.Ok($"{serviceName} re-enabled.");

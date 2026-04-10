@@ -251,21 +251,30 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
 
                 // 3. Power plan
                 string plan  = _powerPlan.GetActivePlan();
-                bool   planOk = plan.Contains("High Performance", StringComparison.OrdinalIgnoreCase)
-                             || plan.Contains("Ultimate", StringComparison.OrdinalIgnoreCase);
+                bool hasBattery = _powerPlan.HasBattery();
+                bool batteryOptConfigured = !string.IsNullOrEmpty(_settings.BatteryOptimizationMode);
+                bool isHighPerf = plan.Contains("High Performance", StringComparison.OrdinalIgnoreCase)
+                               || plan.Contains("Ultimate", StringComparison.OrdinalIgnoreCase);
+                // On a laptop with battery optimization configured, the plan switching
+                // to Balanced on battery is expected behaviour — not a problem.
+                bool planOk = isHighPerf
+                           || (hasBattery && batteryOptConfigured &&
+                               plan.Contains("Balanced", StringComparison.OrdinalIgnoreCase));
                 if (!planOk) pending++;
                 items.Add(new AutoPilotItem
                 {
                     Label  = "Power plan",
                     IsDone = planOk,
-                    Detail = planOk ? "High Performance" : $"Currently: {plan}",
+                    Detail = isHighPerf ? "High Performance"
+                           : planOk    ? "Balanced on battery (auto-switching enabled)"
+                                       : $"Currently: {plan}",
                 });
                 ActivePlan = plan;
 
                 // 4. Balanced on battery (only if battery present)
-                if (_powerPlan.HasBattery())
+                if (hasBattery)
                 {
-                    bool battOk = !string.IsNullOrEmpty(_settings.BatteryOptimizationMode);
+                    bool battOk = batteryOptConfigured;
                     if (!battOk) pending++;
                     items.Add(new AutoPilotItem
                     {

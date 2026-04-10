@@ -161,11 +161,19 @@ public class TaskSleepSettings
 
     /// <summary>
     /// Maximum CPU usage (percent, 1–100) for napped processes. Uses Job Object
-    /// CPU rate control — a real kernel-level cap. Default: 5%.
+    /// CPU rate control — a real kernel-level cap. Default: 3%.
     /// </summary>
-    public int NappedCpuCapPercent { get; set; } = 5;
+    public int NappedCpuCapPercent { get; set; } = 3;
 
     // ── Beta Features ────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// When true, processes running at High or System integrity level (elevated/admin
+    /// processes, OS infrastructure like Hyper-V vmwp.exe, Docker, WSL2, etc.) are
+    /// automatically protected from napping. Prevents throttling critical system
+    /// processes that aren't in the foreground's process tree. On by default.
+    /// </summary>
+    public bool ElevatedProcessGuardEnabled { get; set; } = true;
 
     /// <summary>
     /// When true, apps visible on ANY monitor are protected from napping, not just
@@ -234,17 +242,38 @@ public class TaskSleepSettings
     /// </summary>
     public int NotificationGracePeriodMs { get; set; } = 15_000;
 
+    // ── Background Nap (unfocused timer) ────────────────────────────────────
     /// <summary>
-    /// When true, nap thresholds are lowered on battery power to extend battery life.
-    /// Reduces CPU trigger by half, enables aggressive napping, and shortens grace periods.
-    /// Off by default.
+    /// When true, any non-foreground process is napped after being unfocused for
+    /// BackgroundNapAfterMs, regardless of CPU usage. The most effective nap mode —
+    /// catches everything the user isn't actively using.
     /// </summary>
-    public bool BatteryModeEnabled { get; set; } = false;
+    public bool BackgroundNapEnabled { get; set; } = true;
 
     /// <summary>
-    /// On battery, minimize-nap grace period is reduced to this value (ms). Default: 10 s.
+    /// How long (ms) a process must be unfocused before background nap kicks in.
+    /// Default: 180 000 ms (3 minutes).
     /// </summary>
-    public int BatteryMinimizeGraceMs { get; set; } = 10_000;
+    public int BackgroundNapAfterMs { get; set; } = 180_000;
+
+    // ── Idle Nap (low CPU auto-nap) ──────────────────────────────────────────
+    /// <summary>
+    /// When true, any non-foreground process using less than IdleNapCpuThreshold %
+    /// for IdleNapAfterMs is napped regardless of system CPU level. Catches truly
+    /// idle background processes that waste resources by just existing.
+    /// </summary>
+    public bool IdleNapEnabled { get; set; } = true;
+
+    /// <summary>
+    /// CPU % threshold below which a process is considered idle. Default: 0.5%.
+    /// </summary>
+    public double IdleNapCpuThreshold { get; set; } = 0.5;
+
+    /// <summary>
+    /// How long (ms) a process must stay below IdleNapCpuThreshold before being
+    /// idle-napped. Default: 120 000 ms (2 minutes).
+    /// </summary>
+    public int IdleNapAfterMs { get; set; } = 120_000;
 
     // ── Monitoring ────────────────────────────────────────────────────────────
     /// <summary>

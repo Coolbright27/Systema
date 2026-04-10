@@ -125,24 +125,26 @@ public class CoreParkingService
     });
 
     /// <summary>
-    /// Disables core parking by forcing all cores to stay unparked:
-    ///   - Sets CPMINCORES = 100 % so the OS must keep every core active.
-    ///   - Deletes the SystemaCoreParking scheduled task (no longer needed).
-    ///
-    /// Note: CPMINCORES = 0 would be wrong here — that means "minimum 0 cores
-    /// must stay active", which allows maximum parking. We want 100 (no parking).
+    /// Disables core parking enforcement — restores Windows default behaviour:
+    ///   - Deletes Systema's CPMINCORES registry overrides from all power schemes
+    ///     so the OS uses its own built-in core parking logic.
+    ///   - Runs <c>powercfg /setactive SCHEME_CURRENT</c> to apply immediately.
+    ///   - Deletes the SystemaCoreParking scheduled task.
     /// </summary>
     public Task<TweakResult> DisableForcedCoreParking() => Task.Run(() =>
     {
         try
         {
-            // 100 % = keep all cores unparked. Apply before deleting the task so
-            // the change takes effect immediately via powercfg /setactive.
-            int schemesUpdated = ApplyCoreParking(minCoresPercent: 100);
+            // Remove Systema's overrides from all power schemes so Windows
+            // goes back to its built-in CPMINCORES default.
+            int cleaned = RemoveCoreParkingOverrides();
+
+            // Also reset the active scheme via powercfg to apply immediately
+            RunPowercfg("/setactive SCHEME_CURRENT");
 
             DeleteScheduledTask();
 
-            string msg = $"Core parking disabled — all cores forced unparked across {schemesUpdated} scheme(s). Startup task removed.";
+            string msg = $"Core parking enforcement removed — Windows defaults restored across {cleaned} scheme(s). Startup task removed.";
             return TweakResult.Ok(msg);
         }
         catch (Exception ex)
@@ -204,6 +206,47 @@ public class CoreParkingService
         ApplyViaPowercfg(minCoresPercent);
 
         return updated;
+    }
+
+    /// <summary>
+    /// Removes Systema's CPMINCORES AC/DC overrides from all power schemes,
+    /// letting Windows fall back to its built-in defaults.
+    /// </summary>
+    private static int RemoveCoreParkingOverrides()
+    {
+        int cleaned = 0;
+        try
+        {
+            using var schemesKey = Registry.LocalMachine.OpenSubKey(PowerSchemesRoot, writable: false);
+            if (schemesKey == null) return 0;
+
+            foreach (string schemeGuid in schemesKey.GetSubKeyNames())
+            {
+                string settingPath =
+                    $@"{PowerSchemesRoot}\{schemeGuid}\{ProcessorPowerSubGroupGuid}\{CpMinCoresGuid}";
+
+                try
+                {
+                    using var settingKey = Registry.LocalMachine.OpenSubKey(settingPath, writable: true);
+                    if (settingKey == null) continue;
+
+                    settingKey.DeleteValue("ACSettingIndex", throwOnMissingValue: false);
+                    settingKey.DeleteValue("DCSettingIndex", throwOnMissingValue: false);
+                    cleaned++;
+                }
+                catch (Exception ex)
+                {
+                    LoggerService.Instance.Warn("CoreParkingService",
+                        $"Could not clean scheme '{schemeGuid}': {ex.Message}");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            LoggerService.Instance.Warn("CoreParkingService",
+                $"RemoveCoreParkingOverrides enumeration failed: {ex.Message}");
+        }
+        return cleaned;
     }
 
     /// <summary>

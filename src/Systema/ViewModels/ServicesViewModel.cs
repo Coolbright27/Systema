@@ -256,8 +256,11 @@ public partial class ServicesViewModel : ObservableObject, IAutoRefreshable
                 StatusMessage = $"Disabling {svc.DisplayName}... ({disabled + 1}/{recommended.Count})";
                 try
                 {
-                    await _serviceControl.DisableServiceAsync(svc.ServiceName);
-                    disabled++;
+                    var result = await _serviceControl.DisableServiceAsync(svc.ServiceName);
+                    if (result.Success) disabled++;
+                    else _log.Warn("ServicesViewModel", $"DisableServiceAsync({svc.ServiceName}) failed: {result.Message}");
+                    // Small delay between operations so the SCM has time to process
+                    await Task.Delay(150);
                 }
                 catch (Exception ex)
                 {

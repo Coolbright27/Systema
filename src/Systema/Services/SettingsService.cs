@@ -319,6 +319,18 @@ public class SettingsService
         set => WriteBool(nameof(GameBoosterPreventSleep), value);
     }
 
+    /// <summary>
+    /// Disable Windows Search Indexing (WSearch) during game boost to free disk I/O
+    /// and CPU. The service is suspended AND stopped during the session and restored
+    /// when the game exits — unless it was already disabled before the boost.
+    /// Default: true (on).
+    /// </summary>
+    public bool GameBoosterDisableSearchIndexing
+    {
+        get => ReadBool(nameof(GameBoosterDisableSearchIndexing), defaultValue: true);
+        set => WriteBool(nameof(GameBoosterDisableSearchIndexing), value);
+    }
+
     // ── System Stability tweaks ───────────────────────────────────────────────
 
     /// <summary>Whether the user has disabled Windows Fast Startup (off by default).</summary>
