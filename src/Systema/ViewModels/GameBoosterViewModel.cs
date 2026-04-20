@@ -57,7 +57,6 @@ public partial class GameBoosterViewModel : ObservableObject, IAutoRefreshable, 
     [ObservableProperty] private bool _freeMemoryOnBoost;
     [ObservableProperty] private bool _suppressNotifications;
     [ObservableProperty] private bool _highPerfPowerPlan;
-    [ObservableProperty] private bool _timerResolutionOnBoost;
     [ObservableProperty] private bool _disableGameBar;
     [ObservableProperty] private bool _gpuProfileOnBoost;
     [ObservableProperty] private bool _disableNagleOnBoost;
@@ -229,7 +228,6 @@ public partial class GameBoosterViewModel : ObservableObject, IAutoRefreshable, 
         _settings.GameBoosterFreeMemory            = FreeMemoryOnBoost;
         _settings.GameBoosterSuppressNotifications = SuppressNotifications;
         _settings.GameBoosterHighPerfPowerPlan     = HighPerfPowerPlan;
-        _settings.GameBoosterTimerResolution       = TimerResolutionOnBoost;
         _settings.GameBoosterDisableGameBar        = DisableGameBar;
         _settings.GameBoosterGpuProfile            = GpuProfileOnBoost;
         _settings.GameBoosterDisableNagle          = DisableNagleOnBoost;
@@ -302,7 +300,6 @@ public partial class GameBoosterViewModel : ObservableObject, IAutoRefreshable, 
         FreeMemoryOnBoost       = _settings.GameBoosterFreeMemory;
         SuppressNotifications   = _settings.GameBoosterSuppressNotifications;
         HighPerfPowerPlan       = _settings.GameBoosterHighPerfPowerPlan;
-        TimerResolutionOnBoost  = _settings.GameBoosterTimerResolution;
         DisableGameBar          = _settings.GameBoosterDisableGameBar;
         GpuProfileOnBoost       = _settings.GameBoosterGpuProfile;
         DisableNagleOnBoost     = _settings.GameBoosterDisableNagle;
@@ -328,7 +325,6 @@ public partial class GameBoosterViewModel : ObservableObject, IAutoRefreshable, 
         OnPropertyChanged(nameof(FreeMemoryOnBoost));
         OnPropertyChanged(nameof(SuppressNotifications));
         OnPropertyChanged(nameof(HighPerfPowerPlan));
-        OnPropertyChanged(nameof(TimerResolutionOnBoost));
         OnPropertyChanged(nameof(DisableGameBar));
         OnPropertyChanged(nameof(GpuProfileOnBoost));
         OnPropertyChanged(nameof(DisableNagleOnBoost));

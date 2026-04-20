@@ -227,16 +227,24 @@ public class PowerPlanService
         {
             try
             {
+                // Cap maximum processor state to 99% on DC (battery) power for ALL plans.
+                // This disables turbo boost while allowing normal max frequency.
+                foreach (string planGuid in new[] { PowerSaverGuid, BalancedGuid, HighPerformanceGuid })
+                {
+                    RunPowercfg($"/setdcvalueindex {planGuid} {ProcessorSubGroup} {MaxProcessorState} 99");
+                }
+                _log.Info("PowerPlanService", "CPU capped to 99% on DC power across all plans");
+
                 if (IsOnBattery())
                 {
                     RunPowercfg($"/setactive {BalancedGuid}");
-                    _log.Info("PowerPlanService", "On battery — switched active plan to Balanced");
-                    return TweakResult.Ok("Balanced plan activated. Will restore your previous plan when plugged in.");
+                    _log.Info("PowerPlanService", "On battery — switched active plan to Balanced + 99% CPU cap");
+                    return TweakResult.Ok("Balanced plan + 99% CPU cap (turbo boost disabled) activated. Will restore your previous plan when plugged in.");
                 }
                 else
                 {
-                    _log.Info("PowerPlanService", "On AC — battery opt enabled, plan unchanged until you unplug");
-                    return TweakResult.Ok("Battery optimization active. Balanced plan will switch on when you unplug.");
+                    _log.Info("PowerPlanService", "On AC — battery opt enabled, 99% DC cap set, plan unchanged until you unplug");
+                    return TweakResult.Ok("Battery optimization active. Balanced plan + 99% CPU cap will apply when you unplug.");
                 }
             }
             catch (Exception ex)

@@ -31,6 +31,12 @@ using Microsoft.Win32;
 using Systema.Core;
 using Systema.Models;
 using Systema.Services;
+// Aliases avoid ambiguity with System.Windows.Forms.TextBox (WinForms is referenced via UseWindowsForms).
+using WpfTextBox = System.Windows.Controls.TextBox;
+using WpfKeyboard = System.Windows.Input.Keyboard;
+using WpfWindow = System.Windows.Window;
+using WpfVisualTreeHelper = System.Windows.Media.VisualTreeHelper;
+using WpfDependencyObject = System.Windows.DependencyObject;
 
 namespace Systema.ViewModels;
 
@@ -48,33 +54,18 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
 
     // ── Observable properties ─────────────────────────────────────────────────
 
-    // ── Automatic Controls ────────────────────────────────────────────────────
+    // ── Core Controls ────────────────────────────────────────────────────────
     [ObservableProperty] private bool   _isEnabled               = true;
-    [ObservableProperty] private bool   _lowerCpuPriority        = true;
-    [ObservableProperty] private bool   _ignoreForeground        = true;
-    [ObservableProperty] private bool   _actOnForegroundChildren = false;
-    [ObservableProperty] private bool   _excludeSystemServices   = true;
-    [ObservableProperty] private bool   _enableEfficiencyMode    = true;
 
-    [ObservableProperty] private bool _cpuTriggeredNapEnabled = true;
     [ObservableProperty] private bool _napChildrenEnabled     = false;
 
-    // ── CPU Thresholds ────────────────────────────────────────────────────────
+    // ── CPU Thresholds (fixed defaults — preset selector removed in 1.7.32) ──
     [ObservableProperty] private int _systemCpuTriggerPercent = 12;
     [ObservableProperty] private int _processCpuStartPercent  = 7;
     [ObservableProperty] private int _processCpuStopPercent   = 3;
-    [ObservableProperty] private int _timeOverQuotaMs         = 1000;
-    [ObservableProperty] private int _minAdjustmentDurationMs = 1000;
-    [ObservableProperty] private int _maxAdjustmentDurationMs = 3000;
-
-    // ── GPU, I/O & Core Affinity ──────────────────────────────────────────────
-    [ObservableProperty] private bool _lowerGpuPriority = true;
-    [ObservableProperty] private bool _lowerIoPriority  = true;
-    [ObservableProperty] private bool _detectECores     = true;
-    [ObservableProperty] private bool _moveToECores     = true;
-
-    // ── Persistent Nap ────────────────────────────────────────────────────────
-    [ObservableProperty] private bool _persistentNapEnabled = true;
+    [ObservableProperty] private int _timeOverQuotaMs         = 1500;
+    [ObservableProperty] private int _minAdjustmentDurationMs = 5000;
+    [ObservableProperty] private int _maxAdjustmentDurationMs = 30000;
 
     // ── Minimize Nap ──────────────────────────────────────────────────────────
     [ObservableProperty] private bool _minimizeNapEnabled              = true;
@@ -83,10 +74,7 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
     [ObservableProperty] private int  _minimizeDeepSleepThresholdMs    = 600_000;
     [ObservableProperty] private int  _minimizeDeepSleepWakeIntervalMs = 300_000;
 
-    // ── Advanced: Memory / Tick ────────────────────────────────────────────────
-    [ObservableProperty] private bool _lowerMemoryPriority = true;
-    [ObservableProperty] private bool _trimWorkingSet      = true;
-    [ObservableProperty] private bool _adaptiveTick        = true;
+    // (LowerMemoryPriority, TrimWorkingSet, AdaptiveTick always on — hardcoded in BuildSettings)
 
     // ── Whitelist (apps that are never napped) ────────────────────────────────
     /// <summary>Process names that Task Sleep will never touch, shown as the whitelist in the UI.</summary>
@@ -105,18 +93,30 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
     [ObservableProperty] private int  _trayDeepSleepWakeIntervalMs = 600_000;
 
     // ── CPU Cap ──────────────────────────────────────────────────────────────
-    [ObservableProperty] private bool _nappedCpuCapEnabled = true;
-    [ObservableProperty] private int  _nappedCpuCapPercent = 5;
+    [ObservableProperty] private bool _nappedCpuCapEnabled     = true;
+    [ObservableProperty] private int  _nappedCpuCapPercent     = 3;
+    [ObservableProperty] private int  _briefWakeCpuCapPercent  = 7;
+
+    // ── Game Mode interaction ────────────────────────────────────────────────
+    [ObservableProperty] private bool _suppressBriefWakesDuringGameMode = true;
 
     // ── Brief Wake Concurrency ────────────────────────────────────────────────
     [ObservableProperty] private int _maxConcurrentBriefWakes = 3;
 
-    // ── Beta Features ────────────────────────────────────────────────────────
+    // ── Advanced Features ────────────────────────────────────────────────────
     [ObservableProperty] private bool _elevatedProcessGuardEnabled   = true;
     [ObservableProperty] private bool _multiMonitorAwarenessEnabled  = true;
+    [ObservableProperty] private bool _processGroupAwarenessEnabled  = true;
+
+    // ── Background / Idle Nap ────────────────────────────────────────────────
+    [ObservableProperty] private bool _backgroundNapEnabled          = true;
+    [ObservableProperty] private int  _backgroundNapAfterMs          = 180_000;
+    [ObservableProperty] private bool _idleNapEnabled                = true;
+    [ObservableProperty] private int  _idleNapAfterMs                = 120_000;
+
+    // ── Beta Features ────────────────────────────────────────────────────────
     [ObservableProperty] private bool _networkActivityGuardEnabled   = false;
     [ObservableProperty] private int  _networkActivityThresholdKBps  = 50;
-    [ObservableProperty] private bool _processGroupAwarenessEnabled  = true;
     [ObservableProperty] private bool _diskIoGuardEnabled            = false;
     [ObservableProperty] private int  _diskIoThresholdKBps           = 100;
     [ObservableProperty] private bool _smartAggressiveNapEnabled     = false;
@@ -124,23 +124,13 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
     [ObservableProperty] private int  _smartAggressiveTickCount      = 5;
     [ObservableProperty] private bool _notificationGracePeriodEnabled = false;
     [ObservableProperty] private int  _notificationGracePeriodMs     = 15_000;
-    [ObservableProperty] private bool _backgroundNapEnabled          = true;
-    [ObservableProperty] private int  _backgroundNapAfterMs          = 180_000;
-    [ObservableProperty] private bool _idleNapEnabled                = true;
-    [ObservableProperty] private int  _idleNapAfterMs                = 120_000;
 
-    // ── Monitoring & Enforcement ──────────────────────────────────────────────
-    [ObservableProperty] private bool   _enforceSettings  = true;
-    [ObservableProperty] private bool   _softNapEnabled   = false;
+    // ── UI Display ──────────────────────────────────────────────────────────
     [ObservableProperty] private string _cpuFreedDisplay  = "";
     [ObservableProperty] private bool   _cpuFreedVisible  = false;
     [ObservableProperty] private bool   _showAllProcesses = false;
     [ObservableProperty] private string _systemCpuDisplay      = "System CPU: —";
     [ObservableProperty] private string _throttledCountDisplay = "0 napping";
-
-    // ── Aggressiveness preset (replaces individual CPU threshold controls) ─────
-    // 0=Balanced, 1=Aggressive, 2=Maximum, 3=Light
-    [ObservableProperty] private int _aggressivenessLevel = 0;
 
     // ── UI State ──────────────────────────────────────────────────────────────
     [ObservableProperty] private bool _isAdvancedExpanded = false;
@@ -218,13 +208,6 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
         else       _service.Stop();
     }
 
-    partial void OnLowerCpuPriorityChanged(bool value)        => PushSettings();
-    partial void OnIgnoreForegroundChanged(bool value)        => PushSettings();
-    partial void OnActOnForegroundChildrenChanged(bool value) => PushSettings();
-    partial void OnExcludeSystemServicesChanged(bool value)   => PushSettings();
-    partial void OnEnableEfficiencyModeChanged(bool value)    => PushSettings();
-
-    partial void OnCpuTriggeredNapEnabledChanged(bool value) => PushSettings();
     partial void OnNapChildrenEnabledChanged(bool value)    => PushSettings();
 
     partial void OnSystemCpuTriggerPercentChanged(int value)  => PushSettings();
@@ -233,12 +216,6 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
     partial void OnTimeOverQuotaMsChanged(int value)          => PushSettings();
     partial void OnMinAdjustmentDurationMsChanged(int value)  => PushSettings();
     partial void OnMaxAdjustmentDurationMsChanged(int value)  => PushSettings();
-
-    partial void OnLowerGpuPriorityChanged(bool value)      => PushSettings();
-    partial void OnLowerIoPriorityChanged(bool value)       => PushSettings();
-    partial void OnDetectECoresChanged(bool value)          => PushSettings();
-    partial void OnMoveToECoresChanged(bool value)          => PushSettings();
-    partial void OnPersistentNapEnabledChanged(bool value)  => PushSettings();
 
     partial void OnMinimizeNapEnabledChanged(bool value)              => PushSettings();
     partial void OnMinimizedBriefWakeIntervalMsChanged(int value)    => PushSettings();
@@ -253,20 +230,49 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
     partial void OnTrayDeepSleepThresholdMsChanged(int value)   => PushSettings();
     partial void OnTrayDeepSleepWakeIntervalMsChanged(int value) => PushSettings();
 
-    partial void OnNappedCpuCapEnabledChanged(bool value)  => PushSettings();
-    partial void OnNappedCpuCapPercentChanged(int value)   => PushSettings();
+    partial void OnNappedCpuCapEnabledChanged(bool value)    => PushSettings();
+    partial void OnNappedCpuCapPercentChanged(int value)
+    {
+        _log.Info("TaskSleepViewModel", $"OnNappedCpuCapPercentChanged fired: value={value}");
+        int c = Math.Clamp(value, 1, 100);
+        if (c != value) { NappedCpuCapPercent = c; return; }
+        _log.Info("TaskSleepViewModel", $"OnNappedCpuCapPercentChanged calling PushSettings (clamped={c})");
+        PushSettings();
+    }
+    partial void OnBriefWakeCpuCapPercentChanged(int value)
+    {
+        int c = Math.Clamp(value, 1, 100);
+        if (c != value) { BriefWakeCpuCapPercent = c; return; }
+        PushSettings();
+    }
+    partial void OnSuppressBriefWakesDuringGameModeChanged(bool value) => PushSettings();
 
 
-    partial void OnMaxConcurrentBriefWakesChanged(int value)   => PushSettings();
+    partial void OnMaxConcurrentBriefWakesChanged(int value)
+    {
+        int c = Math.Clamp(value, 1, 10);
+        if (c != value) { MaxConcurrentBriefWakes = c; return; }
+        PushSettings();
+    }
 
-    // ── Beta feature callbacks ────────────────────────────────────────────────
+    // ── Advanced + Beta feature callbacks ────────────────────────────────────
     partial void OnElevatedProcessGuardEnabledChanged(bool value)        => PushSettings();
     partial void OnMultiMonitorAwarenessEnabledChanged(bool value)       => PushSettings();
     partial void OnNetworkActivityGuardEnabledChanged(bool value)        => PushSettings();
-    partial void OnNetworkActivityThresholdKBpsChanged(int value)        => PushSettings();
+    partial void OnNetworkActivityThresholdKBpsChanged(int value)
+    {
+        int c = Math.Clamp(value, 1, 10_000);
+        if (c != value) { NetworkActivityThresholdKBps = c; return; }
+        PushSettings();
+    }
     partial void OnProcessGroupAwarenessEnabledChanged(bool value)       => PushSettings();
     partial void OnDiskIoGuardEnabledChanged(bool value)                 => PushSettings();
-    partial void OnDiskIoThresholdKBpsChanged(int value)                 => PushSettings();
+    partial void OnDiskIoThresholdKBpsChanged(int value)
+    {
+        int c = Math.Clamp(value, 1, 10_000);
+        if (c != value) { DiskIoThresholdKBps = c; return; }
+        PushSettings();
+    }
     partial void OnSmartAggressiveNapEnabledChanged(bool value)          => PushSettings();
     partial void OnSmartAggressiveCpuThresholdPercentChanged(int value)  => PushSettings();
     partial void OnSmartAggressiveTickCountChanged(int value)            => PushSettings();
@@ -277,61 +283,7 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
     partial void OnIdleNapEnabledChanged(bool value)                     => PushSettings();
     partial void OnIdleNapAfterMsChanged(int value)                      => PushSettings();
 
-    partial void OnLowerMemoryPriorityChanged(bool value) => PushSettings();
-    partial void OnTrimWorkingSetChanged(bool value)      => PushSettings();
-    partial void OnAdaptiveTickChanged(bool value)        => PushSettings();
-
-    partial void OnEnforceSettingsChanged(bool value)  => PushSettings();
-    partial void OnSoftNapEnabledChanged(bool value)   => PushSettings();
-
-    partial void OnAggressivenessLevelChanged(int value)
-    {
-        ApplyAggressivenessPreset(value);
-        PushSettings();
-    }
-
-    /// <summary>
-    /// Sets CPU thresholds and timing based on a simple preset level.
-    /// 0=Balanced (default), 1=Aggressive, 2=Maximum, 3=Light
-    /// </summary>
-    private void ApplyAggressivenessPreset(int level)
-    {
-        switch (level)
-        {
-            case 3: // Light — only naps very heavy background apps
-                SystemCpuTriggerPercent = 25;
-                ProcessCpuStartPercent  = 15;
-                ProcessCpuStopPercent   = 8;
-                TimeOverQuotaMs         = 3000;
-                MinAdjustmentDurationMs = 3000;
-                MaxAdjustmentDurationMs = 60_000;
-                break;
-            case 0: // Balanced — good for most users (default)
-                SystemCpuTriggerPercent = 12;
-                ProcessCpuStartPercent  = 7;
-                ProcessCpuStopPercent   = 3;
-                TimeOverQuotaMs         = 1500;
-                MinAdjustmentDurationMs = 5000;
-                MaxAdjustmentDurationMs = 30_000;
-                break;
-            case 1: // Aggressive — for gaming or low-end PCs
-                SystemCpuTriggerPercent = 5;
-                ProcessCpuStartPercent  = 3;
-                ProcessCpuStopPercent   = 1;
-                TimeOverQuotaMs         = 500;
-                MinAdjustmentDurationMs = 2000;
-                MaxAdjustmentDurationMs = 10_000;
-                break;
-            case 2: // Maximum — naps nearly everything possible
-                SystemCpuTriggerPercent = 1;
-                ProcessCpuStartPercent  = 1;
-                ProcessCpuStopPercent   = 0;
-                TimeOverQuotaMs         = 200;
-                MinAdjustmentDurationMs = 1000;
-                MaxAdjustmentDurationMs = 5000;
-                break;
-        }
-    }
+    // (LowerMemoryPriority, TrimWorkingSet, AdaptiveTick, EnforceSettings, SoftNap — hardcoded)
 
     // ── Human-friendly helpers for XAML bindings (convert ms ↔ seconds/minutes) ─
 
@@ -540,12 +492,29 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
     private TaskSleepSettings BuildSettings() => new()
     {
         IsEnabled               = IsEnabled,
-        LowerCpuPriority        = LowerCpuPriority,
-        IgnoreForeground        = IgnoreForeground,
-        ActOnForegroundChildren = ActOnForegroundChildren,
-        ExcludeSystemServices   = ExcludeSystemServices,
-        EnableEfficiencyMode    = EnableEfficiencyMode,
-        CpuTriggeredNapEnabled  = CpuTriggeredNapEnabled,
+        // Always-on core behavior (hardcoded — no UI toggle needed)
+        LowerCpuPriority        = true,
+        IgnoreForeground        = true,
+        ActOnForegroundChildren = false,
+        ExcludeSystemServices   = true,
+        EnableEfficiencyMode    = true,
+        PersistentNapEnabled    = true,
+        EnforceSettings         = true,
+        SoftNapEnabled          = false,
+        // LowerGpuPriority intentionally disabled: D3DKMT Idle tier disrupts the shared
+        // HAGS flip queue and can break VSync for foreground games. See TaskSleepSettings.
+        LowerGpuPriority        = false,
+        LowerIoPriority         = true,
+        DetectECores            = true,
+        MoveToECores            = true,
+        LowerMemoryPriority     = true,
+        TrimWorkingSet          = true,
+        AdaptiveTick            = true,
+        // User-configurable
+        // CpuTriggeredNapEnabled is hardcoded false — MinimizeNap/TrayNap/BackgroundNap/IdleNap
+        // already cover every path that needs to nap something. A plain CPU trigger risked
+        // throttling visible apps the user was actively using, which is the wrong default.
+        CpuTriggeredNapEnabled  = false,
         NapChildrenEnabled      = NapChildrenEnabled,
         SystemCpuTriggerPercent = SystemCpuTriggerPercent,
         ProcessCpuStartPercent  = ProcessCpuStartPercent,
@@ -553,11 +522,6 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
         TimeOverQuotaMs         = TimeOverQuotaMs,
         MinAdjustmentDurationMs = MinAdjustmentDurationMs,
         MaxAdjustmentDurationMs = MaxAdjustmentDurationMs,
-        LowerGpuPriority        = true, // always on — no user benefit from disabling
-        LowerIoPriority         = true,
-        DetectECores            = true,
-        MoveToECores            = true,
-        PersistentNapEnabled    = PersistentNapEnabled,
         MinimizeNapEnabled              = MinimizeNapEnabled,
         MinimizedBriefWakeIntervalMs    = MinimizedBriefWakeIntervalMs,
         MinimizedBriefWakeDurationMs    = MinimizedBriefWakeDurationMs,
@@ -567,12 +531,16 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
         TrayBriefWakeIntervalMs     = TrayBriefWakeIntervalMs,
         TrayBriefWakeDurationMs     = TrayBriefWakeDurationMs,
         TrayDeepSleepEnabled        = TrayDeepSleepEnabled,
-        TrayDeepSleepThresholdMs    = Math.Max(TrayDeepSleepThresholdMs, 60_000),
+        // Tray deep sleep threshold is unified with the minimize deep sleep threshold
+        // (one "Deep sleep after" setting in the UI). One knob, no divergence.
+        TrayDeepSleepThresholdMs    = Math.Max(MinimizeDeepSleepThresholdMs, 60_000),
         TrayDeepSleepWakeIntervalMs = Math.Max(TrayDeepSleepWakeIntervalMs, 60_000),
         NappedCpuCapEnabled         = NappedCpuCapEnabled,
         NappedCpuCapPercent         = Math.Clamp(NappedCpuCapPercent, 1, 100),
+        BriefWakeCpuCapPercent      = Math.Clamp(BriefWakeCpuCapPercent, 1, 100),
+        SuppressBriefWakesDuringGameMode = SuppressBriefWakesDuringGameMode,
         MaxConcurrentBriefWakes     = Math.Clamp(MaxConcurrentBriefWakes, 1, 10),
-        // Beta features
+        // Advanced features
         ElevatedProcessGuardEnabled        = ElevatedProcessGuardEnabled,
         MultiMonitorAwarenessEnabled       = MultiMonitorAwarenessEnabled,
         NetworkActivityGuardEnabled        = NetworkActivityGuardEnabled,
@@ -590,17 +558,12 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
         IdleNapEnabled                     = IdleNapEnabled,
         IdleNapCpuThreshold                = 0.5,
         IdleNapAfterMs                     = Math.Clamp(IdleNapAfterMs, 30_000, 600_000),
-        LowerMemoryPriority     = true, // always on
-        TrimWorkingSet          = true,
-        AdaptiveTick            = AdaptiveTick,
         // Whitelist entries are stored as blacklist (IsBlacklisted=true) AppRules internally
         AppRules                = Whitelist.Select(name => new TaskSleepAppRule
                                   {
                                       ProcessName  = name,
                                       IsBlacklisted = true
                                   }).ToList(),
-        EnforceSettings         = EnforceSettings,
-        SoftNapEnabled          = SoftNapEnabled,
         IsGameModeActive        = _isGameModeActive,
     };
 
@@ -608,18 +571,13 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
 
     private void LoadSettings()
     {
+        _log.Info("TaskSleepViewModel", "LoadSettings starting — reading registry");
         try
         {
             using var key = Registry.CurrentUser.OpenSubKey(RegKey, writable: false);
-            if (key == null) return;
+            if (key == null) { _log.Warn("TaskSleepViewModel", "LoadSettings: registry key not found — using defaults"); return; }
 
             IsEnabled               = ReadBool(key, "IsEnabled",               true);
-            LowerCpuPriority        = ReadBool(key, "LowerCpuPriority",        true);
-            IgnoreForeground        = ReadBool(key, "IgnoreForeground",        true);
-            ActOnForegroundChildren = ReadBool(key, "ActOnForegroundChildren", false);
-            ExcludeSystemServices   = ReadBool(key, "ExcludeSystemServices",   true);
-            EnableEfficiencyMode    = ReadBool(key, "EnableEfficiencyMode",    true);
-            CpuTriggeredNapEnabled  = ReadBool(key, "CpuTriggeredNapEnabled",  true);
             NapChildrenEnabled      = ReadBool(key, "NapChildrenEnabled",      false);
             SystemCpuTriggerPercent = Math.Clamp(ReadInt(key, "SystemCpuTriggerPercent",  12), 1, 100);
             ProcessCpuStartPercent  = Math.Clamp(ReadInt(key, "ProcessCpuStartPercent",    7), 1, 100);
@@ -627,11 +585,6 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
             TimeOverQuotaMs         = Math.Clamp(ReadInt(key, "TimeOverQuotaMs",        1500), 100, 60_000);
             MinAdjustmentDurationMs = Math.Clamp(ReadInt(key, "MinAdjustmentDurationMs", 5000), 500, 300_000);
             MaxAdjustmentDurationMs = Math.Clamp(ReadInt(key, "MaxAdjustmentDurationMs", 30000), 1000, 3_600_000);
-            LowerGpuPriority        = ReadBool(key, "LowerGpuPriority",      true);
-            LowerIoPriority         = ReadBool(key, "LowerIoPriority",       true);
-            DetectECores            = ReadBool(key, "DetectECores",          true);
-            MoveToECores            = ReadBool(key, "MoveToECores",          true);
-            PersistentNapEnabled    = ReadBool(key, "PersistentNapEnabled",  true);
             MinimizeNapEnabled              = ReadBool(key, "MinimizeNapEnabled",              true);
             MinimizedBriefWakeIntervalMs    = Math.Clamp(ReadInt(key, "MinimizedBriefWakeIntervalMs",    60_000), 1_000, 3_600_000);
             MinimizedBriefWakeDurationMs    = Math.Clamp(ReadInt(key, "MinimizedBriefWakeDurationMs",    10_000), 500, 300_000);
@@ -645,14 +598,10 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
             TrayDeepSleepWakeIntervalMs = Math.Clamp(ReadInt(key, "TrayDeepSleepWakeIntervalMs", 600_000), 60_000, 3_600_000);
             NappedCpuCapEnabled         = ReadBool(key, "NappedCpuCapEnabled",         true);
             NappedCpuCapPercent         = Math.Clamp(ReadInt(key, "NappedCpuCapPercent", 3), 1, 100);
+            BriefWakeCpuCapPercent      = Math.Clamp(ReadInt(key, "BriefWakeCpuCapPercent", 7), 1, 100);
+            SuppressBriefWakesDuringGameMode = ReadBool(key, "SuppressBriefWakesDuringGameMode", true);
             MaxConcurrentBriefWakes     = Math.Clamp(ReadInt(key, "MaxConcurrentBriefWakes",  3), 1, 10);
-            LowerMemoryPriority     = ReadBool(key, "LowerMemoryPriority",   true);
-            TrimWorkingSet          = ReadBool(key, "TrimWorkingSet",        true);
-            AdaptiveTick            = ReadBool(key, "AdaptiveTick",          true);
-            EnforceSettings         = ReadBool(key, "EnforceSettings",       true);
-            SoftNapEnabled = ReadBool(key, "SoftNapEnabled", false);
-            AggressivenessLevel = Math.Clamp(ReadInt(key, "AggressivenessLevel", 0), 0, 3);
-            // Beta features
+            // Advanced + Beta features
             ElevatedProcessGuardEnabled        = ReadBool(key, "ElevatedProcessGuardEnabled",        true);
             MultiMonitorAwarenessEnabled       = ReadBool(key, "MultiMonitorAwarenessEnabled",       true);
             NetworkActivityGuardEnabled        = ReadBool(key, "NetworkActivityGuardEnabled",        false);
@@ -678,18 +627,14 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
 
     private void SaveSettings()
     {
+        var caller = new System.Diagnostics.StackTrace(1, false).ToString().Split('\n')[0].Trim();
+        _log.Info("TaskSleepViewModel", $"SaveSettings called — NappedCpuCapPercent={NappedCpuCapPercent} — caller: {caller}");
         try
         {
             using var key = Registry.CurrentUser.CreateSubKey(RegKey, writable: true);
-            if (key == null) return;
+            if (key == null) { _log.Warn("TaskSleepViewModel", "SaveSettings: registry key creation failed (null)"); return; }
 
             key.SetValue("IsEnabled",               IsEnabled               ? 1 : 0, RegistryValueKind.DWord);
-            key.SetValue("LowerCpuPriority",        LowerCpuPriority        ? 1 : 0, RegistryValueKind.DWord);
-            key.SetValue("IgnoreForeground",        IgnoreForeground        ? 1 : 0, RegistryValueKind.DWord);
-            key.SetValue("ActOnForegroundChildren", ActOnForegroundChildren ? 1 : 0, RegistryValueKind.DWord);
-            key.SetValue("ExcludeSystemServices",   ExcludeSystemServices   ? 1 : 0, RegistryValueKind.DWord);
-            key.SetValue("EnableEfficiencyMode",    EnableEfficiencyMode    ? 1 : 0, RegistryValueKind.DWord);
-            key.SetValue("CpuTriggeredNapEnabled",  CpuTriggeredNapEnabled  ? 1 : 0, RegistryValueKind.DWord);
             key.SetValue("NapChildrenEnabled",      NapChildrenEnabled      ? 1 : 0, RegistryValueKind.DWord);
             key.SetValue("SystemCpuTriggerPercent", SystemCpuTriggerPercent,          RegistryValueKind.DWord);
             key.SetValue("ProcessCpuStartPercent",  ProcessCpuStartPercent,           RegistryValueKind.DWord);
@@ -697,11 +642,6 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
             key.SetValue("TimeOverQuotaMs",         TimeOverQuotaMs,                  RegistryValueKind.DWord);
             key.SetValue("MinAdjustmentDurationMs", MinAdjustmentDurationMs,          RegistryValueKind.DWord);
             key.SetValue("MaxAdjustmentDurationMs", MaxAdjustmentDurationMs,          RegistryValueKind.DWord);
-            key.SetValue("LowerGpuPriority",        LowerGpuPriority     ? 1 : 0, RegistryValueKind.DWord);
-            key.SetValue("LowerIoPriority",         LowerIoPriority      ? 1 : 0, RegistryValueKind.DWord);
-            key.SetValue("DetectECores",            DetectECores         ? 1 : 0, RegistryValueKind.DWord);
-            key.SetValue("MoveToECores",            MoveToECores         ? 1 : 0, RegistryValueKind.DWord);
-            key.SetValue("PersistentNapEnabled",    PersistentNapEnabled ? 1 : 0, RegistryValueKind.DWord);
             key.SetValue("MinimizeNapEnabled",              MinimizeNapEnabled      ? 1 : 0, RegistryValueKind.DWord);
             key.SetValue("MinimizedBriefWakeIntervalMs",    MinimizedBriefWakeIntervalMs,     RegistryValueKind.DWord);
             key.SetValue("MinimizedBriefWakeDurationMs",    MinimizedBriefWakeDurationMs,     RegistryValueKind.DWord);
@@ -715,14 +655,10 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
             key.SetValue("TrayDeepSleepWakeIntervalMs", TrayDeepSleepWakeIntervalMs,  RegistryValueKind.DWord);
             key.SetValue("NappedCpuCapEnabled",         NappedCpuCapEnabled   ? 1 : 0, RegistryValueKind.DWord);
             key.SetValue("NappedCpuCapPercent",         NappedCpuCapPercent,          RegistryValueKind.DWord);
+            key.SetValue("BriefWakeCpuCapPercent",      BriefWakeCpuCapPercent,       RegistryValueKind.DWord);
+            key.SetValue("SuppressBriefWakesDuringGameMode", SuppressBriefWakesDuringGameMode ? 1 : 0, RegistryValueKind.DWord);
             key.SetValue("MaxConcurrentBriefWakes",     MaxConcurrentBriefWakes,      RegistryValueKind.DWord);
-            key.SetValue("LowerMemoryPriority",     LowerMemoryPriority  ? 1 : 0, RegistryValueKind.DWord);
-            key.SetValue("TrimWorkingSet",          TrimWorkingSet       ? 1 : 0, RegistryValueKind.DWord);
-            key.SetValue("AdaptiveTick",            AdaptiveTick         ? 1 : 0, RegistryValueKind.DWord);
-            key.SetValue("EnforceSettings",         EnforceSettings      ? 1 : 0, RegistryValueKind.DWord);
-            key.SetValue("SoftNapEnabled", SoftNapEnabled ? 1 : 0, RegistryValueKind.DWord);
-            key.SetValue("AggressivenessLevel", AggressivenessLevel, RegistryValueKind.DWord);
-            // Beta features
+            // Advanced + Beta features
             key.SetValue("ElevatedProcessGuardEnabled",        ElevatedProcessGuardEnabled        ? 1 : 0, RegistryValueKind.DWord);
             key.SetValue("MultiMonitorAwarenessEnabled",       MultiMonitorAwarenessEnabled       ? 1 : 0, RegistryValueKind.DWord);
             key.SetValue("NetworkActivityGuardEnabled",        NetworkActivityGuardEnabled        ? 1 : 0, RegistryValueKind.DWord);
@@ -739,6 +675,7 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
             key.SetValue("BackgroundNapAfterMs",               BackgroundNapAfterMs,                        RegistryValueKind.DWord);
             key.SetValue("IdleNapEnabled",                     IdleNapEnabled                     ? 1 : 0, RegistryValueKind.DWord);
             key.SetValue("IdleNapAfterMs",                     IdleNapAfterMs,                              RegistryValueKind.DWord);
+            _log.Info("TaskSleepViewModel", $"SaveSettings completed successfully — NappedCpuCapPercent={NappedCpuCapPercent}");
         }
         catch (Exception ex)
         {
@@ -795,8 +732,75 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Forces every pending TextBox edit (LostFocus binding) in every live WPF
+    /// window to commit its source, then unconditionally persists every setting.
+    /// Safe to call from any Dispose path (window close, tray Exit, OS shutdown).
+    ///
+    /// Fixes the "type a number then restart → value resets" bug: our XAML uses
+    /// UpdateSourceTrigger=LostFocus, so a typed value in a still-focused
+    /// TextBox never reaches the VM property unless we force the commit here.
+    ///
+    /// We walk the visual tree (not Keyboard.FocusedElement) because:
+    ///   • A window hidden to tray loses focus tracking but its TextBoxes live on.
+    ///   • Keyboard.FocusedElement returns null/wrong element for hidden windows.
+    ///   • Tree walk catches every pending binding regardless of focus state.
+    /// </summary>
+    public void CommitPendingEditsAndSave()
+    {
+        try
+        {
+            var app = Application.Current;
+            if (app != null)
+            {
+                Action commitAll = () =>
+                {
+                    foreach (WpfWindow w in app.Windows)
+                        CommitAllTextBoxBindings(w);
+                };
+                if (app.Dispatcher.CheckAccess()) commitAll();
+                else app.Dispatcher.Invoke(commitAll);
+            }
+        }
+        catch (Exception ex)
+        {
+            _log.Warn("TaskSleepViewModel", $"CommitPendingEdits (tree walk) failed: {ex.Message}");
+        }
+
+        // Unconditional safety-net save — idempotent and cheap, even if no
+        // setter fired above. Covers every edge case (app crash mid-shutdown,
+        // OS session-end, user clicks Exit without ever blurring a TextBox).
+        try { SaveSettings();  } catch { /* SaveSettings logs its own failures */ }
+        try { SaveWhitelist(); } catch { /* SaveWhitelist logs its own failures */ }
+    }
+
+    /// <summary>
+    /// Recursively walks the visual tree rooted at <paramref name="parent"/> and
+    /// calls <see cref="System.Windows.Data.BindingExpression.UpdateSource"/> on
+    /// every TextBox's Text binding. Commits any pending LostFocus edits.
+    /// </summary>
+    private static void CommitAllTextBoxBindings(WpfDependencyObject? parent)
+    {
+        if (parent == null) return;
+        if (parent is WpfTextBox tb)
+        {
+            try
+            {
+                var exp = tb.GetBindingExpression(WpfTextBox.TextProperty);
+                exp?.UpdateSource();
+            }
+            catch { /* one bad binding shouldn't stop the rest */ }
+        }
+        int count = WpfVisualTreeHelper.GetChildrenCount(parent);
+        for (int i = 0; i < count; i++)
+            CommitAllTextBoxBindings(WpfVisualTreeHelper.GetChild(parent, i));
+    }
+
     public void Dispose()
     {
+        // Flush any pending user edits and persist before stopping timers / disposing service.
+        CommitPendingEditsAndSave();
+
         _monitorTimer.Stop();
         _processRefreshTimer.Stop();
         _service.Dispose();

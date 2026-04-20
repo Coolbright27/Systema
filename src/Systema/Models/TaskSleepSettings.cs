@@ -49,7 +49,7 @@ public class TaskSleepSettings
     public int MaxAdjustmentDurationMs { get; set; } = 30000; // force-restore after this long (fallback when PersistentNap=off)
 
     // ── GPU, I/O & Core Affinity ──────────────────────────────────────────────
-    public bool LowerGpuPriority { get; set; } = true;
+    public bool LowerGpuPriority { get; set; } = false; // default OFF — D3DKMT Idle tier disrupts the shared HAGS flip queue, breaking VSync for all processes including foreground games
     public bool LowerIoPriority  { get; set; } = true;
     public bool DetectECores     { get; set; } = true;
     public bool MoveToECores     { get; set; } = true;
@@ -91,8 +91,9 @@ public class TaskSleepSettings
     public bool MinimizeNapEnabled { get; set; } = true;
 
     /// <summary>
-    /// How often (ms) a minimized-napped app is allowed a brief wake when the system
-    /// CPU is low enough (below SystemCpuTriggerPercent / 2). Default: 60 s.
+    /// How often (ms) a minimized-napped app is allowed a brief wake. Default: 60 s.
+    /// Not gated on system CPU — MaxConcurrentBriefWakes, BriefWakeCpuCapPercent, and
+    /// the 10-second wake window together bound the cost.
     /// </summary>
     public int MinimizedBriefWakeIntervalMs { get; set; } = 60_000;
 
@@ -164,6 +165,25 @@ public class TaskSleepSettings
     /// CPU rate control — a real kernel-level cap. Default: 3%.
     /// </summary>
     public int NappedCpuCapPercent { get; set; } = 3;
+
+    /// <summary>
+    /// CPU cap (percent, 1–100) applied DURING brief wake windows instead of fully
+    /// releasing the cap. Lets napped apps make real progress during their wake window
+    /// without letting them spike. 7% ≈ 2.3× the nap cap — enough to process a message
+    /// queue or fire a setInterval callback, but keeps concurrent-wake CPU bounded
+    /// (3 wakes × 7% = 21%, under the 12% system nap trigger's steady-state budget).
+    /// Default: 7%.
+    /// </summary>
+    public int BriefWakeCpuCapPercent { get; set; } = 7;
+
+    /// <summary>
+    /// When true, scheduled brief wakes (both minimize-nap and tray-nap) are suspended
+    /// while Game Mode is active. Napped apps stay napped for the entire game session,
+    /// reserving 100% of the CPU for the game. Default: true — this is the intended
+    /// behavior for most users. Turn off only if you actively need background apps
+    /// (e.g. Discord bots, streaming scripts) to keep getting periodic runtime while gaming.
+    /// </summary>
+    public bool SuppressBriefWakesDuringGameMode { get; set; } = true;
 
     // ── Beta Features ────────────────────────────────────────────────────────
 

@@ -28,6 +28,7 @@ using System.Management;
 using System.Runtime.InteropServices;
 using Systema.Core;
 using Systema.Models;
+using Systema.Services.TaskSleep;
 
 namespace Systema.Services;
 
@@ -68,14 +69,23 @@ public sealed class TaskSleepService : IDisposable
     // pid -> UTC timestamp when this process first exceeded the CPU start threshold
     private readonly Dictionary<int, DateTime> _overThresholdSince = new();
 
-    // pid -> (total CPU time in 100-ns ticks, sample timestamp) for CPU% calculation
-    private readonly Dictionary<int, (long TotalTime, DateTime SampleTime)> _cpuSamples = new();
+    // Single-call kernel sampler — owns its own pid → (CreateTime, TotalCpu, WallTicks)
+    // baseline state. Replaces the v1.7.30 Parallel.ForEach + OpenProcess-per-PID path
+    // (which cost ~200-900 ms per tick on a busy system).
+    private readonly NtProcessSampler _ntSampler = new();
 
     // pid -> last computed CPU percentage (monitor-thread only)
     private readonly Dictionary<int, double> _lastCpuPercent = new();
 
     // pid -> process display name (monitor-thread only)
     private readonly Dictionary<int, string> _processNames = new();
+
+    // pid -> CreationTime in 100-ns ticks since 1601 (Windows FILETIME units).
+    // Acts as the ProcessKey identity half: any dictionary keyed purely by PID can
+    // be validated by comparing this value to the latest sampler output. If the PID
+    // has been reused by a new process, the creation times differ and the stale
+    // throttle / cap state is dropped.
+    private readonly Dictionary<int, long> _pidCreationTimes = new();
 
     // pid -> original affinity mask (saved before we pin to E-cores)
     private readonly ConcurrentDictionary<int, UIntPtr> _originalAffinities = new();
@@ -145,19 +155,21 @@ public sealed class TaskSleepService : IDisposable
     // Cleaned up in CleanupDeadProcesses when the PID exits.
     private readonly Dictionary<int, bool> _elevatedPidCache = new();
 
+    // ── Auto-detected critical services (populated at startup via WMI scan) ────
+    // Supplements StaticSystemProcessNames to catch critical services that appear
+    // in OS updates or are otherwise not in the static list.
+    private volatile HashSet<string> _detectedCriticalServices = new(StringComparer.OrdinalIgnoreCase);
+
     // ── CPU cap via Job Objects ───────────────────────────────────────────────
     // pid → Job Object handle. When a process is napped and CPU cap is enabled,
     // a job with a hard CPU rate limit is created and the process assigned to it.
     // Closing the job handle on restore releases the cap.
-    // IntPtr.Zero sentinel = job assignment failed, using suspend/resume fallback.
+    // If job assignment fails (e.g. Chromium/browser sandbox procs already in a
+    // non-nestable job), the cap is simply skipped for that process — priority,
+    // EcoQoS, affinity, and I/O/Memory priority throttling still apply and are
+    // sufficient. The v1.7.30 NtSuspendProcess duty-cycle fallback was removed
+    // in v1.7.31 because it could hang windowed GPU/COM workloads.
     private readonly Dictionary<int, IntPtr> _cpuCapJobs = new();
-
-    // ── Suspend/resume duty-cycle fallback for processes in non-nestable jobs ──
-    // When job assignment fails, we enforce CPU cap by suspending the process for
-    // a fraction of each tick. PIDs in this set get suspended at tick start and
-    // resumed partway through.
-    private readonly HashSet<int> _dutyCyclePids = new();
-    private readonly Dictionary<int, int> _dutyCycleCapPercent = new();
 
     // ── Re-enforce tracking ───────────────────────────────────────────────────
     // Counts how many times the re-enforce step had to push each process back.
@@ -344,8 +356,17 @@ public sealed class TaskSleepService : IDisposable
         // UWP infrastructure — WinStore.App runs inside ApplicationFrameHost;
         // throttling these causes Store downloads to stall and UWP apps to hang
         "WinStore.App", "Microsoft.WindowsStore",
-        // Windows Update installers — throttling mid-install can cause restart hangs
-        "wuauclt", "musNotification", "musNotificationUx", "WaaSMedicAgent",
+        // Windows Update orchestration — throttling breaks Windows Update COM registration
+        // and coordination between update services, causing 0x80004002 COM interface errors
+        "wuauclt",                // Windows Update Auto Update client
+        "musNotification",        // MU notification UI (tray)
+        "musNotificationUx",      // MU notification (newer UX)
+        "WaaSMedicAgent",         // Windows as a Service health diagnostics
+        "WaaSMedicSvc",           // WaaS Medic Service — monitors update health
+        "UsoSvc",                 // Update Orchestrator Service — main Windows Update coordinator
+        "UsoClient",              // UOS client (moved from AggressiveNapTargets to protected)
+        "WuauserV1",              // WSUS update handler variant
+        "svchost",                // (already protected in core OS list above)
         // Diagnostics / perf tools — throttling Task Manager while troubleshooting is confusing
         "Taskmgr", "PerfHost",
         // ── Anti-cheat services — throttling these causes game kicks or bans ────
@@ -378,6 +399,18 @@ public sealed class TaskSleepService : IDisposable
         "atiesrxx",             // AMD External Events Server
         "RadeonSoftware",       // AMD Radeon Software overlay
         "RadeonsoftwareSlimService", // AMD Radeon slim service
+        "AMDRSServ",                // AMD Radeon Software service helper
+        "AMDRSSrcExt",              // AMD Radeon Software source extension
+        "amdfendr",                 // AMD Crash Defender (anti-cheat companion)
+        "NvTelemetryContainer",     // NVIDIA telemetry container (driver component)
+        "NvNodeLauncher",           // NVIDIA node.js launcher (GFE component)
+        "GameBarPresenceWriter",    // Xbox Game Bar presence writer (overlay infra)
+        "GameBarFTServer",          // Xbox Game Bar frame target server
+        "XboxGameBarWidgets",       // Xbox Game Bar widgets host
+        "WinRing0_1_2_0",           // WinRing0 driver helper (HWiNFO, RTSS, etc.)
+        "RTSS",                     // RivaTuner Statistics Server (frame limiter/OSD)
+        "RTSSHooksLoader64",        // RTSS hooks loader
+        "EncoderServer64",          // NVIDIA NVENC encoder server (ShadowPlay)
         // ── Audio driver processes — throttling causes crackle / latency spikes ──
         "RtkAudUService64",     // Realtek HD Audio UAD service (64-bit)
         "RtkAudUService32",     // Realtek HD Audio UAD service (32-bit)
@@ -451,8 +484,6 @@ public sealed class TaskSleepService : IDisposable
     {
         // Telemetry / data collection
         "DiagTrack", "wsqmcons", "compattelrunner",
-        // Windows Update background workers (not the core update service)
-        "UsoClient",
         // Cloud sync agents (throttle when not actively syncing visible files)
         "OneDrive", "Dropbox", "GoogleDriveFS", "iCloudDrive",
         "iCloud", "iCloudServices", "BoxSync", "pCloud",
@@ -539,10 +570,10 @@ public sealed class TaskSleepService : IDisposable
     private const int  IO_PRIORITY_LOW              = 1;
 
     // ── Process access rights ──────────────────────────────────────────────────
+    private const uint PROCESS_TERMINATE                 = 0x0001;
     private const uint PROCESS_SET_INFORMATION           = 0x0200;
     private const uint PROCESS_QUERY_LIMITED_INFORMATION = 0x1000;
     private const uint PROCESS_SET_QUOTA                = 0x0100;
-    private const uint PROCESS_SUSPEND_RESUME           = 0x0800;
 
     // ── Efficiency Mode (EcoQoS) constants ────────────────────────────────────
     private const uint PROCESS_POWER_THROTTLING_CURRENT_VERSION = 1;
@@ -559,6 +590,13 @@ public sealed class TaskSleepService : IDisposable
     // Checked at the start of each Tick() so the monitor thread enforces the new cap safely.
     private volatile bool _enforceWakeCapOnNextTick;
 
+    // Set by UpdateSettings when the CPU cap setting changes (enabled/disabled/percent).
+    // Processed by the monitor thread during Tick() to avoid cross-thread access to
+    // _cpuCapJobs (non-concurrent collection).
+    private volatile bool _cpuCapSettingsChanged;
+    private volatile int  _pendingCpuCapPercent;
+    private volatile bool _pendingCpuCapEnabled;
+
     public void UpdateSettings(TaskSleepSettings settings)
     {
         // ── Validate settings before applying ────────────────────────────────
@@ -569,17 +607,32 @@ public sealed class TaskSleepService : IDisposable
         // NappedCpuCapPercent must be 1–100
         settings.NappedCpuCapPercent = Math.Clamp(settings.NappedCpuCapPercent, 1, 100);
 
-        int oldMaxWakes;
+        bool oldCapEnabled;
+        int  oldCapPercent;
+        int  oldMaxWakes;
         lock (_settingsLock)
         {
-            oldMaxWakes = _settings.MaxConcurrentBriefWakes;
-            _settings   = settings;
-            _appRules   = settings.AppRules.ToDictionary(r => r.ProcessName, StringComparer.OrdinalIgnoreCase);
+            oldCapEnabled = _settings.NappedCpuCapEnabled;
+            oldCapPercent = _settings.NappedCpuCapPercent;
+            oldMaxWakes   = _settings.MaxConcurrentBriefWakes;
+            _settings     = settings;
+            _appRules     = settings.AppRules.ToDictionary(r => r.ProcessName, StringComparer.OrdinalIgnoreCase);
         }
 
         // If the cap was reduced, signal the monitor thread to enforce it on the very next tick.
         if (settings.MaxConcurrentBriefWakes < oldMaxWakes)
             _enforceWakeCapOnNextTick = true;
+
+        // ── Live-update CPU cap on already-throttled processes ────────────────
+        // Signal the monitor thread to apply the change on the next Tick.
+        // We must NOT touch _cpuCapJobs here because it is a non-concurrent
+        // collection owned by the monitor thread.
+        if (settings.NappedCpuCapPercent != oldCapPercent || settings.NappedCpuCapEnabled != oldCapEnabled)
+        {
+            _pendingCpuCapPercent = settings.NappedCpuCapPercent;
+            _pendingCpuCapEnabled = settings.NappedCpuCapEnabled;
+            _cpuCapSettingsChanged = true;
+        }
     }
 
     // ── Lifecycle ──────────────────────────────────────────────────────────────
@@ -590,8 +643,10 @@ public sealed class TaskSleepService : IDisposable
         _running = true;
 
         // Detect registered 3rd-party antivirus products so their processes are protected.
-        // Run on a background thread — WMI can be slow and we don't want to block startup.
+        // Run on background threads — WMI can be slow and we don't want to block startup.
+        // These initialize critical protection lists.
         _ = System.Threading.Tasks.Task.Run(DetectRegisteredAntiviruses);
+        _ = System.Threading.Tasks.Task.Run(ScanAndProtectCriticalServices);
 
         _monitorThread = new Thread(MonitorLoop, 8 * 1024 * 1024)
         {
@@ -617,7 +672,11 @@ public sealed class TaskSleepService : IDisposable
         Notify("Task Sleep is off.");
     }
 
-    public void Dispose() => Stop();
+    public void Dispose()
+    {
+        Stop();
+        _ntSampler.Dispose();
+    }
 
     // ── Monitor loop ───────────────────────────────────────────────────────────
 
@@ -645,10 +704,10 @@ public sealed class TaskSleepService : IDisposable
 
         while (_running)
         {
-            // Processes run freely during Tick() so CPU is measured accurately.
-            // The duty cycle only suspends processes that are ACTUALLY over the cap,
-            // and only during the sleep phase — like macOS App Nap (priority lowering
-            // is the main mechanism, suspension is a last resort for over-cap processes).
+            // Duty-cycle PIDs stay suspended during Tick() for tight cap enforcement.
+            // Priority lowering + EcoQoS are the main mechanism (App Nap style);
+            // duty-cycle suspend/resume is the hard-cap enforcement for processes
+            // that couldn't get a kernel Job Object cap.
             try   { Tick(); }
             catch (Exception ex) { _log.Error("TaskSleepService", "Tick failed", ex); }
 
@@ -656,6 +715,8 @@ public sealed class TaskSleepService : IDisposable
             {
                 // Adaptive tick: when the system is idle and nothing is throttled there
                 // is nothing to do — sleep longer to reduce the monitor's own overhead.
+                // Event-driven fast paths (foreground / minimize / audio) drive restore
+                // latency, so this tick is now primarily a reconciliation cadence.
                 TaskSleepSettings s;
                 lock (_settingsLock) { s = _settings; }
                 int sleepMs = (s.AdaptiveTick &&
@@ -663,56 +724,7 @@ public sealed class TaskSleepService : IDisposable
                                _throttledPids.IsEmpty)
                     ? 2500 : 1000;
 
-                // Duty-cycle CPU cap: only suspend processes that are measured above the
-                // user-set CPU cap. Processes below the cap are left alone — priority
-                // lowering, efficiency mode, and E-core affinity handle them (App Nap style).
-                //
-                // The CPU was sampled during Tick() while the process was running, so the
-                // reading is accurate. Suspension only happens during the sleep phase.
-                if (_dutyCyclePids.Count > 0)
-                {
-                    // Always enforce duty cycle on ALL duty-cycle PIDs — they already have
-                    // a CPU cap assigned (typically 3%). The suspend/resume ratio enforces
-                    // that cap at the OS level. Only skip suspension if CPU is truly near zero
-                    // (below 1%) since there's nothing to cap.
-                    var activeDcPids = new List<int>();
-                    foreach (int dcPid in _dutyCyclePids)
-                    {
-                        _lastCpuPercent.TryGetValue(dcPid, out double cpu);
-                        if (cpu >= 1.0)  // above 1% → needs enforcement
-                            activeDcPids.Add(dcPid);
-                    }
-
-                    if (activeDcPids.Count > 0)
-                    {
-                        // Use the lowest cap among active PIDs for timing
-                        int minCap = 3;
-                        foreach (int dcPid in activeDcPids)
-                        {
-                            int pidCap = _dutyCycleCapPercent.GetValueOrDefault(dcPid, 3);
-                            if (pidCap < minCap) minCap = pidCap;
-                        }
-                        // awakeMs = fraction of sleep corresponding to cap%.
-                        // E.g. cap=3%, sleepMs=1000 → awake 30ms, suspend 970ms.
-                        // Minimum 50ms awake to avoid permanent freeze.
-                        int awakeMs   = Math.Max(50, sleepMs * minCap / 100);
-                        int suspendMs = sleepMs - awakeMs;
-
-                        DutyCycleSuspendSpecific(activeDcPids);
-                        Thread.Sleep(suspendMs);
-
-                        DutyCycleResumeSpecific(activeDcPids);
-                        Thread.Sleep(awakeMs);
-                    }
-                    else
-                    {
-                        Thread.Sleep(sleepMs);
-                    }
-                }
-                else
-                {
-                    Thread.Sleep(sleepMs);
-                }
+                Thread.Sleep(sleepMs);
             }
         }
     }
@@ -722,6 +734,17 @@ public sealed class TaskSleepService : IDisposable
         TaskSleepSettings s;
         Dictionary<string, TaskSleepAppRule> rules;
         lock (_settingsLock) { s = _settings; rules = _appRules; }
+
+        // ── SELF-PROTECTION: Systema must NEVER throttle itself ──
+        // Even if a bug causes Systema to be throttled, we detect and restore it immediately.
+        // This is a safety net to catch edge cases where Systema's own PID gets into _throttledPids.
+        int ourPid = Process.GetCurrentProcess().Id;
+        if (_throttledPids.ContainsKey(ourPid))
+        {
+            _log.Warn("TaskSleepService",
+                $"⚠️ SELF-PROTECTION: Systema itself (PID {ourPid}) was throttled — restoring immediately. This should never happen; please report the circumstances.");
+            TryRestoreProcess(ourPid);
+        }
 
         // 4d. If the max-concurrent-wakes cap was reduced, expire excess active brief wakes now.
         // This runs on the monitor thread so dictionary access is safe (single-threaded tick).
@@ -743,6 +766,39 @@ public sealed class TaskSleepService : IDisposable
                                                     .Select(kv => kv.Key)
                                                     .ToList())
                     _briefWakeEndAt[pid] = expireNow;
+            }
+        }
+
+        // 4e. Apply pending CPU cap changes from UpdateSettings (deferred to monitor thread
+        //      for thread safety — _cpuCapJobs is non-concurrent).
+        if (_cpuCapSettingsChanged)
+        {
+            _cpuCapSettingsChanged = false;
+            bool capEnabled = _pendingCpuCapEnabled;
+            int  capPercent = _pendingCpuCapPercent;
+
+            if (!capEnabled)
+            {
+                // Cap was disabled — remove all active caps
+                foreach (int pid in _cpuCapJobs.Keys.ToList())
+                    RemoveCpuCap(pid);
+                _log.Info("TaskSleepService", "CPU cap disabled — removed caps from all napped processes");
+            }
+            else
+            {
+                // Cap enabled or percent changed — update existing + apply to uncapped
+                foreach (var kvp in _cpuCapJobs.ToList())
+                {
+                    if (kvp.Value != IntPtr.Zero)
+                        UpdateCpuCap(kvp.Key, capPercent);
+                }
+                // Apply to any throttled processes that don't have a cap yet
+                foreach (int pid in _throttledPids.Keys.ToList())
+                {
+                    if (!_cpuCapJobs.ContainsKey(pid))
+                        ApplyCpuCap(pid, capPercent);
+                }
+                _log.Info("TaskSleepService", $"CPU cap live-updated to {capPercent}% on all napped processes");
             }
         }
 
@@ -866,11 +922,29 @@ public sealed class TaskSleepService : IDisposable
             while (_wakeRequests.TryDequeue(out string? wn))
                 if (wn != null) wakeNames.Add(wn);
 
-            foreach (int pid in _throttledPids.Keys.ToList())
+            // Union: throttled pids AND pids currently in a brief wake. BeginBriefWake
+            // removes from _throttledPids, so brief-wake PIDs live only in the nap-type
+            // dicts — without this union, "Stop Napping" silently no-ops on them.
+            var allNappedPids = new HashSet<int>(_throttledPids.Keys);
+            allNappedPids.UnionWith(_minimizedNapPids);
+            allNappedPids.UnionWith(_trayNapPids);
+            allNappedPids.UnionWith(_backgroundNapPids);
+            allNappedPids.UnionWith(_idleNapPids);
+
+            foreach (int pid in allNappedPids)
             {
                 if (_processNames.TryGetValue(pid, out string? pname) && wakeNames.Contains(pname))
                 {
-                    TryRestoreProcess(pid);
+                    if (_throttledPids.ContainsKey(pid))
+                    {
+                        TryRestoreProcess(pid);
+                    }
+                    else
+                    {
+                        // Mid-brief-wake — priority is already normal, just release the
+                        // kernel cap and clear tracking state.
+                        FullyRestoreFromBriefWake(pid);
+                    }
                     _minimizedNapPids.Remove(pid);
                     _trayNapPids.Remove(pid);
                     _backgroundNapPids.Remove(pid);
@@ -879,6 +953,11 @@ public sealed class TaskSleepService : IDisposable
                     _briefWakeEndAt.Remove(pid);
                     _trayNextBriefWakeAt.Remove(pid);
                     _trayBriefWakeEndAt.Remove(pid);
+                    // Wake any children this parent had napped — otherwise they stay
+                    // capped at 3% after the user clicks "Stop Napping" on the parent.
+                    // FullyRestoreFromBriefWake already does this internally; calling
+                    // again is a no-op (RestoreNapChildren is idempotent on empty sets).
+                    RestoreNapChildren(pid);
                 }
             }
         }
@@ -899,24 +978,33 @@ public sealed class TaskSleepService : IDisposable
                 shouldRestore = true; restoreReason = "process exited";
                 _minimizedNapPids.Remove(pid); _nextBriefWakeAt.Remove(pid); _briefWakeEndAt.Remove(pid);
                 _napSince.Remove(pid);            }
-            else if (protectedPids.Contains(pid))
+            else if (protectedPids.Contains(pid) &&
+                     (pid == (int)foregroundPid || visibleOnMonitorPids.Contains(pid)))
             {
-                // Protected PID — only restore if the user DIRECTLY focused this PID
-                // (it's the foreground window or visible on a monitor). A minimize/tray-napped
-                // process can land in protectedPids via process group or family matching
-                // without the user actually touching it — don't restore in that case.
-                bool isDirectForeground = pid == (int)foregroundPid ||
-                                          visibleOnMonitorPids.Contains(pid);
-                if (isDirectForeground)
-                {
-                    // User brought the app to foreground — wake it permanently
-                    shouldRestore = true; restoreReason = "opened by user";
-                    _minimizedNapPids.Remove(pid); _nextBriefWakeAt.Remove(pid); _briefWakeEndAt.Remove(pid);
-                    _trayNapPids.Remove(pid); _trayNextBriefWakeAt.Remove(pid); _trayBriefWakeEndAt.Remove(pid);
-                    _backgroundNapPids.Remove(pid); _idleNapPids.Remove(pid);
-                    _napSince.Remove(pid);
-                }
-                // else: family/group matched but not directly focused — leave napped
+                // User brought the app DIRECTLY to foreground — wake it permanently.
+                shouldRestore = true; restoreReason = "opened by user";
+                _minimizedNapPids.Remove(pid); _nextBriefWakeAt.Remove(pid); _briefWakeEndAt.Remove(pid);
+                _trayNapPids.Remove(pid); _trayNextBriefWakeAt.Remove(pid); _trayBriefWakeEndAt.Remove(pid);
+                _backgroundNapPids.Remove(pid); _idleNapPids.Remove(pid);
+                _napSince.Remove(pid);
+            }
+            else if (protectedPids.Contains(pid) &&
+                     (_backgroundNapPids.Contains(pid) || _idleNapPids.Contains(pid)))
+            {
+                // Family match (same exe name or app family as the foreground pid) AND
+                // this sibling is bg/idle-napped. Previously this branch left the helper
+                // napped "because the user didn't directly focus it" — which caused Steam
+                // webhelpers, Electron/Chromium renderers, Discord helpers, etc. to stay
+                // stuck at the 3% napped CPU cap while the main app was foreground,
+                // making the whole app feel unusably slow.
+                //
+                // Restore the helper so it can render/process alongside its parent.
+                // Minimize/tray-napped family members are NOT restored here — the user
+                // deliberately hid those, and their own branches below handle un-minimize
+                // / visibility / audio restore.
+                shouldRestore = true; restoreReason = "app family focused";
+                _backgroundNapPids.Remove(pid); _idleNapPids.Remove(pid);
+                _napSince.Remove(pid);
             }
             else if (_minimizedNapPids.Contains(pid))
             {
@@ -935,11 +1023,19 @@ public sealed class TaskSleepService : IDisposable
                 }
                 else
                 {
-                    // Still minimized & silent — collect as brief-wake candidate (fairness: sorted later)
-                    bool cpuIdle    = sysCpu < s.SystemCpuTriggerPercent / 2.0;
+                    // Still minimized & silent — collect as brief-wake candidate (fairness: sorted later).
+                    // No system-CPU gate: apps like Steam commonly run 5+ processes each capped
+                    // at NappedCpuCapPercent (default 3%), so the napped contribution alone is
+                    // already 15%+ of total CPU. Any CPU-based gate would permanently block
+                    // wakes for multi-process apps. Instead we rely on:
+                    //   • MaxConcurrentBriefWakes (default 3) — hard cap on parallel wakes
+                    //   • BriefWakeCpuCapPercent (default 7%) — each wake only adds ~4% delta
+                    //   • 10-second wake window — self-limiting even if the gate misjudges
+                    //   • Game Mode suppression — covers the "system genuinely busy" case
                     bool wakeNeeded = !_nextBriefWakeAt.TryGetValue(pid, out DateTime nextWake) ||
                                       DateTime.UtcNow >= nextWake;
-                    if (!s.IsGameModeActive && cpuIdle && wakeNeeded)
+                    bool gameBlocks = s.IsGameModeActive && s.SuppressBriefWakesDuringGameMode;
+                    if (!gameBlocks && wakeNeeded)
                     {
                         // Use nap-start time for fairness sort (earliest nap = waited longest).
                         // Falls back to current time for new candidates so they queue behind older ones.
@@ -966,11 +1062,12 @@ public sealed class TaskSleepService : IDisposable
                 }
                 else
                 {
-                    // Still tray-only — collect as brief-wake candidate (fairness: sorted later)
-                    bool cpuIdle    = sysCpu < s.SystemCpuTriggerPercent / 2.0;
+                    // Still tray-only — collect as brief-wake candidate (fairness: sorted later).
+                    // No system-CPU gate — see rationale in the minimize-nap branch above.
                     bool wakeNeeded = !_trayNextBriefWakeAt.TryGetValue(pid, out DateTime nextTrayWake) ||
                                       DateTime.UtcNow >= nextTrayWake;
-                    if (!s.IsGameModeActive && cpuIdle && wakeNeeded)
+                    bool gameBlocks = s.IsGameModeActive && s.SuppressBriefWakesDuringGameMode;
+                    if (!gameBlocks && wakeNeeded)
                     {
                         // Use nap-start time for fairness sort (earliest nap = waited longest).
                         DateTime scheduledAt = _napSince.TryGetValue(pid, out DateTime ns) ? ns : DateTime.UtcNow;
@@ -1085,7 +1182,7 @@ public sealed class TaskSleepService : IDisposable
 
                 if (isTray)
                 {
-                    TryRestoreProcess(wPid);
+                    BeginBriefWake(wPid, s);
                     _throttledAt.Remove(wPid);
                     _trayBriefWakeEndAt[wPid] = DateTime.UtcNow.AddMilliseconds(s.TrayBriefWakeDurationMs);
 
@@ -1103,7 +1200,7 @@ public sealed class TaskSleepService : IDisposable
                 }
                 else
                 {
-                    TryRestoreProcess(wPid);
+                    BeginBriefWake(wPid, s);
                     _throttledAt.Remove(wPid);
                     _briefWakeEndAt[wPid] = DateTime.UtcNow.AddMilliseconds(s.MinimizedBriefWakeDurationMs);
 
@@ -1140,68 +1237,83 @@ public sealed class TaskSleepService : IDisposable
         {
             try
             {
-                // ── Brief-wake re-throttle: minimize-napped proc whose idle-wake window expired ──
+                // ── SKIP SYSTEMA ITSELF — It must never be throttled under any circumstances ──
+                if (proc.ProcessName.Equals("Systema", StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                // ── Brief-wake handling: minimize-napped proc currently in a brief wake ──
+                // During BeginBriefWake the pid is removed from _throttledPids, so the main
+                // wake loop at #5 can't see it. We have to evaluate user-focus / audio /
+                // un-minimize here and fully restore if any of them triggered.
                 if (s.MinimizeNapEnabled &&
                     !_throttledPids.ContainsKey(proc.Id) &&
                     _minimizedNapPids.Contains(proc.Id))
                 {
-                    if (_briefWakeEndAt.TryGetValue(proc.Id, out DateTime wakeEnd) &&
-                        DateTime.UtcNow >= wakeEnd)
+                    bool stillMinimized = minimizedPids.Contains(proc.Id);
+                    bool reNapAudio     = IsAudioProtected(proc.Id, proc.ProcessName, audioPids);
+                    bool userFocused    = protectedPids.Contains(proc.Id);
+                    bool wakeWindowOver = _briefWakeEndAt.TryGetValue(proc.Id, out DateTime wakeEnd) &&
+                                          DateTime.UtcNow >= wakeEnd;
+
+                    // User opened the window / focused the app / started audio → immediate
+                    // full restore (don't wait for the 10 s brief wake window to elapse —
+                    // otherwise the app sits at the loosened cap until it expires, which
+                    // feels broken to the user).
+                    if (!stillMinimized || userFocused || reNapAudio)
                     {
+                        FullyRestoreFromBriefWake(proc.Id);
+                        _processNames.TryGetValue(proc.Id, out string? wn);
+                        string reason = reNapAudio   ? "audio detected"
+                                       : userFocused ? "opened by user"
+                                                     : "app un-minimized";
+                        AddEvent(wn ?? proc.ProcessName, proc.Id, "Woke up", reason);
+                    }
+                    else if (wakeWindowOver)
+                    {
+                        // Window expired with no user interaction — re-nap.
                         _briefWakeEndAt.Remove(proc.Id);
-                        // Check audio before re-napping — app may have started playing
-                        // audio or using mic during the brief wake window
-                        bool reNapAudio = IsAudioProtected(proc.Id, proc.ProcessName, audioPids);
-                        if (!protectedPids.Contains(proc.Id) && !reNapAudio)
+                        if (TryThrottle(proc, s, rules, forceMaxThrottle: true))
                         {
-                            if (TryThrottle(proc, s, rules, forceMaxThrottle: true))
-                            {
-                                _throttledAt[proc.Id] = DateTime.UtcNow;
-                                _processNames.TryGetValue(proc.Id, out string? rn);
-                                AddEvent(rn ?? proc.ProcessName, proc.Id,
-                                    "Re-napping", "brief wake ended");
-                            }
-                        }
-                        else
-                        {
-                            // User focused the app or it started audio — free it permanently
-                            _minimizedNapPids.Remove(proc.Id);
-                            _nextBriefWakeAt.Remove(proc.Id);
+                            _throttledAt[proc.Id] = DateTime.UtcNow;
+                            _processNames.TryGetValue(proc.Id, out string? rn);
+                            AddEvent(rn ?? proc.ProcessName, proc.Id,
+                                "Re-napping", "brief wake ended");
                         }
                     }
-                    // Whether we just re-throttled or are still in the wake window, skip
-                    // the CPU throttle path for this process — minimize-nap owns it.
+                    // Whether we just restored, re-throttled, or are still in the wake window,
+                    // skip the rest of the throttle logic for this process.
                     continue;
                 }
 
-                // ── Brief-wake re-throttle: tray-napped proc whose wake window expired ──
+                // ── Brief-wake handling: tray-napped proc currently in a brief wake ──
                 if (s.TrayNapEnabled &&
                     !_throttledPids.ContainsKey(proc.Id) &&
                     _trayNapPids.Contains(proc.Id))
                 {
-                    if (_trayBriefWakeEndAt.TryGetValue(proc.Id, out DateTime trayWakeEnd) &&
-                        DateTime.UtcNow >= trayWakeEnd)
+                    bool stillTray      = trayPids.Contains(proc.Id);
+                    bool trayReNapAudio = IsAudioProtected(proc.Id, proc.ProcessName, audioPids);
+                    bool userFocused    = protectedPids.Contains(proc.Id);
+                    bool wakeWindowOver = _trayBriefWakeEndAt.TryGetValue(proc.Id, out DateTime trayWakeEnd) &&
+                                          DateTime.UtcNow >= trayWakeEnd;
+
+                    if (!stillTray || userFocused || trayReNapAudio)
+                    {
+                        FullyRestoreFromBriefWake(proc.Id);
+                        _processNames.TryGetValue(proc.Id, out string? wn);
+                        string reason = trayReNapAudio ? "audio detected"
+                                       : userFocused   ? "opened by user"
+                                                       : "window appeared";
+                        AddEvent(wn ?? proc.ProcessName, proc.Id, "Woke up", reason);
+                    }
+                    else if (wakeWindowOver)
                     {
                         _trayBriefWakeEndAt.Remove(proc.Id);
-                        // Check audio before re-napping — app may have started playing
-                        // audio or using mic during the brief wake window
-                        bool trayReNapAudio = IsAudioProtected(proc.Id, proc.ProcessName, audioPids);
-                        if (!protectedPids.Contains(proc.Id) && trayPids.Contains(proc.Id) && !trayReNapAudio)
+                        if (TryThrottle(proc, s, rules, forceMaxThrottle: true))
                         {
-                            if (TryThrottle(proc, s, rules, forceMaxThrottle: true))
-                            {
-                                _throttledAt[proc.Id] = DateTime.UtcNow;
-                                _processNames.TryGetValue(proc.Id, out string? tn);
-                                AddEvent(tn ?? proc.ProcessName, proc.Id,
-                                    "Tray Re-nap", "brief wake ended");
-                            }
-                        }
-                        else
-                        {
-                            // App opened a window, started audio, or user focused it — free permanently
-                            _trayNapPids.Remove(proc.Id);
-                            _trayNextBriefWakeAt.Remove(proc.Id);
-                            _napSince.Remove(proc.Id);
+                            _throttledAt[proc.Id] = DateTime.UtcNow;
+                            _processNames.TryGetValue(proc.Id, out string? tn);
+                            AddEvent(tn ?? proc.ProcessName, proc.Id,
+                                "Tray Re-nap", "brief wake ended");
                         }
                     }
                     continue;
@@ -1497,8 +1609,74 @@ public sealed class TaskSleepService : IDisposable
                     _overThresholdSince.Remove(proc.Id);
                 }
             }
+            catch (InvalidOperationException)
+            {
+                // "No process is associated with this object." — the process exited between
+                // Process.GetProcesses() snapshot and our access of a lazy property (e.g.
+                // proc.SessionId). Benign — nothing to clean up, just move on.
+            }
             catch (Exception ex) { _log.Warn("TaskSleepService", $"Tick: could not process PID {proc.Id}: {ex.Message}"); }
             finally { try { proc.Dispose(); } catch { } }
+        }
+
+        // 6b. Orphan-cap sweep — safety net for any Job Object cap that became
+        //     disconnected from the process's nap state (e.g. a race where a pid was
+        //     removed from every nap dict but _cpuCapJobs never got released). Without
+        //     this, a stuck 3% cap would persist until process exit — the user's
+        //     "app goes super slow" symptom. Only release caps where the pid is
+        //     DEFINITIVELY not supposed to be throttled anymore: no throttle, no nap,
+        //     no brief-wake tracking, no grace, and no pending restoration.
+        if (_cpuCapJobs.Count > 0)
+        {
+            foreach (int capPid in _cpuCapJobs.Keys.ToList())
+            {
+                if (_throttledPids.ContainsKey(capPid)) continue;       // actively napped
+                if (_minimizedNapPids.Contains(capPid)) continue;       // in minimize brief-wake state
+                if (_trayNapPids.Contains(capPid))     continue;        // in tray brief-wake state
+                if (_backgroundNapPids.Contains(capPid)) continue;      // bg-napped (fallback)
+                if (_idleNapPids.Contains(capPid))     continue;        // idle-napped (fallback)
+                if (_briefWakeEndAt.ContainsKey(capPid)) continue;      // wake window still open
+                if (_trayBriefWakeEndAt.ContainsKey(capPid)) continue;  // tray wake window still open
+                // Orphan — release it.
+                _processNames.TryGetValue(capPid, out string? orphanName);
+                RemoveCpuCap(capPid);
+                _originalAffinities.TryRemove(capPid, out _);
+                _log.Info("TaskSleepService",
+                    $"Orphan CPU cap released for {orphanName ?? $"PID {capPid}"} (PID {capPid}) — safety-net sweep");
+            }
+        }
+
+        // 6c. Orphan nap-child sweep — if a nap-child's parent is no longer napped
+        //      (parent exited, was restored by a path that skipped RestoreNapChildren,
+        //      or PID was reused), the child would otherwise sit capped forever with
+        //      no wake trigger (PersistentNap bypasses time-based restore). Detect
+        //      and release these.
+        if (_parentOfNapChild.Count > 0)
+        {
+            foreach (var kv in _parentOfNapChild.ToList())
+            {
+                int childPid  = kv.Key;
+                int parentPid = kv.Value;
+                // Parent still in any napped / brief-wake state → child stays napped.
+                if (_throttledPids.ContainsKey(parentPid))      continue;
+                if (_minimizedNapPids.Contains(parentPid))      continue;
+                if (_trayNapPids.Contains(parentPid))           continue;
+                if (_backgroundNapPids.Contains(parentPid))     continue;
+                if (_idleNapPids.Contains(parentPid))           continue;
+                if (_briefWakeEndAt.ContainsKey(parentPid))     continue;
+                if (_trayBriefWakeEndAt.ContainsKey(parentPid)) continue;
+
+                // Parent is fully un-napped (or gone) — wake the child too.
+                _processNames.TryGetValue(childPid, out string? orphanChildName);
+                _napChildPids.Remove(childPid);
+                _parentOfNapChild.Remove(childPid);
+                _napSince.Remove(childPid);
+                _throttledAt.Remove(childPid);
+                _cpuAtThrottle.Remove(childPid);
+                TryRestoreProcess(childPid);            // also releases cap if still held
+                _log.Info("TaskSleepService",
+                    $"Orphan nap-child released: {orphanChildName ?? $"PID {childPid}"} (parent PID {parentPid} no longer napped)");
+            }
         }
 
         // 7. Re-enforce: re-apply throttle if a process raised its own priority back
@@ -1626,113 +1804,70 @@ public sealed class TaskSleepService : IDisposable
     }
 
     /// <summary>
-    /// Opens each process with QUERY_LIMITED access, reads kernel+user times,
-    /// and returns a map of pid → CPU percentage since the last sample.
-    /// Work is spread across up to 4 threads to keep the tick fast on busy systems.
-    /// Processes with no previous sample are skipped this tick (first-time baseline).
+    /// Samples every process in one NtQuerySystemInformation kernel call and returns
+    /// pid → CPU% since the previous sample. Typical cost is &lt; 5 ms even on a box
+    /// with 400+ processes — the old OpenProcess-per-PID path took 200-900 ms.
+    ///
+    /// Side effects (monitor-thread only):
+    /// • <see cref="_lastCpuPercent"/>, <see cref="_processNames"/>,
+    ///   <see cref="_pidCreationTimes"/> are updated for every sampled PID.
+    /// • <see cref="_accessDeniedPids"/> is cleared for any PID that appeared in the
+    ///   kernel output — the sampler never fails per-process because it doesn't
+    ///   open any handles. Access-denied backoff is still driven by throttle /
+    ///   restore call sites that actually do OpenProcess.
     /// </summary>
     private Dictionary<int, double> SampleAllProcessCpu(Process[] all)
     {
-        var now   = DateTime.UtcNow;
-        int cores = Environment.ProcessorCount;
+        var cpuMap = new Dictionary<int, double>(all.Length);
+        var samples = _ntSampler.Sample();
 
-        // Collect results from all threads into concurrent dicts, then merge back.
-        // Reading _cpuSamples in parallel is safe: reads happen here, writes happen
-        // below (single-threaded) after the parallel section completes.
-        var parallelResult  = new System.Collections.Concurrent.ConcurrentDictionary<int, double>();
-        var parallelSamples = new System.Collections.Concurrent.ConcurrentDictionary<int, (long TotalTime, DateTime SampleTime)>();
-        var parallelNames   = new System.Collections.Concurrent.ConcurrentDictionary<int, string>();
-
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-        try
+        foreach (var s in samples)
         {
-            Parallel.ForEach(all,
-                new ParallelOptions
-                {
-                    MaxDegreeOfParallelism = Math.Max(2, Math.Min(cores / 2, 16)),
-                    CancellationToken = cts.Token
-                },
-                proc =>
-                {
-                    try
-                    {
-                        IntPtr h = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, proc.Id);
-                        if (h == IntPtr.Zero)
-                        {
-                            // Track consecutive access denials for the backoff system
-                            int err = Marshal.GetLastWin32Error();
-                            if (err == 5 /* ERROR_ACCESS_DENIED */)
-                                _accessDeniedPids.AddOrUpdate(proc.Id,
-                                    (1, DateTime.UtcNow),
-                                    (_, old) => (old.Count + 1, DateTime.UtcNow));
-                            return;
-                        }
+            cpuMap[s.Pid]              = s.CpuPercent;
+            _lastCpuPercent[s.Pid]     = s.CpuPercent;
+            _pidCreationTimes[s.Pid]   = s.CreationTime100ns;
 
-                        try
-                        {
-                            if (!GetProcessTimes(h, out _, out _, out FILETIME ftKernel, out FILETIME ftUser))
-                                return;
+            if (s.ImageName is string raw && raw.Length > 0)
+            {
+                // Strip path and .exe suffix to match Process.ProcessName semantics
+                int slash = raw.LastIndexOfAny(new[] { '\\', '/' });
+                string name = slash >= 0 ? raw.Substring(slash + 1) : raw;
+                if (name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+                    name = name.Substring(0, name.Length - 4);
+                _processNames[s.Pid] = name;
+            }
 
-                            // Successful access — clear backoff if previously denied
-                            _accessDeniedPids.TryRemove(proc.Id, out _);
-
-                            long totalTime = FtToLong(ftKernel) + FtToLong(ftUser);
-
-                            if (_cpuSamples.TryGetValue(proc.Id, out var prev))
-                            {
-                                double elapsed = (now - prev.SampleTime).TotalSeconds;
-                                if (elapsed >= 0.5)
-                                {
-                                    long delta = totalTime - prev.TotalTime;
-                                    if (delta > 0)
-                                    {
-                                        double cpu        = delta / (elapsed * cores * 10_000_000.0) * 100.0;
-                                        double clampedCpu = Math.Max(0, Math.Min(100.0, cpu));
-                                        parallelResult[proc.Id] = clampedCpu;
-                                    }
-                                    else
-                                    {
-                                        parallelResult[proc.Id] = 0;
-                                    }
-                                }
-                            }
-
-                            parallelSamples[proc.Id] = (totalTime, now);
-                            parallelNames[proc.Id]   = proc.ProcessName;
-                        }
-                        finally { CloseHandle(h); }
-                    }
-                    catch
-                    {
-                        // Track access-denied failures for backoff logic (ShouldSkip).
-                        // Any unhandled exception from process CPU sampling likely means
-                        // access denied or the process exited mid-sample.
-                        _accessDeniedPids.AddOrUpdate(proc.Id,
-                            (1, DateTime.UtcNow),
-                            (_, old) => (old.Count + 1, DateTime.UtcNow));
-                    }
-                });
-        }
-        catch (OperationCanceledException)
-        {
-            _log.Warn("TaskSleepService", "SampleAllProcessCpu: Parallel.ForEach timed out (5 s) — partial results used");
+            // Fresh sample successful — reset any lingering access-denied backoff
+            _accessDeniedPids.TryRemove(s.Pid, out _);
         }
 
-        // Merge back into non-concurrent monitor-thread dicts
-        foreach (var kv in parallelResult)  _lastCpuPercent[kv.Key] = kv.Value;
-        foreach (var kv in parallelSamples) _cpuSamples[kv.Key]     = kv.Value;
-        foreach (var kv in parallelNames)   _processNames[kv.Key]   = kv.Value;
+        return cpuMap;
+    }
 
-        return new Dictionary<int, double>(parallelResult);
+    /// <summary>
+    /// Returns true when <paramref name="pid"/> still refers to the same process
+    /// that was seen at the last sample. If the PID has been reused (different
+    /// CreationTime) or is unknown, returns false — callers should treat the PID
+    /// as stale and drop any associated throttle / cap state.
+    /// </summary>
+    private bool ProcessIdentityMatches(int pid, long expectedCreationTime)
+    {
+        return _pidCreationTimes.TryGetValue(pid, out long actual)
+            && actual == expectedCreationTime;
     }
 
     private void CleanupDeadProcesses(HashSet<int> livePids)
     {
+        // Let the kernel sampler drop its own baselines first
+        _ntSampler.Prune(livePids);
+
         // Single pass: compute dead PIDs once, then remove from all dictionaries.
-        var dead = _cpuSamples.Keys.Where(pid => !livePids.Contains(pid)).ToList();
+        // Use _pidCreationTimes as the authoritative domain — it tracks every PID
+        // the sampler has ever seen, so nothing is missed.
+        var dead = _pidCreationTimes.Keys.Where(pid => !livePids.Contains(pid)).ToList();
         foreach (int pid in dead)
         {
-            _cpuSamples.Remove(pid);
+            _pidCreationTimes.Remove(pid);
             _overThresholdSince.Remove(pid);
             _throttledAt.Remove(pid);
             _restoredAt.Remove(pid);
@@ -1776,6 +1911,18 @@ public sealed class TaskSleepService : IDisposable
     private bool TryThrottle(Process proc, TaskSleepSettings s,
         Dictionary<string, TaskSleepAppRule> rules, bool forceMaxThrottle = false)
     {
+        // ── FINAL SAFETY GATE — double-check critical processes before throttling ──
+        // Even if a process made it through ShouldSkip, we have a second opportunity
+        // to reject it here to prevent system corruption. This catches edge cases where
+        // a process wasn't in our static lists but is actually critical (e.g., a new
+        // Windows Update service in an OS update).
+        if (IsSystemProcess(proc) || IsElevatedOrSystemProcess(proc.Id))
+        {
+            _log.Warn("TaskSleepService",
+                $"SAFETY: Blocked throttle of critical process '{proc.ProcessName}' (PID {proc.Id}) in TryThrottle gate — this should never happen. Check ShouldSkip logic.");
+            return false;
+        }
+
         IntPtr handle = OpenProcess(
             PROCESS_SET_INFORMATION | PROCESS_QUERY_LIMITED_INFORMATION,
             false, proc.Id);
@@ -1791,14 +1938,18 @@ public sealed class TaskSleepService : IDisposable
             // forceMaxThrottle = true for minimize-nap and tray-nap (full throttle always)
             // forceMaxThrottle = false for CPU-triggered throttle (follows user settings)
             bool   lowerCpu    = forceMaxThrottle || s.LowerCpuPriority;
-            bool   lowerGpu    = forceMaxThrottle || s.LowerGpuPriority;
+            // GPU priority is NEVER included in forceMaxThrottle.
+            // D3DKMTSetProcessSchedulingPriorityClass(Idle) disrupts the Windows HAGS flip
+            // queue shared by all processes — even minimised apps with Idle GPU priority can
+            // break VSync for the foreground game and hang Intel/NVIDIA GPU tools.
+            bool   lowerGpu    = s.LowerGpuPriority; // user opt-in only, never forced
             bool   lowerIo     = forceMaxThrottle || s.LowerIoPriority;
             bool   lowerMem    = forceMaxThrottle || s.LowerMemoryPriority;
             bool   moveToECores = forceMaxThrottle ? (s.MoveToECores && s.DetectECores) : s.MoveToECores;
             bool   effMode     = forceMaxThrottle || s.EnableEfficiencyMode;
             // Soft nap: use lighter throttle classes when user requests it (not for force-max)
             uint   cpuClass    = (!forceMaxThrottle && s.SoftNapEnabled) ? BELOW_NORMAL_PRIORITY_CLASS : IDLE_PRIORITY_CLASS;
-            var    gpuClass    = KMTSCHEDULINGPRIORITYCLASS.Idle;
+            var    gpuClass    = KMTSCHEDULINGPRIORITYCLASS.BelowNormal; // never Idle — Idle tier breaks HAGS flip-queue VSync system-wide
             int    ioLevel     = (!forceMaxThrottle && s.SoftNapEnabled) ? IO_PRIORITY_LOW : IO_PRIORITY_VERY_LOW;
 
             if (!forceMaxThrottle && rules.TryGetValue(proc.ProcessName, out var rule))
@@ -1875,9 +2026,19 @@ public sealed class TaskSleepService : IDisposable
                 // give them to the foreground app without waiting for the pager.
                 if (s.TrimWorkingSet) TrimProcessWorkingSet(handle);
 
-                // Apply hard CPU cap via Job Object when enabled
+                // Apply (or tighten) the kernel CPU cap via Job Object.
+                // If a cap is already attached (e.g. we're re-napping after a brief wake,
+                // where BeginBriefWake kept the job alive at BriefWakeCpuCapPercent),
+                // UpdateCpuCap tightens it back to NappedCpuCapPercent without tearing
+                // down the job object. Fresh naps go through ApplyCpuCap.
                 if (s.NappedCpuCapEnabled && s.NappedCpuCapPercent > 0)
-                    ApplyCpuCap(proc.Id, Math.Clamp(s.NappedCpuCapPercent, 1, 100));
+                {
+                    int tightCap = Math.Clamp(s.NappedCpuCapPercent, 1, 100);
+                    if (_cpuCapJobs.ContainsKey(proc.Id))
+                        UpdateCpuCap(proc.Id, tightCap);
+                    else
+                        ApplyCpuCap(proc.Id, tightCap);
+                }
             }
 
             return changed;
@@ -1926,27 +2087,119 @@ public sealed class TaskSleepService : IDisposable
     }
 
     /// <summary>
+    /// Transitions a napped process into the brief-wake state: lifts priority / affinity /
+    /// IO / memory throttles but KEEPS the Job Object cap alive, loosening it to
+    /// <c>BriefWakeCpuCapPercent</c>. This prevents the CPU spike that would occur if the
+    /// cap were fully removed at wake time — a common complaint where napped apps would
+    /// briefly peg a core before being re-throttled. The kernel cap stays in force
+    /// continuously through the nap → wake → re-nap cycle; only its rate changes.
+    /// </summary>
+    private void BeginBriefWake(int pid, TaskSleepSettings s)
+    {
+        if (!_throttledPids.TryRemove(pid, out uint original)) return;
+
+        IntPtr handle = OpenProcess(
+            PROCESS_SET_INFORMATION | PROCESS_QUERY_LIMITED_INFORMATION,
+            false, pid);
+
+        if (handle == IntPtr.Zero)
+        {
+            _originalAffinities.TryRemove(pid, out _);
+            _cpuAtThrottle.Remove(pid);
+            return;
+        }
+
+        try
+        {
+            if (original != 0) SetPriorityClass(handle, original);
+            SetEfficiencyMode(handle, false);
+            SetGpuPriority(handle, KMTSCHEDULINGPRIORITYCLASS.Normal);
+            SetIoPriorityLevel(handle, IO_PRIORITY_NORMAL);
+            SetMemoryPriority(handle, MEMORY_PRIORITY_NORMAL);
+
+            if (_originalAffinities.TryRemove(pid, out UIntPtr origAffinity))
+            {
+                try { SetProcessAffinityMask(handle, origAffinity); }
+                catch (Exception ex) { _log.Warn("TaskSleepService", $"BeginBriefWake affinity restore failed for PID {pid}: {ex.Message}"); }
+            }
+
+            // Loosen (but do not remove) the kernel CPU cap for the wake window.
+            // If the process was cap-skipped (sentinel IntPtr.Zero), UpdateCpuCap is a no-op
+            // and the app runs with only priority restored — same behaviour as before.
+            if (s.NappedCpuCapEnabled && s.BriefWakeCpuCapPercent > 0)
+                UpdateCpuCap(pid, Math.Clamp(s.BriefWakeCpuCapPercent, 1, 100));
+        }
+        catch (Exception ex)
+        {
+            _log.Warn("TaskSleepService", $"BeginBriefWake PID {pid} failed: {ex.Message}");
+        }
+        finally { CloseHandle(handle); }
+    }
+
+    /// <summary>
+    /// Fully restores a process that is currently mid-brief-wake.
+    /// <para>
+    /// BeginBriefWake already lifted the soft throttles (priority / EcoQoS / GPU / IO /
+    /// memory / affinity) and removed the pid from <see cref="_throttledPids"/>, so the
+    /// ONLY piece of throttle state still in effect is the Job Object CPU rate cap
+    /// (loosened to <c>BriefWakeCpuCapPercent</c>). Closing that job releases the kernel
+    /// cap immediately.
+    /// </para>
+    /// Also clears every nap-related tracking dictionary so the process is treated as
+    /// a fresh, un-throttled app on subsequent ticks.
+    /// </summary>
+    private void FullyRestoreFromBriefWake(int pid)
+    {
+        RemoveCpuCap(pid);                          // release the kernel Job Object cap
+        _minimizedNapPids.Remove(pid);
+        _trayNapPids.Remove(pid);
+        _backgroundNapPids.Remove(pid);
+        _idleNapPids.Remove(pid);
+        _nextBriefWakeAt.Remove(pid);
+        _briefWakeEndAt.Remove(pid);
+        _trayNextBriefWakeAt.Remove(pid);
+        _trayBriefWakeEndAt.Remove(pid);
+        _napSince.Remove(pid);
+        _throttledAt.Remove(pid);
+        _cpuAtThrottle.Remove(pid);
+        _originalAffinities.TryRemove(pid, out _);
+        _restoredAt[pid] = DateTime.UtcNow;         // 5 s cooldown against immediate re-nap
+        // Restore any child processes that were napped when this parent was napped —
+        // otherwise Steam's helpers / Electron renderers stay stuck at 3% while the
+        // parent is running freely, which produces the exact "super slow app" symptom
+        // the main-loop fix addresses. Harmless if parent had no napped children.
+        RestoreNapChildren(pid);
+    }
+
+    /// <summary>
     /// Creates a Windows Job Object with a hard CPU rate cap and assigns the process to it.
     /// Uses kernel-level enforcement — the OS itself caps the process's CPU time slices.
     ///
-    /// On Windows 8+ most processes are already in an implicit job. To handle this,
-    /// we first try <c>AssignProcessToJobObject</c> (works if the existing job allows
-    /// nesting). If that fails, we fall back to <c>SetInformationJobObject</c> on the
-    /// process's current job via <c>QueryInformationJobObject</c>. As a last resort we
-    /// use <c>SetProcessInformation</c> with <c>PROCESS_POWER_THROTTLING</c> to throttle
-    /// CPU via Efficiency Mode (EcoQoS) which doesn't require a job.
+    /// On Windows 11 most processes already live in an implicit job. When our
+    /// <c>AssignProcessToJobObject</c> is refused (Chromium sandbox, UWP containers,
+    /// non-nestable jobs, or access denied), we mark the PID as "cap skipped" via the
+    /// <see cref="IntPtr.Zero"/> sentinel and let the existing priority / EcoQoS /
+    /// E-core affinity / I-O / memory-priority throttles do the work. No suspend-based
+    /// fallback is used — it would fight the kernel scheduler and risked hanging
+    /// windowed GPU/COM workloads (WDDM flip queue stalls, Intel/NVIDIA tools freezes).
     /// </summary>
     private void ApplyCpuCap(int pid, int capPercent)
     {
-        if (_cpuCapJobs.ContainsKey(pid)) return; // already capped
+        if (_cpuCapJobs.ContainsKey(pid)) return; // already capped or sentinel-marked
         try
         {
+            // AssignProcessToJobObject requires PROCESS_SET_QUOTA AND PROCESS_TERMINATE
+            // on the target handle. Missing PROCESS_TERMINATE was silently failing Assign
+            // for every process, leaving the kernel cap unattached — apps like Steam
+            // downloading a game could blow past the cap freely.
             IntPtr hProcess = OpenProcess(
-                PROCESS_SET_INFORMATION | PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_SET_QUOTA,
+                PROCESS_SET_INFORMATION | PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_SET_QUOTA | PROCESS_TERMINATE,
                 false, pid);
             if (hProcess == IntPtr.Zero)
             {
-                _log.Warn("TaskSleepService", $"ApplyCpuCap: OpenProcess failed for PID {pid} (error {Marshal.GetLastWin32Error()})");
+                int err = Marshal.GetLastWin32Error();
+                _log.Info("TaskSleepService", $"ApplyCpuCap: OpenProcess denied for PID {pid} (err {err}) — cap skipped, other throttles active");
+                _cpuCapJobs[pid] = IntPtr.Zero;
                 return;
             }
             try
@@ -1954,7 +2207,9 @@ public sealed class TaskSleepService : IDisposable
                 IntPtr hJob = CreateJobObjectW(IntPtr.Zero, null);
                 if (hJob == IntPtr.Zero)
                 {
-                    _log.Warn("TaskSleepService", $"ApplyCpuCap: CreateJobObject failed for PID {pid}");
+                    int err = Marshal.GetLastWin32Error();
+                    _log.Warn("TaskSleepService", $"ApplyCpuCap: CreateJobObject failed for PID {pid} (err {err}) — cap skipped");
+                    _cpuCapJobs[pid] = IntPtr.Zero;
                     return;
                 }
 
@@ -1968,8 +2223,9 @@ public sealed class TaskSleepService : IDisposable
                         ref info, Marshal.SizeOf<JOBOBJECT_CPU_RATE_CONTROL_INFORMATION>()))
                 {
                     int err = Marshal.GetLastWin32Error();
-                    _log.Warn("TaskSleepService", $"ApplyCpuCap: SetInformationJobObject failed for PID {pid} (error {err})");
+                    _log.Warn("TaskSleepService", $"ApplyCpuCap: SetInformationJobObject failed for PID {pid} (err {err}) — cap skipped");
                     CloseHandle(hJob);
+                    _cpuCapJobs[pid] = IntPtr.Zero;
                     return;
                 }
 
@@ -1979,15 +2235,14 @@ public sealed class TaskSleepService : IDisposable
                 }
                 else
                 {
-                    // Win8+ allows nested jobs, but some (e.g. Chromium sandbox) deny it.
-                    // Fall back to suspend/resume duty cycle to enforce a real CPU cap.
+                    // Win11 permits nested jobs for most processes, but Chromium sandbox,
+                    // some UWP containers, and a few AV products still refuse. Log the
+                    // Win32 error so we can tell "permission issue" apart from "sandbox
+                    // refused". The priority / EcoQoS / E-core / memory throttles still apply.
                     int err = Marshal.GetLastWin32Error();
-                    // Duty cycle fallback — logged at debug level to avoid spam
-                    // (most modern apps are in Chromium-style non-nestable jobs)
+                    _log.Warn("TaskSleepService", $"ApplyCpuCap: AssignProcessToJobObject failed for PID {pid} (err {err}) — hard cap unavailable, using soft throttles only");
                     CloseHandle(hJob);
-                    _cpuCapJobs[pid] = IntPtr.Zero; // sentinel: don't retry job
-                    _dutyCyclePids.Add(pid);
-                    _dutyCycleCapPercent[pid] = capPercent;
+                    _cpuCapJobs[pid] = IntPtr.Zero;
                 }
             }
             finally { CloseHandle(hProcess); }
@@ -2024,52 +2279,45 @@ public sealed class TaskSleepService : IDisposable
         }
     }
 
-    /// <summary>Releases the CPU cap by closing the Job Object handle.</summary>
+    /// <summary>
+    /// Releases the CPU cap on a napped process.
+    /// <para>
+    /// CRITICAL Windows subtlety: closing a Job Object handle does NOT release the CPU
+    /// cap on processes assigned to the job. Per MSDN, "the job object remains in the
+    /// system until the last process assigned to the job has terminated" — with all its
+    /// limits still in force. A process cannot be removed from a job once assigned.
+    /// </para>
+    /// <para>
+    /// So we MUST first raise the job's CPU rate to 100% (effectively lifting the cap)
+    /// BEFORE closing our handle. Otherwise the process stays stuck at the napped cap
+    /// (3% by default) until it exits — which is exactly the "Steam goes super slow
+    /// after wake, doesn't go high CPU" symptom the user kept reporting.
+    /// </para>
+    /// </summary>
     private void RemoveCpuCap(int pid)
     {
         if (_cpuCapJobs.Remove(pid, out IntPtr hJob) && hJob != IntPtr.Zero)
         {
+            try
+            {
+                // Raise cap to 100.00% (10000 hundredths) BEFORE closing the handle.
+                // This is the ONLY way to release the limit without killing the process.
+                var lift = new JOBOBJECT_CPU_RATE_CONTROL_INFORMATION
+                {
+                    ControlFlags = JOB_OBJECT_CPU_RATE_CONTROL_ENABLE | JOB_OBJECT_CPU_RATE_CONTROL_HARD_CAP,
+                    CpuRate      = 10000, // 100% of aggregate CPU — effectively no cap
+                };
+                if (!SetInformationJobObject(hJob, JobObjectCpuRateControlInformation,
+                        ref lift, Marshal.SizeOf<JOBOBJECT_CPU_RATE_CONTROL_INFORMATION>()))
+                {
+                    _log.Warn("TaskSleepService",
+                        $"RemoveCpuCap: failed to lift cap for PID {pid} (err {Marshal.GetLastWin32Error()}) — closing handle anyway");
+                }
+            }
+            catch (Exception ex) { _log.Warn("TaskSleepService", $"RemoveCpuCap: lift-before-close failed for PID {pid}: {ex.Message}"); }
+
             try { CloseHandle(hJob); }
             catch (Exception ex) { _log.Warn("TaskSleepService", $"RemoveCpuCap: CloseHandle failed for PID {pid}: {ex.Message}"); }
-        }
-        // Also remove from duty-cycle fallback and resume if suspended
-        if (_dutyCyclePids.Remove(pid))
-        {
-            _dutyCycleCapPercent.Remove(pid);
-            try
-            {
-                IntPtr h = OpenProcess(PROCESS_SUSPEND_RESUME, false, pid);
-                if (h != IntPtr.Zero) { NtResumeProcess(h); CloseHandle(h); }
-            }
-            catch { }
-        }
-    }
-
-    /// <summary>Suspend specific duty-cycle PIDs that are over the cap threshold.</summary>
-    private void DutyCycleSuspendSpecific(List<int> pids)
-    {
-        foreach (int pid in pids)
-        {
-            try
-            {
-                IntPtr h = OpenProcess(PROCESS_SUSPEND_RESUME, false, pid);
-                if (h != IntPtr.Zero) { NtSuspendProcess(h); CloseHandle(h); }
-            }
-            catch { }
-        }
-    }
-
-    /// <summary>Resume specific duty-cycle PIDs after their suspend window.</summary>
-    private void DutyCycleResumeSpecific(List<int> pids)
-    {
-        foreach (int pid in pids)
-        {
-            try
-            {
-                IntPtr h = OpenProcess(PROCESS_SUSPEND_RESUME, false, pid);
-                if (h != IntPtr.Zero) { NtResumeProcess(h); CloseHandle(h); }
-            }
-            catch { }
         }
     }
 
@@ -2080,23 +2328,24 @@ public sealed class TaskSleepService : IDisposable
             TryRestoreProcess(pid);
             _throttledAt.Remove(pid);
         }
-        // Release all CPU cap job handles (skip sentinel zeros)
-        foreach (var kvp in _cpuCapJobs)
-            if (kvp.Value != IntPtr.Zero)
-                try { CloseHandle(kvp.Value); } catch { }
-        _cpuCapJobs.Clear();
-        // Resume any duty-cycle suspended processes
-        foreach (int dcPid in _dutyCyclePids)
+        // Release all CPU cap job handles (skip sentinel zeros).
+        // CRITICAL: must lift the cap to 100% FIRST, otherwise the processes in each
+        // job stay capped at 3% until they exit (per MSDN — closing a job handle does
+        // not remove limits from its processes). Without this, exiting Systema would
+        // leave every previously napped app throttled indefinitely.
+        var liftInfo = new JOBOBJECT_CPU_RATE_CONTROL_INFORMATION
         {
-            try
-            {
-                IntPtr h = OpenProcess(PROCESS_SUSPEND_RESUME, false, dcPid);
-                if (h != IntPtr.Zero) { NtResumeProcess(h); CloseHandle(h); }
-            }
-            catch { }
+            ControlFlags = JOB_OBJECT_CPU_RATE_CONTROL_ENABLE | JOB_OBJECT_CPU_RATE_CONTROL_HARD_CAP,
+            CpuRate      = 10000, // 100%
+        };
+        int liftSize = Marshal.SizeOf<JOBOBJECT_CPU_RATE_CONTROL_INFORMATION>();
+        foreach (var kvp in _cpuCapJobs)
+        {
+            if (kvp.Value == IntPtr.Zero) continue;
+            try { SetInformationJobObject(kvp.Value, JobObjectCpuRateControlInformation, ref liftInfo, liftSize); } catch { }
+            try { CloseHandle(kvp.Value); } catch { }
         }
-        _dutyCyclePids.Clear();
-        _dutyCycleCapPercent.Clear();
+        _cpuCapJobs.Clear();
         _overThresholdSince.Clear();
         _originalAffinities.Clear();
         _minimizedNapPids.Clear();
@@ -2131,12 +2380,29 @@ public sealed class TaskSleepService : IDisposable
             _skipReasons[proc.Id] = "Access denied";
             return true;
         }
-        if (IsSecurityCritical(proc.ProcessName)) { _skipReasons[proc.Id] = "Security/AV"; return true; }
+
+        // ── PERMANENT SAFETY LAYERS — Never bypassed, regardless of user settings ──
+        // These are non-negotiable to prevent corruption of critical OS functionality.
+
+        // 1. System process names — explicit whitelist of processes that must never be throttled.
+        //    This takes priority over ALL user settings.
+        if (IsSystemProcess(proc)) { _skipReasons[proc.Id] = "System process (whitelist)"; return true; }
+
+        // 2. Elevated/System integrity — ALWAYS skip, no toggle. These are admin-only
+        //    processes and throttling them can corrupt system state.
+        if (IsElevatedOrSystemProcess(proc.Id)) { _skipReasons[proc.Id] = "Elevated/System integrity (non-bypassable)"; return true; }
+
+        // 3. Security-critical (AV, Defender, etc.) — ALWAYS skip, non-negotiable
+        if (IsSecurityCritical(proc.ProcessName)) { _skipReasons[proc.Id] = "Security/AV critical"; return true; }
+
+        // 4. Auto-whitelisted processes (previously caused issues) — ALWAYS skip
         if (_napSuppressed.Contains(proc.ProcessName)) { _skipReasons[proc.Id] = "Auto-whitelisted"; return true; }
-        if (s.ExcludeSystemServices && IsSystemProcess(proc)) { _skipReasons[proc.Id] = "System process"; return true; }
-        if (s.ElevatedProcessGuardEnabled && IsElevatedOrSystemProcess(proc.Id)) { _skipReasons[proc.Id] = "Elevated/admin"; return true; }
+
+        // ── User-configurable checks (toggleable via settings) ──
+        if (s.ExcludeSystemServices && IsSystemService(proc)) { _skipReasons[proc.Id] = "Windows service"; return true; }
         if (s.IgnoreForeground && protectedPids.Contains(proc.Id)) { _skipReasons[proc.Id] = "Foreground"; return true; }
         if (rules.TryGetValue(proc.ProcessName, out var rule) && rule.IsBlacklisted) { _skipReasons[proc.Id] = "Never-nap list"; return true; }
+
         // Global audio protection gate: if any process is actively playing audio,
         // using the microphone, or is a known always-active app (media player, OBS),
         // it must NEVER be napped by any path (CPU, smart, aggressive, idle, background).
@@ -2158,7 +2424,7 @@ public sealed class TaskSleepService : IDisposable
         SecurityCriticalProcessNames.Contains(processName) ||
         _detectedAvProcessNames.Contains(processName);
 
-    private static bool IsSystemProcess(Process proc)
+    private bool IsSystemProcess(Process proc)
     {
         // Name-based exclusion only. We no longer use SessionId == 0 as a blanket guard,
         // because that would protect every background service process — including Windows
@@ -2166,7 +2432,10 @@ public sealed class TaskSleepService : IDisposable
         // what we want to throttle. SystemProcessNames now explicitly enumerates everything
         // that must never be touched; everything else (including non-critical session 0
         // processes) is eligible for throttling.
-        return SystemProcessNames.Contains(proc.ProcessName);
+        //
+        // Also check runtime-detected critical services to catch new services added in OS updates.
+        return SystemProcessNames.Contains(proc.ProcessName) ||
+               _detectedCriticalServices.Contains(proc.ProcessName);
     }
 
     /// <summary>
@@ -2244,6 +2513,97 @@ public sealed class TaskSleepService : IDisposable
 
         _elevatedPidCache[pid] = elevated;
         return elevated;
+    }
+
+    /// <summary>
+    /// Returns true if the process is running as a Windows service (has a service owner).
+    /// Services should NEVER be throttled unless explicitly in the SystemProcessNames whitelist,
+    /// because throttling a service mid-operation can leave it in a corrupted or inconsistent state
+    /// (e.g., Windows Update COM registration failures).
+    /// This is a best-effort check using WMI — if WMI is unavailable or the check fails, returns false.
+    /// </summary>
+    private bool IsSystemService(Process proc)
+    {
+        try
+        {
+            // Query WMI for services matching this process ID
+            using var searcher = new ManagementObjectSearcher(
+                $"SELECT Name FROM Win32_Service WHERE ProcessId = {proc.Id}");
+            foreach (ManagementObject service in searcher.Get())
+            {
+                // If any service uses this PID, it's a service process
+                var name = service["Name"] as string;
+                if (!string.IsNullOrEmpty(name))
+                {
+                    _log.Info("TaskSleepService",
+                        $"Detected service '{name}' (PID {proc.Id}) — protecting from throttling");
+                    return true;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            // WMI failures are non-fatal — just log and return false.
+            // This prevents a WMI issue from breaking the monitor thread.
+            _log.Warn("TaskSleepService", $"IsSystemService WMI check failed for PID {proc.Id}: {ex.Message}");
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Scans critical Windows services (Windows Update, diagnostics, licensing, etc.)
+    /// and auto-protects them by adding to <see cref="_detectedCriticalServices"/>.
+    /// This is a DEFENSIVE measure: if a new critical service appears in an OS update,
+    /// we catch it and protect it automatically instead of discovering it by breaking
+    /// that service (like we did with UsoSvc before v1.7.20).
+    /// </summary>
+    private void ScanAndProtectCriticalServices()
+    {
+        try
+        {
+            var criticalServicePatterns = new[]
+            {
+                // Windows Update family — all Uso* and WaaS* services
+                "Uso", "Wuau", "WaaS", "Medic", "mus",
+                // Core OS / licensing
+                "Winlogon", "Lsass", "Services", "SmartScreen",
+                // Component servicing
+                "TrustedInstaller", "Wudf",
+                // COM / RPC infrastructure — these are essential for all COM calls
+                "RpcSs", "DcomLaunch",
+            };
+
+            using var searcher = new ManagementObjectSearcher(
+                "SELECT Name, DisplayName FROM Win32_Service WHERE State = 'Running'");
+
+            var detected = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (ManagementObject service in searcher.Get())
+            {
+                var svcName = service["Name"] as string ?? "";
+                var displayName = service["DisplayName"] as string ?? "";
+                if (string.IsNullOrEmpty(svcName)) continue;
+
+                // Check if this service name starts with any critical pattern
+                bool isCritical = criticalServicePatterns.Any(pattern =>
+                    svcName.StartsWith(pattern, StringComparison.OrdinalIgnoreCase));
+
+                if (isCritical && !SystemProcessNames.Contains(svcName))
+                {
+                    detected.Add(svcName);
+                    _log.Info("TaskSleepService",
+                        $"Auto-detected critical service for protection: '{svcName}' ({displayName})");
+                }
+            }
+
+            _detectedCriticalServices = detected;
+            if (detected.Count > 0)
+                _log.Info("TaskSleepService", $"Startup: auto-detected and protected {detected.Count} critical services");
+        }
+        catch (Exception ex)
+        {
+            // Non-fatal — if service scan fails, we still have the static lists
+            _log.Warn("TaskSleepService", $"ScanAndProtectCriticalServices failed: {ex.Message}");
+        }
     }
 
     /// <summary>
@@ -3014,10 +3374,17 @@ public sealed class TaskSleepService : IDisposable
     {
         try
         {
+            // Per MSDN ProcessPowerThrottling:
+            //   enable  → ControlMask=EXECUTION_SPEED, StateMask=EXECUTION_SPEED (force EcoQoS on)
+            //   restore → ControlMask=0,               StateMask=0               (reset to system default — let Windows manage)
+            // Previously we used ControlMask=EXECUTION_SPEED / StateMask=0 on restore,
+            // which *explicitly disables* OS-controlled EcoQoS for the process until it
+            // exits — bypassing Windows' own adaptive throttling. Resetting to default
+            // lets Windows reclaim control once we're done throttling the process.
             var state = new PROCESS_POWER_THROTTLING_STATE
             {
                 Version     = PROCESS_POWER_THROTTLING_CURRENT_VERSION,
-                ControlMask = PROCESS_POWER_THROTTLING_EXECUTION_SPEED,
+                ControlMask = enable ? PROCESS_POWER_THROTTLING_EXECUTION_SPEED : 0,
                 StateMask   = enable ? PROCESS_POWER_THROTTLING_EXECUTION_SPEED : 0
             };
 
@@ -3561,12 +3928,6 @@ public sealed class TaskSleepService : IDisposable
 
     [DllImport("psapi.dll", SetLastError = true)]
     private static extern bool EmptyWorkingSet(IntPtr hProcess);
-
-    [DllImport("ntdll.dll")]
-    private static extern int NtSuspendProcess(IntPtr processHandle);
-
-    [DllImport("ntdll.dll")]
-    private static extern int NtResumeProcess(IntPtr processHandle);
 
     [DllImport("kernel32.dll", SetLastError = true)]
     private static extern bool SetProcessWorkingSetSize(IntPtr hProcess,

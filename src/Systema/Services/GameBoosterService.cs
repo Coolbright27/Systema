@@ -62,13 +62,6 @@ public sealed class GameBoosterService : IDisposable
     private const uint ES_CONTINUOUS      = 0x80000000;
     private const uint ES_SYSTEM_REQUIRED = 0x00000001;
 
-    // ── P/Invoke: Timer resolution (winmm) ────────────────────────────────────
-    [DllImport("winmm.dll")]
-    private static extern uint timeBeginPeriod(uint uPeriod);
-
-    [DllImport("winmm.dll")]
-    private static extern uint timeEndPeriod(uint uPeriod);
-
     // ── P/Invoke: IO priority ──────────────────────────────────────────────────
     [DllImport("ntdll.dll")]
     private static extern int NtSetInformationProcess(
@@ -121,8 +114,6 @@ public sealed class GameBoosterService : IDisposable
     private string? _savedPowerPlanGuid;       // null = not changed
     // Sleep prevention — true if SetThreadExecutionState(ES_SYSTEM_REQUIRED) is currently active
     private bool _sleepPrevented;
-    // Timer resolution
-    private bool   _timerResolutionSet;
     // Game Bar / DVR
     private int?   _savedAppCaptureEnabled;
     private int?   _savedGameDvrEnabled;
@@ -140,6 +131,41 @@ public sealed class GameBoosterService : IDisposable
     private bool _bluetoothRadioDisabled;
     // Search indexing — true if WSearch was running before boost and we stopped it
     private bool _searchIndexingWasRunning;
+
+    // ── Crash-recovery persistence ───────────────────────────────────────────
+    // On boost activation we write a JSON snapshot of all pre-boost originals.
+    // On deactivation we delete it. If Systema starts and this file exists, the
+    // previous session crashed mid-boost — we load the snapshot and restore.
+    private static readonly string BoostStateDir = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Systema");
+    private static readonly string BoostStatePath = Path.Combine(BoostStateDir, "boost_state.json");
+
+    /// <summary>Serializable snapshot of pre-boost state for crash recovery.</summary>
+    private sealed class BoostStateSnapshot
+    {
+        public string? GameName                   { get; set; }
+        public List<string>? KilledServices       { get; set; }
+        public int? NotificationsEnabled          { get; set; }
+        public string? PowerPlanGuid              { get; set; }
+        public bool SearchIndexingWasRunning      { get; set; }
+        public int? AppCaptureEnabled             { get; set; }
+        public int? GameDvrEnabled                { get; set; }
+        public int? SystemResponsiveness          { get; set; }
+        public int? MmPriority                    { get; set; }
+        public string? SchedulingCategory         { get; set; }
+        public string? SfIoPriority               { get; set; }
+        public List<RegistryRestoreEntry>? NagleRestore    { get; set; }
+        public List<RegistryRestoreEntry>? NicPowerRestore { get; set; }
+        public bool WifiRadioDisabled             { get; set; }
+        public bool BluetoothRadioDisabled        { get; set; }
+    }
+
+    private sealed class RegistryRestoreEntry
+    {
+        public string Path { get; set; } = "";
+        public string Name { get; set; } = "";
+        public int? Val    { get; set; }  // null = delete value on restore
+    }
 
     public bool IsEnabled             => _settings.GameBoosterEnabled;
     public bool BoostActive           => _boostActive;
@@ -360,6 +386,10 @@ public sealed class GameBoosterService : IDisposable
     public void StartMonitoring(TrayService tray)
     {
         _tray = tray;
+
+        // Crash recovery: if the previous session crashed while boost was active,
+        // restore all settings to their pre-boost originals before doing anything else.
+        RecoverBoostStateFromCrash();
 
         // Initial game install scan (large-stack thread — Process.GetProcesses() needs it)
         _ = RunOnLargeStackAsync(ScanForInstalledGames);
@@ -690,6 +720,14 @@ public sealed class GameBoosterService : IDisposable
         if (isRealGame)
             BoostGameProcess(gameName);
 
+        // WAL (write-ahead log) pattern: read all pre-boost originals into _saved* fields
+        // BEFORE making any system changes, then persist them to disk immediately.
+        // If the PC crashes or power-cuts anywhere during ApplyBoostOptions, the next
+        // Systema startup finds boost_state.json and fully restores all settings — even
+        // if the crash happened on the very first Apply call.
+        ReadBoostOriginals();
+        PersistBoostState();
+
         // Apply new boost options (memory, notifications, power plan)
         ApplyBoostOptions(gameName);
 
@@ -757,6 +795,10 @@ public sealed class GameBoosterService : IDisposable
             }
         }
         _killedServices.Clear();
+
+        // Clean deactivation — delete the persisted snapshot so next startup
+        // doesn't try to restore again.
+        ClearPersistedBoostState();
 
         CrashGuard.Clear();
 
@@ -857,7 +899,6 @@ public sealed class GameBoosterService : IDisposable
         if (_settings.GameBoosterPreventSleep) ApplyPreventSleep();
 
         // 0. New network / system options (applied before the heavy RAM trim)
-        if (_settings.GameBoosterTimerResolution)  ApplyTimerResolution();
         if (_settings.GameBoosterDisableGameBar)   ApplyGameBarDisable();
         if (_settings.GameBoosterGpuProfile)       ApplyMultimediaProfile();
         if (_settings.GameBoosterDisableNagle)          ApplyDisableNagle();
@@ -1034,7 +1075,6 @@ public sealed class GameBoosterService : IDisposable
         RestoreNagle();
         RestoreMultimediaProfile();
         if (_savedAppCaptureEnabled.HasValue || _savedGameDvrEnabled.HasValue) RestoreGameBarDvr();
-        RestoreTimerResolution();
 
         // 1. Restore notifications — only if we actually suppressed them (were ON before boost)
         if (_savedNotificationsEnabled.HasValue)
@@ -1090,31 +1130,322 @@ public sealed class GameBoosterService : IDisposable
         }
     }
 
+    // ── Crash-recovery: persist / clear / recover ─────────────────────────────
+
+    /// <summary>
+    /// Reads every pre-boost system value into the corresponding _saved* field WITHOUT
+    /// modifying anything.  Called immediately before <see cref="PersistBoostState"/>
+    /// so the on-disk snapshot is written before any system changes are made
+    /// (write-ahead log pattern).  If the PC crashes mid-apply the snapshot already
+    /// contains all originals and <see cref="RecoverBoostStateFromCrash"/> can restore them.
+    /// </summary>
+    private void ReadBoostOriginals()
+    {
+        // ── Game Bar / DVR ────────────────────────────────────────────────────
+        if (_settings.GameBoosterDisableGameBar)
+        {
+            try
+            {
+                using var dvrKey = Registry.CurrentUser.OpenSubKey(GameDvrKey);
+                if (dvrKey != null)
+                {
+                    var cur = dvrKey.GetValue("AppCaptureEnabled");
+                    _savedAppCaptureEnabled = cur is int i ? i : 1;
+                }
+            }
+            catch { }
+            try
+            {
+                using var cfgKey = Registry.CurrentUser.OpenSubKey(GameConfigKey);
+                if (cfgKey != null)
+                {
+                    var cur = cfgKey.GetValue("GameDVR_Enabled");
+                    _savedGameDvrEnabled = cur is int i ? i : 1;
+                }
+            }
+            catch { }
+        }
+
+        // ── Multimedia System Profile (SystemResponsiveness + Games sub-key) ──
+        if (_settings.GameBoosterGpuProfile)
+        {
+            try
+            {
+                using var profKey = Registry.LocalMachine.OpenSubKey(MmProfileKey);
+                if (profKey != null)
+                {
+                    var cur = profKey.GetValue("SystemResponsiveness");
+                    _savedSystemResponsiveness = cur is int i ? i : 20;
+                }
+            }
+            catch { }
+            try
+            {
+                using var gamesKey = Registry.LocalMachine.OpenSubKey(MmGamesKey);
+                if (gamesKey != null)
+                {
+                    var curPri           = gamesKey.GetValue("Priority");
+                    _savedMmPriority         = curPri is int ip ? ip : 2;
+                    _savedSchedulingCategory = gamesKey.GetValue("Scheduling Category") as string ?? "Medium";
+                    _savedSfIoPriority       = gamesKey.GetValue("SFIO Priority")       as string ?? "Normal";
+                }
+            }
+            catch { }
+        }
+
+        // ── Nagle — read per-adapter TCP values without writing ───────────────
+        if (_settings.GameBoosterDisableNagle)
+        {
+            var restore = new List<(string, string, object?)>();
+            try
+            {
+                using var ifacesKey = Registry.LocalMachine.OpenSubKey(TcpipIfacesKey);
+                if (ifacesKey != null)
+                {
+                    foreach (var guid in ifacesKey.GetSubKeyNames())
+                    {
+                        var path = $@"{TcpipIfacesKey}\{guid}";
+                        try
+                        {
+                            using var iKey = Registry.LocalMachine.OpenSubKey(path);
+                            if (iKey == null) continue;
+                            var savedAck   = iKey.GetValue("TcpAckFrequency");
+                            var savedDelay = iKey.GetValue("TCPNoDelay");
+                            restore.Add((path, "TcpAckFrequency", savedAck));
+                            restore.Add((path, "TCPNoDelay",      savedDelay));
+                        }
+                        catch { }
+                    }
+                }
+            }
+            catch { }
+            _nagleRestore = restore;
+        }
+
+        // ── NIC power saving — read per-adapter PnPCapabilities without writing
+        if (_settings.GameBoosterNicPowerSaving)
+        {
+            var restore = new List<(string, string, object?)>();
+            try
+            {
+                using var nicClass = Registry.LocalMachine.OpenSubKey(NicClassKey);
+                if (nicClass != null)
+                {
+                    foreach (var subName in nicClass.GetSubKeyNames())
+                    {
+                        if (!int.TryParse(subName, out _)) continue;
+                        var path = $@"{NicClassKey}\{subName}";
+                        try
+                        {
+                            using var adapterKey = Registry.LocalMachine.OpenSubKey(path);
+                            if (adapterKey == null) continue;
+                            if (adapterKey.GetValue("NetCfgInstanceId") == null) continue;
+                            var savedVal = adapterKey.GetValue("PnPCapabilities");
+                            restore.Add((path, "PnPCapabilities", savedVal));
+                        }
+                        catch { }
+                    }
+                }
+            }
+            catch { }
+            _nicPowerRestore = restore;
+        }
+
+        // ── Notifications ─────────────────────────────────────────────────────
+        if (_settings.GameBoosterSuppressNotifications)
+        {
+            try
+            {
+                using var key = Registry.CurrentUser.OpenSubKey(NotificationKey);
+                // If key absent, Windows default is notifications ON — treat as 1
+                var cur = key?.GetValue("NOC_GLOBAL_SETTING_TOASTS_ENABLED") as int?;
+                bool alreadyOff = cur.HasValue && cur.Value == 0;
+                _savedNotificationsEnabled = alreadyOff ? (int?)null : (cur ?? 1);
+            }
+            catch { }
+        }
+
+        // ── Windows Search service status ─────────────────────────────────────
+        if (_settings.GameBoosterDisableSearchIndexing)
+        {
+            try
+            {
+                using var svc = new ServiceController("WSearch");
+                svc.Refresh();
+                _searchIndexingWasRunning = svc.Status == ServiceControllerStatus.Running
+                                         || svc.Status == ServiceControllerStatus.StartPending;
+            }
+            catch { }
+        }
+
+        // ── Active power plan GUID ────────────────────────────────────────────
+        if (_settings.GameBoosterHighPerfPowerPlan)
+        {
+            try
+            {
+                var psi = new System.Diagnostics.ProcessStartInfo("powercfg", "/getactivescheme")
+                {
+                    RedirectStandardOutput = true, UseShellExecute = false, CreateNoWindow = true
+                };
+                using var ps = System.Diagnostics.Process.Start(psi);
+                if (ps != null)
+                {
+                    string output = ps.StandardOutput.ReadToEnd();
+                    ps.WaitForExit(3000);
+                    var match = System.Text.RegularExpressions.Regex.Match(
+                        output,
+                        @"GUID:\s+([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})");
+                    if (match.Success) _savedPowerPlanGuid = match.Groups[1].Value;
+                }
+            }
+            catch { }
+        }
+
+        // WiFi / Bluetooth: no pre-read needed.  _wifiRadioDisabled and
+        // _bluetoothRadioDisabled default to false and are only set to true by
+        // the async Apply methods after they actually disable the radio.
+        // At persist-time they are correctly false (nothing disabled yet).
+    }
+
+    /// <summary>
+    /// Writes all pre-boost original values to disk so they survive a crash.
+    /// Called immediately after <see cref="ReadBoostOriginals"/> and BEFORE
+    /// <see cref="ApplyBoostOptions"/> — write-ahead log pattern.
+    /// </summary>
+    private void PersistBoostState()
+    {
+        try
+        {
+            var snapshot = new BoostStateSnapshot
+            {
+                GameName                 = ActiveGameName,
+                KilledServices           = new List<string>(_killedServices),
+                NotificationsEnabled     = _savedNotificationsEnabled,
+                PowerPlanGuid            = _savedPowerPlanGuid,
+                SearchIndexingWasRunning = _searchIndexingWasRunning,
+                AppCaptureEnabled        = _savedAppCaptureEnabled,
+                GameDvrEnabled           = _savedGameDvrEnabled,
+                SystemResponsiveness     = _savedSystemResponsiveness,
+                MmPriority               = _savedMmPriority,
+                SchedulingCategory       = _savedSchedulingCategory,
+                SfIoPriority             = _savedSfIoPriority,
+                WifiRadioDisabled        = _wifiRadioDisabled,
+                BluetoothRadioDisabled   = _bluetoothRadioDisabled,
+            };
+
+            if (_nagleRestore != null)
+                snapshot.NagleRestore = _nagleRestore
+                    .Select(r => new RegistryRestoreEntry { Path = r.path, Name = r.name, Val = r.val is int i ? i : null })
+                    .ToList();
+
+            if (_nicPowerRestore != null)
+                snapshot.NicPowerRestore = _nicPowerRestore
+                    .Select(r => new RegistryRestoreEntry { Path = r.path, Name = r.name, Val = r.val is int i ? i : null })
+                    .ToList();
+
+            Directory.CreateDirectory(BoostStateDir);
+            var json = JsonSerializer.Serialize(snapshot, new JsonSerializerOptions { WriteIndented = true });
+            // Atomic write: temp file then rename to prevent corruption on crash mid-write
+            var tmp = BoostStatePath + ".tmp";
+            File.WriteAllText(tmp, json);
+            File.Move(tmp, BoostStatePath, overwrite: true);
+            _log.Info("GameBoosterService", "Boost state persisted to disk for crash recovery");
+        }
+        catch (Exception ex) { _log.Warn("GameBoosterService", $"PersistBoostState failed: {ex.Message}"); }
+    }
+
+    /// <summary>
+    /// Deletes the persisted boost state file — called after a clean deactivation.
+    /// </summary>
+    private void ClearPersistedBoostState()
+    {
+        try { if (File.Exists(BoostStatePath)) File.Delete(BoostStatePath); }
+        catch (Exception ex) { _log.Warn("GameBoosterService", $"ClearPersistedBoostState failed: {ex.Message}"); }
+    }
+
+    /// <summary>
+    /// Called once at startup. If a boost_state.json file exists, the previous session
+    /// crashed mid-boost. Load the saved originals and run the normal restore logic so
+    /// services, registry, power plan, etc. are returned to their pre-boost values.
+    /// </summary>
+    private void RecoverBoostStateFromCrash()
+    {
+        try
+        {
+            if (!File.Exists(BoostStatePath)) return;
+
+            var json = File.ReadAllText(BoostStatePath);
+            var snap = JsonSerializer.Deserialize<BoostStateSnapshot>(json);
+            if (snap == null)
+            {
+                ClearPersistedBoostState();
+                return;
+            }
+
+            _log.Warn("GameBoosterService",
+                $"Crash recovery: previous boost for '{snap.GameName}' was active when Systema exited — restoring original settings now");
+
+            // Load saved originals into the in-memory fields
+            _killedServices.Clear();
+            if (snap.KilledServices != null) _killedServices.AddRange(snap.KilledServices);
+            _savedNotificationsEnabled  = snap.NotificationsEnabled;
+            _savedPowerPlanGuid         = snap.PowerPlanGuid;
+            _searchIndexingWasRunning   = snap.SearchIndexingWasRunning;
+            _savedAppCaptureEnabled     = snap.AppCaptureEnabled;
+            _savedGameDvrEnabled        = snap.GameDvrEnabled;
+            _savedSystemResponsiveness  = snap.SystemResponsiveness;
+            _savedMmPriority            = snap.MmPriority;
+            _savedSchedulingCategory    = snap.SchedulingCategory;
+            _savedSfIoPriority          = snap.SfIoPriority;
+            _wifiRadioDisabled          = snap.WifiRadioDisabled;
+            _bluetoothRadioDisabled     = snap.BluetoothRadioDisabled;
+
+            if (snap.NagleRestore != null)
+                _nagleRestore = snap.NagleRestore
+                    .Select(r => (r.Path, r.Name, (object?)(r.Val.HasValue ? r.Val.Value : null)))
+                    .ToList();
+
+            if (snap.NicPowerRestore != null)
+                _nicPowerRestore = snap.NicPowerRestore
+                    .Select(r => (r.Path, r.Name, (object?)(r.Val.HasValue ? r.Val.Value : null)))
+                    .ToList();
+
+            // Run normal restore — RestoreBoostOptions handles all registry/settings,
+            // then restore killed services
+            RestoreBoostOptions();
+
+            foreach (var svcName in _killedServices)
+            {
+                try
+                {
+                    using var svc = new ServiceController(svcName);
+                    svc.Refresh();
+                    if (svc.Status == ServiceControllerStatus.Stopped)
+                    {
+                        svc.Start();
+                        _log.Info("GameBoosterService", $"Crash recovery: restored service {svcName}");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    if (!ex.Message.Contains("was not found"))
+                        _log.Warn("GameBoosterService", $"Crash recovery: could not restore {svcName}: {ex.Message}");
+                }
+            }
+            _killedServices.Clear();
+
+            ClearPersistedBoostState();
+            _log.Info("GameBoosterService", "Crash recovery complete — all boost settings restored");
+        }
+        catch (Exception ex)
+        {
+            _log.Warn("GameBoosterService", $"RecoverBoostStateFromCrash failed: {ex.Message}");
+            // Delete corrupt file so it doesn't block every startup
+            ClearPersistedBoostState();
+        }
+    }
+
     // ── New Boost Helpers ─────────────────────────────────────────────────────
-
-    // ·· 1ms Timer Resolution ··················································
-
-    private void ApplyTimerResolution()
-    {
-        // timeBeginPeriod returns 0 (TIMERR_NOERROR) on success
-        if (timeBeginPeriod(1) == 0)
-        {
-            _timerResolutionSet = true;
-            _log.Info("GameBoosterService", "Timer resolution set to 1 ms");
-        }
-        else
-        {
-            _log.Warn("GameBoosterService", "timeBeginPeriod(1) failed — timer resolution unchanged");
-        }
-    }
-
-    private void RestoreTimerResolution()
-    {
-        if (!_timerResolutionSet) return;
-        timeEndPeriod(1);
-        _timerResolutionSet = false;
-        _log.Info("GameBoosterService", "Timer resolution restored to Windows default");
-    }
 
     // ·· Game Bar & DVR ························································
 

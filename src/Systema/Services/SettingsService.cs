@@ -258,17 +258,14 @@ public class SettingsService
         set => WriteBool(nameof(GameBoosterHighPerfPowerPlan), value);
     }
 
-    /// <summary>Set Windows timer resolution to 1 ms while a game is running (reduces frame jitter).</summary>
-    public bool GameBoosterTimerResolution
-    {
-        get => ReadBool(nameof(GameBoosterTimerResolution), defaultValue: true);
-        set => WriteBool(nameof(GameBoosterTimerResolution), value);
-    }
-
-    /// <summary>Tune the Windows Multimedia System Profile (GPU Priority, Scheduling Category) for gaming.</summary>
+    /// <summary>
+    /// Tune the Windows Multimedia System Profile (GPU Priority, Scheduling Category,
+    /// SystemResponsiveness=0) for gaming.
+    /// Default: false — can cause screen tearing on some systems; opt-in only.
+    /// </summary>
     public bool GameBoosterGpuProfile
     {
-        get => ReadBool(nameof(GameBoosterGpuProfile), defaultValue: true);
+        get => ReadBool(nameof(GameBoosterGpuProfile), defaultValue: false);
         set => WriteBool(nameof(GameBoosterGpuProfile), value);
     }
 

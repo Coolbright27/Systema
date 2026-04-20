@@ -610,71 +610,7 @@
                                Style="{StaticResource SectionLabel}"
                                Margin="0,0,0,16"/>
 
-                    <!-- Stay asleep until opened (Persistent Nap) -->
-                    <Grid Margin="0,0,0,16">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" Margin="0,0,24,0">
-                            <TextBlock Text="Stay asleep until opened"
-                                       Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                            <TextBlock Text="Once an app is put to sleep, it stays asleep until you click on it. Prevents apps from constantly waking themselves up."
-                                       Style="{StaticResource CaptionText}"
-                                       Foreground="{StaticResource TextSecondaryBrush}"
-                                       TextWrapping="Wrap" Margin="0,3,0,0"/>
-                        </StackPanel>
-                        <CheckBox Grid.Column="1"
-                                  IsChecked="{Binding PersistentNapEnabled, Mode=TwoWay}"
-                                  Style="{StaticResource ToggleSwitch}"
-                                  VerticalAlignment="Top"/>
-                    </Grid>
-
-                    <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,0,0,16"/>
-
-                    <!-- CPU-triggered nap -->
-                    <Grid Margin="0,0,0,16">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" Margin="0,0,24,0">
-                            <TextBlock Text="Nap high-CPU background apps"
-                                       Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                            <TextBlock Text="Automatically slows down background apps that are using too much CPU while your system is under load."
-                                       Style="{StaticResource CaptionText}"
-                                       Foreground="{StaticResource TextSecondaryBrush}"
-                                       TextWrapping="Wrap" Margin="0,3,0,0"/>
-                        </StackPanel>
-                        <CheckBox Grid.Column="1"
-                                  IsChecked="{Binding CpuTriggeredNapEnabled, Mode=TwoWay}"
-                                  Style="{StaticResource ToggleSwitch}"
-                                  VerticalAlignment="Top"/>
-                    </Grid>
-
-                    <!-- Nap child processes -->
-                    <Grid Margin="0,0,0,16">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" Margin="0,0,24,0">
-                            <TextBlock Text="Nap child processes"
-                                       Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                            <TextBlock Text="When an app is put to sleep, also sleep its helper processes. Frees up more resources but some apps may not handle this well."
-                                       Style="{StaticResource CaptionText}"
-                                       Foreground="{StaticResource TextSecondaryBrush}"
-                                       TextWrapping="Wrap" Margin="0,3,0,0"/>
-                        </StackPanel>
-                        <CheckBox Grid.Column="1"
-                                  IsChecked="{Binding NapChildrenEnabled, Mode=TwoWay}"
-                                  Style="{StaticResource ToggleSwitch}"
-                                  VerticalAlignment="Top"/>
-                    </Grid>
-
-                    <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,0,0,16"/>
-
-                    <!-- Minimize Nap -->
+                    <!-- Sleep minimized apps -->
                     <Grid Margin="0,0,0,16">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
@@ -683,7 +619,7 @@
                         <StackPanel Grid.Column="0" Margin="0,0,24,0">
                             <TextBlock Text="Sleep minimized apps"
                                        Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                            <TextBlock Text="Puts apps to sleep after you minimize them. Apps playing audio, on calls, or recording are always protected. Sleeping apps get periodic brief wakes to stay up to date."
+                            <TextBlock Text="Apps you minimize are automatically put to sleep. They get periodic brief wakes to stay up to date. Audio, calls, and recordings are always protected."
                                        Style="{StaticResource CaptionText}"
                                        Foreground="{StaticResource TextSecondaryBrush}"
                                        TextWrapping="Wrap" Margin="0,3,0,0"/>
@@ -694,90 +630,16 @@
                                   VerticalAlignment="Top"/>
                     </Grid>
 
-                    <!-- Minimize Nap: brief wake interval -->
-                    <Grid Margin="16,0,0,12"
-                          Visibility="{Binding MinimizeNapEnabled, Converter={StaticResource BoolToVis}}">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" Margin="0,0,24,0">
-                            <TextBlock Text="Brief wake every"
-                                       Style="{StaticResource CaptionText}" FontWeight="SemiBold"/>
-                            <TextBlock Text="How often sleeping apps are briefly woken up to check for updates and notifications."
-                                       Style="{StaticResource CaptionText}"
-                                       Foreground="{StaticResource TextSecondaryBrush}"
-                                       TextWrapping="Wrap" Margin="0,2,0,0"/>
-                        </StackPanel>
-                        <TextBox Grid.Column="1"
-                                 Text="{Binding MinimizedBriefWakeIntervalSeconds, UpdateSourceTrigger=LostFocus}"
-                                 Style="{StaticResource ThresholdInput}"/>
-                        <TextBlock Grid.Column="2" Text="sec" VerticalAlignment="Center"
-                                   Margin="6,0,0,0" Style="{StaticResource BodyText}"
-                                   Foreground="{StaticResource TextSecondaryBrush}"/>
-                    </Grid>
-
-                    <!-- Minimize Nap: brief wake duration -->
-                    <Grid Margin="16,0,0,12"
-                          Visibility="{Binding MinimizeNapEnabled, Converter={StaticResource BoolToVis}}">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" Margin="0,0,24,0">
-                            <TextBlock Text="Wake lasts for"
-                                       Style="{StaticResource CaptionText}" FontWeight="SemiBold"/>
-                            <TextBlock Text="How long the app stays awake during each brief wake before going back to sleep."
-                                       Style="{StaticResource CaptionText}"
-                                       Foreground="{StaticResource TextSecondaryBrush}"
-                                       TextWrapping="Wrap" Margin="0,2,0,0"/>
-                        </StackPanel>
-                        <TextBox Grid.Column="1"
-                                 Text="{Binding MinimizedBriefWakeDurationSeconds, UpdateSourceTrigger=LostFocus}"
-                                 Style="{StaticResource ThresholdInput}"/>
-                        <TextBlock Grid.Column="2" Text="sec" VerticalAlignment="Center"
-                                   Margin="6,0,0,0" Style="{StaticResource BodyText}"
-                                   Foreground="{StaticResource TextSecondaryBrush}"/>
-                    </Grid>
-
-                    <!-- Minimize Nap: deep sleep threshold -->
-                    <Grid Margin="16,0,0,16"
-                          Visibility="{Binding MinimizeNapEnabled, Converter={StaticResource BoolToVis}}">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" Margin="0,0,24,0">
-                            <TextBlock Text="Deep sleep after"
-                                       Style="{StaticResource CaptionText}" FontWeight="SemiBold"/>
-                            <TextBlock Text="After being minimized this long without being opened, the app enters deep sleep with much longer intervals between wakes."
-                                       Style="{StaticResource CaptionText}"
-                                       Foreground="{StaticResource TextSecondaryBrush}"
-                                       TextWrapping="Wrap" Margin="0,2,0,0"/>
-                        </StackPanel>
-                        <TextBox Grid.Column="1"
-                                 Text="{Binding MinimizeDeepSleepThresholdMinutes, UpdateSourceTrigger=LostFocus}"
-                                 Style="{StaticResource ThresholdInput}"/>
-                        <TextBlock Grid.Column="2" Text="min" VerticalAlignment="Center"
-                                   Margin="6,0,0,0" Style="{StaticResource BodyText}"
-                                   Foreground="{StaticResource TextSecondaryBrush}"/>
-                    </Grid>
-
-                    <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,0,0,16"/>
-
-                    <!-- Tray Nap -->
+                    <!-- Sleep system tray apps -->
                     <Grid Margin="0,0,0,16">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <StackPanel Grid.Column="0" Margin="0,0,24,0">
-                            <TextBlock Text="Sleep system tray apps"
+                            <TextBlock Text="Sleep tray apps"
                                        Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                            <TextBlock Text="Puts background apps that only live in the system tray to sleep — things like cloud sync, game launchers, and background utilities. Apps playing audio are always protected."
+                            <TextBlock Text="Background apps living in the system tray (cloud sync, game launchers, updaters) are put to sleep with rare brief wakes."
                                        Style="{StaticResource CaptionText}"
                                        Foreground="{StaticResource TextSecondaryBrush}"
                                        TextWrapping="Wrap" Margin="0,3,0,0"/>
@@ -788,381 +650,64 @@
                                   VerticalAlignment="Top"/>
                     </Grid>
 
-                    <!-- Tray Nap: brief wake interval -->
-                    <Grid Margin="16,0,0,12"
-                          Visibility="{Binding TrayNapEnabled, Converter={StaticResource BoolToVis}}">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" Margin="0,0,24,0">
-                            <TextBlock Text="Tray wake every"
-                                       Style="{StaticResource CaptionText}" FontWeight="SemiBold"/>
-                            <TextBlock Text="How often sleeping tray apps are briefly woken up to sync data and check for updates."
-                                       Style="{StaticResource CaptionText}"
-                                       Foreground="{StaticResource TextSecondaryBrush}"
-                                       TextWrapping="Wrap" Margin="0,2,0,0"/>
-                        </StackPanel>
-                        <TextBox Grid.Column="1"
-                                 Text="{Binding TrayBriefWakeIntervalMinutes, UpdateSourceTrigger=LostFocus}"
-                                 Style="{StaticResource ThresholdInput}"/>
-                        <TextBlock Grid.Column="2" Text="min" VerticalAlignment="Center"
-                                   Margin="6,0,0,0" Style="{StaticResource BodyText}"
-                                   Foreground="{StaticResource TextSecondaryBrush}"/>
-                    </Grid>
-
-                    <!-- Tray Nap: brief wake duration -->
-                    <Grid Margin="16,0,0,16"
-                          Visibility="{Binding TrayNapEnabled, Converter={StaticResource BoolToVis}}">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" Margin="0,0,24,0">
-                            <TextBlock Text="Tray wake lasts for"
-                                       Style="{StaticResource CaptionText}" FontWeight="SemiBold"/>
-                            <TextBlock Text="How long tray apps stay awake during each brief wake."
-                                       Style="{StaticResource CaptionText}"
-                                       Foreground="{StaticResource TextSecondaryBrush}"
-                                       TextWrapping="Wrap" Margin="0,2,0,0"/>
-                        </StackPanel>
-                        <TextBox Grid.Column="1"
-                                 Text="{Binding TrayBriefWakeDurationSeconds, UpdateSourceTrigger=LostFocus}"
-                                 Style="{StaticResource ThresholdInput}"/>
-                        <TextBlock Grid.Column="2" Text="sec" VerticalAlignment="Center"
-                                   Margin="6,0,0,0" Style="{StaticResource BodyText}"
-                                   Foreground="{StaticResource TextSecondaryBrush}"/>
-                    </Grid>
-
-                    <!-- Tray Deep Sleep -->
-                    <Grid Margin="16,0,0,16"
-                          Visibility="{Binding TrayNapEnabled, Converter={StaticResource BoolToVis}}">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" Margin="0,0,24,0">
-                            <TextBlock Text="Tray deep sleep"
-                                       Style="{StaticResource CaptionText}" FontWeight="SemiBold"/>
-                            <TextBlock Text="Tray apps that have been sleeping for a while enter a deeper sleep with even less frequent wakes to save more resources."
-                                       Style="{StaticResource CaptionText}"
-                                       Foreground="{StaticResource TextSecondaryBrush}"
-                                       TextWrapping="Wrap" Margin="0,2,0,0"/>
-                        </StackPanel>
-                        <CheckBox Grid.Column="1"
-                                  IsChecked="{Binding TrayDeepSleepEnabled, Mode=TwoWay}"
-                                  Style="{StaticResource ToggleSwitch}"
-                                  VerticalAlignment="Top"/>
-                    </Grid>
-
-                    <!-- Tray deep sleep threshold -->
-                    <Grid Margin="32,0,0,12"
-                          Visibility="{Binding TrayDeepSleepEnabled, Converter={StaticResource BoolToVis}}">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" Margin="0,0,24,0">
-                            <TextBlock Text="Deep sleep after"
-                                       Style="{StaticResource CaptionText}" FontWeight="SemiBold"/>
-                            <TextBlock Text="How long a tray app must be sleeping before it enters deep sleep."
-                                       Style="{StaticResource CaptionText}"
-                                       Foreground="{StaticResource TextSecondaryBrush}"
-                                       TextWrapping="Wrap" Margin="0,2,0,0"/>
-                        </StackPanel>
-                        <TextBox Grid.Column="1"
-                                 Text="{Binding TrayDeepSleepThresholdMinutes, UpdateSourceTrigger=LostFocus}"
-                                 Style="{StaticResource ThresholdInput}"/>
-                        <TextBlock Grid.Column="2" Text="min" VerticalAlignment="Center"
-                                   Margin="6,0,0,0" Style="{StaticResource BodyText}"
-                                   Foreground="{StaticResource TextSecondaryBrush}"/>
-                    </Grid>
-
-                    <!-- Tray deep sleep wake interval -->
-                    <Grid Margin="32,0,0,16"
-                          Visibility="{Binding TrayDeepSleepEnabled, Converter={StaticResource BoolToVis}}">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" Margin="0,0,24,0">
-                            <TextBlock Text="Deep sleep wake every"
-                                       Style="{StaticResource CaptionText}" FontWeight="SemiBold"/>
-                            <TextBlock Text="How often deep-sleeping tray apps are briefly woken up."
-                                       Style="{StaticResource CaptionText}"
-                                       Foreground="{StaticResource TextSecondaryBrush}"
-                                       TextWrapping="Wrap" Margin="0,2,0,0"/>
-                        </StackPanel>
-                        <TextBox Grid.Column="1"
-                                 Text="{Binding TrayDeepSleepWakeIntervalMinutes, UpdateSourceTrigger=LostFocus}"
-                                 Style="{StaticResource ThresholdInput}"/>
-                        <TextBlock Grid.Column="2" Text="min" VerticalAlignment="Center"
-                                   Margin="6,0,0,0" Style="{StaticResource BodyText}"
-                                   Foreground="{StaticResource TextSecondaryBrush}"/>
-                    </Grid>
-
-                    <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,0,0,16"/>
-
-                    <!-- CPU Cap for napped apps -->
+                    <!-- Sleep unused apps (Background Nap) -->
                     <Grid Margin="0,0,0,16">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <StackPanel Grid.Column="0" Margin="0,0,24,0">
-                            <TextBlock Text="CPU cap for napped apps"
+                            <TextBlock Text="Sleep unused apps"
                                        Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                            <TextBlock Text="Puts a hard limit on how much CPU sleeping apps can use. Unlike priority alone, this is enforced by Windows itself — apps physically cannot exceed the cap."
+                            <TextBlock Text="Apps you haven't used in a few minutes are put to sleep, even if they're not minimized. The most effective mode — catches everything you're not actively using."
                                        Style="{StaticResource CaptionText}"
                                        Foreground="{StaticResource TextSecondaryBrush}"
                                        TextWrapping="Wrap" Margin="0,3,0,0"/>
                         </StackPanel>
                         <CheckBox Grid.Column="1"
-                                  IsChecked="{Binding NappedCpuCapEnabled, Mode=TwoWay}"
+                                  IsChecked="{Binding BackgroundNapEnabled, Mode=TwoWay}"
                                   Style="{StaticResource ToggleSwitch}"
                                   VerticalAlignment="Top"/>
                     </Grid>
 
-                    <!-- CPU cap percent -->
-                    <Grid Margin="16,0,0,16"
-                          Visibility="{Binding NappedCpuCapEnabled, Converter={StaticResource BoolToVis}}">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" Margin="0,0,24,0">
-                            <TextBlock Text="Max CPU for napped apps"
-                                       Style="{StaticResource CaptionText}" FontWeight="SemiBold"/>
-                            <TextBlock Text="The maximum CPU percentage a sleeping app is allowed to use. Lower values free up more power for what you're actually doing. Apps are only suspended if they exceed this cap by more than 4%, so background tasks like updates still run."
-                                       Style="{StaticResource CaptionText}"
-                                       Foreground="{StaticResource TextSecondaryBrush}"
-                                       TextWrapping="Wrap" Margin="0,2,0,0"/>
-                        </StackPanel>
-                        <TextBox Grid.Column="1"
-                                 Text="{Binding NappedCpuCapPercent, UpdateSourceTrigger=LostFocus}"
-                                 Style="{StaticResource ThresholdInput}"/>
-                        <TextBlock Grid.Column="2" Text="%" VerticalAlignment="Center"
-                                   Margin="6,0,0,0" Style="{StaticResource BodyText}"
-                                   Foreground="{StaticResource TextSecondaryBrush}"/>
-                    </Grid>
-
-                    <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,0,0,16"/>
-
-                    <!-- Max concurrent brief wakes -->
-                    <Grid Margin="0,0,0,16">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" Margin="0,0,24,0">
-                            <TextBlock Text="Max simultaneous brief wakes"
-                                       Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                            <TextBlock Text="Limits how many sleeping apps can wake up at the same time. Prevents CPU spikes when multiple apps try to wake at once."
-                                       Style="{StaticResource CaptionText}"
-                                       Foreground="{StaticResource TextSecondaryBrush}"
-                                       TextWrapping="Wrap" Margin="0,3,0,0"/>
-                        </StackPanel>
-                        <TextBox Grid.Column="1"
-                                 Text="{Binding MaxConcurrentBriefWakes, UpdateSourceTrigger=LostFocus}"
-                                 Style="{StaticResource ThresholdInput}"/>
-                        <TextBlock Grid.Column="2" Text="apps" VerticalAlignment="Center"
-                                   Margin="6,0,0,0" Style="{StaticResource BodyText}"
-                                   Foreground="{StaticResource TextSecondaryBrush}"/>
-                    </Grid>
-
-                    <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,0,0,16"/>
-
-                    <!-- Protect active window -->
+                    <!-- Sleep idle apps -->
                     <Grid Margin="0,0,0,16">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <StackPanel Grid.Column="0" Margin="0,0,24,0">
-                            <TextBlock Text="Protect active window"
+                            <TextBlock Text="Sleep idle apps"
                                        Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                            <TextBlock Text="The app you're currently using and its helper processes are always protected from being slept."
+                            <TextBlock Text="Apps using almost no CPU for 2+ minutes are put to sleep. Catches truly idle background processes that waste resources by just existing."
                                        Style="{StaticResource CaptionText}"
                                        Foreground="{StaticResource TextSecondaryBrush}"
                                        TextWrapping="Wrap" Margin="0,3,0,0"/>
                         </StackPanel>
                         <CheckBox Grid.Column="1"
-                                  IsChecked="{Binding IgnoreForeground, Mode=TwoWay}"
+                                  IsChecked="{Binding IdleNapEnabled, Mode=TwoWay}"
                                   Style="{StaticResource ToggleSwitch}"
                                   VerticalAlignment="Top"/>
                     </Grid>
 
                     <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,0,0,16"/>
 
-                    <!-- Skip system services -->
+                    <!-- Nap child processes -->
                     <Grid Margin="0,0,0,16">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <StackPanel Grid.Column="0" Margin="0,0,24,0">
-                            <TextBlock Text="Skip system services"
+                            <TextBlock Text="Include helper processes"
                                        Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                            <TextBlock Text="Protects Windows services, antivirus, GPU drivers, audio drivers, anti-cheat, and other critical system processes from being touched."
+                            <TextBlock Text="When an app is put to sleep, also sleep processes it launched. Frees more resources but some apps may not handle this well."
                                        Style="{StaticResource CaptionText}"
                                        Foreground="{StaticResource TextSecondaryBrush}"
                                        TextWrapping="Wrap" Margin="0,3,0,0"/>
                         </StackPanel>
                         <CheckBox Grid.Column="1"
-                                  IsChecked="{Binding ExcludeSystemServices, Mode=TwoWay}"
-                                  Style="{StaticResource ToggleSwitch}"
-                                  VerticalAlignment="Top"/>
-                    </Grid>
-
-                    <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,0,0,16"/>
-
-                    <!-- Windows Efficiency Mode -->
-                    <Grid Margin="0,0,0,16">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" Margin="0,0,24,0">
-                            <TextBlock Text="Windows Efficiency Mode"
-                                       Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                            <TextBlock Text="Uses Windows EcoQoS to reduce power consumption for sleeping apps. Lowers clock speed and heat, especially helpful on laptops."
-                                       Style="{StaticResource CaptionText}"
-                                       Foreground="{StaticResource TextSecondaryBrush}"
-                                       TextWrapping="Wrap" Margin="0,3,0,0"/>
-                        </StackPanel>
-                        <CheckBox Grid.Column="1"
-                                  IsChecked="{Binding EnableEfficiencyMode, Mode=TwoWay}"
-                                  Style="{StaticResource ToggleSwitch}"
-                                  VerticalAlignment="Top"/>
-                    </Grid>
-
-                    <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,0,0,16"/>
-
-                    <!-- Lower CPU priority -->
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" Margin="0,0,24,0">
-                            <TextBlock Text="Lower CPU priority"
-                                       Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                            <TextBlock Text="Drops sleeping apps to the lowest CPU priority so they only get processing time when nothing else needs it."
-                                       Style="{StaticResource CaptionText}"
-                                       Foreground="{StaticResource TextSecondaryBrush}"
-                                       TextWrapping="Wrap" Margin="0,3,0,0"/>
-                        </StackPanel>
-                        <CheckBox Grid.Column="1"
-                                  IsChecked="{Binding LowerCpuPriority, Mode=TwoWay}"
-                                  Style="{StaticResource ToggleSwitch}"
-                                  VerticalAlignment="Top"/>
-                    </Grid>
-
-                    <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,0,0,16"/>
-
-                    <!-- ── AGGRESSIVENESS ── -->
-                    <TextBlock Text="AGGRESSIVENESS" Style="{StaticResource SectionLabel}"/>
-
-                    <StackPanel Margin="0,0,0,16">
-                        <TextBlock Text="How aggressively should Task Sleep throttle background apps?"
-                                   Style="{StaticResource CaptionText}"
-                                   Foreground="{StaticResource TextSecondaryBrush}"
-                                   TextWrapping="Wrap" Margin="0,0,0,12"/>
-
-                        <UniformGrid Rows="1" Margin="0,0,0,0">
-                            <RadioButton Content="Light"
-                                         GroupName="Aggressiveness"
-                                         IsChecked="{Binding AggressivenessLevel, Converter={StaticResource IntEqualConverter}, ConverterParameter=3}"
-                                         Style="{StaticResource ToggleRadio}"
-                                         Margin="0,0,6,0"/>
-                            <RadioButton Content="Balanced"
-                                         GroupName="Aggressiveness"
-                                         IsChecked="{Binding AggressivenessLevel, Converter={StaticResource IntEqualConverter}, ConverterParameter=0}"
-                                         Style="{StaticResource ToggleRadio}"
-                                         Margin="0,0,6,0"/>
-                            <RadioButton Content="Aggressive"
-                                         GroupName="Aggressiveness"
-                                         IsChecked="{Binding AggressivenessLevel, Converter={StaticResource IntEqualConverter}, ConverterParameter=1}"
-                                         Style="{StaticResource ToggleRadio}"
-                                         Margin="0,0,6,0"/>
-                            <RadioButton Content="Maximum"
-                                         GroupName="Aggressiveness"
-                                         IsChecked="{Binding AggressivenessLevel, Converter={StaticResource IntEqualConverter}, ConverterParameter=2}"
-                                         Style="{StaticResource ToggleRadio}"/>
-                        </UniformGrid>
-                    </StackPanel>
-
-                    <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,0,0,16"/>
-
-                    <!-- ── FINE-TUNING ── -->
-                    <TextBlock Text="FINE-TUNING" Style="{StaticResource SectionLabel}"/>
-
-                    <!-- Soft nap mode -->
-                    <Grid Margin="0,0,0,16">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" Margin="0,0,24,0">
-                            <TextBlock Text="Soft nap mode"
-                                       Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                            <TextBlock Text="Uses gentler throttling for CPU-triggered naps — apps stay more responsive but save less power."
-                                       Style="{StaticResource CaptionText}"
-                                       Foreground="{StaticResource TextSecondaryBrush}"
-                                       TextWrapping="Wrap" Margin="0,3,0,0"/>
-                        </StackPanel>
-                        <CheckBox Grid.Column="1"
-                                  IsChecked="{Binding SoftNapEnabled, Mode=TwoWay}"
-                                  Style="{StaticResource ToggleSwitch}"
-                                  VerticalAlignment="Top"/>
-                    </Grid>
-
-                    <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,0,0,16"/>
-
-                    <!-- Prevent apps from waking themselves -->
-                    <Grid Margin="0,0,0,16">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" Margin="0,0,24,0">
-                            <TextBlock Text="Prevent apps from waking themselves"
-                                       Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                            <TextBlock Text="Re-applies throttling if an app raises its own priority. Apps that fight back 3 times are auto-whitelisted."
-                                       Style="{StaticResource CaptionText}"
-                                       Foreground="{StaticResource TextSecondaryBrush}"
-                                       TextWrapping="Wrap" Margin="0,3,0,0"/>
-                        </StackPanel>
-                        <CheckBox Grid.Column="1"
-                                  IsChecked="{Binding EnforceSettings, Mode=TwoWay}"
-                                  Style="{StaticResource ToggleSwitch}"
-                                  VerticalAlignment="Top"/>
-                    </Grid>
-
-                    <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,0,0,16"/>
-
-                    <!-- Adaptive monitor speed -->
-                    <Grid Margin="0,0,0,4">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" Margin="0,0,24,0">
-                            <TextBlock Text="Adaptive monitor speed"
-                                       Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                            <TextBlock Text="Slows down monitoring when idle to save CPU. Speeds back up when activity is detected."
-                                       Style="{StaticResource CaptionText}"
-                                       Foreground="{StaticResource TextSecondaryBrush}"
-                                       TextWrapping="Wrap" Margin="0,3,0,0"/>
-                        </StackPanel>
-                        <CheckBox Grid.Column="1"
-                                  IsChecked="{Binding AdaptiveTick, Mode=TwoWay}"
+                                  IsChecked="{Binding NapChildrenEnabled, Mode=TwoWay}"
                                   Style="{StaticResource ToggleSwitch}"
                                   VerticalAlignment="Top"/>
                     </Grid>
@@ -1170,39 +715,28 @@
                 </StackPanel>
             </Border>
 
-            <!-- ===== BETA FEATURES ===== -->
+            <!-- ===== ADVANCED SETTINGS CARD ===== -->
             <Border Style="{StaticResource Card}" Margin="0,0,0,16">
                 <StackPanel>
-
-                    <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                        <TextBlock Text="Beta Features" Style="{StaticResource HeadingMedium}"/>
-                        <Border Background="#D97706" CornerRadius="4" Padding="6,2" Margin="10,0,0,0" VerticalAlignment="Center">
-                            <TextBlock Text="BETA" FontSize="10" FontWeight="Bold" Foreground="White"/>
-                        </Border>
-                    </StackPanel>
-                    <TextBlock Text="New features in testing — try them out and toggle individually"
+                    <TextBlock Text="ADVANCED" Style="{StaticResource SectionLabel}" Margin="0,0,0,4"/>
+                    <TextBlock Text="Protection guards and timing controls for power users"
                                Style="{StaticResource CaptionText}"
                                Foreground="{StaticResource TextSecondaryBrush}"
                                Margin="0,0,0,16"/>
 
-                    <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,0,0,16"/>
+                    <!-- ── PROTECTION GUARDS ── -->
+                    <TextBlock Text="PROTECTION" Style="{StaticResource SectionLabel}" Margin="0,0,0,8"/>
 
                     <!-- Elevated process guard -->
                     <Grid Margin="0,0,0,16">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <StackPanel Grid.Column="0" Margin="0,0,24,0">
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="Elevated process guard"
-                                           Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                                <Border Background="#D97706" CornerRadius="3" Padding="4,1" Margin="8,0,0,0" VerticalAlignment="Center">
-                                    <TextBlock Text="Beta" FontSize="9" FontWeight="Bold" Foreground="White"/>
-                                </Border>
-                            </StackPanel>
-                            <TextBlock Text="Automatically protects admin/elevated processes (Hyper-V VMs, Docker, WSL2, elevated tools) from being napped. Uses Windows integrity levels — no name list needed."
+                            <TextBlock Text="Protect elevated processes"
+                                       Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
+                            <TextBlock Text="Admin processes like Hyper-V, Docker, WSL2, and elevated tools are automatically protected using Windows integrity levels."
                                        Style="{StaticResource CaptionText}"
                                        Foreground="{StaticResource TextSecondaryBrush}"
                                        TextWrapping="Wrap" Margin="0,3,0,0"/>
@@ -1218,17 +752,11 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <StackPanel Grid.Column="0" Margin="0,0,24,0">
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="Multi-monitor awareness"
-                                           Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                                <Border Background="#D97706" CornerRadius="3" Padding="4,1" Margin="8,0,0,0" VerticalAlignment="Center">
-                                    <TextBlock Text="Beta" FontSize="9" FontWeight="Bold" Foreground="White"/>
-                                </Border>
-                            </StackPanel>
-                            <TextBlock Text="If you can see an app on any of your monitors, it won't be put to sleep — even if it's not the window you're currently clicking in."
+                            <TextBlock Text="Multi-monitor awareness"
+                                       Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
+                            <TextBlock Text="Apps visible on any monitor are protected, not just the one you're clicking in."
                                        Style="{StaticResource CaptionText}"
                                        Foreground="{StaticResource TextSecondaryBrush}"
                                        TextWrapping="Wrap" Margin="0,3,0,0"/>
@@ -1246,14 +774,9 @@
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <StackPanel Grid.Column="0" Margin="0,0,24,0">
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="Process group awareness"
-                                           Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                                <Border Background="#D97706" CornerRadius="3" Padding="4,1" Margin="8,0,0,0" VerticalAlignment="Center">
-                                    <TextBlock Text="Beta" FontSize="9" FontWeight="Bold" Foreground="White"/>
-                                </Border>
-                            </StackPanel>
-                            <TextBlock Text="When you're using an app, all of its processes stay awake. For example, if one Chrome window is focused, every Chrome process is protected."
+                            <TextBlock Text="App group awareness"
+                                       Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
+                            <TextBlock Text="When you're using an app, all of its processes stay awake (e.g. all Chrome tabs and renderers are protected when any Chrome window is focused)."
                                        Style="{StaticResource CaptionText}"
                                        Foreground="{StaticResource TextSecondaryBrush}"
                                        TextWrapping="Wrap" Margin="0,3,0,0"/>
@@ -1264,7 +787,279 @@
                                   VerticalAlignment="Top"/>
                     </Grid>
 
+                    <!-- Tray deep sleep (moved from Wake Timing — this is a behavioural guard) -->
+                    <Grid Margin="0,0,0,16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" Margin="0,0,24,0">
+                            <TextBlock Text="Tray deep sleep"
+                                       Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
+                            <TextBlock Text="After a tray app has been idle for the deep-sleep threshold, stretch its wakes to a longer interval. Protects it from spurious activations while still giving it periodic runtime."
+                                       Style="{StaticResource CaptionText}"
+                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                       TextWrapping="Wrap" Margin="0,3,0,0"/>
+                        </StackPanel>
+                        <CheckBox Grid.Column="1"
+                                  IsChecked="{Binding TrayDeepSleepEnabled, Mode=TwoWay}"
+                                  Style="{StaticResource ToggleSwitch}"
+                                  VerticalAlignment="Top"/>
+                    </Grid>
+
+                    <!-- Pause brief wakes during Game Mode -->
+                    <Grid Margin="0,0,0,16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" Margin="0,0,24,0">
+                            <TextBlock Text="Pause brief wakes while gaming"
+                                       Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
+                            <TextBlock Text="When Game Booster is active, napped apps stay fully asleep — no periodic wakes — so 100% of the CPU goes to your game. Turn off if you need background apps (Discord bots, streaming tools, etc.) to keep running while gaming."
+                                       Style="{StaticResource CaptionText}"
+                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                       TextWrapping="Wrap" Margin="0,3,0,0"/>
+                        </StackPanel>
+                        <CheckBox Grid.Column="1"
+                                  IsChecked="{Binding SuppressBriefWakesDuringGameMode, Mode=TwoWay}"
+                                  Style="{StaticResource ToggleSwitch}"
+                                  VerticalAlignment="Top"/>
+                    </Grid>
+
                     <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,0,0,16"/>
+
+                    <!-- ── CPU CAP ── -->
+                    <TextBlock Text="CPU CAP" Style="{StaticResource SectionLabel}" Margin="0,0,0,8"/>
+
+                    <Grid Margin="0,0,0,16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" Margin="0,0,24,0">
+                            <TextBlock Text="Hard CPU limit for sleeping apps"
+                                       Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
+                            <TextBlock Text="Enforced by Windows at the kernel level. Apps physically cannot exceed the cap."
+                                       Style="{StaticResource CaptionText}"
+                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                       TextWrapping="Wrap" Margin="0,3,0,0"/>
+                        </StackPanel>
+                        <CheckBox Grid.Column="1"
+                                  IsChecked="{Binding NappedCpuCapEnabled, Mode=TwoWay}"
+                                  Style="{StaticResource ToggleSwitch}"
+                                  VerticalAlignment="Top"/>
+                    </Grid>
+
+                    <!-- CPU cap sub-rows: all share 70px textbox + 50px unit column so they line up. -->
+                    <StackPanel Visibility="{Binding NappedCpuCapEnabled, Converter={StaticResource BoolToVis}}">
+                        <Grid Margin="16,0,0,10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="70"/>
+                                <ColumnDefinition Width="50"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Max CPU while sleeping"
+                                       Style="{StaticResource BodyText}"
+                                       VerticalAlignment="Center"/>
+                            <TextBox Grid.Column="1"
+                                     Text="{Binding NappedCpuCapPercent, UpdateSourceTrigger=PropertyChanged}"
+                                     Style="{StaticResource ThresholdInput}"
+                                     HorizontalAlignment="Stretch"/>
+                            <TextBlock Grid.Column="2" Text="%" VerticalAlignment="Center"
+                                       Margin="8,0,0,0" Style="{StaticResource BodyText}"
+                                       Foreground="{StaticResource TextSecondaryBrush}"/>
+                        </Grid>
+
+                        <Grid Margin="16,0,0,16">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="70"/>
+                                <ColumnDefinition Width="50"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" Margin="0,0,12,0" VerticalAlignment="Center">
+                                <TextBlock Text="Max CPU during brief wakes"
+                                           Style="{StaticResource BodyText}"/>
+                                <TextBlock Text="Cap stays on while a sleeping app briefly wakes, so it can't spike. Higher = more responsive, lower = less CPU use."
+                                           Style="{StaticResource CaptionText}"
+                                           Foreground="{StaticResource TextSecondaryBrush}"
+                                           TextWrapping="Wrap" Margin="0,3,0,0"/>
+                            </StackPanel>
+                            <TextBox Grid.Column="1"
+                                     Text="{Binding BriefWakeCpuCapPercent, UpdateSourceTrigger=PropertyChanged}"
+                                     Style="{StaticResource ThresholdInput}"
+                                     VerticalAlignment="Top"
+                                     HorizontalAlignment="Stretch"/>
+                            <TextBlock Grid.Column="2" Text="%" VerticalAlignment="Top"
+                                       Margin="8,8,0,0" Style="{StaticResource BodyText}"
+                                       Foreground="{StaticResource TextSecondaryBrush}"/>
+                        </Grid>
+                    </StackPanel>
+
+                    <Grid Margin="0,0,0,16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="70"/>
+                            <ColumnDefinition Width="50"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" Margin="0,0,12,0" VerticalAlignment="Center">
+                            <TextBlock Text="Max simultaneous brief wakes"
+                                       Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
+                            <TextBlock Text="Limits how many sleeping apps can wake up at the same time to prevent CPU spikes."
+                                       Style="{StaticResource CaptionText}"
+                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                       TextWrapping="Wrap" Margin="0,3,0,0"/>
+                        </StackPanel>
+                        <TextBox Grid.Column="1"
+                                 Text="{Binding MaxConcurrentBriefWakes, UpdateSourceTrigger=PropertyChanged}"
+                                 Style="{StaticResource ThresholdInput}"
+                                 VerticalAlignment="Top"
+                                 HorizontalAlignment="Stretch"/>
+                        <TextBlock Grid.Column="2" Text="apps" VerticalAlignment="Top"
+                                   Margin="8,8,0,0" Style="{StaticResource BodyText}"
+                                   Foreground="{StaticResource TextSecondaryBrush}"/>
+                    </Grid>
+
+                    <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,0,0,16"/>
+
+                    <!-- ── WAKE TIMING ── -->
+                    <!-- Column layout: label fills, fixed 70px textbox, fixed 36px unit. -->
+                    <!-- Every row aligns on the right regardless of unit text width.     -->
+                    <!-- "Deep sleep after" sets the threshold for BOTH minimized and tray -->
+                    <!-- deep sleep — one setting, one row. "Deep wake every" shows only   -->
+                    <!-- when Tray Deep Sleep (in Protection) is enabled.                   -->
+                    <TextBlock Text="WAKE TIMING" Style="{StaticResource SectionLabel}" Margin="0,0,0,12"/>
+
+                    <TextBlock Text="Minimized apps"
+                               FontSize="14" FontWeight="Bold"
+                               Foreground="{StaticResource TextPrimaryBrush}"
+                               Margin="0,0,0,12"/>
+
+                    <Grid Margin="0,0,0,10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="70"/>
+                            <ColumnDefinition Width="36"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Brief wake every" Style="{StaticResource BodyText}" VerticalAlignment="Center"/>
+                        <TextBox Grid.Column="1"
+                                 Text="{Binding MinimizedBriefWakeIntervalSeconds, UpdateSourceTrigger=PropertyChanged}"
+                                 Style="{StaticResource ThresholdInput}"
+                                 HorizontalAlignment="Stretch"/>
+                        <TextBlock Grid.Column="2" Text="sec" VerticalAlignment="Center"
+                                   Margin="8,0,0,0" Style="{StaticResource BodyText}"
+                                   Foreground="{StaticResource TextSecondaryBrush}"/>
+                    </Grid>
+
+                    <Grid Margin="0,0,0,20">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="70"/>
+                            <ColumnDefinition Width="36"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Wake lasts for" Style="{StaticResource BodyText}" VerticalAlignment="Center"/>
+                        <TextBox Grid.Column="1"
+                                 Text="{Binding MinimizedBriefWakeDurationSeconds, UpdateSourceTrigger=PropertyChanged}"
+                                 Style="{StaticResource ThresholdInput}"
+                                 HorizontalAlignment="Stretch"/>
+                        <TextBlock Grid.Column="2" Text="sec" VerticalAlignment="Center"
+                                   Margin="8,0,0,0" Style="{StaticResource BodyText}"
+                                   Foreground="{StaticResource TextSecondaryBrush}"/>
+                    </Grid>
+
+                    <TextBlock Text="Tray apps"
+                               FontSize="14" FontWeight="Bold"
+                               Foreground="{StaticResource TextPrimaryBrush}"
+                               Margin="0,0,0,12"/>
+
+                    <Grid Margin="0,0,0,10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="70"/>
+                            <ColumnDefinition Width="36"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Brief wake every" Style="{StaticResource BodyText}" VerticalAlignment="Center"/>
+                        <TextBox Grid.Column="1"
+                                 Text="{Binding TrayBriefWakeIntervalMinutes, UpdateSourceTrigger=PropertyChanged}"
+                                 Style="{StaticResource ThresholdInput}"
+                                 HorizontalAlignment="Stretch"/>
+                        <TextBlock Grid.Column="2" Text="min" VerticalAlignment="Center"
+                                   Margin="8,0,0,0" Style="{StaticResource BodyText}"
+                                   Foreground="{StaticResource TextSecondaryBrush}"/>
+                    </Grid>
+
+                    <Grid Margin="0,0,0,20">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="70"/>
+                            <ColumnDefinition Width="36"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Wake lasts for" Style="{StaticResource BodyText}" VerticalAlignment="Center"/>
+                        <TextBox Grid.Column="1"
+                                 Text="{Binding TrayBriefWakeDurationSeconds, UpdateSourceTrigger=PropertyChanged}"
+                                 Style="{StaticResource ThresholdInput}"
+                                 HorizontalAlignment="Stretch"/>
+                        <TextBlock Grid.Column="2" Text="sec" VerticalAlignment="Center"
+                                   Margin="8,0,0,0" Style="{StaticResource BodyText}"
+                                   Foreground="{StaticResource TextSecondaryBrush}"/>
+                    </Grid>
+
+                    <!-- Deep sleep — shared threshold for minimized + tray apps. -->
+                    <TextBlock Text="Deep sleep"
+                               FontSize="14" FontWeight="Bold"
+                               Foreground="{StaticResource TextPrimaryBrush}"
+                               Margin="0,0,0,12"/>
+
+                    <Grid Margin="0,0,0,10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="70"/>
+                            <ColumnDefinition Width="36"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Deep sleep after" Style="{StaticResource BodyText}" VerticalAlignment="Center"/>
+                        <TextBox Grid.Column="1"
+                                 Text="{Binding MinimizeDeepSleepThresholdMinutes, UpdateSourceTrigger=PropertyChanged}"
+                                 Style="{StaticResource ThresholdInput}"
+                                 HorizontalAlignment="Stretch"/>
+                        <TextBlock Grid.Column="2" Text="min" VerticalAlignment="Center"
+                                   Margin="8,0,0,0" Style="{StaticResource BodyText}"
+                                   Foreground="{StaticResource TextSecondaryBrush}"/>
+                    </Grid>
+
+                    <Grid Margin="0,0,0,10"
+                          Visibility="{Binding TrayDeepSleepEnabled, Converter={StaticResource BoolToVis}}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="70"/>
+                            <ColumnDefinition Width="36"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Tray deep wake every" Style="{StaticResource BodyText}" VerticalAlignment="Center"/>
+                        <TextBox Grid.Column="1"
+                                 Text="{Binding TrayDeepSleepWakeIntervalMinutes, UpdateSourceTrigger=PropertyChanged}"
+                                 Style="{StaticResource ThresholdInput}"
+                                 HorizontalAlignment="Stretch"/>
+                        <TextBlock Grid.Column="2" Text="min" VerticalAlignment="Center"
+                                   Margin="8,0,0,0" Style="{StaticResource BodyText}"
+                                   Foreground="{StaticResource TextSecondaryBrush}"/>
+                    </Grid>
+
+                </StackPanel>
+            </Border>
+
+            <!-- ===== BETA FEATURES ===== -->
+            <Border Style="{StaticResource Card}" Margin="0,0,0,16">
+                <StackPanel>
+
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                        <TextBlock Text="Beta Features" Style="{StaticResource HeadingMedium}"/>
+                        <Border Background="#D97706" CornerRadius="4" Padding="6,2" Margin="10,0,0,0" VerticalAlignment="Center">
+                            <TextBlock Text="BETA" FontSize="10" FontWeight="Bold" Foreground="White"/>
+                        </Border>
+                    </StackPanel>
+                    <TextBlock Text="Experimental features in testing"
+                               Style="{StaticResource CaptionText}"
+                               Foreground="{StaticResource TextSecondaryBrush}"
+                               Margin="0,0,0,16"/>
 
                     <!-- Network activity guard -->
                     <Grid Margin="0,0,0,16">
@@ -1273,14 +1068,9 @@
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <StackPanel Grid.Column="0" Margin="0,0,24,0">
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="Network activity guard"
-                                           Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                                <Border Background="#D97706" CornerRadius="3" Padding="4,1" Margin="8,0,0,0" VerticalAlignment="Center">
-                                    <TextBlock Text="Beta" FontSize="9" FontWeight="Bold" Foreground="White"/>
-                                </Border>
-                            </StackPanel>
-                            <TextBlock Text="Apps that are actively downloading, uploading, or streaming data won't be put to sleep until they finish."
+                            <TextBlock Text="Network activity guard"
+                                       Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
+                            <TextBlock Text="Apps actively downloading, uploading, or streaming won't be put to sleep."
                                        Style="{StaticResource CaptionText}"
                                        Foreground="{StaticResource TextSecondaryBrush}"
                                        TextWrapping="Wrap" Margin="0,3,0,0"/>
@@ -1291,7 +1081,6 @@
                                   VerticalAlignment="Top"/>
                     </Grid>
 
-                    <!-- Network threshold -->
                     <Grid Margin="16,0,0,16"
                           Visibility="{Binding NetworkActivityGuardEnabled, Converter={StaticResource BoolToVis}}">
                         <Grid.ColumnDefinitions>
@@ -1299,16 +1088,9 @@
                             <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" Margin="0,0,24,0">
-                            <TextBlock Text="Network threshold"
-                                       Style="{StaticResource CaptionText}" FontWeight="SemiBold"/>
-                            <TextBlock Text="Apps using more than this amount of network traffic are protected from sleeping."
-                                       Style="{StaticResource CaptionText}"
-                                       Foreground="{StaticResource TextSecondaryBrush}"
-                                       TextWrapping="Wrap" Margin="0,2,0,0"/>
-                        </StackPanel>
+                        <TextBlock Text="Network threshold" Style="{StaticResource CaptionText}" VerticalAlignment="Center"/>
                         <TextBox Grid.Column="1"
-                                 Text="{Binding NetworkActivityThresholdKBps, UpdateSourceTrigger=LostFocus}"
+                                 Text="{Binding NetworkActivityThresholdKBps, UpdateSourceTrigger=PropertyChanged}"
                                  Style="{StaticResource ThresholdInput}"/>
                         <TextBlock Grid.Column="2" Text="KB/s" VerticalAlignment="Center"
                                    Margin="6,0,0,0" Style="{StaticResource BodyText}"
@@ -1322,14 +1104,9 @@
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <StackPanel Grid.Column="0" Margin="0,0,24,0">
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="Disk I/O guard"
-                                           Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                                <Border Background="#D97706" CornerRadius="3" Padding="4,1" Margin="8,0,0,0" VerticalAlignment="Center">
-                                    <TextBlock Text="Beta" FontSize="9" FontWeight="Bold" Foreground="White"/>
-                                </Border>
-                            </StackPanel>
-                            <TextBlock Text="Apps that are actively reading or writing files (saving, compiling, installing) won't be put to sleep until they finish."
+                            <TextBlock Text="Disk I/O guard"
+                                       Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
+                            <TextBlock Text="Apps actively reading or writing files (saving, compiling, installing) won't be put to sleep."
                                        Style="{StaticResource CaptionText}"
                                        Foreground="{StaticResource TextSecondaryBrush}"
                                        TextWrapping="Wrap" Margin="0,3,0,0"/>
@@ -1340,7 +1117,6 @@
                                   VerticalAlignment="Top"/>
                     </Grid>
 
-                    <!-- Disk I/O threshold -->
                     <Grid Margin="16,0,0,16"
                           Visibility="{Binding DiskIoGuardEnabled, Converter={StaticResource BoolToVis}}">
                         <Grid.ColumnDefinitions>
@@ -1348,16 +1124,9 @@
                             <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" Margin="0,0,24,0">
-                            <TextBlock Text="Disk I/O threshold"
-                                       Style="{StaticResource CaptionText}" FontWeight="SemiBold"/>
-                            <TextBlock Text="Apps using more than this amount of disk activity are protected from sleeping."
-                                       Style="{StaticResource CaptionText}"
-                                       Foreground="{StaticResource TextSecondaryBrush}"
-                                       TextWrapping="Wrap" Margin="0,2,0,0"/>
-                        </StackPanel>
+                        <TextBlock Text="Disk threshold" Style="{StaticResource CaptionText}" VerticalAlignment="Center"/>
                         <TextBox Grid.Column="1"
-                                 Text="{Binding DiskIoThresholdKBps, UpdateSourceTrigger=LostFocus}"
+                                 Text="{Binding DiskIoThresholdKBps, UpdateSourceTrigger=PropertyChanged}"
                                  Style="{StaticResource ThresholdInput}"/>
                         <TextBlock Grid.Column="2" Text="KB/s" VerticalAlignment="Center"
                                    Margin="6,0,0,0" Style="{StaticResource BodyText}"
@@ -1373,14 +1142,9 @@
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <StackPanel Grid.Column="0" Margin="0,0,24,0">
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="Smart aggressive nap"
-                                           Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                                <Border Background="#D97706" CornerRadius="3" Padding="4,1" Margin="8,0,0,0" VerticalAlignment="Center">
-                                    <TextBlock Text="Beta" FontSize="9" FontWeight="Bold" Foreground="White"/>
-                                </Border>
-                            </StackPanel>
-                            <TextBlock Text="Finds background apps that have been doing nothing for a while and puts them to sleep, even if they aren't on the known resource wasters list."
+                            <TextBlock Text="Smart aggressive nap"
+                                       Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
+                            <TextBlock Text="Finds background apps doing nothing and puts them to sleep, even if they aren't on the known resource wasters list."
                                        Style="{StaticResource CaptionText}"
                                        Foreground="{StaticResource TextSecondaryBrush}"
                                        TextWrapping="Wrap" Margin="0,3,0,0"/>
@@ -1391,70 +1155,18 @@
                                   VerticalAlignment="Top"/>
                     </Grid>
 
-                    <!-- Smart aggressive sub-settings -->
-                    <StackPanel Margin="16,0,0,0"
-                                Visibility="{Binding SmartAggressiveNapEnabled, Converter={StaticResource BoolToVis}}">
-                        <Grid Margin="0,0,0,12">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <StackPanel Grid.Column="0" Margin="0,0,24,0">
-                                <TextBlock Text="CPU threshold"
-                                           Style="{StaticResource CaptionText}" FontWeight="SemiBold"/>
-                                <TextBlock Text="Apps using less CPU than this are considered idle."
-                                           Style="{StaticResource CaptionText}"
-                                           Foreground="{StaticResource TextSecondaryBrush}"
-                                           TextWrapping="Wrap" Margin="0,2,0,0"/>
-                            </StackPanel>
-                            <TextBox Grid.Column="1"
-                                     Text="{Binding SmartAggressiveCpuThresholdPercent, UpdateSourceTrigger=LostFocus}"
-                                     Style="{StaticResource ThresholdInput}"/>
-                            <TextBlock Grid.Column="2" Text="%" VerticalAlignment="Center"
-                                       Margin="6,0,0,0" Style="{StaticResource BodyText}"
-                                       Foreground="{StaticResource TextSecondaryBrush}"/>
-                        </Grid>
-                        <Grid Margin="0,0,0,16">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <StackPanel Grid.Column="0" Margin="0,0,24,0">
-                                <TextBlock Text="Idle checks required"
-                                           Style="{StaticResource CaptionText}" FontWeight="SemiBold"/>
-                                <TextBlock Text="How many consecutive checks the app must be idle before it's put to sleep."
-                                           Style="{StaticResource CaptionText}"
-                                           Foreground="{StaticResource TextSecondaryBrush}"
-                                           TextWrapping="Wrap" Margin="0,2,0,0"/>
-                            </StackPanel>
-                            <TextBox Grid.Column="1"
-                                     Text="{Binding SmartAggressiveTickCount, UpdateSourceTrigger=LostFocus}"
-                                     Style="{StaticResource ThresholdInput}"/>
-                            <TextBlock Grid.Column="2" Text="checks" VerticalAlignment="Center"
-                                       Margin="6,0,0,0" Style="{StaticResource BodyText}"
-                                       Foreground="{StaticResource TextSecondaryBrush}"/>
-                        </Grid>
-                    </StackPanel>
-
                     <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,0,0,16"/>
 
                     <!-- Notification grace period -->
-                    <Grid Margin="0,0,0,16">
+                    <Grid Margin="0,0,0,4">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <StackPanel Grid.Column="0" Margin="0,0,24,0">
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="Notification grace period"
-                                           Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                                <Border Background="#D97706" CornerRadius="3" Padding="4,1" Margin="8,0,0,0" VerticalAlignment="Center">
-                                    <TextBlock Text="Beta" FontSize="9" FontWeight="Bold" Foreground="White"/>
-                                </Border>
-                            </StackPanel>
-                            <TextBlock Text="When an app receives a notification or updates its status, it gets extra time before being put to sleep so you don't miss anything."
+                            <TextBlock Text="Notification grace period"
+                                       Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
+                            <TextBlock Text="When an app gets a notification, it gets extra time before being put to sleep."
                                        Style="{StaticResource CaptionText}"
                                        Foreground="{StaticResource TextSecondaryBrush}"
                                        TextWrapping="Wrap" Margin="0,3,0,0"/>
@@ -1464,31 +1176,6 @@
                                   Style="{StaticResource ToggleSwitch}"
                                   VerticalAlignment="Top"/>
                     </Grid>
-
-                    <!-- Notification grace duration -->
-                    <Grid Margin="16,0,0,16"
-                          Visibility="{Binding NotificationGracePeriodEnabled, Converter={StaticResource BoolToVis}}">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" Margin="0,0,24,0">
-                            <TextBlock Text="Grace duration"
-                                       Style="{StaticResource CaptionText}" FontWeight="SemiBold"/>
-                            <TextBlock Text="How long to wait after a notification before allowing the app to be slept."
-                                       Style="{StaticResource CaptionText}"
-                                       Foreground="{StaticResource TextSecondaryBrush}"
-                                       TextWrapping="Wrap" Margin="0,2,0,0"/>
-                        </StackPanel>
-                        <TextBox Grid.Column="1"
-                                 Text="{Binding NotificationGracePeriodSeconds, UpdateSourceTrigger=LostFocus}"
-                                 Style="{StaticResource ThresholdInput}"/>
-                        <TextBlock Grid.Column="2" Text="s" VerticalAlignment="Center"
-                                   Margin="6,0,0,0" Style="{StaticResource BodyText}"
-                                   Foreground="{StaticResource TextSecondaryBrush}"/>
-                    </Grid>
-
 
                 </StackPanel>
             </Border>

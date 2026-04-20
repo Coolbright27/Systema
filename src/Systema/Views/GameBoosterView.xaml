@@ -436,21 +436,6 @@
                                   IsChecked="{Binding HighPerfPowerPlan, Mode=TwoWay}" VerticalAlignment="Center"/>
                     </Grid>
 
-                    <!-- 1 ms timer resolution -->
-                    <Grid Margin="0,0,0,14">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" Margin="0,0,24,0" VerticalAlignment="Center">
-                            <TextBlock Text="1 ms timer resolution" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                            <TextBlock Text="Sets Windows scheduler tick to 1 ms (from ~15.6 ms default). Reduces frame-time jitter and input lag. Restored on game exit."
-                                       Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,2,0,0"/>
-                        </StackPanel>
-                        <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}"
-                                  IsChecked="{Binding TimerResolutionOnBoost, Mode=TwoWay}" VerticalAlignment="Center"/>
-                    </Grid>
-
                     <!-- Disable Game Bar & DVR -->
                     <Grid Margin="0,0,0,14">
                         <Grid.ColumnDefinitions>
@@ -474,7 +459,7 @@
                         </Grid.ColumnDefinitions>
                         <StackPanel Grid.Column="0" Margin="0,0,24,0" VerticalAlignment="Center">
                             <TextBlock Text="GPU &amp; multimedia system profile" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                            <TextBlock Text="Raises Windows Multimedia scheduler priority and SystemResponsiveness to 0 so the game gets maximum CPU quanta. Restored on exit."
+                            <TextBlock Text="Raises Windows Multimedia scheduler priority and sets SystemResponsiveness=0 so the game gets maximum CPU quanta. Restored on exit. Off by default — can cause screen tearing on some systems."
                                        Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,2,0,0"/>
                         </StackPanel>
                         <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}"
