@@ -3,7 +3,7 @@
 ; ============================================================
 
 #define MyAppName "Systema"
-#define MyAppVersion "1.7.47"
+#define MyAppVersion "1.7.48"
 #define MyAppPublisher "Systema"
 #define MyAppURL "https://github.com/systema-app"
 #define MyAppExeName "Systema.exe"
@@ -26,7 +26,7 @@ LicenseFile=
 OutputDir=.\output
 OutputBaseFilename=Systema_Setup_{#MyAppVersion}
 SetupIconFile=..\src\Systema\Assets\logo.ico
-Compression=lzma2/fast
+Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern
 PrivilegesRequired=admin
@@ -69,15 +69,6 @@ Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChang
 ; Silent/auto-update — relaunches into tray (Ghost Mode), no window popup
 Filename: "{app}\{#MyAppExeName}"; Parameters: "--silent"; Flags: nowait runascurrentuser shellexec; \
   Check: WizardSilent
-; Remove "downloaded from internet" Zone.Identifier from ALL files (app + subfolders + DLLs)
-; This prevents Windows Defender and SmartScreen from blocking the unsigned exe on subsequent launches
-Filename: "powershell.exe"; Parameters: "-NoProfile -Command ""$ErrorActionPreference='SilentlyContinue'; Get-ChildItem -Path '{app}' -Recurse -File | Unblock-File; Write-Host 'Files unblocked'; exit 0"""; \
-  Flags: runhidden waituntilterminated; StatusMsg: "Unblocking files from internet restriction..."
-
-; Add Defender exclusion for the entire installation directory (prevents real-time scan interference)
-; This is crucial for unsigned elevated apps to avoid false positives
-Filename: "powershell.exe"; Parameters: "-NoProfile -Command ""$ErrorActionPreference='SilentlyContinue'; Add-MpPreference -ExclusionPath '{app}' -Force; Write-Host 'Defender exclusion added'; exit 0"""; \
-  Flags: runhidden waituntilterminated; StatusMsg: "Adding Windows Defender exclusion..."
 
 [Code]
 // Check Windows version and display SmartScreen info (only in interactive mode)
