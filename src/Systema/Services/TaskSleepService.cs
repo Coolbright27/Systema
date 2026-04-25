@@ -1937,27 +1937,21 @@ public sealed class TaskSleepService : IDisposable
             // ── Determine effective settings (per-app overrides global) ────────
             // forceMaxThrottle = true for minimize-nap and tray-nap (full throttle always)
             // forceMaxThrottle = false for CPU-triggered throttle (follows user settings)
+            // GPU priority is deliberately NOT manipulated anywhere — D3DKMT scheduling
+            // calls disrupt the shared HAGS flip queue and break VSync system-wide.
             bool   lowerCpu    = forceMaxThrottle || s.LowerCpuPriority;
-            // GPU priority is NEVER included in forceMaxThrottle.
-            // D3DKMTSetProcessSchedulingPriorityClass(Idle) disrupts the Windows HAGS flip
-            // queue shared by all processes — even minimised apps with Idle GPU priority can
-            // break VSync for the foreground game and hang Intel/NVIDIA GPU tools.
-            bool   lowerGpu    = s.LowerGpuPriority; // user opt-in only, never forced
             bool   lowerIo     = forceMaxThrottle || s.LowerIoPriority;
             bool   lowerMem    = forceMaxThrottle || s.LowerMemoryPriority;
             bool   moveToECores = forceMaxThrottle ? (s.MoveToECores && s.DetectECores) : s.MoveToECores;
             bool   effMode     = forceMaxThrottle || s.EnableEfficiencyMode;
             // Soft nap: use lighter throttle classes when user requests it (not for force-max)
             uint   cpuClass    = (!forceMaxThrottle && s.SoftNapEnabled) ? BELOW_NORMAL_PRIORITY_CLASS : IDLE_PRIORITY_CLASS;
-            var    gpuClass    = KMTSCHEDULINGPRIORITYCLASS.BelowNormal; // never Idle — Idle tier breaks HAGS flip-queue VSync system-wide
             int    ioLevel     = (!forceMaxThrottle && s.SoftNapEnabled) ? IO_PRIORITY_LOW : IO_PRIORITY_VERY_LOW;
 
             if (!forceMaxThrottle && rules.TryGetValue(proc.ProcessName, out var rule))
             {
                 if (rule.CpuPriority != null)
                     { lowerCpu = true; cpuClass = ParseCpuPriorityClass(rule.CpuPriority); }
-                if (rule.GpuPriority != null)
-                    { lowerGpu = rule.GpuPriority != "Normal"; gpuClass = ParseGpuPriorityClass(rule.GpuPriority); }
                 if (rule.IoPriority  != null)
                     { lowerIo  = rule.IoPriority  != "Normal"; ioLevel  = ParseIoPriority(rule.IoPriority); }
                 if (rule.Affinity    != null)
@@ -1982,13 +1976,6 @@ public sealed class TaskSleepService : IDisposable
             if (effMode)
             {
                 SetEfficiencyMode(handle, true);
-                _throttledPids.TryAdd(proc.Id, storedOriginal);
-                changed = true;
-            }
-
-            if (lowerGpu)
-            {
-                SetGpuPriority(handle, gpuClass);
                 _throttledPids.TryAdd(proc.Id, storedOriginal);
                 changed = true;
             }
@@ -2066,7 +2053,6 @@ public sealed class TaskSleepService : IDisposable
         {
             if (original != 0) SetPriorityClass(handle, original);
             SetEfficiencyMode(handle, false);
-            SetGpuPriority(handle, KMTSCHEDULINGPRIORITYCLASS.Normal);
             SetIoPriorityLevel(handle, IO_PRIORITY_NORMAL);
             SetMemoryPriority(handle, MEMORY_PRIORITY_NORMAL);
 
@@ -2113,7 +2099,6 @@ public sealed class TaskSleepService : IDisposable
         {
             if (original != 0) SetPriorityClass(handle, original);
             SetEfficiencyMode(handle, false);
-            SetGpuPriority(handle, KMTSCHEDULINGPRIORITYCLASS.Normal);
             SetIoPriorityLevel(handle, IO_PRIORITY_NORMAL);
             SetMemoryPriority(handle, MEMORY_PRIORITY_NORMAL);
 
@@ -3402,12 +3387,10 @@ public sealed class TaskSleepService : IDisposable
     }
 
     // ── GPU Priority ───────────────────────────────────────────────────────────
-
-    private static void SetGpuPriority(IntPtr handle, KMTSCHEDULINGPRIORITYCLASS cls)
-    {
-        try { D3DKMTSetProcessSchedulingPriorityClass(handle, cls); }
-        catch (Exception ex) { _log.Warn("TaskSleepService", $"SetGpuPriority failed (GPU scheduling may not be available): {ex.Message}"); }
-    }
+    // Intentionally NOT implemented. D3DKMTSetProcessSchedulingPriorityClass disrupts
+    // the shared HAGS flip queue and breaks VSync system-wide. The previous
+    // SetGpuPriority helper and its P/Invoke were removed entirely — TaskSleepService
+    // never touches GPU scheduling.
 
     // ── I/O Priority ───────────────────────────────────────────────────────────
 
@@ -3465,12 +3448,6 @@ public sealed class TaskSleepService : IDisposable
         "Above Normal" => 0x00008000,
         "High"         => 0x00000080,
         _              => 0x00000040,
-    };
-
-    private static KMTSCHEDULINGPRIORITYCLASS ParseGpuPriorityClass(string? s) => s switch
-    {
-        "Normal" => KMTSCHEDULINGPRIORITYCLASS.Normal,
-        _        => KMTSCHEDULINGPRIORITYCLASS.Idle,
     };
 
     private static int ParseIoPriority(string? s) => s switch
@@ -3917,10 +3894,6 @@ public sealed class TaskSleepService : IDisposable
     private static extern bool SetProcessAffinityMask(
         IntPtr hProcess, UIntPtr dwProcessAffinityMask);
 
-    [DllImport("gdi32.dll")]
-    private static extern int D3DKMTSetProcessSchedulingPriorityClass(
-        IntPtr hProcess, KMTSCHEDULINGPRIORITYCLASS priorityClass);
-
     [DllImport("ntdll.dll")]
     private static extern int NtSetInformationProcess(
         IntPtr hProcess, int processInformationClass,
@@ -3997,15 +3970,6 @@ public sealed class TaskSleepService : IDisposable
         ProcessPowerThrottling      = 4,
     }
 
-    private enum KMTSCHEDULINGPRIORITYCLASS
-    {
-        Idle        = 0,
-        BelowNormal = 1,
-        Normal      = 2,
-        AboveNormal = 3,
-        High        = 4,
-        Realtime    = 5,
-    }
 
     [StructLayout(LayoutKind.Sequential)]
     private struct MEMORY_PRIORITY_INFORMATION

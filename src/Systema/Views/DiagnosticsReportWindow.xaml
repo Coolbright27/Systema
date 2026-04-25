@@ -1,3 +1,5 @@
+<!-- AllowsTransparency removed — see MainWindow.xaml VSync warning comment.
+     Layered windows break NVIDIA driver-level VSync for the foreground game. -->
 <Window x:Class="Systema.Views.DiagnosticsReportWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -5,18 +7,20 @@
         Height="820" Width="1060"
         MinHeight="540" MinWidth="760"
         WindowStyle="None"
-        AllowsTransparency="True"
-        Background="Transparent"
+        Background="#0D0F14"
         WindowStartupLocation="CenterScreen"
         Topmost="False">
+    <WindowChrome.WindowChrome>
+        <WindowChrome CaptionHeight="0"
+                      CornerRadius="0"
+                      GlassFrameThickness="0"
+                      ResizeBorderThickness="6"
+                      UseAeroCaptionButtons="False"/>
+    </WindowChrome.WindowChrome>
 
     <Border Background="#0D0F14"
-            CornerRadius="12"
             BorderBrush="#00B4FF"
             BorderThickness="1">
-        <Border.Effect>
-            <DropShadowEffect Color="#000000" BlurRadius="30" ShadowDepth="0" Opacity="0.7"/>
-        </Border.Effect>
 
         <Grid>
             <Grid.RowDefinitions>
@@ -28,7 +32,6 @@
             <!-- ── Title Bar ── -->
             <Border Grid.Row="0"
                     Background="#111520"
-                    CornerRadius="12,12,0,0"
                     MouseLeftButtonDown="TitleBar_MouseDown">
                 <Grid Margin="16,0">
                     <Grid.ColumnDefinitions>

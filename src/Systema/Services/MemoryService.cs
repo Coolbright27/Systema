@@ -191,20 +191,63 @@ public class MemoryService
     private const uint MemoryPurgeStandbyList = 4;
     private const uint MemoryFlushModifiedList  = 3;
 
+    // ── VSync-critical processes (NEVER EmptyWorkingSet these) ────────────────
+    // Trimming these processes' working sets forces them to page memory from disk
+    // the next time they run, which causes multi-second latency spikes. For
+    // dwm.exe specifically, this means the compositor thread misses its 60/144 Hz
+    // presentation deadlines and NVIDIA MPO / Independent Flip falls back to
+    // composed mode — hard tearing on every window including the foreground game.
+    // svchost is excluded because Windows hosts DWM helpers, Themes, UxSms,
+    // AudioSrv, and other presentation-critical services inside svchost.exe.
+    // nvcontainer / nvdisplay.container host NVIDIA's user-mode GPU scheduler.
+    private static readonly HashSet<string> VsyncCriticalProcessNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "dwm",                    // Desktop Window Manager — THE VSync killer when trimmed
+        "audiodg",                // Audio Device Graph Isolation — feeds MMCSS boost to DWM
+        "svchost",                // hosts DWM helpers, Themes, UxSms, AudioSrv, etc.
+        "nvcontainer",            // NVIDIA user-mode GPU scheduler / telemetry
+        "nvdisplay.container",    // NVIDIA display container
+        "nvwmi64",                // NVIDIA WMI
+        "RadeonSoftware",         // AMD driver user-mode
+        "amdow",                  // AMD overlay
+        "atieclxx", "atiesrxx",   // AMD kernel-mode helpers
+        "igfxEM", "igfxCUIService", // Intel GPU helpers
+        "csrss",                  // Client/Server Runtime — critical session manager
+        "services",               // SCM
+        "lsass",                  // credential manager — memory corruption risk if trimmed
+        "winlogon",               // session / DWM parent
+        "wininit", "smss",        // early-boot session managers
+        "System", "Registry", "Idle", "Secure System", "Memory Compression",
+    };
+
     /// <summary>
     /// Flushes process working sets and purges the standby memory list.
     /// Returns (freedMb, message). Runs on caller's thread — wrap in Task.Run.
+    ///
+    /// VSYNC WARNING: dwm.exe, audiodg.exe, svchost.exe, and GPU vendor user-mode
+    /// processes are EXCLUDED. Trimming dwm's working set forces the compositor to
+    /// page from disk and breaks NVIDIA MPO / Independent Flip for every window on
+    /// the desktop — causing hard tearing in foreground games until DWM's pages
+    /// fault back in. Never remove the exclusion list below without understanding
+    /// the consequences; see VsyncCriticalProcessNames for the full list.
     /// </summary>
     public (long freedMb, string message) FreeRam()
     {
         var (_, beforeMb) = GetRamStats();
 
-        // 1. EmptyWorkingSet on every accessible process
-        int trimmed = 0;
+        // 1. EmptyWorkingSet on every accessible process EXCEPT VSync-critical ones
+        int trimmed = 0, skipped = 0;
         foreach (var proc in System.Diagnostics.Process.GetProcesses())
         {
             try
             {
+                // Skip DWM, audiodg, svchost, GPU driver user-mode, session-critical
+                if (VsyncCriticalProcessNames.Contains(proc.ProcessName))
+                {
+                    skipped++;
+                    continue;
+                }
+
                 var handle = OpenProcess(PROCESS_ALL_ACCESS, false, proc.Id);
                 if (handle == IntPtr.Zero) continue;
                 EmptyWorkingSet(handle);
@@ -228,7 +271,7 @@ public class MemoryService
         var (_, afterMb) = GetRamStats();
         long freed = Math.Max(0, afterMb - beforeMb);
 
-        Log.Info("MemoryService", $"FreeRam: trimmed {trimmed} processes, freed ~{freed} MB");
+        Log.Info("MemoryService", $"FreeRam: trimmed {trimmed} processes (skipped {skipped} VSync-critical), freed ~{freed} MB");
         return (freed, $"Freed ~{freed:N0} MB from {trimmed} processes.");
     }
 

@@ -98,6 +98,33 @@ public sealed class GameBoosterService : IDisposable
 
     private const uint PROCESS_SET_INFORMATION = 0x0200;
 
+    // ── VSync-critical processes (NEVER trim these) ──────────────────────────
+    // Trimming dwm/audiodg/svchost/GPU-vendor working sets forces them to page
+    // memory from disk next time they run, which causes the compositor thread to
+    // miss its 60/144/240 Hz presentation deadlines and NVIDIA MPO / Independent
+    // Flip to fall back to composed mode — causing the very tearing this Game
+    // Booster is supposed to prevent. Keep in sync with
+    // MemoryService.VsyncCriticalProcessNames.
+    private static readonly HashSet<string> VsyncCriticalProcessNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "dwm",                    // Desktop Window Manager — THE VSync killer when trimmed
+        "audiodg",                // Audio Device Graph Isolation — feeds MMCSS boost to DWM
+        "svchost",                // hosts DWM helpers, Themes, UxSms, AudioSrv, etc.
+        "nvcontainer",            // NVIDIA user-mode GPU scheduler / telemetry
+        "nvdisplay.container",    // NVIDIA display container
+        "nvwmi64",                // NVIDIA WMI
+        "RadeonSoftware",         // AMD driver user-mode
+        "amdow",                  // AMD overlay
+        "atieclxx", "atiesrxx",   // AMD kernel-mode helpers
+        "igfxEM", "igfxCUIService", // Intel GPU helpers
+        "csrss",                  // Client/Server Runtime — critical session manager
+        "services",               // SCM
+        "lsass",                  // credential manager — memory corruption risk if trimmed
+        "winlogon",               // session / DWM parent
+        "wininit", "smss",        // early-boot session managers
+        "System", "Registry", "Idle", "Secure System", "Memory Compression",
+    };
+
     // ── Registry paths for new boost options ──────────────────────────────────
     private const string NotificationKey  = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Notifications\Settings";
     private const string HighPerfPlanGuid = "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c";
@@ -331,8 +358,10 @@ public sealed class GameBoosterService : IDisposable
 
         // ── Misc background services ──────────────────────────────────────────
         "RetailDemo",        // Retail Demo Experience Service
-        "XblGameSave",       // Xbox Live Game Save
-        "XboxNetApiSvc",     // Xbox Live Networking
+        // NOTE: Xbox services (XblGameSave, XboxNetApiSvc, XblAuthManager, xbgm) were
+        // removed from the kill list — xbgm hooks the running game's presentation layer
+        // and the Xbox Game Bar stack shares D3D/DWM hooks that, when yanked mid-session,
+        // can destabilise the flip queue and break VSync on NVIDIA. Keep them running.
         "WMPNetworkSvc",     // Windows Media Player Network Sharing
         "NcaSvc",            // Network Connectivity Assistant
         "StorSvc",           // Storage Service — background storage maintenance
@@ -344,8 +373,6 @@ public sealed class GameBoosterService : IDisposable
         "TapiSrv",           // Telephony — legacy TAPI, old modem applications
         "ShellHWDetection",  // Shell Hardware Detection — autoplay for USB/optical drives
         "WMPNetworkSvc",     // Windows Media Player Network Sharing (duplicate guard OK)
-        "XblAuthManager",    // Xbox Live Auth Manager
-        "xbgm",              // Xbox Game Monitoring
 
         // ── Remote access (not needed while gaming locally) ───────────────────
         "TermService",       // Remote Desktop Services — RDP host server
@@ -359,11 +386,13 @@ public sealed class GameBoosterService : IDisposable
         "WdiSystemHost",     // Diagnostic System Host — diagnostic scenario runner
         "WdiServiceHost",    // Diagnostic Service Host — WDI scenario host (duplicate guard OK)
 
-        // ── NFC / payments / mixed reality ────────────────────────────────────
+        // ── NFC / payments ─────────────────────────────────────────────────────
         "WalletService",         // Wallet Service — NFC passes and contactless payments
         "SEMgrSvc",              // Payments and NFC/SE Manager — secure element
-        "MixedRealityOpenXRSvc", // Mixed Reality OpenXR — VR/AR runtime overhead
-        "spectrum",              // Windows Perception Service — spatial awareness / VR
+        // NOTE: MixedRealityOpenXRSvc and spectrum were removed from the kill list —
+        // both hold active D3D/GPU resources (OpenXR runtime + Perception spatial mapping)
+        // and tearing down the OpenXR runtime mid-session is known to disturb the
+        // display flip queue on NVIDIA. Don't kill GPU-consuming services.
 
         // ── Misc low-value background workers ────────────────────────────────
         "wisvc",             // Windows Insider Service — Insider preview notifications
@@ -386,6 +415,11 @@ public sealed class GameBoosterService : IDisposable
     public void StartMonitoring(TrayService tray)
     {
         _tray = tray;
+
+        // VSync repair: normalize SystemResponsiveness if it's stuck at 0 from an older
+        // Systema build. Runs unconditionally on every startup — it's a no-op unless
+        // the value is actually 0, and it cannot harm a healthy system.
+        RepairVSyncCriticalRegistryValues();
 
         // Crash recovery: if the previous session crashed while boost was active,
         // restore all settings to their pre-boost originals before doing anything else.
@@ -519,6 +553,13 @@ public sealed class GameBoosterService : IDisposable
     /// <summary>Returns the effective kill list (user overrides or default).</summary>
     public List<string> GetKillList() => _settings.GameBoosterKillList ?? new List<string>(DefaultKillList);
     public void SetKillList(List<string> list) => _settings.GameBoosterKillList = list;
+
+    /// <summary>
+    /// Public entry-point for Settings → Reset All Settings to force the VSync-critical
+    /// registry repair (SystemResponsiveness normalization) without waiting for the next
+    /// startup. Safe to call anytime — no-op unless the value is actually 0.
+    /// </summary>
+    public void RepairRegistryNow() => RepairVSyncCriticalRegistryValues();
 
     // ── Game Detection ─────────────────────────────────────────────────────────
 
@@ -918,18 +959,29 @@ public sealed class GameBoosterService : IDisposable
         //    Step 1 — per-process: remove working-set floor then flush pages to standby list.
         //    Step 2 — system-wide: flush modified pages, then purge the standby list so all
         //             those pages become immediately free (not just potentially reusable).
+        //
+        // VSYNC: we EXCLUDE dwm.exe, audiodg.exe, svchost.exe, and GPU vendor user-mode
+        // processes. Trimming dwm's working set forces the compositor to page from disk
+        // and breaks NVIDIA MPO / Independent Flip for the whole desktop — causing the
+        // very tearing this Game Booster is trying to prevent. The list mirrors
+        // MemoryService.VsyncCriticalProcessNames; keep them in sync.
         if (_settings.GameBoosterFreeMemory)
         {
             try
             {
                 var procs = Process.GetProcesses();
-                int trimmed = 0;
+                int trimmed = 0, skipped = 0;
                 foreach (var proc in procs)
                 {
                     try
                     {
                         if (proc.ProcessName.Equals(gameName, StringComparison.OrdinalIgnoreCase)) continue;
                         if (proc.Id <= 4) continue;
+                        if (VsyncCriticalProcessNames.Contains(proc.ProcessName))
+                        {
+                            skipped++;
+                            continue;
+                        }
                         IntPtr h = OpenProcess(PROCESS_SET_INFORMATION, false, proc.Id);
                         if (h == IntPtr.Zero) continue;
                         try
@@ -959,7 +1011,7 @@ public sealed class GameBoosterService : IDisposable
                 }
                 catch (Exception ex2) { _log.Warn("GameBoosterService", $"StandbyPurge failed: {ex2.Message}"); }
 
-                _log.Info("GameBoosterService", $"Trimmed working sets of {trimmed} background processes to free RAM for {gameName}");
+                _log.Info("GameBoosterService", $"Trimmed working sets of {trimmed} background processes to free RAM for {gameName} (skipped {skipped} VSync-critical)");
             }
             catch (Exception ex) { _log.Warn("GameBoosterService", $"FreeMemory failed: {ex.Message}"); }
         }
@@ -1510,21 +1562,55 @@ public sealed class GameBoosterService : IDisposable
 
     // ·· GPU / Multimedia System Profile ·······································
 
-    private void ApplyMultimediaProfile()
+    /// <summary>
+    /// One-way repair for upgrade scenarios: older Systema builds wrote
+    /// SystemResponsiveness=0 as a "gamer tweak" which starves MMCSS priority boost
+    /// for DWM and breaks NVIDIA MPO / Independent Flip for the whole desktop. If the
+    /// current value is 0 we normalize it back to the Windows default (20). Safe to
+    /// call on every startup — no-op unless the value is actually 0.
+    /// </summary>
+    private void RepairVSyncCriticalRegistryValues()
     {
         try
         {
-            // Parent profile key — SystemResponsiveness=0 gives the game all CPU quanta
             using var profKey = Registry.LocalMachine.OpenSubKey(MmProfileKey, writable: true);
             if (profKey != null)
             {
                 var cur = profKey.GetValue("SystemResponsiveness");
-                _savedSystemResponsiveness = cur is int i ? i : 20;
-                if (_savedSystemResponsiveness != 0)
-                    profKey.SetValue("SystemResponsiveness", 0, RegistryValueKind.DWord);
+                if (cur is int i && i == 0)
+                {
+                    profKey.SetValue("SystemResponsiveness", 20, RegistryValueKind.DWord);
+                    _log.Info("GameBoosterService",
+                        "VSync repair: SystemResponsiveness was 0 — normalized to 20 so MMCSS can boost DWM presentation threads");
+                }
             }
+        }
+        catch (Exception ex)
+        {
+            _log.Warn("GameBoosterService", $"RepairVSyncCriticalRegistryValues: {ex.Message}");
+        }
+    }
+
+    private void ApplyMultimediaProfile()
+    {
+        try
+        {
+            // VSYNC WARNING: SystemResponsiveness is deliberately NOT modified.
+            // Setting HKLM\...\Multimedia\SystemProfile\SystemResponsiveness to 0
+            // (a popular "gamer tweak") gives games 100 % of CPU quanta but
+            // STARVES MMCSS's priority boost for the DWM render/compositor threads.
+            // DWM misses its 60/144/240 Hz presentation deadlines and NVIDIA MPO /
+            // Independent Flip falls back to composed mode, causing hard tearing on
+            // every window — including the foreground game. The Windows default
+            // (20) gives DWM the non-multimedia headroom it needs to keep flip
+            // queues consistent. Leave it alone.
+            _savedSystemResponsiveness = null;
 
             // Games task sub-key — raise scheduling priority and GPU/SFIO priority
+            // for the MMCSS "Games" category specifically. This only affects threads
+            // that opt in via AvSetMmThreadCharacteristics("Games", ...) — it does
+            // NOT displace DWM (which uses the "Window Manager" category), so it is
+            // VSync-safe.
             using var gamesKey = Registry.LocalMachine.OpenSubKey(MmGamesKey, writable: true);
             if (gamesKey != null)
             {
@@ -1539,7 +1625,7 @@ public sealed class GameBoosterService : IDisposable
                 gamesKey.SetValue("SFIO Priority",       "High", RegistryValueKind.String);
             }
 
-            _log.Info("GameBoosterService", "Multimedia system profile tuned for gaming");
+            _log.Info("GameBoosterService", "Multimedia system profile tuned for gaming (SystemResponsiveness preserved — VSync safety)");
         }
         catch (Exception ex) { _log.Warn("GameBoosterService", $"ApplyMultimediaProfile: {ex.Message}"); }
     }
@@ -1548,12 +1634,28 @@ public sealed class GameBoosterService : IDisposable
     {
         try
         {
-            if (_savedSystemResponsiveness.HasValue)
+            // Upgrade-path repair: older Systema builds set SystemResponsiveness=0
+            // (which starves MMCSS priority boost for DWM — see ApplyMultimediaProfile).
+            // If we find a lingering 0, normalize to the Windows default of 20 so VSync
+            // recovers even if the user never calls Apply again. This is a one-way
+            // safety repair; current builds NEVER write SystemResponsiveness, so any
+            // 0 we see is either a stale value from an old install or a manual gamer
+            // tweak — either way, 0 breaks VSync and we clamp it.
+            try
             {
                 using var profKey = Registry.LocalMachine.OpenSubKey(MmProfileKey, writable: true);
-                profKey?.SetValue("SystemResponsiveness", _savedSystemResponsiveness.Value, RegistryValueKind.DWord);
-                _savedSystemResponsiveness = null;
+                if (profKey != null)
+                {
+                    var cur = profKey.GetValue("SystemResponsiveness");
+                    if (cur is int i && i == 0)
+                    {
+                        profKey.SetValue("SystemResponsiveness", 20, RegistryValueKind.DWord);
+                        _log.Info("GameBoosterService", "SystemResponsiveness was 0 — normalized to 20 to restore MMCSS/DWM boost (VSync repair)");
+                    }
+                }
             }
+            catch { /* best-effort — never fail restore over this */ }
+            _savedSystemResponsiveness = null; // current code never sets this; kept for back-compat
 
             if (_savedMmPriority.HasValue)
             {

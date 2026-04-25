@@ -33,6 +33,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
     private readonly RestorePointService _restoreService;
     private readonly UpdateService       _updateService;
     private readonly WatchdogService     _watchdog;
+    private readonly GameBoosterService  _gameBooster;
     private static readonly LoggerService _log = LoggerService.Instance;
 
     // Event handlers stored for cleanup in Dispose()
@@ -252,51 +253,154 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
     }
 
     // ── Reset All Settings ───────────────────────────────────────────────────
+    //
+    // Comprehensive reset that unwinds EVERYTHING Systema has written:
+    //
+    //   SYSTEMA STATE
+    //     • HKCU\Software\Systema (all user preferences + TaskSleep sub-key)
+    //     • %APPDATA%\Systema\tasksleep_rules.json
+    //     • %LOCALAPPDATA%\Systema\boost_state.json (crash recovery)
+    //     • %LOCALAPPDATA%\Systema\crash_*.txt
+    //     • %LOCALAPPDATA%\Systema\Logs\*.log (best effort — current session file stays locked)
+    //     • "Systema" scheduled task (StartWithWindows)
+    //     • "Systema Watchdog" scheduled task (KeepSystemaRunning)
+    //
+    //   WINDOWS TWEAKS (reverted to defaults)
+    //     • Any active Game Boost is cleanly deactivated first, which restores:
+    //         services stopped, Nagle, NIC power, DNS, power plan, Game Bar, MMCSS
+    //         Games subkey, Wi-Fi/Bluetooth radios, sleep prevention
+    //     • VSync-critical MMCSS SystemResponsiveness — forced back to 20 if it was 0
+    //
+    //   Reset order matters: deactivate boost BEFORE deleting state files, so the
+    //   in-memory snapshot of pre-boost values is still available for restore.
 
     [RelayCommand]
-    private void ResetAllSettings()
+    private async Task ResetAllSettingsAsync()
     {
-        var result = MessageBox.Show(
-            "This will reset ALL Systema settings to their defaults and restart the app.\n\nAre you sure?",
-            "Reset All Settings",
-            MessageBoxButton.YesNo,
-            MessageBoxImage.Warning);
+        const string dialogMsg =
+            "This will FULLY reset Systema:\n\n" +
+            "• All user preferences and Task Sleep rules\n" +
+            "• Startup task and Watchdog task\n" +
+            "• Activity logs and crash reports\n" +
+            "• Any active Game Boost (services & tweaks reverted)\n" +
+            "• VSync-critical registry values restored to defaults\n\n" +
+            "The app will restart when done.\n\nContinue?";
 
+        var result = MessageBox.Show(dialogMsg, "Reset All Settings",
+            MessageBoxButton.YesNo, MessageBoxImage.Warning);
         if (result != MessageBoxResult.Yes) return;
+
+        var steps = new List<string>();
+        _log.Info("Settings", "Reset All Settings — starting full cleanup");
+
+        // ── 1) Deactivate active Game Boost (uses in-memory snapshot to restore Windows tweaks) ──
+        try
+        {
+            await _gameBooster.DisableManualBoostAsync();
+            steps.Add("Game Boost deactivated");
+        }
+        catch (Exception ex) { _log.Warn("Settings", $"Reset: boost deactivate failed — {ex.Message}"); }
+
+        // ── 2) Force VSync-critical registry repair (idempotent; also runs on next startup) ──
+        try
+        {
+            _gameBooster.RepairRegistryNow();
+            steps.Add("MMCSS SystemResponsiveness normalized");
+        }
+        catch (Exception ex) { _log.Warn("Settings", $"Reset: MMCSS repair failed — {ex.Message}"); }
+
+        // ── 3) Remove scheduled tasks ──
+        try { _watchdog.Disable(); steps.Add("Watchdog task removed"); }
+        catch (Exception ex) { _log.Warn("Settings", $"Reset: watchdog disable failed — {ex.Message}"); }
 
         try
         {
-            // Delete all Systema registry keys (includes TaskSleep sub-key)
-            try { Microsoft.Win32.Registry.CurrentUser.DeleteSubKeyTree(@"Software\Systema", throwOnMissingSubKey: false); }
-            catch (Exception ex) { _log.Warn("Settings", $"Registry delete failed: {ex.Message}"); }
+            _settings.StartWithWindows = false;  // deletes "Systema" task AND HKCU Run fallback
+            steps.Add("Startup task removed");
+        }
+        catch (Exception ex) { _log.Warn("Settings", $"Reset: startup task delete failed — {ex.Message}"); }
 
-            // Delete Task Sleep whitelist JSON
-            var rulesPath = System.IO.Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                "Systema", "tasksleep_rules.json");
-            if (File.Exists(rulesPath))
-                try { File.Delete(rulesPath); } catch { }
+        // ── 4) Delete AppData files (best effort — active log file stays locked) ──
+        TryDeleteAppDataState(steps);
 
-            _log.Info("Settings", "All settings reset to defaults — restarting");
+        // ── 5) Delete HKCU\Software\Systema (all user preferences + TaskSleep sub-key) ──
+        try
+        {
+            Microsoft.Win32.Registry.CurrentUser.DeleteSubKeyTree(
+                @"Software\Systema", throwOnMissingSubKey: false);
+            steps.Add("Registry cleared");
+        }
+        catch (Exception ex) { _log.Warn("Settings", $"Reset: registry delete failed — {ex.Message}"); }
 
-            // Restart the app
+        _log.Info("Settings", $"Reset complete — {steps.Count} step(s): {string.Join(", ", steps)}");
+
+        // ── 6) Restart (next startup re-runs RepairVSyncCriticalRegistryValues as belt-and-braces) ──
+        try
+        {
             var exePath = System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName;
             if (!string.IsNullOrEmpty(exePath))
             {
                 System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
                 {
-                    FileName = exePath,
+                    FileName        = exePath,
                     UseShellExecute = true,
-                    Verb = "runas"
+                    Verb            = "runas"
                 });
             }
-            Application.Current.Shutdown();
         }
-        catch (Exception ex)
+        catch (Exception ex) { _log.Warn("Settings", $"Reset: restart launch failed — {ex.Message}"); }
+
+        Application.Current.Shutdown();
+    }
+
+    /// <summary>
+    /// Best-effort deletion of Systema state files under %APPDATA% and %LOCALAPPDATA%.
+    /// The currently-open session log will remain locked; restart rotates it.
+    /// </summary>
+    private static void TryDeleteAppDataState(List<string> steps)
+    {
+        // %APPDATA%\Systema\tasksleep_rules.json
+        try
         {
-            _log.Error("Settings", "Reset failed", ex);
-            MessageBox.Show($"Reset failed: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            var rulesFile = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                "Systema", "tasksleep_rules.json");
+            if (File.Exists(rulesFile))
+            {
+                File.Delete(rulesFile);
+                steps.Add("Task Sleep whitelist deleted");
+            }
         }
+        catch (Exception ex) { _log.Warn("Settings", $"Reset: tasksleep_rules.json — {ex.Message}"); }
+
+        // %LOCALAPPDATA%\Systema\* — boost state, crash reports, log archive
+        try
+        {
+            var localDir = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "Systema");
+            if (!Directory.Exists(localDir)) return;
+
+            var boostFile = Path.Combine(localDir, "boost_state.json");
+            if (File.Exists(boostFile))
+                try { File.Delete(boostFile); steps.Add("Crash-recovery state cleared"); }
+                catch (Exception ex) { _log.Warn("Settings", $"Reset: boost_state.json — {ex.Message}"); }
+
+            // Crash reports
+            foreach (var f in Directory.GetFiles(localDir, "crash_*.txt"))
+                try { File.Delete(f); } catch { /* individual crash dump — best effort */ }
+
+            // Rotated log files (current session log is locked by the active LoggerService)
+            var logsDir = Path.Combine(localDir, "Logs");
+            if (Directory.Exists(logsDir))
+            {
+                int deleted = 0;
+                foreach (var f in Directory.GetFiles(logsDir, "*.log"))
+                    try { File.Delete(f); deleted++; } catch { /* active log stays locked */ }
+                if (deleted > 0) steps.Add($"{deleted} archived log file(s) deleted");
+            }
+        }
+        catch (Exception ex) { _log.Warn("Settings", $"Reset: LOCALAPPDATA cleanup — {ex.Message}"); }
     }
 
     // ── Constructor ───────────────────────────────────────────────────────────
@@ -305,12 +409,14 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         SettingsService     settings,
         RestorePointService restoreService,
         UpdateService       updateService,
-        WatchdogService     watchdog)
+        WatchdogService     watchdog,
+        GameBoosterService  gameBooster)
     {
         _settings       = settings;
         _restoreService = restoreService;
         _updateService  = updateService;
         _watchdog       = watchdog;
+        _gameBooster    = gameBooster;
 
         // Load persisted values without triggering OnChanged (avoids a redundant write)
         _skipRestorePoint         = _settings.SkipRestorePoint;

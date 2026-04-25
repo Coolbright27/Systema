@@ -1,3 +1,16 @@
+<!--
+    VSYNC / TEARING WARNING
+    ──────────────────────────────────────────────────────────────────
+    Do NOT add `AllowsTransparency="True"` back to this window.
+    It forces WS_EX_LAYERED (layered window) on the HWND, which disables
+    DWM Multi-Plane Overlay and Independent Flip for every other window
+    on the desktop — including the foreground game. NVIDIA driver-level
+    VSync relies on MPO/Independent Flip, so a layered transparent window
+    system-wide breaks the driver's VSync and causes hard tearing on
+    NVIDIA GPUs while Systema is running.
+    Use WindowChrome (below) for custom chrome; use DWMWA_WINDOW_CORNER_PREFERENCE
+    from MainWindow.xaml.cs for Win11 rounded corners. Never AllowsTransparency.
+-->
 <Window x:Class="Systema.Views.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -5,11 +18,22 @@
         xmlns:views="clr-namespace:Systema.Views"
         Title="Systema" Height="720" Width="1100"
         MinHeight="600" MinWidth="900"
-        WindowStyle="None" AllowsTransparency="True"
-        Background="Transparent"
+        WindowStyle="None"
+        Background="{StaticResource BgPrimaryBrush}"
         WindowStartupLocation="CenterScreen"
         Activated="Window_Activated"
         Deactivated="Window_Deactivated">
+    <WindowChrome.WindowChrome>
+        <!-- Custom chrome without the VSync-breaking layered-window path.
+             CaptionHeight=0: our own title bar handles drag via MouseLeftButtonDown.
+             ResizeBorderThickness=6: users can still resize by grabbing edges.
+             GlassFrameThickness=0 + UseAeroCaptionButtons=False: no native caption. -->
+        <WindowChrome CaptionHeight="0"
+                      CornerRadius="0"
+                      GlassFrameThickness="0"
+                      ResizeBorderThickness="6"
+                      UseAeroCaptionButtons="False"/>
+    </WindowChrome.WindowChrome>
 
     <Window.Resources>
         <DataTemplate DataType="{x:Type vm:DashboardViewModel}">
@@ -41,13 +65,12 @@
         </DataTemplate>
     </Window.Resources>
 
+    <!-- Rounded corners are provided by DWM on Win11 via DwmSetWindowAttribute in
+         MainWindow.xaml.cs. No Border CornerRadius / DropShadowEffect here — both
+         would require layered-window mode which breaks VSync system-wide. -->
     <Border Background="{StaticResource BgPrimaryBrush}"
-            CornerRadius="12"
             BorderBrush="{StaticResource BorderBrush}"
             BorderThickness="1">
-        <Border.Effect>
-            <DropShadowEffect Color="#000000" BlurRadius="30" ShadowDepth="0" Opacity="0.6"/>
-        </Border.Effect>
 
         <Grid>
             <Grid.RowDefinitions>
@@ -58,7 +81,6 @@
             <!-- ===== TITLE BAR ===== -->
             <Border Grid.Row="0"
                     Background="{StaticResource BgSidebarBrush}"
-                    CornerRadius="12,12,0,0"
                     MouseLeftButtonDown="TitleBar_MouseLeftButtonDown">
                 <Grid>
                     <Grid.ColumnDefinitions>
@@ -207,7 +229,7 @@
                         </StackPanel>
 
                         <!-- Version footer -->
-                        <TextBlock Grid.Row="1" Text="v1.7.48" Margin="16,0,0,16"
+                        <TextBlock Grid.Row="1" Text="v1.7.50" Margin="16,0,0,16"
                                    Style="{StaticResource CaptionText}"/>
                     </Grid>
                 </Border>

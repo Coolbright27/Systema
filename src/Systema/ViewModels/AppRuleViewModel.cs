@@ -29,7 +29,6 @@ public partial class AppRuleViewModel : ObservableObject
 
     [ObservableProperty] private bool   _isBlacklisted;
     [ObservableProperty] private string _cpuPriority    = "Default";
-    [ObservableProperty] private string _gpuPriority    = "Default";
     [ObservableProperty] private string _ioPriority     = "Default";
     [ObservableProperty] private string _affinity       = "Default";
     [ObservableProperty] private string _efficiencyMode = "Default";
@@ -40,7 +39,6 @@ public partial class AppRuleViewModel : ObservableObject
         ProcessName     = rule.ProcessName;
         _isBlacklisted  = rule.IsBlacklisted;
         _cpuPriority    = rule.CpuPriority    ?? "Default";
-        _gpuPriority    = rule.GpuPriority    ?? "Default";
         _ioPriority     = rule.IoPriority     ?? "Default";
         _affinity       = rule.Affinity       ?? "Default";
         _efficiencyMode = rule.EfficiencyMode.HasValue
@@ -50,7 +48,6 @@ public partial class AppRuleViewModel : ObservableObject
 
     partial void OnIsBlacklistedChanged(bool value)    => _onChanged();
     partial void OnCpuPriorityChanged(string value)    => _onChanged();
-    partial void OnGpuPriorityChanged(string value)    => _onChanged();
     partial void OnIoPriorityChanged(string value)     => _onChanged();
     partial void OnAffinityChanged(string value)       => _onChanged();
     partial void OnEfficiencyModeChanged(string value) => _onChanged();
@@ -60,7 +57,6 @@ public partial class AppRuleViewModel : ObservableObject
         ProcessName    = ProcessName,
         IsBlacklisted  = IsBlacklisted,
         CpuPriority    = CpuPriority    == "Default" ? null : CpuPriority,
-        GpuPriority    = GpuPriority    == "Default" ? null : GpuPriority,
         IoPriority     = IoPriority     == "Default" ? null : IoPriority,
         Affinity       = Affinity       == "Default" ? null : Affinity,
         EfficiencyMode = EfficiencyMode == "Default" ? (bool?)null

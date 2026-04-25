@@ -3,7 +3,7 @@
 ; ============================================================
 
 #define MyAppName "Systema"
-#define MyAppVersion "1.7.48"
+#define MyAppVersion "1.7.50"
 #define MyAppPublisher "Systema"
 #define MyAppURL "https://github.com/systema-app"
 #define MyAppExeName "Systema.exe"
@@ -71,11 +71,13 @@ Filename: "{app}\{#MyAppExeName}"; Parameters: "--silent"; Flags: nowait runascu
   Check: WizardSilent
 
 [Code]
-// Check Windows version and display SmartScreen info (only in interactive mode)
+// Check Windows version. Minimum supported: Windows 10.
+// A friendly welcome notice is shown in interactive mode so users who hit a
+// Windows protection prompt know how to proceed. Silent auto-updates skip this.
 function InitializeSetup(): Boolean;
 var
   Version: TWindowsVersion;
-  SmartScreenMsg: String;
+  WelcomeMsg: String;
 begin
   GetWindowsVersionEx(Version);
   if (Version.Major < 10) then
@@ -85,24 +87,18 @@ begin
   end
   else
   begin
-    // ONLY show SmartScreen warning in INTERACTIVE mode (not during auto-update /VERYSILENT installs)
-    // Silent updates use /SUPPRESSMSGBOXES /VERYSILENT so this won't block them
+    // Interactive install only — auto-updates run with /VERYSILENT and skip this.
     if not WizardSilent then
     begin
-      SmartScreenMsg := 'UNSIGNED EXECUTABLE NOTICE' + #10#10 +
-        'Systema is intentionally unsigned for transparency and open-source integrity.' + #10 +
-        'Windows SmartScreen may block it on first download.' + #10#10 +
-        'HOW TO BYPASS SMARTSCREEN:' + #10 +
-        '1. Download the installer' + #10 +
-        '2. When SmartScreen appears, click "More info"' + #10 +
-        '3. Click "Run anyway"' + #10#10 +
-        'WHY UNSIGNED?' + #10 +
-        'Code signing requires closed CA integration and remote servers, ' +
-        'which conflicts with our open-source, self-contained design.' + #10#10 +
-        'SAFETY CHECK:' + #10 +
-        'Always download from: https://github.com/Coolbright27/Systema/releases' + #10#10 +
-        'Click OK to continue installation.';
-      MsgBox(SmartScreenMsg, mbInformation, MB_OK);
+      WelcomeMsg := 'Welcome to Systema Setup' + #10#10 +
+        'Systema is a free, open-source Windows optimization tool.' + #10#10 +
+        'If Windows shows a protection prompt during install:' + #10 +
+        '  1. Click More info' + #10 +
+        '  2. Click Run anyway' + #10#10 +
+        'Always download from the official GitHub releases page:' + #10 +
+        'https://github.com/Coolbright27/Systema/releases' + #10#10 +
+        'Click OK to continue.';
+      MsgBox(WelcomeMsg, mbInformation, MB_OK);
     end;
     Result := True;
   end;

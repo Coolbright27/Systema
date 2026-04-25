@@ -48,8 +48,11 @@ public class TaskSleepSettings
     public int MinAdjustmentDurationMs { get; set; } = 5000;  // keep throttled for at least this long
     public int MaxAdjustmentDurationMs { get; set; } = 30000; // force-restore after this long (fallback when PersistentNap=off)
 
-    // ── GPU, I/O & Core Affinity ──────────────────────────────────────────────
-    public bool LowerGpuPriority { get; set; } = false; // default OFF — D3DKMT Idle tier disrupts the shared HAGS flip queue, breaking VSync for all processes including foreground games
+    // ── I/O & Core Affinity ───────────────────────────────────────────────────
+    // GPU priority deliberately NOT tunable — D3DKMTSetProcessSchedulingPriorityClass
+    // disrupts the shared HAGS flip queue and breaks VSync system-wide (including the
+    // foreground game). The feature was removed entirely in favour of never touching
+    // GPU scheduling from this service.
     public bool LowerIoPriority  { get; set; } = true;
     public bool DetectECores     { get; set; } = true;
     public bool MoveToECores     { get; set; } = true;

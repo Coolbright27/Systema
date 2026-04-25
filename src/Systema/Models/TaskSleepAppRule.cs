@@ -25,7 +25,7 @@ public class TaskSleepAppRule
 
     // null = inherit the global setting for that dimension
     public string? CpuPriority    { get; set; }  // "Idle" | "Below Normal" | "Normal" | "Above Normal" | "High"
-    public string? GpuPriority    { get; set; }  // "Idle" | "Normal"
+    // GpuPriority was removed — TaskSleepService no longer touches GPU scheduling.
     public string? IoPriority     { get; set; }  // "Very Low" | "Low" | "Normal"
     public string? Affinity       { get; set; }  // "E-cores" | "Any"
     public bool?   EfficiencyMode { get; set; }  // true | false

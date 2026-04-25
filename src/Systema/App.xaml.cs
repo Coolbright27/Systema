@@ -168,7 +168,7 @@ public partial class App : Application
             var servicesVm    = new ServicesViewModel(serviceControl, optFeatures, restoreService, settingsService);
             var visualVm      = new VisualViewModel(animationService, powerPlanService, settingsService);
             var gameBoosterVm = new GameBoosterViewModel(gameboosterService, settingsService);
-            var settingsVm    = new SettingsViewModel(settingsService, restoreService, _updateService, watchdogService);
+            var settingsVm    = new SettingsViewModel(settingsService, restoreService, _updateService, watchdogService, gameboosterService);
             var toolsVm       = new ToolsViewModel(
                 realtekService, coreParkingService, restoreService,
                 settingsService, dnsService, wuTweaksService, stabilityService);

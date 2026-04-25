@@ -1,15 +1,49 @@
+using System;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Input;
+using System.Windows.Interop;
 using Systema.ViewModels;
 
 namespace Systema.Views;
 
 public partial class MainWindow : Window
 {
+    // ── DWM rounded corners (Windows 11) ─────────────────────────────────────
+    // AllowsTransparency was removed to stop layered-window mode from disabling
+    // MPO / Independent Flip and breaking driver-level VSync on NVIDIA. On Win11
+    // we restore the rounded-corner look via DWMWA_WINDOW_CORNER_PREFERENCE, which
+    // is a system-drawn cosmetic hint — it does NOT change the window's HWND
+    // style, never triggers layered-window composition, and is a no-op on Win10.
+    private const int DWMWA_WINDOW_CORNER_PREFERENCE = 33;
+    private enum DWM_WINDOW_CORNER_PREFERENCE
+    {
+        DWMWCP_DEFAULT    = 0,
+        DWMWCP_DONOTROUND = 1,
+        DWMWCP_ROUND      = 2,
+        DWMWCP_ROUNDSMALL = 3,
+    }
+
+    [DllImport("dwmapi.dll")]
+    private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int attrValue, int attrSize);
+
     public MainWindow(MainViewModel viewModel)
     {
         InitializeComponent();
         DataContext = viewModel;
+    }
+
+    protected override void OnSourceInitialized(EventArgs e)
+    {
+        base.OnSourceInitialized(e);
+        // Best-effort rounded corners on Win11. Silently ignored on Win10 / older DWM.
+        try
+        {
+            var hwnd = new WindowInteropHelper(this).Handle;
+            int pref = (int)DWM_WINDOW_CORNER_PREFERENCE.DWMWCP_ROUND;
+            DwmSetWindowAttribute(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, ref pref, sizeof(int));
+        }
+        catch { /* not supported on this Windows build — leave square */ }
     }
 
     private void TitleBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)

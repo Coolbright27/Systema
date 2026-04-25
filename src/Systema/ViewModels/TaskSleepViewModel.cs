@@ -501,9 +501,8 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
         PersistentNapEnabled    = true,
         EnforceSettings         = true,
         SoftNapEnabled          = false,
-        // LowerGpuPriority intentionally disabled: D3DKMT Idle tier disrupts the shared
-        // HAGS flip queue and can break VSync for foreground games. See TaskSleepSettings.
-        LowerGpuPriority        = false,
+        // GPU priority is no longer touched at all — removed to avoid ever disrupting
+        // the shared HAGS flip queue that games and DWM rely on for VSync.
         LowerIoPriority         = true,
         DetectECores            = true,
         MoveToECores            = true,

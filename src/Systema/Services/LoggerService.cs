@@ -565,7 +565,6 @@ public class LoggerService
             using var tsKey = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"SOFTWARE\Systema\TaskSleep");
             sb.AppendLine($"  TaskSleep.IsEnabled:              {tsKey?.GetValue("IsEnabled",               "not set") ?? "not set"}");
             sb.AppendLine($"  TaskSleep.LowerCpuPriority:       {tsKey?.GetValue("LowerCpuPriority",        "not set") ?? "not set"}");
-            sb.AppendLine($"  TaskSleep.LowerGpuPriority:       {tsKey?.GetValue("LowerGpuPriority",        "not set") ?? "not set"}");
             sb.AppendLine($"  TaskSleep.LowerIoPriority:        {tsKey?.GetValue("LowerIoPriority",         "not set") ?? "not set"}");
             sb.AppendLine($"  TaskSleep.LowerMemoryPriority:    {tsKey?.GetValue("LowerMemoryPriority",     "not set") ?? "not set"}");
             sb.AppendLine($"  TaskSleep.TrimWorkingSet:         {tsKey?.GetValue("TrimWorkingSet",          "not set") ?? "not set"}");
