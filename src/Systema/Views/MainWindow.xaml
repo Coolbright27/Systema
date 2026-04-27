@@ -229,7 +229,7 @@
                         </StackPanel>
 
                         <!-- Version footer -->
-                        <TextBlock Grid.Row="1" Text="v1.7.50" Margin="16,0,0,16"
+                        <TextBlock Grid.Row="1" Text="v1.7.53" Margin="16,0,0,16"
                                    Style="{StaticResource CaptionText}"/>
                     </Grid>
                 </Border>

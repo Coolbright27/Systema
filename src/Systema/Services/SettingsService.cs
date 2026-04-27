@@ -328,6 +328,19 @@ public class SettingsService
         set => WriteBool(nameof(GameBoosterDisableSearchIndexing), value);
     }
 
+    /// <summary>
+    /// On supported laptops (Dell, Lenovo, …), pause or limit battery charging while a
+    /// boost session is active. On laptops with a small AC adapter the power budget is
+    /// shared between charging and CPU+GPU; pausing charging gives the full adapter
+    /// wattage to performance and lowers chassis temps. Vendor-specific — feature is
+    /// hidden on desktops and unsupported brands. Default: false (opt-in).
+    /// </summary>
+    public bool GameBoosterPauseCharging
+    {
+        get => ReadBool(nameof(GameBoosterPauseCharging), defaultValue: false);
+        set => WriteBool(nameof(GameBoosterPauseCharging), value);
+    }
+
     // ── System Stability tweaks ───────────────────────────────────────────────
 
     /// <summary>Whether the user has disabled Windows Fast Startup (off by default).</summary>

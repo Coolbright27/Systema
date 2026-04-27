@@ -571,6 +571,27 @@
                                   IsChecked="{Binding PreventSleepOnBoost, Mode=TwoWay}" VerticalAlignment="Center"/>
                     </Grid>
 
+                    <!-- ── Battery Pause (vendor-specific charge control) ──────────────── -->
+                    <Grid Margin="0,0,0,16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" Margin="0,0,24,0" VerticalAlignment="Center">
+                            <TextBlock Text="Battery Pause (laptops)" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
+                            <TextBlock Text="On supported laptops, asks the BIOS to stop charging the battery while gaming so the full AC adapter wattage feeds CPU + GPU. Saves chassis heat and avoids power-budget throttling. Charging resumes the instant boost ends — even after a crash or power loss."
+                                       Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,2,0,0"/>
+                            <TextBlock Text="{Binding BatteryPauseStatus}" Style="{StaticResource CaptionText}"
+                                       Foreground="{StaticResource AccentBlueBrush}" TextWrapping="Wrap"
+                                       FontStyle="Italic" Margin="0,4,0,0"/>
+                        </StackPanel>
+                        <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}"
+                                  IsChecked="{Binding PauseChargingOnBoost, Mode=TwoWay}"
+                                  IsEnabled="{Binding BatteryPauseAvailable}"
+                                  VerticalAlignment="Center"
+                                  ToolTip="Disabled on desktops and unsupported laptop brands."/>
+                    </Grid>
+
                     <Button Content="Save Boost Actions" Style="{StaticResource PrimaryButton}"
                             Padding="16,8" HorizontalAlignment="Left"
                             Command="{Binding SaveSettingsCommand}"/>

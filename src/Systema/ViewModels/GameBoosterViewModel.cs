@@ -67,6 +67,11 @@ public partial class GameBoosterViewModel : ObservableObject, IAutoRefreshable, 
     [ObservableProperty] private bool _preventSleepOnBoost;
     [ObservableProperty] private bool _disableSearchIndexingOnBoost;
 
+    // ── Battery Pause (vendor-specific charge control) ────────────────────────
+    [ObservableProperty] private bool   _pauseChargingOnBoost;
+    [ObservableProperty] private string _batteryPauseStatus    = "Detecting hardware support…";
+    [ObservableProperty] private bool   _batteryPauseAvailable;
+
     /// <summary>Persists and applies the master switch immediately — no Save click needed.</summary>
     partial void OnGameBoosterEnabledChanged(bool value)
     {
@@ -139,6 +144,34 @@ public partial class GameBoosterViewModel : ObservableObject, IAutoRefreshable, 
             LoggerService.Instance.Error("GameBoosterViewModel", "LoadSettings failed in constructor", ex);
             throw;
         }
+
+        // Run vendor detection on a worker thread — first WMI hit can take 50-300ms
+        // on cold cache and we don't want to stall the UI thread while the user
+        // navigates to the Game Booster panel.
+        _ = Task.Run(() =>
+        {
+            try
+            {
+                var support = _gameBooster.BatteryPause.DetectSupport();
+                var msg     = _gameBooster.BatteryPause.StatusMessage;
+                Application.Current?.Dispatcher.BeginInvoke(() =>
+                {
+                    BatteryPauseStatus    = msg;
+                    BatteryPauseAvailable = support == BatteryPauseSupport.Supported;
+                    if (!BatteryPauseAvailable && PauseChargingOnBoost)
+                    {
+                        // User had toggle on but device no longer supports it (e.g.
+                        // vendor utility uninstalled). Force toggle off.
+                        PauseChargingOnBoost = false;
+                        _settings.GameBoosterPauseCharging = false;
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                _log.Warn("GameBoosterViewModel", $"Battery pause detection failed: {ex.Message}");
+            }
+        });
     }
 
     // ── IAutoRefreshable ──────────────────────────────────────────────────────
@@ -237,6 +270,7 @@ public partial class GameBoosterViewModel : ObservableObject, IAutoRefreshable, 
         _settings.GameBoosterDisableBluetooth      = DisableBluetoothOnBoost;
         _settings.GameBoosterPreventSleep          = PreventSleepOnBoost;
         _settings.GameBoosterDisableSearchIndexing = DisableSearchIndexingOnBoost;
+        _settings.GameBoosterPauseCharging         = PauseChargingOnBoost;
 
         StatusMessage = "Settings saved.";
         _log.Info("GameBoosterViewModel", $"Settings saved — interval={CheckIntervalMinutes}min, killList={lines.Count} entries");
@@ -309,6 +343,7 @@ public partial class GameBoosterViewModel : ObservableObject, IAutoRefreshable, 
         DisableBluetoothOnBoost = _settings.GameBoosterDisableBluetooth;
         PreventSleepOnBoost     = _settings.GameBoosterPreventSleep;
         DisableSearchIndexingOnBoost = _settings.GameBoosterDisableSearchIndexing;
+        PauseChargingOnBoost    = _settings.GameBoosterPauseCharging;
         GameBoosterEnabled      = _settings.GameBoosterEnabled;
 
         // Force every binding to re-evaluate unconditionally. CommunityToolkit.Mvvm's setter
@@ -334,6 +369,7 @@ public partial class GameBoosterViewModel : ObservableObject, IAutoRefreshable, 
         OnPropertyChanged(nameof(DisableBluetoothOnBoost));
         OnPropertyChanged(nameof(PreventSleepOnBoost));
         OnPropertyChanged(nameof(DisableSearchIndexingOnBoost));
+        OnPropertyChanged(nameof(PauseChargingOnBoost));
         OnPropertyChanged(nameof(GameBoosterEnabled));
 
         var killList = _gameBooster.GetKillList();

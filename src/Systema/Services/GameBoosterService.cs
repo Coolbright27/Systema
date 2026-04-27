@@ -37,6 +37,7 @@ public sealed class GameBoosterService : IDisposable
     private readonly ServiceControlService _serviceControl;
     private readonly SettingsService       _settings;
     private readonly ProcessLassoService   _processLasso;
+    private readonly BatteryPauseService   _batteryPause;
 
     private DispatcherTimer? _gameCheckTimer;
     private DispatcherTimer? _xboxCheckTimer;
@@ -158,6 +159,8 @@ public sealed class GameBoosterService : IDisposable
     private bool _bluetoothRadioDisabled;
     // Search indexing — true if WSearch was running before boost and we stopped it
     private bool _searchIndexingWasRunning;
+    // Battery pause snapshot — non-null if charging was paused via vendor BIOS hook
+    private BatteryPauseSnapshot? _batteryPauseSnapshot;
 
     // ── Crash-recovery persistence ───────────────────────────────────────────
     // On boost activation we write a JSON snapshot of all pre-boost originals.
@@ -185,6 +188,11 @@ public sealed class GameBoosterService : IDisposable
         public List<RegistryRestoreEntry>? NicPowerRestore { get; set; }
         public bool WifiRadioDisabled             { get; set; }
         public bool BluetoothRadioDisabled        { get; set; }
+        // Battery pause — vendor mode active before pause. Null if pause was not applied.
+        public string? BatteryPauseMethod       { get; set; }
+        public string? BatteryPauseVendor       { get; set; }
+        public string? BatteryPauseOriginalMode { get; set; }
+        public bool    BatteryPauseWasActive    { get; set; }
     }
 
     private sealed class RegistryRestoreEntry
@@ -403,12 +411,20 @@ public sealed class GameBoosterService : IDisposable
 
     // ── Constructor ────────────────────────────────────────────────────────────
 
-    public GameBoosterService(ServiceControlService serviceControl, SettingsService settings, ProcessLassoService processLasso)
+    public GameBoosterService(ServiceControlService serviceControl, SettingsService settings,
+                              ProcessLassoService processLasso, BatteryPauseService batteryPause)
     {
         _serviceControl = serviceControl;
         _settings       = settings;
         _processLasso   = processLasso;
+        _batteryPause   = batteryPause;
     }
+
+    /// <summary>
+    /// Exposes the BatteryPauseService so the UI can show vendor / support text
+    /// without re-running detection. Read-only.
+    /// </summary>
+    public BatteryPauseService BatteryPause => _batteryPause;
 
     // ── Public API ─────────────────────────────────────────────────────────────
 
@@ -939,6 +955,13 @@ public sealed class GameBoosterService : IDisposable
         //     including any early exit if the game crashes right after launch.
         if (_settings.GameBoosterPreventSleep) ApplyPreventSleep();
 
+        // –0.5. Pause battery charging on supported laptops. Vendor BIOS hook (Dell /
+        //       Lenovo today). Snapshot the original mode so we can restore on a clean
+        //       deactivation OR on next launch after a crash. Cheap WMI calls — runs
+        //       inline. If the user opted in but the device isn't supported, this is a
+        //       no-op.
+        if (_settings.GameBoosterPauseCharging) ApplyBatteryPause();
+
         // 0. New network / system options (applied before the heavy RAM trim)
         if (_settings.GameBoosterDisableGameBar)   ApplyGameBarDisable();
         if (_settings.GameBoosterGpuProfile)       ApplyMultimediaProfile();
@@ -1119,6 +1142,10 @@ public sealed class GameBoosterService : IDisposable
         // –1. Remove sleep prevention first — system is free to sleep again immediately
         //     once the boost ends, regardless of how long the other restores take.
         RestorePreventSleep();
+
+        // –0.5. Resume battery charging if we paused it. Always best-effort; never
+        //       throws even if the snapshot is null or the vendor hook is gone.
+        RestoreBatteryPause();
 
         // 0. Restore new options (order: reverse of apply)
         RestoreBluetooth();
@@ -1357,6 +1384,31 @@ public sealed class GameBoosterService : IDisposable
         // _bluetoothRadioDisabled default to false and are only set to true by
         // the async Apply methods after they actually disable the radio.
         // At persist-time they are correctly false (nothing disabled yet).
+
+        // ── Battery pause: capture the vendor mode BEFORE any WMI write so the
+        //    snapshot persisted to disk contains the original. We set WasPaused=true
+        //    as an "intent to restore" flag — even if the actual WMI write later
+        //    fails or crashes mid-call, RecoverBoostStateFromCrash will set the
+        //    vendor mode back to OriginalMode on next launch. Restoring to the
+        //    same value is a no-op if pause never actually happened — safe.
+        if (_settings.GameBoosterPauseCharging)
+        {
+            try
+            {
+                var support = _batteryPause.DetectSupport();
+                if (support == BatteryPauseSupport.Supported)
+                {
+                    _batteryPauseSnapshot = new BatteryPauseSnapshot
+                    {
+                        Method       = _batteryPause.ActiveMethodName,
+                        Vendor       = _batteryPause.Vendor,
+                        OriginalMode = _batteryPause.GetCurrentVendorMode(),
+                        WasPaused    = true,
+                    };
+                }
+            }
+            catch (Exception ex) { _log.Warn("GameBoosterService", $"BatteryPause pre-read: {ex.Message}"); }
+        }
     }
 
     /// <summary>
@@ -1383,6 +1435,10 @@ public sealed class GameBoosterService : IDisposable
                 SfIoPriority             = _savedSfIoPriority,
                 WifiRadioDisabled        = _wifiRadioDisabled,
                 BluetoothRadioDisabled   = _bluetoothRadioDisabled,
+                BatteryPauseMethod       = _batteryPauseSnapshot?.Method,
+                BatteryPauseVendor       = _batteryPauseSnapshot?.Vendor,
+                BatteryPauseOriginalMode = _batteryPauseSnapshot?.OriginalMode,
+                BatteryPauseWasActive    = _batteryPauseSnapshot?.WasPaused == true,
             };
 
             if (_nagleRestore != null)
@@ -1451,6 +1507,15 @@ public sealed class GameBoosterService : IDisposable
             _savedSfIoPriority          = snap.SfIoPriority;
             _wifiRadioDisabled          = snap.WifiRadioDisabled;
             _bluetoothRadioDisabled     = snap.BluetoothRadioDisabled;
+            _batteryPauseSnapshot       = snap.BatteryPauseWasActive
+                ? new BatteryPauseSnapshot
+                {
+                    Method       = snap.BatteryPauseMethod,
+                    Vendor       = snap.BatteryPauseVendor,
+                    OriginalMode = snap.BatteryPauseOriginalMode,
+                    WasPaused    = true,
+                }
+                : null;
 
             if (snap.NagleRestore != null)
                 _nagleRestore = snap.NagleRestore
@@ -1696,6 +1761,63 @@ public sealed class GameBoosterService : IDisposable
         SetThreadExecutionState(ES_CONTINUOUS);
         _sleepPrevented = false;
         _log.Info("GameBoosterService", "Sleep prevention cleared — normal sleep timeouts restored");
+    }
+
+    // ·· Battery Pause ·························································
+
+    /// <summary>
+    /// Asks the laptop's vendor BIOS hook (Dell / Lenovo) to pause battery
+    /// charging while the boost is active. The pre-pause vendor mode is
+    /// captured into _batteryPauseSnapshot so PersistBoostState can write
+    /// it to disk for crash recovery.
+    /// </summary>
+    private void ApplyBatteryPause()
+    {
+        try
+        {
+            // Detect lazily — first call may probe WMI for ~50ms.
+            var support = _batteryPause.DetectSupport();
+            if (support != BatteryPauseSupport.Supported)
+            {
+                _log.Info("GameBoosterService",
+                    $"Battery Pause skipped — device support state is {support}");
+                return;
+            }
+
+            // User asked for "20 below current" as the floor; we hand it to the service
+            // which honours it on Dell Custom mode, otherwise applies the vendor preset.
+            int current   = _batteryPause.GetBatteryPercent() ?? 80;
+            int threshold = Math.Max(30, current - 20);
+
+            _batteryPauseSnapshot = _batteryPause.Pause(threshold);
+            if (_batteryPauseSnapshot != null)
+                _log.Info("GameBoosterService",
+                    $"Battery charging paused via {_batteryPauseSnapshot.Vendor} (was '{_batteryPauseSnapshot.OriginalMode ?? "unknown"}')");
+        }
+        catch (Exception ex)
+        {
+            _log.Warn("GameBoosterService", $"ApplyBatteryPause failed: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Resumes normal charging. Idempotent — does nothing if pause was never applied.
+    /// </summary>
+    private void RestoreBatteryPause()
+    {
+        if (_batteryPauseSnapshot == null) return;
+        try
+        {
+            _batteryPause.Resume(_batteryPauseSnapshot);
+        }
+        catch (Exception ex)
+        {
+            _log.Warn("GameBoosterService", $"RestoreBatteryPause failed: {ex.Message}");
+        }
+        finally
+        {
+            _batteryPauseSnapshot = null;
+        }
     }
 
     // ·· Nagle's Algorithm ·····················································

@@ -137,7 +137,8 @@ public partial class App : Application
             var optFeatures        = new OptionalFeaturesService();
             var dnsService         = new DnsService();
             var processLassoService = new ProcessLassoService();
-            var gameboosterService  = new GameBoosterService(serviceControl, settingsService, processLassoService);
+            var batteryPauseService = new BatteryPauseService();
+            var gameboosterService  = new GameBoosterService(serviceControl, settingsService, processLassoService, batteryPauseService);
             var realtekService      = new RealtekCleanerService();
             var coreParkingService  = new CoreParkingService();
             var wuTweaksService     = new WindowsUpdateTweaksService();

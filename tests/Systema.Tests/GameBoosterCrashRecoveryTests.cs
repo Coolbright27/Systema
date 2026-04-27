@@ -36,6 +36,12 @@ public class GameBoosterCrashRecoveryTests : IDisposable
         public List<RegistryRestoreEntry>? NicPowerRestore { get; set; }
         public bool WifiRadioDisabled             { get; set; }
         public bool BluetoothRadioDisabled        { get; set; }
+        // Battery pause (added in v1.7.51) — vendor-specific charge control
+        // BatteryPauseMethod added in v1.7.52 — routes Resume back through the right hook
+        public string? BatteryPauseMethod         { get; set; }
+        public string? BatteryPauseVendor         { get; set; }
+        public string? BatteryPauseOriginalMode   { get; set; }
+        public bool    BatteryPauseWasActive      { get; set; }
     }
 
     private sealed class RegistryRestoreEntry
@@ -565,5 +571,148 @@ public class GameBoosterCrashRecoveryTests : IDisposable
         var back = Deserialize(Serialize(snap))!;
         Assert.NotNull(back.NagleRestore![0].Val);
         Assert.Equal(0, back.NagleRestore![0].Val);
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // 9. BATTERY PAUSE — vendor mode roundtrip and forward-compat
+    // ══════════════════════════════════════════════════════════════════════════
+
+    [Fact]
+    public void BatteryPause_DellAdaptive_RoundtripPreservesVendorAndMode()
+    {
+        // User had Dell PrimaryBattChargeCfg = "Adaptive" before boost.
+        // We pause by setting Custom mode (start=50, stop=55). Snapshot must
+        // remember "Adaptive" so restore returns to the user's chosen mode.
+        var snap = new BoostStateSnapshot
+        {
+            GameName                 = "csgo",
+            BatteryPauseMethod       = "DellModern",
+            BatteryPauseVendor       = "Dell Inc.",
+            BatteryPauseOriginalMode = "Adaptive",
+            BatteryPauseWasActive    = true,
+        };
+
+        var back = Deserialize(Serialize(snap))!;
+        Assert.Equal("DellModern", back.BatteryPauseMethod);
+        Assert.Equal("Dell Inc.",  back.BatteryPauseVendor);
+        Assert.Equal("Adaptive",   back.BatteryPauseOriginalMode);
+        Assert.True(back.BatteryPauseWasActive);
+    }
+
+    [Fact]
+    public void BatteryPause_DellCustomOriginal_CompositeEncodingRoundtrips()
+    {
+        // User already had Dell Custom mode with their own thresholds (e.g. start=60,stop=80)
+        // before boost. GetCurrentMode encodes this as "Custom:60:80".
+        // Resume must decode and restore both thresholds precisely.
+        var snap = new BoostStateSnapshot
+        {
+            GameName                 = "Cyberpunk2077",
+            BatteryPauseMethod       = "DellModern",
+            BatteryPauseVendor       = "Dell Inc.",
+            BatteryPauseOriginalMode = "Custom:60:80",
+            BatteryPauseWasActive    = true,
+        };
+
+        var back = Deserialize(Serialize(snap))!;
+        Assert.Equal("Custom:60:80", back.BatteryPauseOriginalMode);
+        Assert.True(back.BatteryPauseWasActive);
+
+        // Verify the composite can be split back into its parts.
+        var parts = back.BatteryPauseOriginalMode!.Split(':');
+        Assert.Equal(3, parts.Length);
+        Assert.Equal("Custom", parts[0]);
+        Assert.Equal("60",     parts[1]);
+        Assert.Equal("80",     parts[2]);
+    }
+
+    [Fact]
+    public void BatteryPause_LenovoConservationOff_RoundtripPreservesZeroFlag()
+    {
+        // Lenovo Conservation Mode is a "0" or "1" string. Original "0" (off)
+        // must survive the roundtrip distinct from null / absent.
+        var snap = new BoostStateSnapshot
+        {
+            GameName                 = "Valorant",
+            BatteryPauseVendor       = "LENOVO",
+            BatteryPauseOriginalMode = "0",
+            BatteryPauseWasActive    = true,
+        };
+
+        var back = Deserialize(Serialize(snap))!;
+        Assert.Equal("0", back.BatteryPauseOriginalMode);
+        Assert.True(back.BatteryPauseWasActive);
+    }
+
+    [Fact]
+    public void BatteryPause_Disabled_RoundtripPreservesFalseAndNullFields()
+    {
+        // User did NOT enable battery pause for this session. All three fields stay null/false.
+        var snap = new BoostStateSnapshot
+        {
+            GameName              = "Fortnite",
+            BatteryPauseWasActive = false,
+        };
+
+        var back = Deserialize(Serialize(snap))!;
+        Assert.Null(back.BatteryPauseVendor);
+        Assert.Null(back.BatteryPauseOriginalMode);
+        Assert.False(back.BatteryPauseWasActive);
+    }
+
+    [Fact]
+    public void BatteryPause_MethodField_RoundtripsAcrossAllVendorMethods()
+    {
+        // Recovery routes through method by name — must be stable across versions.
+        foreach (var methodName in new[] { "DellModern", "DellLegacy", "Lenovo", "HP", "Acer", "Powercfg" })
+        {
+            var snap = new BoostStateSnapshot
+            {
+                GameName              = "csgo",
+                BatteryPauseMethod    = methodName,
+                BatteryPauseVendor    = "Test Vendor",
+                BatteryPauseOriginalMode = "OriginalState",
+                BatteryPauseWasActive = true,
+            };
+
+            var back = Deserialize(Serialize(snap))!;
+            Assert.Equal(methodName, back.BatteryPauseMethod);
+        }
+    }
+
+    [Fact]
+    public void BatteryPause_PowercfgStartStopMode_RoundtripsCommaPair()
+    {
+        // PowercfgMethod encodes the original threshold pair as "start,stop" — must survive JSON roundtrip.
+        var snap = new BoostStateSnapshot
+        {
+            GameName                 = "Valorant",
+            BatteryPauseMethod       = "Powercfg",
+            BatteryPauseOriginalMode = "0,100",
+            BatteryPauseWasActive    = true,
+        };
+        var back = Deserialize(Serialize(snap))!;
+        Assert.Equal("0,100", back.BatteryPauseOriginalMode);
+    }
+
+    [Fact]
+    public void BatteryPause_OldSnapshotWithoutFields_DeserializesWithDefaults()
+    {
+        // Snapshot from v1.7.50 or earlier — no BatteryPause fields at all.
+        // Must NOT throw on deserialize; new fields default to null / false.
+        var oldStyleJson = """
+        {
+            "GameName": "csgo",
+            "KilledServices": ["BITS"],
+            "WifiRadioDisabled": false,
+            "BluetoothRadioDisabled": false
+        }
+        """;
+
+        var snap = Deserialize(oldStyleJson)!;
+        Assert.Equal("csgo", snap.GameName);
+        Assert.Null(snap.BatteryPauseVendor);
+        Assert.Null(snap.BatteryPauseOriginalMode);
+        Assert.False(snap.BatteryPauseWasActive);
     }
 }
