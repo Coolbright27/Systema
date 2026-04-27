@@ -41,8 +41,8 @@
 //   binaries, or obfuscation. Comments are technical, not adversarial.
 // ════════════════════════════════════════════════════════════════════════════
 
-using System.Diagnostics;
 using System.Management;
+using System.Runtime.InteropServices;
 
 namespace Systema.Services;
 
@@ -965,57 +965,89 @@ public sealed class BatteryPauseService
         }
     }
 
-    // ── Method 6: Powercfg (universal — works on ASUS + any laptop where firmware
-    // honors the standard ACPI battery threshold IOCTL) ────────────────────────
+    // ── Method 6: powrprof.dll (universal — works on ASUS + any laptop where firmware
+    // honors the standard ACPI battery threshold IOCTL) ───────────────────────
     //
     // Microsoft exposes BATTERYTHRESHOLDSTART / BATTERYTHRESHOLDSTOP under the
     // SUB_BATTERY power-scheme subgroup. ASUS's ATKACPI driver and a few other
     // OEMs honor these — when set, the EC stops charging above STOP and resumes
-    // below START.  Detection: probe whether the threshold sub-settings exist in
-    // the active scheme query output.  If the query succeeds AND returns a value,
-    // the firmware participates.
+    // below START.
+    //
+    // We call the powrprof.dll Win32 APIs directly instead of spawning powercfg.exe.
+    // powercfg.exe uses these same APIs internally, so the result is identical,
+    // but there is no subprocess launch — which eliminates the "hidden process with
+    // redirected I/O" heuristic that AV engines flag on unsigned apps.
 
     private sealed class PowercfgMethod : IBatteryPauseMethod
     {
-        // Standard Microsoft GUIDs from the power-management documentation.
-        // These never change.
-        private const string SubBatteryGuid       = "e73a048d-bf27-4f12-9731-8b2076e8891f";
-        // Threshold-start and threshold-stop subsetting GUIDs.  These come from
-        // the 'powercfg /query SCHEME_CURRENT SUB_BATTERY' output on systems
-        // where the firmware participates.
-        private const string ThresholdStartGuid   = "f1244e21-8c6c-4c70-bd7e-6a1f2b3a4ab1";
-        private const string ThresholdStopGuid    = "37f3aafa-8c91-4f0e-b69a-1a6cd2b3fe0f";
+        // Standard Microsoft GUIDs — these never change across Windows versions.
+        private static readonly Guid SubBattery      = new Guid("e73a048d-bf27-4f12-9731-8b2076e8891f");
+        private static readonly Guid ThresholdStart  = new Guid("f1244e21-8c6c-4c70-bd7e-6a1f2b3a4ab1");
+        private static readonly Guid ThresholdStop   = new Guid("37f3aafa-8c91-4f0e-b69a-1a6cd2b3fe0f");
 
         public string Name         => "Powercfg";
         public string FriendlyName => "Windows BATTERYTHRESHOLD";
 
+        // ── powrprof.dll — Windows Power Profile API ────────────────────────────
+        // Standard, widely-used Windows APIs. Same DLL powercfg.exe links against.
+
+        [DllImport("powrprof.dll")]
+        private static extern uint PowerGetActiveScheme(
+            IntPtr UserRootPowerKey, out IntPtr ActivePolicyGuid);
+
+        [DllImport("powrprof.dll")]
+        private static extern uint PowerReadACValueIndex(
+            IntPtr RootPowerKey, ref Guid SchemeGuid,
+            ref Guid SubGroupGuid, ref Guid PowerSettingGuid,
+            out uint AcValueIndex);
+
+        [DllImport("powrprof.dll")]
+        private static extern uint PowerWriteACValueIndex(
+            IntPtr RootPowerKey, ref Guid SchemeGuid,
+            ref Guid SubGroupGuid, ref Guid PowerSettingGuid,
+            uint AcValueIndex);
+
+        [DllImport("powrprof.dll")]
+        private static extern uint PowerWriteDCValueIndex(
+            IntPtr RootPowerKey, ref Guid SchemeGuid,
+            ref Guid SubGroupGuid, ref Guid PowerSettingGuid,
+            uint DcValueIndex);
+
+        [DllImport("powrprof.dll")]
+        private static extern uint PowerSetActiveScheme(
+            IntPtr UserRootPowerKey, ref Guid SchemeGuid);
+
+        [DllImport("kernel32.dll")]
+        private static extern IntPtr LocalFree(IntPtr hMem);
+
         public BatteryPauseSupport Probe(string vendor)
         {
-            // Method-agnostic: works on any vendor whose firmware honors the threshold
-            // IOCTL. We check by attempting a read-only powercfg query for the sub-setting.
+            // Probe by reading the threshold-start value from the active power scheme.
+            // If the firmware doesn't register this sub-setting, PowerReadACValueIndex
+            // returns a non-zero error code (e.g. ERROR_FILE_NOT_FOUND = 2).
             try
             {
-                var output = RunPowercfg($"/query SCHEME_CURRENT {SubBatteryGuid}");
-                if (output.Contains("Battery threshold", StringComparison.OrdinalIgnoreCase) ||
-                    output.Contains("BATTERYTHRESHOLD", StringComparison.OrdinalIgnoreCase) ||
-                    output.Contains(ThresholdStartGuid, StringComparison.OrdinalIgnoreCase))
-                {
-                    return BatteryPauseSupport.Supported;
-                }
-                return BatteryPauseSupport.UnsupportedVendor;
+                var scheme = GetActiveSchemeGuid();
+                if (scheme == null) return BatteryPauseSupport.UnsupportedVendor;
+                var schemeGuid  = scheme.Value;
+                var sub         = SubBattery;
+                var threshStart = ThresholdStart;
+                uint rc = PowerReadACValueIndex(
+                    IntPtr.Zero, ref schemeGuid, ref sub, ref threshStart, out _);
+                return rc == 0 ? BatteryPauseSupport.Supported : BatteryPauseSupport.UnsupportedVendor;
             }
             catch { return BatteryPauseSupport.UnsupportedVendor; }
         }
 
         public string? GetCurrentMode()
         {
-            // Encode "start,stop" as the saved mode so Resume can restore both.
+            // Encode "start,stop" so Resume can restore both values exactly.
             try
             {
-                var startOut = RunPowercfg($"/query SCHEME_CURRENT {SubBatteryGuid} {ThresholdStartGuid}");
-                var stopOut  = RunPowercfg($"/query SCHEME_CURRENT {SubBatteryGuid} {ThresholdStopGuid}");
-                int start = ExtractIndex(startOut);
-                int stop  = ExtractIndex(stopOut);
+                var scheme = GetActiveSchemeGuid();
+                if (scheme == null) return null;
+                uint start = ReadAc(scheme.Value, ThresholdStart);
+                uint stop  = ReadAc(scheme.Value, ThresholdStop);
                 return $"{start},{stop}";
             }
             catch { return null; }
@@ -1023,80 +1055,73 @@ public sealed class BatteryPauseService
 
         public bool Pause(int thresholdHint)
         {
-            // Honor the user-requested 20-below floor. Clamp to a sane range so we
-            // never set negative or > 100. Stop = thresholdHint, Start = stop - 5
-            // (gives the EC a small hysteresis window).
-            int stop  = Math.Clamp(thresholdHint, 30, 95);
-            int start = Math.Max(20, stop - 5);
+            uint stop  = (uint)Math.Clamp(thresholdHint, 30, 95);
+            uint start = (uint)Math.Max(20, (int)stop - 5);
             return Apply(start, stop);
         }
 
         public void Resume(string? originalMode)
         {
-            int start = 0, stop = 100;
+            uint start = 0, stop = 100;
             if (!string.IsNullOrEmpty(originalMode) && originalMode.Contains(','))
             {
                 var parts = originalMode.Split(',');
-                if (parts.Length == 2 && int.TryParse(parts[0], out var s) && int.TryParse(parts[1], out var e))
+                if (parts.Length == 2 &&
+                    uint.TryParse(parts[0], out var s) &&
+                    uint.TryParse(parts[1], out var e))
                 { start = s; stop = e; }
             }
             Apply(start, stop);
         }
 
-        private static bool Apply(int start, int stop)
-        {
-            // Set both AC and DC values. Then activate the scheme so changes take effect.
-            bool ok = true;
-            ok &= ExecPowercfg($"-setdcvalueindex SCHEME_CURRENT {SubBatteryGuid} {ThresholdStartGuid} {start}");
-            ok &= ExecPowercfg($"-setacvalueindex SCHEME_CURRENT {SubBatteryGuid} {ThresholdStartGuid} {start}");
-            ok &= ExecPowercfg($"-setdcvalueindex SCHEME_CURRENT {SubBatteryGuid} {ThresholdStopGuid} {stop}");
-            ok &= ExecPowercfg($"-setacvalueindex SCHEME_CURRENT {SubBatteryGuid} {ThresholdStopGuid} {stop}");
-            ok &= ExecPowercfg("-S SCHEME_CURRENT");
-            return ok;
-        }
-
-        private static string RunPowercfg(string args)
-        {
-            var psi = new ProcessStartInfo("powercfg", args)
-            {
-                RedirectStandardOutput = true,
-                RedirectStandardError  = true,
-                UseShellExecute        = false,
-                CreateNoWindow         = true,
-            };
-            using var p = Process.Start(psi);
-            if (p == null) return "";
-            string output = p.StandardOutput.ReadToEnd();
-            p.WaitForExit(3000);
-            return output;
-        }
-
-        private static bool ExecPowercfg(string args)
+        private static bool Apply(uint start, uint stop)
         {
             try
             {
-                var psi = new ProcessStartInfo("powercfg", args)
-                {
-                    UseShellExecute = false, CreateNoWindow = true,
-                };
-                using var p = Process.Start(psi);
-                if (p == null) return false;
-                p.WaitForExit(3000);
-                return p.ExitCode == 0;
+                var scheme = GetActiveSchemeGuid();
+                if (scheme == null) return false;
+
+                bool ok = WriteIndex(scheme.Value, ThresholdStart, start) &&
+                          WriteIndex(scheme.Value, ThresholdStop,  stop);
+                if (!ok) return false;
+
+                // Activate the scheme so the EC picks up the new values immediately.
+                var s = scheme.Value;
+                PowerSetActiveScheme(IntPtr.Zero, ref s);
+                return true;
             }
-            catch { return false; }
+            catch (Exception ex)
+            {
+                _log.Warn("BatteryPauseService", $"PowercfgMethod.Apply threw: {ex.Message}");
+                return false;
+            }
         }
 
-        private static int ExtractIndex(string output)
+        // ── Helpers ───────────────────────────────────────────────────────────
+
+        private static Guid? GetActiveSchemeGuid()
         {
-            // powercfg /query output format includes "Current AC Power Setting Index: 0xNN"
-            var m = System.Text.RegularExpressions.Regex.Match(
-                output, @"Current\s+\w+\s+Power\s+Setting\s+Index:\s+0x([0-9a-f]+)",
-                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-            if (m.Success && int.TryParse(m.Groups[1].Value,
-                System.Globalization.NumberStyles.HexNumber, null, out var v))
-                return v;
-            return 0;
+            uint rc = PowerGetActiveScheme(IntPtr.Zero, out IntPtr ptr);
+            if (rc != 0 || ptr == IntPtr.Zero) return null;
+            try   { return Marshal.PtrToStructure<Guid>(ptr); }
+            finally { LocalFree(ptr); }
+        }
+
+        private static uint ReadAc(Guid scheme, Guid setting)
+        {
+            var sub = SubBattery;
+            PowerReadACValueIndex(IntPtr.Zero, ref scheme, ref sub, ref setting, out uint val);
+            return val;
+        }
+
+        private static bool WriteIndex(Guid scheme, Guid setting, uint value)
+        {
+            var sub = SubBattery;
+            uint r1 = PowerWriteACValueIndex(IntPtr.Zero, ref scheme, ref sub, ref setting, value);
+            uint r2 = PowerWriteDCValueIndex(IntPtr.Zero, ref scheme, ref sub, ref setting, value);
+            if (r1 != 0) _log.Warn("BatteryPauseService", $"PowerWriteACValueIndex returned {r1}");
+            if (r2 != 0) _log.Warn("BatteryPauseService", $"PowerWriteDCValueIndex returned {r2}");
+            return r1 == 0 && r2 == 0;
         }
     }
 }
