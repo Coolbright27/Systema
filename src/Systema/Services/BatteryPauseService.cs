@@ -404,11 +404,14 @@ public sealed class BatteryPauseService
 
         public bool Pause(int thresholdHint)
         {
-            // Set Custom mode first, then apply the lowest BIOS-allowed thresholds:
-            // start = 50% (BIOS minimum), stop = 55% (BIOS minimum).
-            if (!SetAttribute(AttrName, "Custom")) return false;
-            SetAttribute("CustomChargeStart", "50");
-            SetAttribute("CustomChargeStop",  "55");
+            // IMPORTANT: set thresholds BEFORE switching mode to Custom.
+            // Dell BIOS validates CustomChargeStart/Stop at the moment Custom is
+            // activated — if those attributes are absent or zero at that moment,
+            // the BIOS falls back to PrimAcUse ("Always AC"). Setting thresholds
+            // first ensures they are in place when the mode switch fires.
+            if (!SetAttribute("CustomChargeStart", "50")) return false;
+            if (!SetAttribute("CustomChargeStop",  "55")) return false;
+            if (!SetAttribute(AttrName, "Custom"))        return false;
             return true;
         }
 
@@ -556,10 +559,11 @@ public sealed class BatteryPauseService
 
         public bool Pause(int thresholdHint)
         {
-            // Batch: set Custom mode + lowest allowed thresholds in one WMI call.
+            // Thresholds first in the array — BIOS validates them at the moment
+            // Custom mode is activated, so they must already be present.
             return Set(
-                new[] { AttrName,  "CustomChargeStart", "CustomChargeStop" },
-                new[] { "Custom",  "50",                "55"               });
+                new[] { "CustomChargeStart", "CustomChargeStop", AttrName },
+                new[] { "50",               "55",               "Custom"  });
         }
 
         public void Resume(string? originalMode)
