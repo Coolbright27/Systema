@@ -50,7 +50,7 @@
 
                 <StackPanel Grid.Column="0">
                     <TextBlock Text="Dashboard" Style="{StaticResource HeadingLarge}"/>
-                    <TextBlock Text="Systema is working in the background â€” here's what's happening on your PC."
+                    <TextBlock Text="Systema is working in the background — here's what's happening on your PC."
                                Style="{StaticResource CaptionText}" Margin="0,4,0,0"
                                Foreground="{StaticResource TextSecondaryBrush}"/>
                 </StackPanel>
@@ -75,7 +75,7 @@
             </Grid>
 
             <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
-            <!-- STATUS ROW â€” 3 live status pills                               -->
+            <!-- STATUS ROW — 3 live status pills                               -->
             <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
             <Grid Grid.Row="2">
                 <Grid.ColumnDefinitions>
@@ -87,14 +87,14 @@
                 </Grid.ColumnDefinitions>
 
                 <!-- ── Task Sleep pill ───────────────────────────────────────── -->
-                <Border Grid.Column=”0” Padding=”16,14”>
+                <Border Grid.Column="0" Padding="16,14">
                     <Border.Style>
-                        <Style TargetType=”Border” BasedOn=”{StaticResource Card}”>
-                            <Setter Property=”BorderThickness” Value=”3,1,1,1”/>
-                            <Setter Property=”BorderBrush”     Value=”{StaticResource BorderBrush}”/>
+                        <Style TargetType="Border" BasedOn="{StaticResource Card}">
+                            <Setter Property="BorderThickness" Value="3,1,1,1"/>
+                            <Setter Property="BorderBrush"     Value="{StaticResource BorderBrush}"/>
                             <Style.Triggers>
-                                <DataTrigger Binding=”{Binding TaskSleepActive}” Value=”True”>
-                                    <Setter Property=”BorderBrush” Value=”{StaticResource AccentGreenBrush}”/>
+                                <DataTrigger Binding="{Binding TaskSleepActive}" Value="True">
+                                    <Setter Property="BorderBrush" Value="{StaticResource AccentGreenBrush}"/>
                                 </DataTrigger>
                             </Style.Triggers>
                         </Style>
@@ -131,17 +131,17 @@
                 </Border>
 
                 <!-- ── Game Boost pill ───────────────────────────────────────── -->
-                <Border Grid.Column=”2” Padding=”16,14”>
+                <Border Grid.Column="2" Padding="16,14">
                     <Border.Style>
-                        <Style TargetType=”Border” BasedOn=”{StaticResource Card}”>
-                            <Setter Property=”BorderThickness” Value=”3,1,1,1”/>
-                            <Setter Property=”BorderBrush”     Value=”{StaticResource BorderBrush}”/>
+                        <Style TargetType="Border" BasedOn="{StaticResource Card}">
+                            <Setter Property="BorderThickness" Value="3,1,1,1"/>
+                            <Setter Property="BorderBrush"     Value="{StaticResource BorderBrush}"/>
                             <Style.Triggers>
-                                <DataTrigger Binding=”{Binding GamesDetected}” Value=”True”>
-                                    <Setter Property=”BorderBrush” Value=”{StaticResource AccentBlueBrush}”/>
+                                <DataTrigger Binding="{Binding GamesDetected}" Value="True">
+                                    <Setter Property="BorderBrush" Value="{StaticResource AccentBlueBrush}"/>
                                 </DataTrigger>
-                                <DataTrigger Binding=”{Binding GameBoostActive}” Value=”True”>
-                                    <Setter Property=”BorderBrush” Value=”{StaticResource AccentGreenBrush}”/>
+                                <DataTrigger Binding="{Binding GameBoostActive}" Value="True">
+                                    <Setter Property="BorderBrush" Value="{StaticResource AccentGreenBrush}"/>
                                 </DataTrigger>
                             </Style.Triggers>
                         </Style>
@@ -156,7 +156,7 @@
                                             <DataTrigger Binding="{Binding GamesDetected}" Value="True">
                                                 <Setter Property="Fill" Value="{StaticResource AccentBlueBrush}"/>
                                             </DataTrigger>
-                                            <!-- Boosting â†’ green (highest priority â€” last wins) -->
+                                            <!-- Boosting â†’ green (highest priority — last wins) -->
                                             <DataTrigger Binding="{Binding GameBoostActive}" Value="True">
                                                 <Setter Property="Fill" Value="{StaticResource AccentGreenBrush}"/>
                                             </DataTrigger>
@@ -175,7 +175,7 @@
                                         <DataTrigger Binding="{Binding GamesDetected}" Value="True">
                                             <Setter Property="Foreground" Value="{StaticResource AccentBlueBrush}"/>
                                         </DataTrigger>
-                                        <!-- Active overrides detected â€” last wins -->
+                                        <!-- Active overrides detected — last wins -->
                                         <DataTrigger Binding="{Binding GameBoostActive}" Value="True">
                                             <Setter Property="Foreground" Value="{StaticResource AccentGreenBrush}"/>
                                         </DataTrigger>
@@ -187,14 +187,14 @@
                 </Border>
 
                 <!-- ── Privacy pill ──────────────────────────────────────────── -->
-                <Border Grid.Column=”4” Padding=”16,14”>
+                <Border Grid.Column="4" Padding="16,14">
                     <Border.Style>
-                        <Style TargetType=”Border” BasedOn=”{StaticResource Card}”>
-                            <Setter Property=”BorderThickness” Value=”3,1,1,1”/>
-                            <Setter Property=”BorderBrush”     Value=”{StaticResource AccentYellowBrush}”/>
+                        <Style TargetType="Border" BasedOn="{StaticResource Card}">
+                            <Setter Property="BorderThickness" Value="3,1,1,1"/>
+                            <Setter Property="BorderBrush"     Value="{StaticResource AccentYellowBrush}"/>
                             <Style.Triggers>
-                                <DataTrigger Binding=”{Binding DataCollectionBlocked}” Value=”True”>
-                                    <Setter Property=”BorderBrush” Value=”{StaticResource AccentGreenBrush}”/>
+                                <DataTrigger Binding="{Binding DataCollectionBlocked}" Value="True">
+                                    <Setter Property="BorderBrush" Value="{StaticResource AccentGreenBrush}"/>
                                 </DataTrigger>
                             </Style.Triggers>
                         </Style>
@@ -278,11 +278,11 @@
                                                    VerticalAlignment="Center">
                                             <TextBlock.Style>
                                                 <Style TargetType="TextBlock">
-                                                    <Setter Property="Text"       Value="âœ—"/>
+                                                    <Setter Property="Text"       Value="✗"/>
                                                     <Setter Property="Foreground" Value="{StaticResource AccentYellowBrush}"/>
                                                     <Style.Triggers>
                                                         <DataTrigger Binding="{Binding IsDone}" Value="True">
-                                                            <Setter Property="Text"       Value="âœ“"/>
+                                                            <Setter Property="Text"       Value="✓"/>
                                                             <Setter Property="Foreground" Value="{StaticResource AccentGreenBrush}"/>
                                                         </DataTrigger>
                                                     </Style.Triggers>
@@ -412,7 +412,7 @@
                     <StackPanel Grid.Column="0">
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
                             <TextBlock Text="Task Sleep" Style="{StaticResource HeadingMedium}" Margin="0,0,10,0"/>
-                            <!-- Nap count badge â€” only when apps are napping -->
+                            <!-- Nap count badge — only when apps are napping -->
                             <Border CornerRadius="10" Padding="8,2" VerticalAlignment="Center"
                                     Background="#1AA855F7" BorderBrush="{StaticResource AccentBlueBrush}"
                                     BorderThickness="1"
@@ -432,7 +432,7 @@
                                     <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
                                     <Style.Triggers>
                                         <DataTrigger Binding="{Binding TaskSleepActive}" Value="True">
-                                            <Setter Property="Text"       Value="Systema is napping these apps for you â€” they use less CPU, memory, and GPU in the background."/>
+                                            <Setter Property="Text"       Value="Systema is napping these apps for you — they use less CPU, memory, and GPU in the background."/>
                                             <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
                                         </DataTrigger>
                                     </Style.Triggers>
@@ -440,7 +440,7 @@
                             </TextBlock.Style>
                         </TextBlock>
 
-                        <!-- App chips â€” shown only when Task Sleep is active -->
+                        <!-- App chips — shown only when Task Sleep is active -->
                         <ItemsControl ItemsSource="{Binding NappedApps}"
                                       Visibility="{Binding TaskSleepActive, Converter={StaticResource BoolToVis}}">
                             <ItemsControl.ItemsPanel>
@@ -477,7 +477,7 @@
                                     </Style.Triggers>
                                 </Style>
                             </TextBlock.Style>
-                            All apps are well-behaved right now â€” nothing needs napping.
+                            All apps are well-behaved right now — nothing needs napping.
                         </TextBlock>
                     </StackPanel>
 
