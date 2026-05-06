@@ -1,9 +1,9 @@
-; ============================================================
-; Systema Optimization Suite — Inno Setup Script
+﻿; ============================================================
+; Systema Optimization Suite - Inno Setup Script
 ; ============================================================
 
 #define MyAppName "Systema"
-#define MyAppVersion "1.7.53"
+#define MyAppVersion "1.7.71"
 #define MyAppPublisher "Systema"
 #define MyAppURL "https://github.com/systema-app"
 #define MyAppExeName "Systema.exe"
@@ -37,11 +37,11 @@ ArchitecturesAllowed=x64
 UninstallDisplayName={#MyAppName}
 UninstallDisplayIcon={app}\{#MyAppExeName}
 WizardResizable=yes
-; Version info embedded in setup EXE — improves SmartScreen reputation scoring
+; Version info embedded in setup EXE - improves SmartScreen reputation scoring
 VersionInfoVersion={#MyAppVersion}.0
 VersionInfoCompany={#MyAppPublisher}
 VersionInfoDescription={#MyAppDescription}
-VersionInfoCopyright=© 2026 {#MyAppPublisher}
+VersionInfoCopyright=Copyright 2026 {#MyAppPublisher}
 VersionInfoProductName={#MyAppName}
 VersionInfoProductVersion={#MyAppVersion}.0
 
@@ -63,12 +63,20 @@ Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 
 [Run]
-; Manual install — shows "Launch Systema" checkbox on final wizard page
+; Manual install - shows "Launch Systema" checkbox on final wizard page
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; \
   Flags: nowait postinstall skipifsilent runascurrentuser
-; Silent/auto-update — relaunches into tray (Ghost Mode), no window popup
+; Silent/auto-update - relaunches into tray (Ghost Mode), no window popup
 Filename: "{app}\{#MyAppExeName}"; Parameters: "--silent"; Flags: nowait runascurrentuser shellexec; \
   Check: WizardSilent
+
+[UninstallRun]
+; Restore all Windows settings Systema may have changed before files are deleted.
+; runhidden           = no window popup during uninstall
+; waituntilterminated = block the uninstaller until cleanup completes
+; runascurrentuser    = runs as the interactive user (needed for HKCU access)
+Filename: "{app}\{#MyAppExeName}"; Parameters: "--cleanup"; RunOnceId: "SystemaCleanup"; \
+  Flags: runhidden waituntilterminated runascurrentuser
 
 [Code]
 // Check Windows version. Minimum supported: Windows 10.
@@ -87,7 +95,7 @@ begin
   end
   else
   begin
-    // Interactive install only — auto-updates run with /VERYSILENT and skip this.
+    // Interactive install only - auto-updates run with /VERYSILENT and skip this.
     if not WizardSilent then
     begin
       WelcomeMsg := 'Welcome to Systema Setup' + #10#10 +

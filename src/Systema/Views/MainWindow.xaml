@@ -1,4 +1,4 @@
-<!--
+﻿<!--
     VSYNC / TEARING WARNING
     ──────────────────────────────────────────────────────────────────
     Do NOT add `AllowsTransparency="True"` back to this window.
@@ -95,18 +95,18 @@
                         <Ellipse Width="20" Height="20" Margin="0,0,8,0">
                             <Ellipse.Fill>
                                 <RadialGradientBrush>
-                                    <GradientStop Color="#00B4FF" Offset="0"/>
-                                    <GradientStop Color="#00E5A0" Offset="1"/>
+                                    <GradientStop Color="#A855F7" Offset="0"/>
+                                    <GradientStop Color="#C084FC" Offset="1"/>
                                 </RadialGradientBrush>
                             </Ellipse.Fill>
                         </Ellipse>
                         <TextBlock Text="SYSTEMA" FontWeight="Bold" FontSize="14"
                                    Foreground="{StaticResource TextPrimaryBrush}"
                                    VerticalAlignment="Center"/>
-                        <Border Background="#1A00B4FF" BorderBrush="#4000B4FF" BorderThickness="1"
+                        <Border Background="#1AA855F7" BorderBrush="#40A855F7" BorderThickness="1"
                                 CornerRadius="4" Padding="5,1" Margin="6,0,0,0" VerticalAlignment="Center">
                             <TextBlock Text="BETA" FontSize="9" FontWeight="Bold"
-                                       Foreground="#00B4FF" VerticalAlignment="Center"/>
+                                       Foreground="#A855F7" VerticalAlignment="Center"/>
                         </Border>
                     </StackPanel>
 
@@ -115,17 +115,20 @@
                         <Button Click="MinimizeButton_Click" Width="36" Height="36"
                                 ToolTip="Minimize to Tray" Style="{StaticResource GhostButton}"
                                 BorderThickness="0" Padding="0">
-                            <TextBlock Text="—" FontSize="12" Foreground="{StaticResource TextSecondaryBrush}"/>
+                            <TextBlock Text="&#x2013;" FontSize="12" FontFamily="Segoe UI, Segoe UI Symbol"
+                                       Foreground="{StaticResource TextSecondaryBrush}"/>
                         </Button>
                         <Button Click="MaximizeButton_Click" Width="36" Height="36"
                                 ToolTip="Maximize" Style="{StaticResource GhostButton}"
                                 BorderThickness="0" Padding="0">
-                            <TextBlock Text="□" FontSize="12" Foreground="{StaticResource TextSecondaryBrush}"/>
+                            <TextBlock Text="&#x25A1;" FontSize="12" FontFamily="Segoe UI, Segoe UI Symbol"
+                                       Foreground="{StaticResource TextSecondaryBrush}"/>
                         </Button>
                         <Button Click="CloseButton_Click" Width="36" Height="36"
                                 ToolTip="Close to Tray" Style="{StaticResource GhostButton}"
                                 BorderThickness="0" Padding="0">
-                            <TextBlock Text="✕" FontSize="12" Foreground="{StaticResource TextSecondaryBrush}"/>
+                            <TextBlock Text="&#x2715;" FontSize="12" FontFamily="Segoe UI, Segoe UI Symbol"
+                                       Foreground="{StaticResource TextSecondaryBrush}"/>
                         </Button>
                     </StackPanel>
                 </Grid>
@@ -153,7 +156,8 @@
                             <Button Command="{Binding NavigateCommand}" CommandParameter="Dashboard"
                                     Tag="Dashboard" Style="{StaticResource NavButton}">
                                 <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="⬡" FontSize="14" Margin="0,0,10,0"
+                                    <TextBlock Text="&#x2B21;" FontSize="14" Margin="0,0,10,0"
+                                               FontFamily="Segoe UI, Segoe UI Symbol"
                                                Foreground="{StaticResource AccentBlueBrush}"/>
                                     <TextBlock Text="Dashboard"/>
                                 </StackPanel>
@@ -161,7 +165,8 @@
                             <Button Command="{Binding NavigateCommand}" CommandParameter="Memory"
                                     Tag="Memory" Style="{StaticResource NavButton}">
                                 <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="▦" FontSize="14" Margin="0,0,10,0"
+                                    <TextBlock Text="&#x25A6;" FontSize="14" Margin="0,0,10,0"
+                                               FontFamily="Segoe UI, Segoe UI Symbol"
                                                Foreground="{StaticResource TextSecondaryBrush}"/>
                                     <TextBlock Text="Memory &amp; Startup"/>
                                 </StackPanel>
@@ -169,7 +174,8 @@
                             <Button Command="{Binding NavigateCommand}" CommandParameter="Services"
                                     Tag="Services" Style="{StaticResource NavButton}">
                                 <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="◈" FontSize="14" Margin="0,0,10,0"
+                                    <TextBlock Text="&#x25C8;" FontSize="14" Margin="0,0,10,0"
+                                               FontFamily="Segoe UI, Segoe UI Symbol"
                                                Foreground="{StaticResource TextSecondaryBrush}"/>
                                     <TextBlock Text="Cleanup &amp; Services"/>
                                 </StackPanel>
@@ -177,7 +183,8 @@
                             <Button Command="{Binding NavigateCommand}" CommandParameter="Visual"
                                     Tag="Visual" Style="{StaticResource NavButton}">
                                 <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="✦" FontSize="14" Margin="0,0,10,0"
+                                    <TextBlock Text="&#x2726;" FontSize="14" Margin="0,0,10,0"
+                                               FontFamily="Segoe UI, Segoe UI Symbol"
                                                Foreground="{StaticResource TextSecondaryBrush}"/>
                                     <TextBlock Text="Visual &amp; Power"/>
                                 </StackPanel>
@@ -185,7 +192,8 @@
                             <Button Command="{Binding NavigateCommand}" CommandParameter="GameBooster"
                                     Tag="GameBooster" Style="{StaticResource NavButton}">
                                 <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="🎮" FontSize="13" Margin="0,0,10,0"
+                                    <TextBlock Text="&#x25C6;" FontSize="14" Margin="0,0,10,0"
+                                               FontFamily="Segoe UI, Segoe UI Symbol"
                                                Foreground="{StaticResource TextSecondaryBrush}"/>
                                     <TextBlock Text="Game Booster"/>
                                 </StackPanel>
@@ -193,7 +201,8 @@
                             <Button Command="{Binding NavigateCommand}" CommandParameter="Tools"
                                     Tag="Tools" Style="{StaticResource NavButton}">
                                 <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="🔧" FontSize="13" Margin="0,0,10,0"
+                                    <TextBlock Text="&#x25E7;" FontSize="14" Margin="0,0,10,0"
+                                               FontFamily="Segoe UI, Segoe UI Symbol"
                                                Foreground="{StaticResource TextSecondaryBrush}"/>
                                     <TextBlock Text="System Tweaks"/>
                                 </StackPanel>
@@ -201,7 +210,8 @@
                             <Button Command="{Binding NavigateCommand}" CommandParameter="TaskSleep"
                                     Tag="TaskSleep" Style="{StaticResource NavButton}">
                                 <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="💤" FontSize="13" Margin="0,0,10,0"
+                                    <TextBlock Text="&#x25CE;" FontSize="14" Margin="0,0,10,0"
+                                               FontFamily="Segoe UI, Segoe UI Symbol"
                                                Foreground="{StaticResource TextSecondaryBrush}"/>
                                     <TextBlock Text="Task Sleep"/>
                                 </StackPanel>
@@ -209,7 +219,8 @@
                             <Button Command="{Binding NavigateCommand}" CommandParameter="Bloatware"
                                     Tag="Bloatware" Style="{StaticResource NavButton}">
                                 <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="🧹" FontSize="13" Margin="0,0,10,0"
+                                    <TextBlock Text="&#x25FB;" FontSize="14" Margin="0,0,10,0"
+                                               FontFamily="Segoe UI, Segoe UI Symbol"
                                                Foreground="{StaticResource TextSecondaryBrush}"/>
                                     <TextBlock Text="App Cleanup"/>
                                 </StackPanel>
@@ -221,7 +232,8 @@
                             <Button Command="{Binding NavigateCommand}" CommandParameter="Settings"
                                     Tag="Settings" Style="{StaticResource NavButton}">
                                 <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="⚙" FontSize="14" Margin="0,0,10,0"
+                                    <TextBlock Text="&#x2699;" FontSize="14" Margin="0,0,10,0"
+                                               FontFamily="Segoe UI, Segoe UI Symbol"
                                                Foreground="{StaticResource TextSecondaryBrush}"/>
                                     <TextBlock Text="Settings"/>
                                 </StackPanel>
@@ -229,7 +241,7 @@
                         </StackPanel>
 
                         <!-- Version footer -->
-                        <TextBlock Grid.Row="1" Text="v1.7.53" Margin="16,0,0,16"
+                        <TextBlock Grid.Row="1" Text="v1.7.71" Margin="16,0,0,16"
                                    Style="{StaticResource CaptionText}"/>
                     </Grid>
                 </Border>
