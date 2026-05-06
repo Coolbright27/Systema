@@ -4,9 +4,9 @@
         Title="Select Services to Kill"
         Width="620" Height="520"
         WindowStartupLocation="CenterOwner"
-        Background="#11001A"
+        Background="#0F0F10"
         Foreground="#E2E8F0"
-        BorderBrush="#2D3748" BorderThickness="1"
+        BorderBrush="#262628" BorderThickness="1"
         ResizeMode="NoResize">
 
     <Window.Resources>
@@ -43,7 +43,7 @@
                  TextChanged="SearchBox_TextChanged"/>
 
         <!-- Service List -->
-        <Border Grid.Row="4" Background="#0D1117" BorderBrush="#2D3748" BorderThickness="1" CornerRadius="6">
+        <Border Grid.Row="4" Background="#171718" BorderBrush="#262628" BorderThickness="1" CornerRadius="6">
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
@@ -51,8 +51,8 @@
                 </Grid.RowDefinitions>
 
                 <!-- Column Headers -->
-                <Border Grid.Row="0" Background="#1A2332" Padding="12,8"
-                        BorderBrush="#2D3748" BorderThickness="0,0,0,1">
+                <Border Grid.Row="0" Background="#1F1F22" Padding="12,8"
+                        BorderBrush="#262628" BorderThickness="0,0,0,1">
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="30"/>
@@ -75,7 +75,7 @@
                     <ItemsControl x:Name="ServiceList">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
-                                <Border Padding="12,7" BorderBrush="#2D3748" BorderThickness="0,0,0,1"
+                                <Border Padding="12,7" BorderBrush="#262628" BorderThickness="0,0,0,1"
                                         Background="Transparent">
                                     <Grid>
                                         <Grid.ColumnDefinitions>
@@ -107,10 +107,10 @@
                                                     <Setter Property="Foreground" Value="#A0AEC0"/>
                                                     <Style.Triggers>
                                                         <DataTrigger Binding="{Binding Status}" Value="Running">
-                                                            <Setter Property="Foreground" Value="#68D391"/>
+                                                            <Setter Property="Foreground" Value="#5C9C7C"/>
                                                         </DataTrigger>
                                                         <DataTrigger Binding="{Binding Status}" Value="Stopped">
-                                                            <Setter Property="Foreground" Value="#FC8181"/>
+                                                            <Setter Property="Foreground" Value="#C7556B"/>
                                                         </DataTrigger>
                                                     </Style.Triggers>
                                                 </Style>

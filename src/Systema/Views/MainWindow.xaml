@@ -89,25 +89,18 @@
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
 
-                    <!-- Logo + Brand -->
+                    <!-- Logo + Brand — solid muted accent, no gradients -->
                     <StackPanel Grid.Column="0" Orientation="Horizontal"
                                 VerticalAlignment="Center" Margin="16,0">
-                        <Ellipse Width="20" Height="20" Margin="0,0,8,0">
-                            <Ellipse.Fill>
-                                <RadialGradientBrush>
-                                    <GradientStop Color="#A855F7" Offset="0"/>
-                                    <GradientStop Color="#C084FC" Offset="1"/>
-                                </RadialGradientBrush>
-                            </Ellipse.Fill>
-                        </Ellipse>
-                        <TextBlock Text="SYSTEMA" FontWeight="Bold" FontSize="14"
+                        <Ellipse Width="10" Height="10" Margin="0,0,10,0"
+                                 Fill="{StaticResource AccentBlueBrush}"/>
+                        <TextBlock Text="SYSTEMA" FontWeight="SemiBold" FontSize="13"
                                    Foreground="{StaticResource TextPrimaryBrush}"
+                                   VerticalAlignment="Center"
+                                   Margin="0,0,8,0"/>
+                        <TextBlock Text="BETA" FontSize="9" FontWeight="SemiBold"
+                                   Foreground="{StaticResource TextSecondaryBrush}"
                                    VerticalAlignment="Center"/>
-                        <Border Background="#1AA855F7" BorderBrush="#40A855F7" BorderThickness="1"
-                                CornerRadius="4" Padding="5,1" Margin="6,0,0,0" VerticalAlignment="Center">
-                            <TextBlock Text="BETA" FontSize="9" FontWeight="Bold"
-                                       Foreground="#A855F7" VerticalAlignment="Center"/>
-                        </Border>
                     </StackPanel>
 
                     <!-- Window Buttons -->
@@ -241,7 +234,7 @@
                         </StackPanel>
 
                         <!-- Version footer -->
-                        <TextBlock Grid.Row="1" Text="v1.7.71" Margin="16,0,0,16"
+                        <TextBlock Grid.Row="1" Text="v1.7.72" Margin="16,0,0,16"
                                    Style="{StaticResource CaptionText}"/>
                     </Grid>
                 </Border>

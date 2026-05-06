@@ -3,20 +3,23 @@
                     xmlns:conv="clr-namespace:Systema.Core.Converters">
 
     <!-- ============================================================ -->
-    <!--  COLORS                                                      -->
+    <!--  COLORS — neutral system palette                              -->
+    <!--  Backgrounds: pure dark grays (no purple tint)                -->
+    <!--  Accent:      muted Nord-style blue, used sparingly           -->
+    <!--  Status:      muted green / amber / red — functional only     -->
     <!-- ============================================================ -->
-    <Color x:Key="BgPrimaryColor">#09000E</Color>
-    <Color x:Key="BgSurfaceColor">#11001A</Color>
-    <Color x:Key="BgSidebarColor">#0B0012</Color>
-    <Color x:Key="BgCardColor">#160022</Color>
-    <Color x:Key="AccentBlueColor">#A855F7</Color>
-    <Color x:Key="AccentGreenColor">#00E5A0</Color>
-    <Color x:Key="AccentYellowColor">#FFB800</Color>
-    <Color x:Key="AccentRedColor">#FF4560</Color>
-    <Color x:Key="TextPrimaryColor">#EDE8F5</Color>
-    <Color x:Key="TextSecondaryColor">#8B78A8</Color>
-    <Color x:Key="BorderColor">#2B0F45</Color>
-    <Color x:Key="HoverColor">#230A38</Color>
+    <Color x:Key="BgPrimaryColor">#0F0F10</Color>
+    <Color x:Key="BgSurfaceColor">#171718</Color>
+    <Color x:Key="BgSidebarColor">#0B0B0C</Color>
+    <Color x:Key="BgCardColor">#161617</Color>
+    <Color x:Key="AccentBlueColor">#5E81AC</Color>
+    <Color x:Key="AccentGreenColor">#5C9C7C</Color>
+    <Color x:Key="AccentYellowColor">#C8A654</Color>
+    <Color x:Key="AccentRedColor">#C7556B</Color>
+    <Color x:Key="TextPrimaryColor">#E6E6E7</Color>
+    <Color x:Key="TextSecondaryColor">#8F8F92</Color>
+    <Color x:Key="BorderColor">#262628</Color>
+    <Color x:Key="HoverColor">#1F1F21</Color>
 
     <SolidColorBrush x:Key="BgPrimaryBrush" Color="{StaticResource BgPrimaryColor}"/>
     <SolidColorBrush x:Key="BgSurfaceBrush" Color="{StaticResource BgSurfaceColor}"/>
@@ -94,13 +97,13 @@
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter Property="Background" Value="#C084FC"/>
+                            <Setter Property="Background" Value="#7395B5"/>
                         </Trigger>
                         <Trigger Property="IsPressed" Value="True">
                             <Setter TargetName="Root" Property="Opacity" Value="0.80"/>
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
-                            <Setter Property="Background" Value="#1C0A2E"/>
+                            <Setter Property="Background" Value="#1F1F21"/>
                             <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
@@ -117,7 +120,7 @@
         <Setter Property="Foreground" Value="White"/>
         <Style.Triggers>
             <Trigger Property="IsMouseOver" Value="True">
-                <Setter Property="Background" Value="#FF6B82"/>
+                <Setter Property="Background" Value="#D6677C"/>
             </Trigger>
         </Style.Triggers>
     </Style>
@@ -269,7 +272,7 @@
                             <Setter Property="Background" Value="{StaticResource HoverBrush}"/>
                         </Trigger>
                         <Trigger Property="IsSelected" Value="True">
-                            <Setter Property="Background" Value="#2A0A45"/>
+                            <Setter Property="Background" Value="#262628"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -292,7 +295,7 @@
                                 <Thumb>
                                     <Thumb.Template>
                                         <ControlTemplate TargetType="Thumb">
-                                            <Border Background="#3D1060" CornerRadius="3"/>
+                                            <Border Background="#3A3A3D" CornerRadius="3"/>
                                         </ControlTemplate>
                                     </Thumb.Template>
                                 </Thumb>
@@ -319,7 +322,7 @@
         <Setter Property="Resources">
             <Setter.Value>
                 <ResourceDictionary>
-                    <SolidColorBrush x:Key="{x:Static SystemColors.WindowBrushKey}" Color="#161B25"/>
+                    <SolidColorBrush x:Key="{x:Static SystemColors.WindowBrushKey}" Color="#171718"/>
                 </ResourceDictionary>
             </Setter.Value>
         </Setter>
@@ -504,27 +507,37 @@
     <!--  STATUS PILL  (small inline status badges)                   -->
     <!-- ============================================================ -->
     <Style x:Key="StatusPillGreen" TargetType="Border">
-        <Setter Property="Background" Value="#0D2A1F"/>
-        <Setter Property="BorderBrush" Value="#00E5A0"/>
+        <Setter Property="Background" Value="#1A1F1C"/>
+        <Setter Property="BorderBrush" Value="{StaticResource AccentGreenBrush}"/>
         <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="CornerRadius" Value="4"/>
         <Setter Property="Padding" Value="6,2"/>
     </Style>
 
     <Style x:Key="StatusPillRed" TargetType="Border">
-        <Setter Property="Background" Value="#2A0D15"/>
-        <Setter Property="BorderBrush" Value="#FF4560"/>
+        <Setter Property="Background" Value="#1F1819"/>
+        <Setter Property="BorderBrush" Value="{StaticResource AccentRedBrush}"/>
         <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="CornerRadius" Value="4"/>
         <Setter Property="Padding" Value="6,2"/>
     </Style>
 
     <Style x:Key="StatusPillGray" TargetType="Border">
-        <Setter Property="Background" Value="#180028"/>
+        <Setter Property="Background" Value="{StaticResource BgSurfaceBrush}"/>
         <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
         <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="CornerRadius" Value="4"/>
         <Setter Property="Padding" Value="6,2"/>
+    </Style>
+
+    <!-- ============================================================ -->
+    <!--  HELPER / INFORMATIONAL TEXT  (muted blue)                   -->
+    <!--  Use this for status messages, hints, and supporting info    -->
+    <!--  text — NOT for primary content. Examples: "Active plan: X", -->
+    <!--  "Battery pause is supported", recommended-value hints.      -->
+    <!-- ============================================================ -->
+    <Style x:Key="HelperText" TargetType="TextBlock" BasedOn="{StaticResource CaptionText}">
+        <Setter Property="Foreground" Value="{StaticResource AccentBlueBrush}"/>
     </Style>
 
 </ResourceDictionary>

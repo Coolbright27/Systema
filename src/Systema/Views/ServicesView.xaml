@@ -39,15 +39,14 @@
                     <StackPanel Grid.Column="0" Margin="0,0,20,0">
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
                             <TextBlock Text="Data Collection" Style="{StaticResource HeadingMedium}"/>
-                            <Border Background="{StaticResource AccentRedBrush}" CornerRadius="4"
+                            <Border BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="3"
                                     Padding="6,2" Margin="10,0,0,0" VerticalAlignment="Center">
-                                <TextBlock Text="ADVANCED" FontSize="9" FontWeight="Bold" Foreground="White"/>
+                                <TextBlock Text="ADVANCED" FontSize="9" FontWeight="SemiBold" Foreground="{StaticResource TextSecondaryBrush}"/>
                             </Border>
                         </StackPanel>
                         <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap">
-                            Stops Windows from quietly sending usage statistics and diagnostics to Microsoft in the background.
-                            Your internet, Windows Update, and security features are not affected.
-                            You can allow collection again at any time.
+                            Stops Windows from sending usage statistics and diagnostics to Microsoft.
+                            Internet, Windows Update, and security features are unaffected. Reversible at any time.
                         </TextBlock>
                         <TextBlock Margin="0,6,0,0">
                             <TextBlock.Style>
@@ -101,9 +100,9 @@
                     </Grid.ColumnDefinitions>
                     <StackPanel Grid.Column="0" Orientation="Horizontal">
                         <TextBlock Text="Background Services" Style="{StaticResource HeadingMedium}"/>
-                        <Border Background="{StaticResource AccentYellowBrush}" CornerRadius="4"
+                        <Border BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="3"
                                 Padding="6,2" Margin="10,0,0,0" VerticalAlignment="Center">
-                            <TextBlock Text="MODERATE" FontSize="9" FontWeight="Bold" Foreground="#0D0F14"/>
+                            <TextBlock Text="MODERATE" FontSize="9" FontWeight="SemiBold" Foreground="{StaticResource TextSecondaryBrush}"/>
                         </Border>
                     </StackPanel>
                     <Button Grid.Column="1" Content="Disable Recommended Services"
@@ -114,8 +113,8 @@
 
                 <!-- Description + Color legend -->
                 <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,0,0,8" MaxWidth="700">
-                    These Windows services run in the background. Disabling ones you don't use frees up memory and can speed up your PC.
-                    Services marked RECOMMENDED are safe to disable for most users. You can always re-enable them here.
+                    Background services use memory and CPU. Disabling unused ones frees resources.
+                    Items marked RECOMMENDED are safe to disable for most users — re-enable them here at any time.
                 </TextBlock>
                 <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
                     <Ellipse Width="9" Height="9" Fill="{StaticResource AccentRedBrush}"
@@ -160,7 +159,7 @@
                                             <Style TargetType="Border">
                                                 <Style.Triggers>
                                                     <DataTrigger Binding="{Binding IsOptimized}" Value="True">
-                                                        <Setter Property="Background" Value="#0A1A10"/>
+                                                        <Setter Property="Background" Value="#161617"/>
                                                     </DataTrigger>
                                                 </Style.Triggers>
                                             </Style>
@@ -177,7 +176,7 @@
                                                     <TextBlock Text="{Binding DisplayName}"
                                                                Style="{StaticResource BodyText}" Margin="0,0,8,0"/>
                                                     <Border CornerRadius="4" Padding="5,1" VerticalAlignment="Center"
-                                                            Background="#1AA855F7" BorderBrush="{StaticResource AccentBlueBrush}"
+                                                            Background="#1A5E81AC" BorderBrush="{StaticResource AccentBlueBrush}"
                                                             BorderThickness="1"
                                                             Visibility="{Binding IsRecommended, Converter={StaticResource BoolToVis}}">
                                                         <TextBlock Text="RECOMMENDED" FontSize="8" FontWeight="Bold"
@@ -380,7 +379,7 @@
                                                                Style="{StaticResource BodyText}" FontSize="12"
                                                                Margin="0,0,8,0"/>
                                                     <Border CornerRadius="4" Padding="5,2" VerticalAlignment="Center"
-                                                            Background="#1AFF3B00" BorderBrush="{StaticResource AccentRedBrush}"
+                                                            Background="#1AC7556B" BorderBrush="{StaticResource AccentRedBrush}"
                                                             BorderThickness="1"
                                                             Visibility="{Binding IsRecommendedToRemove, Converter={StaticResource BoolToVis}}">
                                                         <TextBlock Text="REMOVE RECOMMENDED" FontSize="8" FontWeight="Bold"

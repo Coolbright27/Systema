@@ -54,15 +54,14 @@
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
                                 <TextBlock Text="Block Preview Updates"
                                            Style="{StaticResource HeadingMedium}"/>
-                                <Border Background="{StaticResource AccentGreenBrush}" CornerRadius="4"
+                                <Border BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="3"
                                         Padding="6,2" Margin="10,0,0,0" VerticalAlignment="Center">
-                                    <TextBlock Text="SAFE" FontSize="9" FontWeight="Bold" Foreground="#0D0F14"/>
+                                    <TextBlock Text="SAFE" FontSize="9" FontWeight="SemiBold" Foreground="{StaticResource TextSecondaryBrush}"/>
                                 </Border>
                             </StackPanel>
                             <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap">
-                                Blocks Insider builds AND monthly "Preview" cumulative updates (e.g. the
-                                optional pre-Patch-Tuesday releases shown as "Preview Update" in Windows Update).
-                                Regular security and cumulative updates still install as normal.
+                                Blocks Windows Insider builds and monthly preview cumulative updates.
+                                Regular security and quality updates continue to install normally.
                             </TextBlock>
                         </StackPanel>
 
@@ -117,17 +116,16 @@
                     <!-- Header -->
                     <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
                         <TextBlock Text="DNS Switcher" Style="{StaticResource HeadingMedium}"/>
-                        <Border Background="{StaticResource AccentGreenBrush}" CornerRadius="4"
+                        <Border BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="3"
                                 Padding="6,2" Margin="10,0,0,0" VerticalAlignment="Center">
-                            <TextBlock Text="SAFE" FontSize="9" FontWeight="Bold" Foreground="#0D0F14"/>
+                            <TextBlock Text="SAFE" FontSize="9" FontWeight="SemiBold" Foreground="{StaticResource TextSecondaryBrush}"/>
                         </Border>
                     </StackPanel>
 
                     <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,0,0,12"
                                MaxWidth="640">
-                        Choose faster, more private DNS servers for your internet connection.
-                        Cloudflare (1.1.1.1) is the recommended choice for most users — it's fast and doesn't track you.
-                        Click "Reset to DHCP" to go back to your internet provider's default.
+                        Switch to faster, more private DNS servers. Cloudflare (1.1.1.1) is recommended for most users.
+                        Use "Reset to DHCP" to return to your provider's default.
                     </TextBlock>
 
                     <!-- Current DNS display -->
@@ -218,21 +216,20 @@
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
                                 <TextBlock Text="CPU Core Efficiency"
                                            Style="{StaticResource HeadingMedium}"/>
-                                <Border Background="{StaticResource AccentYellowBrush}" CornerRadius="4"
+                                <Border BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="3"
                                         Padding="6,2" Margin="10,0,0,0" VerticalAlignment="Center">
-                                    <TextBlock Text="MODERATE" FontSize="9" FontWeight="Bold" Foreground="#0D0F14"/>
+                                    <TextBlock Text="MODERATE" FontSize="9" FontWeight="SemiBold" Foreground="{StaticResource TextSecondaryBrush}"/>
                                 </Border>
                                 <Border CornerRadius="4" Padding="5,2" Margin="6,0,0,0" VerticalAlignment="Center"
-                                        Background="#1A00E5A0" BorderBrush="{StaticResource AccentGreenBrush}"
+                                        Background="#1A5C9C7C" BorderBrush="{StaticResource AccentGreenBrush}"
                                         BorderThickness="1">
                                     <TextBlock Text="RECOMMENDED" FontSize="8" FontWeight="Bold"
                                                Foreground="{StaticResource AccentGreenBrush}"/>
                                 </Border>
                             </StackPanel>
                             <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap">
-                                Keeps Windows' idle core management on, so CPU cores automatically power down when not needed.
-                                Reduces heat and lets busy cores run faster.
-                                A startup task is created so the setting survives restarts.
+                                Lets Windows park idle CPU cores so active cores can run faster and produce less heat.
+                                Persists across restarts via a scheduled task.
                             </TextBlock>
                         </StackPanel>
 
@@ -296,15 +293,14 @@
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
                                 <TextBlock Text="Disable Fast Startup"
                                            Style="{StaticResource HeadingMedium}"/>
-                                <Border Background="{StaticResource AccentYellowBrush}" CornerRadius="4"
+                                <Border BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="3"
                                         Padding="6,2" Margin="10,0,0,0" VerticalAlignment="Center">
-                                    <TextBlock Text="MODERATE" FontSize="9" FontWeight="Bold" Foreground="#0D0F14"/>
+                                    <TextBlock Text="MODERATE" FontSize="9" FontWeight="SemiBold" Foreground="{StaticResource TextSecondaryBrush}"/>
                                 </Border>
                             </StackPanel>
                             <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap">
-                                Windows Fast Startup saves a kernel snapshot on shutdown to speed up the next boot.
-                                Disabling it forces a full clean shutdown each time, preventing driver state corruption,
-                                ensuring firmware updates apply correctly, and fixing shutdown/reboot issues on some PCs.
+                                Forces a full clean shutdown instead of the cached kernel snapshot.
+                                Prevents driver-state corruption, ensures firmware updates apply, and fixes shutdown issues on some PCs.
                             </TextBlock>
                         </StackPanel>
 
@@ -356,16 +352,14 @@
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
                                 <TextBlock Text="Disable NTFS Last-Access Timestamps"
                                            Style="{StaticResource HeadingMedium}"/>
-                                <Border Background="{StaticResource AccentGreenBrush}" CornerRadius="4"
+                                <Border BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="3"
                                         Padding="6,2" Margin="10,0,0,0" VerticalAlignment="Center">
-                                    <TextBlock Text="SAFE" FontSize="9" FontWeight="Bold" Foreground="#0D0F14"/>
+                                    <TextBlock Text="SAFE" FontSize="9" FontWeight="SemiBold" Foreground="{StaticResource TextSecondaryBrush}"/>
                                 </Border>
                             </StackPanel>
                             <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap">
-                                NTFS normally updates the "Date Accessed" timestamp on every file read, causing
-                                unnecessary disk writes on every open. Disabling this reduces background disk
-                                activity, lowers SSD write amplification, and can improve responsiveness on
-                                systems with many small files (e.g. development machines).
+                                Stops NTFS from writing a "Date Accessed" timestamp on every file read.
+                                Reduces background disk activity, lowers SSD wear, and improves responsiveness on systems with many small files.
                             </TextBlock>
                         </StackPanel>
 
@@ -418,9 +412,9 @@
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
                                 <TextBlock Text="Sleep → Hibernate (Battery)"
                                            Style="{StaticResource HeadingMedium}"/>
-                                <Border Background="{StaticResource AccentGreenBrush}" CornerRadius="4"
+                                <Border BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="3"
                                         Padding="6,2" Margin="10,0,0,0" VerticalAlignment="Center">
-                                    <TextBlock Text="SAFE" FontSize="9" FontWeight="Bold" Foreground="#0D0F14"/>
+                                    <TextBlock Text="SAFE" FontSize="9" FontWeight="SemiBold" Foreground="{StaticResource TextSecondaryBrush}"/>
                                 </Border>
                             </StackPanel>
                             <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap">
@@ -511,9 +505,9 @@
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
                                 <TextBlock Text="Sleep → Hibernate (Plugged In)"
                                            Style="{StaticResource HeadingMedium}"/>
-                                <Border Background="{StaticResource AccentGreenBrush}" CornerRadius="4"
+                                <Border BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="3"
                                         Padding="6,2" Margin="10,0,0,0" VerticalAlignment="Center">
-                                    <TextBlock Text="SAFE" FontSize="9" FontWeight="Bold" Foreground="#0D0F14"/>
+                                    <TextBlock Text="SAFE" FontSize="9" FontWeight="SemiBold" Foreground="{StaticResource TextSecondaryBrush}"/>
                                 </Border>
                             </StackPanel>
                             <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap">
@@ -597,9 +591,9 @@
                     <!-- Header -->
                     <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
                         <TextBlock Text="Realtek App Cleanup" Style="{StaticResource HeadingMedium}"/>
-                        <Border Background="{StaticResource AccentYellowBrush}" CornerRadius="4"
+                        <Border BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="3"
                                 Padding="6,2" Margin="10,0,0,0" VerticalAlignment="Center">
-                            <TextBlock Text="MODERATE" FontSize="9" FontWeight="Bold" Foreground="#0D0F14"/>
+                            <TextBlock Text="MODERATE" FontSize="9" FontWeight="SemiBold" Foreground="{StaticResource TextSecondaryBrush}"/>
                         </Border>
                     </StackPanel>
 

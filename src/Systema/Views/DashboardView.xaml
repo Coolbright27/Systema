@@ -55,20 +55,20 @@
                                Foreground="{StaticResource TextSecondaryBrush}"/>
                 </StackPanel>
 
-                <!-- Admin + version badges -->
+                <!-- Admin + version badges — subtle monochrome chips -->
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top" Margin="12,0,0,0">
-                    <Border Background="#1A00E5A0" BorderBrush="{StaticResource AccentGreenBrush}"
-                            BorderThickness="1" CornerRadius="6" Padding="10,5" Margin="0,0,8,0">
+                    <Border Background="{StaticResource BgSurfaceBrush}" BorderBrush="{StaticResource BorderBrush}"
+                            BorderThickness="1" CornerRadius="4" Padding="10,5" Margin="0,0,8,0">
                         <StackPanel Orientation="Horizontal">
-                            <Ellipse Width="7" Height="7" Fill="{StaticResource AccentGreenBrush}"
-                                     VerticalAlignment="Center" Margin="0,0,6,0"/>
+                            <Ellipse Width="6" Height="6" Fill="{StaticResource AccentGreenBrush}"
+                                     VerticalAlignment="Center" Margin="0,0,7,0"/>
                             <TextBlock Text="Administrator" FontSize="11" FontWeight="SemiBold"
-                                       Foreground="{StaticResource AccentGreenBrush}" FontFamily="Segoe UI"/>
+                                       Foreground="{StaticResource TextPrimaryBrush}" FontFamily="Segoe UI"/>
                         </StackPanel>
                     </Border>
                     <Border Background="{StaticResource BgSurfaceBrush}" BorderBrush="{StaticResource BorderBrush}"
-                            BorderThickness="1" CornerRadius="6" Padding="10,5">
-                        <TextBlock Text="v1.7.71" FontSize="11" FontWeight="SemiBold"
+                            BorderThickness="1" CornerRadius="4" Padding="10,5">
+                        <TextBlock Text="v1.7.72" FontSize="11" FontWeight="SemiBold"
                                    Foreground="{StaticResource TextSecondaryBrush}" FontFamily="Segoe UI"/>
                     </Border>
                 </StackPanel>
@@ -210,20 +210,13 @@
 
                     <!-- Left: title + checklist -->
                     <StackPanel Grid.Column="0">
-                        <!-- Heading row -->
-                        <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                            <TextBlock Text="Auto-Pilot" Style="{StaticResource HeadingMedium}" Margin="0,0,10,0"/>
-                            <Border CornerRadius="4" Padding="7,2" VerticalAlignment="Center"
-                                    Background="#1AA855F7" BorderBrush="{StaticResource AccentBlueBrush}" BorderThickness="1">
-                                <TextBlock Text="SMART OPTIMIZE" FontSize="9" FontWeight="Bold"
-                                           Foreground="{StaticResource AccentBlueBrush}"/>
-                            </Border>
-                        </StackPanel>
+                        <!-- Heading -->
+                        <TextBlock Text="Auto-Pilot" Style="{StaticResource HeadingMedium}" Margin="0,0,0,4"/>
 
                         <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,0,0,16"
                                    Foreground="{StaticResource TextSecondaryBrush}">
-                            Analyses your hardware and applies the best settings automatically.
-                            All changes are reversible from their respective tabs.
+                            Detects your hardware and applies the recommended settings automatically.
+                            Every change is reversible from its respective tab.
                         </TextBlock>
 
                         <!-- Checklist -->
@@ -315,16 +308,13 @@
                                       VerticalAlignment="Center" Margin="12,0,0,0"/>
                         </Grid>
 
-                        <!-- Locked badge visible only when Auto-Pilot is ON -->
-                        <Border HorizontalAlignment="Left" CornerRadius="6" Padding="10,5" Margin="0,0,0,10"
-                                Background="#1A00E5A0" BorderBrush="{StaticResource AccentGreenBrush}"
-                                BorderThickness="1"
-                                Visibility="{Binding AutoPilotModeEnabled, Converter={StaticResource BoolToVis}}">
-                            <TextBlock Foreground="{StaticResource AccentGreenBrush}"
-                                       FontSize="11" FontWeight="SemiBold">
-                                &#x2713;&#x2002;Settings locked &#x2014; auto-restoring if they drift
-                            </TextBlock>
-                        </Border>
+                        <!-- Locked indicator — subtle helper text when Auto-Pilot is ON -->
+                        <TextBlock HorizontalAlignment="Left" Margin="0,0,0,10"
+                                   Visibility="{Binding AutoPilotModeEnabled, Converter={StaticResource BoolToVis}}"
+                                   Style="{StaticResource HelperText}"
+                                   FontWeight="SemiBold">
+                            Settings locked &#x2014; auto-restoring if they drift
+                        </TextBlock>
 
                         <!-- Divider -->
                         <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,4,0,10"/>
@@ -378,7 +368,7 @@
                             <TextBlock Text="Task Sleep" Style="{StaticResource HeadingMedium}" Margin="0,0,10,0"/>
                             <!-- Nap count badge — only when apps are napping -->
                             <Border CornerRadius="10" Padding="8,2" VerticalAlignment="Center"
-                                    Background="#1AA855F7" BorderBrush="{StaticResource AccentBlueBrush}"
+                                    Background="#1A5E81AC" BorderBrush="{StaticResource AccentBlueBrush}"
                                     BorderThickness="1"
                                     Visibility="{Binding TaskSleepActive, Converter={StaticResource BoolToVis}}">
                                 <TextBlock FontSize="10" FontWeight="Bold" Foreground="{StaticResource AccentBlueBrush}">

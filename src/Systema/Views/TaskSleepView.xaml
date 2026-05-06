@@ -26,8 +26,8 @@
                                 <Setter TargetName="bg" Property="Background" Value="#1AFFFFFF"/>
                             </Trigger>
                             <Trigger Property="IsChecked" Value="True">
-                                <Setter TargetName="bg" Property="Background" Value="#7C3AED"/>
-                                <Setter TargetName="bg" Property="BorderBrush" Value="#8B5CF6"/>
+                                <Setter TargetName="bg" Property="Background" Value="#5E81AC"/>
+                                <Setter TargetName="bg" Property="BorderBrush" Value="#7395B5"/>
                                 <Setter Property="Foreground" Value="White"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
@@ -102,7 +102,7 @@
                                         <Setter Property="Background" Value="#12FFFFFF"/>
                                         <Style.Triggers>
                                             <DataTrigger Binding="{Binding ThrottledCountDisplay}" Value="all awake">
-                                                <Setter Property="Background" Value="#0C3EFF3E"/>
+                                                <Setter Property="Background" Value="#0C5C9C7C"/>
                                             </DataTrigger>
                                         </Style.Triggers>
                                     </Style>
@@ -111,10 +111,10 @@
                                            FontSize="11" FontWeight="SemiBold">
                                     <TextBlock.Style>
                                         <Style TargetType="TextBlock">
-                                            <Setter Property="Foreground" Value="#FCD34D"/>
+                                            <Setter Property="Foreground" Value="#C8A654"/>
                                             <Style.Triggers>
                                                 <DataTrigger Binding="{Binding ThrottledCountDisplay}" Value="all awake">
-                                                    <Setter Property="Foreground" Value="#6EE7B7"/>
+                                                    <Setter Property="Foreground" Value="#5C9C7C"/>
                                                 </DataTrigger>
                                             </Style.Triggers>
                                         </Style>
@@ -123,13 +123,13 @@
                             </Border>
                             <!-- CPU freed pill — hidden when nothing is napped -->
                             <Border CornerRadius="10" Padding="8,3"
-                                    Background="#0C6EE7B7"
+                                    Background="#0C5C9C7C"
                                     Margin="8,0,0,0"
                                     VerticalAlignment="Center"
                                     Visibility="{Binding CpuFreedVisible, Converter={StaticResource BoolToVis}}">
                                 <TextBlock Text="{Binding CpuFreedDisplay}"
                                            FontSize="11" FontWeight="SemiBold"
-                                           Foreground="#6EE7B7"/>
+                                           Foreground="#5C9C7C"/>
                             </Border>
                         </WrapPanel>
 
@@ -235,16 +235,16 @@
                                                     <Setter Property="Background" Value="Transparent"/>
                                                     <Style.Triggers>
                                                         <DataTrigger Binding="{Binding StatusLabel}" Value="Napping">
-                                                            <Setter Property="Background" Value="#78350F"/>
+                                                            <Setter Property="Background" Value="#332B1A"/>
                                                         </DataTrigger>
                                                         <DataTrigger Binding="{Binding StatusLabel}" Value="Active">
-                                                            <Setter Property="Background" Value="#2D1060"/>
+                                                            <Setter Property="Background" Value="#1F2A35"/>
                                                         </DataTrigger>
                                                         <DataTrigger Binding="{Binding StatusLabel}" Value="Pending">
-                                                            <Setter Property="Background" Value="#2D1B5E"/>
+                                                            <Setter Property="Background" Value="#1F2A35"/>
                                                         </DataTrigger>
                                                         <DataTrigger Binding="{Binding StatusLabel}" Value="Deep Sleep">
-                                                            <Setter Property="Background" Value="#1E1B4B"/>
+                                                            <Setter Property="Background" Value="#1F1F2A"/>
                                                         </DataTrigger>
                                                     </Style.Triggers>
                                                 </Style>
@@ -256,16 +256,16 @@
                                                         <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
                                                         <Style.Triggers>
                                                             <DataTrigger Binding="{Binding StatusLabel}" Value="Napping">
-                                                                <Setter Property="Foreground" Value="#FCD34D"/>
+                                                                <Setter Property="Foreground" Value="#C8A654"/>
                                                             </DataTrigger>
                                                             <DataTrigger Binding="{Binding StatusLabel}" Value="Active">
-                                                                <Setter Property="Foreground" Value="#C084FC"/>
+                                                                <Setter Property="Foreground" Value="#5E81AC"/>
                                                             </DataTrigger>
                                                             <DataTrigger Binding="{Binding StatusLabel}" Value="Pending">
-                                                                <Setter Property="Foreground" Value="#C084FC"/>
+                                                                <Setter Property="Foreground" Value="#5E81AC"/>
                                                             </DataTrigger>
                                                             <DataTrigger Binding="{Binding StatusLabel}" Value="Deep Sleep">
-                                                                <Setter Property="Foreground" Value="#A5B4FC"/>
+                                                                <Setter Property="Foreground" Value="#7395B5"/>
                                                             </DataTrigger>
                                                         </Style.Triggers>
                                                     </Style>
@@ -410,52 +410,52 @@
                                                 VerticalAlignment="Center">
                                             <Border.Style>
                                                 <Style TargetType="Border">
-                                                    <Setter Property="Background" Value="#1F2937"/>
+                                                    <Setter Property="Background" Value="#1F1F22"/>
                                                     <Style.Triggers>
                                                         <DataTrigger Binding="{Binding Action}" Value="Napping">
-                                                            <Setter Property="Background" Value="#78350F"/>
+                                                            <Setter Property="Background" Value="#332B1A"/>
                                                         </DataTrigger>
                                                         <DataTrigger Binding="{Binding Action}" Value="Minimize Nap">
-                                                            <Setter Property="Background" Value="#78350F"/>
+                                                            <Setter Property="Background" Value="#332B1A"/>
                                                         </DataTrigger>
                                                         <DataTrigger Binding="{Binding Action}" Value="Tray Nap">
-                                                            <Setter Property="Background" Value="#78350F"/>
+                                                            <Setter Property="Background" Value="#332B1A"/>
                                                         </DataTrigger>
                                                         <DataTrigger Binding="{Binding Action}" Value="Smart Nap">
-                                                            <Setter Property="Background" Value="#713F12"/>
+                                                            <Setter Property="Background" Value="#332B1A"/>
                                                         </DataTrigger>
                                                         <DataTrigger Binding="{Binding Action}" Value="Child Nap">
-                                                            <Setter Property="Background" Value="#78350F"/>
+                                                            <Setter Property="Background" Value="#332B1A"/>
                                                         </DataTrigger>
                                                         <DataTrigger Binding="{Binding Action}" Value="Re-napping">
-                                                            <Setter Property="Background" Value="#78350F"/>
+                                                            <Setter Property="Background" Value="#332B1A"/>
                                                         </DataTrigger>
                                                         <DataTrigger Binding="{Binding Action}" Value="Tray Re-nap">
-                                                            <Setter Property="Background" Value="#78350F"/>
+                                                            <Setter Property="Background" Value="#332B1A"/>
                                                         </DataTrigger>
                                                         <DataTrigger Binding="{Binding Action}" Value="Brief Wake">
-                                                            <Setter Property="Background" Value="#2D1060"/>
+                                                            <Setter Property="Background" Value="#1F2A35"/>
                                                         </DataTrigger>
                                                         <DataTrigger Binding="{Binding Action}" Value="Deep Wake">
-                                                            <Setter Property="Background" Value="#1E1B4B"/>
+                                                            <Setter Property="Background" Value="#1F1F2A"/>
                                                         </DataTrigger>
                                                         <DataTrigger Binding="{Binding Action}" Value="Tray Wake">
-                                                            <Setter Property="Background" Value="#2D1060"/>
+                                                            <Setter Property="Background" Value="#1F2A35"/>
                                                         </DataTrigger>
                                                         <DataTrigger Binding="{Binding Action}" Value="Tray Deep Wake">
-                                                            <Setter Property="Background" Value="#1E1B4B"/>
+                                                            <Setter Property="Background" Value="#1F1F2A"/>
                                                         </DataTrigger>
                                                         <DataTrigger Binding="{Binding Action}" Value="Woke up">
-                                                            <Setter Property="Background" Value="#064E3B"/>
+                                                            <Setter Property="Background" Value="#1A2620"/>
                                                         </DataTrigger>
                                                         <DataTrigger Binding="{Binding Action}" Value="Re-enforced">
-                                                            <Setter Property="Background" Value="#4C1D95"/>
+                                                            <Setter Property="Background" Value="#1F2A35"/>
                                                         </DataTrigger>
                                                         <DataTrigger Binding="{Binding Action}" Value="Auto-whitelisted">
-                                                            <Setter Property="Background" Value="#064E3B"/>
+                                                            <Setter Property="Background" Value="#1A2620"/>
                                                         </DataTrigger>
                                                         <DataTrigger Binding="{Binding Action}" Value="Error">
-                                                            <Setter Property="Background" Value="#7F1D1D"/>
+                                                            <Setter Property="Background" Value="#2A1A1C"/>
                                                         </DataTrigger>
                                                     </Style.Triggers>
                                                 </Style>
@@ -467,49 +467,49 @@
                                                         <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
                                                         <Style.Triggers>
                                                             <DataTrigger Binding="{Binding Action}" Value="Napping">
-                                                                <Setter Property="Foreground" Value="#FCD34D"/>
+                                                                <Setter Property="Foreground" Value="#C8A654"/>
                                                             </DataTrigger>
                                                             <DataTrigger Binding="{Binding Action}" Value="Minimize Nap">
-                                                                <Setter Property="Foreground" Value="#FCD34D"/>
+                                                                <Setter Property="Foreground" Value="#C8A654"/>
                                                             </DataTrigger>
                                                             <DataTrigger Binding="{Binding Action}" Value="Tray Nap">
-                                                                <Setter Property="Foreground" Value="#FCD34D"/>
+                                                                <Setter Property="Foreground" Value="#C8A654"/>
                                                             </DataTrigger>
                                                             <DataTrigger Binding="{Binding Action}" Value="Smart Nap">
-                                                                <Setter Property="Foreground" Value="#FBBF24"/>
+                                                                <Setter Property="Foreground" Value="#C8A654"/>
                                                             </DataTrigger>
                                                             <DataTrigger Binding="{Binding Action}" Value="Child Nap">
-                                                                <Setter Property="Foreground" Value="#FCD34D"/>
+                                                                <Setter Property="Foreground" Value="#C8A654"/>
                                                             </DataTrigger>
                                                             <DataTrigger Binding="{Binding Action}" Value="Re-napping">
-                                                                <Setter Property="Foreground" Value="#FCD34D"/>
+                                                                <Setter Property="Foreground" Value="#C8A654"/>
                                                             </DataTrigger>
                                                             <DataTrigger Binding="{Binding Action}" Value="Tray Re-nap">
-                                                                <Setter Property="Foreground" Value="#FCD34D"/>
+                                                                <Setter Property="Foreground" Value="#C8A654"/>
                                                             </DataTrigger>
                                                             <DataTrigger Binding="{Binding Action}" Value="Brief Wake">
-                                                                <Setter Property="Foreground" Value="#C084FC"/>
+                                                                <Setter Property="Foreground" Value="#5E81AC"/>
                                                             </DataTrigger>
                                                             <DataTrigger Binding="{Binding Action}" Value="Deep Wake">
-                                                                <Setter Property="Foreground" Value="#A5B4FC"/>
+                                                                <Setter Property="Foreground" Value="#7395B5"/>
                                                             </DataTrigger>
                                                             <DataTrigger Binding="{Binding Action}" Value="Tray Wake">
-                                                                <Setter Property="Foreground" Value="#C084FC"/>
+                                                                <Setter Property="Foreground" Value="#5E81AC"/>
                                                             </DataTrigger>
                                                             <DataTrigger Binding="{Binding Action}" Value="Tray Deep Wake">
-                                                                <Setter Property="Foreground" Value="#A5B4FC"/>
+                                                                <Setter Property="Foreground" Value="#7395B5"/>
                                                             </DataTrigger>
                                                             <DataTrigger Binding="{Binding Action}" Value="Woke up">
-                                                                <Setter Property="Foreground" Value="#6EE7B7"/>
+                                                                <Setter Property="Foreground" Value="#5C9C7C"/>
                                                             </DataTrigger>
                                                             <DataTrigger Binding="{Binding Action}" Value="Re-enforced">
-                                                                <Setter Property="Foreground" Value="#C084FC"/>
+                                                                <Setter Property="Foreground" Value="#5E81AC"/>
                                                             </DataTrigger>
                                                             <DataTrigger Binding="{Binding Action}" Value="Auto-whitelisted">
-                                                                <Setter Property="Foreground" Value="#6EE7B7"/>
+                                                                <Setter Property="Foreground" Value="#5C9C7C"/>
                                                             </DataTrigger>
                                                             <DataTrigger Binding="{Binding Action}" Value="Error">
-                                                                <Setter Property="Foreground" Value="#FCA5A5"/>
+                                                                <Setter Property="Foreground" Value="#C7556B"/>
                                                             </DataTrigger>
                                                         </Style.Triggers>
                                                     </Style>
@@ -1015,7 +1015,7 @@
 
                     <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
                         <TextBlock Text="Beta Features" Style="{StaticResource HeadingMedium}"/>
-                        <Border Background="#D97706" CornerRadius="4" Padding="6,2" Margin="10,0,0,0" VerticalAlignment="Center">
+                        <Border Background="#3A2A18" CornerRadius="4" Padding="6,2" Margin="10,0,0,0" VerticalAlignment="Center">
                             <TextBlock Text="BETA" FontSize="10" FontWeight="Bold" Foreground="White"/>
                         </Border>
                     </StackPanel>
@@ -1166,10 +1166,10 @@
                                             <ColumnDefinition Width="Auto"/>
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                                            <Border Background="#0C3EFF3E" CornerRadius="4"
+                                            <Border Background="#0C5C9C7C" CornerRadius="4"
                                                     Padding="6,2" Margin="0,0,8,0" VerticalAlignment="Center">
                                                 <TextBlock Text="PROTECTED" FontSize="9" FontWeight="Bold"
-                                                           Foreground="#6EE7B7"/>
+                                                           Foreground="#5C9C7C"/>
                                             </Border>
                                             <TextBlock Text="{Binding}"
                                                        Style="{StaticResource BodyText}"

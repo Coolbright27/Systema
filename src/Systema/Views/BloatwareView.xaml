@@ -41,9 +41,9 @@
                     <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,20,0">
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
                             <TextBlock Text="Safe Pre-installed App List" Style="{StaticResource HeadingMedium}"/>
-                            <Border Background="{StaticResource AccentGreenBrush}" CornerRadius="4"
+                            <Border BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="3"
                                     Padding="6,2" Margin="10,0,0,0" VerticalAlignment="Center">
-                                <TextBlock Text="SAFE" FontSize="9" FontWeight="Bold" Foreground="#0D0F14"/>
+                                <TextBlock Text="SAFE" FontSize="9" FontWeight="SemiBold" Foreground="{StaticResource TextSecondaryBrush}"/>
                             </Border>
                         </StackPanel>
                         <TextBlock TextWrapping="Wrap" Style="{StaticResource BodyText}"
@@ -53,7 +53,7 @@
                             A safety restore point is created before anything is removed.
                         </TextBlock>
                     </StackPanel>
-                    <Button Grid.Column="1" Content="🔍  Scan Again"
+                    <Button Grid.Column="1" Content="Scan Again"
                             Style="{StaticResource GhostButton}" Padding="16,9"
                             VerticalAlignment="Center"
                             IsEnabled="{Binding IsNotLoading}"
@@ -173,7 +173,7 @@
                                     Command="{Binding RemoveSelectedCommand}"
                                     IsEnabled="{Binding IsNotRemoving}">
                                 <TextBlock>
-                                    <Run Text="🗑  Remove Selected ("/>
+                                    <Run Text="Remove Selected ("/>
                                     <Run Text="{Binding SelectedCount, Mode=OneWay}"/>
                                     <Run Text=")"/>
                                 </TextBlock>

@@ -37,9 +37,8 @@
                         <TextBlock Text="Quick Free RAM" Style="{StaticResource HeadingMedium}" Margin="0,0,0,6"/>
 
                         <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,0,0,10">
-                            Forces every background process to release memory it's holding but not actively
-                            using, then purges Windows' standby list. Useful when RAM is running low or
-                            before starting a memory-heavy task.
+                            Releases unused memory from background processes and purges the Windows standby list.
+                            Useful before launching a memory-heavy app or when free RAM is low.
                         </TextBlock>
 
                         <!-- Live free RAM stat -->
@@ -89,16 +88,15 @@
                     <StackPanel>
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
                             <TextBlock Text="Virtual Memory (Page File)" Style="{StaticResource HeadingMedium}"/>
-                            <Border Background="{StaticResource AccentYellowBrush}" CornerRadius="4"
+                            <Border BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="3"
                                     Padding="6,2" Margin="8,0,0,0" VerticalAlignment="Center">
-                                <TextBlock Text="MODERATE" FontSize="9" FontWeight="Bold" Foreground="#0D0F14"/>
+                                <TextBlock Text="MODERATE" FontSize="9" FontWeight="SemiBold" Foreground="{StaticResource TextSecondaryBrush}"/>
                             </Border>
                         </StackPanel>
 
                         <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,0,0,4">
-                            Windows uses a hidden file on your drive as extra memory when RAM fills up.
-                            Setting a fixed (static) size prevents performance hiccups caused by Windows
-                            resizing it on the fly. A restart is required to apply changes.
+                            Windows uses a file on disk as extra memory when RAM is full.
+                            A fixed size prevents stutter from on-the-fly resizing. Requires a restart.
                         </TextBlock>
                         <TextBlock Text="{Binding CurrentPagefileText}"
                                    Style="{StaticResource CaptionText}"
@@ -214,16 +212,16 @@
                                                 VerticalAlignment="Center" CornerRadius="4" Padding="7,3">
                                             <Border.Style>
                                                 <Style TargetType="Border">
-                                                    <Setter Property="Background" Value="#14A855F7"/>
+                                                    <Setter Property="Background" Value="#145E81AC"/>
                                                     <Style.Triggers>
                                                         <DataTrigger Binding="{Binding ImpactLabel}" Value="High">
-                                                            <Setter Property="Background" Value="#22FF4560"/>
+                                                            <Setter Property="Background" Value="#22C7556B"/>
                                                         </DataTrigger>
                                                         <DataTrigger Binding="{Binding ImpactLabel}" Value="Medium">
-                                                            <Setter Property="Background" Value="#22FFB800"/>
+                                                            <Setter Property="Background" Value="#22C8A654"/>
                                                         </DataTrigger>
                                                         <DataTrigger Binding="{Binding ImpactLabel}" Value="Low">
-                                                            <Setter Property="Background" Value="#2200E5A0"/>
+                                                            <Setter Property="Background" Value="#225C9C7C"/>
                                                         </DataTrigger>
                                                     </Style.Triggers>
                                                 </Style>

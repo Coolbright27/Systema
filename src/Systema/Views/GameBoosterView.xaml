@@ -173,12 +173,12 @@
                                     <Setter Property="Foreground" Value="{StaticResource AccentBlueBrush}"/>
                                 </Style>
                             </TextBlock.Style>
-                            <Run Text="⏱ Auto-off in: "/>
+                            <Run Text="Auto-off in: "/>
                             <Run Text="{Binding ManualBoostTimeRemaining}" FontWeight="SemiBold"/>
                         </TextBlock>
                         <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap"
                                    Foreground="{StaticResource AccentYellowBrush}">
-                            ⚠ Auto-disables after 6 hours to restore services.
+                            Auto-disables after 6 hours to restore services.
                         </TextBlock>
                     </StackPanel>
 
@@ -354,7 +354,7 @@
                         </Grid.ColumnDefinitions>
                         <StackPanel Grid.Column="0" Margin="0,0,24,0" VerticalAlignment="Center">
                             <TextBlock Text="Free memory on game start" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                            <TextBlock Text="Trims background processes' working sets so the game has more RAM available immediately."
+                            <TextBlock Text="Releases idle background memory at game launch so more RAM is available immediately."
                                        Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,2,0,0"/>
                         </StackPanel>
                         <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}"
@@ -368,13 +368,13 @@
                         </Grid.ColumnDefinitions>
                         <StackPanel Grid.Column="0" Margin="0,0,24,0" VerticalAlignment="Center">
                             <TextBlock Text="High Performance power plan" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                            <TextBlock Text="Switches to High Performance mode for maximum CPU throughput while gaming. Your previous power plan is restored on exit."
+                            <TextBlock Text="Switches to High Performance for maximum CPU throughput while gaming. Restored on exit."
                                        Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,2,0,0"/>
                             <!-- Conflict warning — shown only when Battery Optimization (Visual & Power tab) is also active -->
                             <TextBlock Visibility="{Binding IsHighPerfConflictActive, Converter={StaticResource BoolToVis}}"
                                        Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,4,0,0"
                                        Foreground="{StaticResource AccentYellowBrush}">
-                                ⚠ Battery Optimization is also active (Visual &amp; Power tab). During gaming the
+                                Battery Optimization is also active (Visual &amp; Power tab). During gaming the
                                 High Performance plan will override it, which may cause unexpected power or thermal
                                 behaviour. Consider disabling one of the two settings.
                             </TextBlock>
@@ -390,7 +390,7 @@
                         </Grid.ColumnDefinitions>
                         <StackPanel Grid.Column="0" Margin="0,0,24,0" VerticalAlignment="Center">
                             <TextBlock Text="GPU &amp; multimedia system profile" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                            <TextBlock Text="Raises Windows Multimedia scheduler (MMCSS) priority for the Games profile — faster CPU quantum scheduling for your game. Does not touch SystemResponsiveness (VSync-safe). Restored on exit."
+                            <TextBlock Text="Raises the MMCSS Games profile priority for faster CPU scheduling. VSync-safe. Restored on exit."
                                        Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,2,0,0"/>
                         </StackPanel>
                         <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}"
@@ -404,7 +404,7 @@
                         </Grid.ColumnDefinitions>
                         <StackPanel Grid.Column="0" Margin="0,0,24,0" VerticalAlignment="Center">
                             <TextBlock Text="Pause search indexing" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                            <TextBlock Text="Stops Windows Search Indexing during the game session to free disk I/O and CPU. Fully restored when the game exits — unless it was already disabled."
+                            <TextBlock Text="Pauses Windows Search Indexing during gameplay to free disk I/O and CPU. Restored on exit."
                                        Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,2,0,0"/>
                         </StackPanel>
                         <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}"
@@ -456,7 +456,7 @@
                         </Grid.ColumnDefinitions>
                         <StackPanel Grid.Column="0" Margin="0,0,24,0" VerticalAlignment="Center">
                             <TextBlock Text="Disable Nagle's algorithm" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                            <TextBlock Text="Sets TcpAckFrequency and TCPNoDelay on all adapters to reduce TCP latency in online games. Restored on game exit."
+                            <TextBlock Text="Reduces TCP latency in online games by disabling packet batching on all adapters. Restored on exit."
                                        Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,2,0,0"/>
                         </StackPanel>
                         <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}"
@@ -547,7 +547,7 @@
                         </Grid.ColumnDefinitions>
                         <StackPanel Grid.Column="0" Margin="0,0,24,0" VerticalAlignment="Center">
                             <TextBlock Text="Battery Pause (laptops)" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                            <TextBlock Text="Asks the BIOS to stop charging the battery while gaming so the full AC adapter wattage feeds CPU + GPU. Reduces heat and avoids power-budget throttling. Charging resumes instantly when boost ends — even after a crash or power loss."
+                            <TextBlock Text="Pauses battery charging while gaming so the AC adapter feeds CPU and GPU directly. Reduces heat and power-budget throttling. Resumes automatically when boost ends."
                                        Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,2,0,0"/>
                             <TextBlock Text="{Binding BatteryPauseStatus}" Style="{StaticResource CaptionText}"
                                        Foreground="{StaticResource AccentBlueBrush}" TextWrapping="Wrap"

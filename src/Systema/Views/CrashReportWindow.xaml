@@ -7,7 +7,7 @@
         Height="700" Width="780"
         MinHeight="540" MinWidth="600"
         WindowStyle="None"
-        Background="#09000E"
+        Background="#0F0F10"
         WindowStartupLocation="CenterScreen"
         Topmost="True">
     <WindowChrome.WindowChrome>
@@ -18,8 +18,8 @@
                       UseAeroCaptionButtons="False"/>
     </WindowChrome.WindowChrome>
 
-    <Border Background="#09000E"
-            BorderBrush="#FF4560"
+    <Border Background="#0F0F10"
+            BorderBrush="#C7556B"
             BorderThickness="1">
 
         <Grid>
@@ -31,7 +31,7 @@
 
             <!-- ── Title Bar ── -->
             <Border Grid.Row="0"
-                    Background="#0B0012"
+                    Background="#0B0B0C"
                     MouseLeftButtonDown="TitleBar_MouseDown">
                 <Grid Margin="16,0">
                     <Grid.ColumnDefinitions>
@@ -40,9 +40,9 @@
                     </Grid.ColumnDefinitions>
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                         <!-- Red warning dot -->
-                        <Ellipse Width="12" Height="12" Fill="#FF4560" Margin="0,0,10,0">
+                        <Ellipse Width="12" Height="12" Fill="#C7556B" Margin="0,0,10,0">
                             <Ellipse.Effect>
-                                <DropShadowEffect Color="#FF4560" BlurRadius="8" ShadowDepth="0"/>
+                                <DropShadowEffect Color="#C7556B" BlurRadius="8" ShadowDepth="0"/>
                             </Ellipse.Effect>
                         </Ellipse>
                         <TextBlock Text="SYSTEMA" FontWeight="Bold" FontSize="13"
@@ -82,8 +82,8 @@
 
                 <!-- Error summary card -->
                 <Border Grid.Row="2"
-                        Background="#160022"
-                        BorderBrush="#FF4560"
+                        Background="#161617"
+                        BorderBrush="#C7556B"
                         BorderThickness="0,0,0,3"
                         CornerRadius="8"
                         Padding="16,12">
@@ -96,7 +96,7 @@
                             <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
                         <TextBlock Grid.Row="0" Text="ERROR" FontSize="10" FontWeight="Bold"
-                                   Foreground="#FF4560" FontFamily="Segoe UI" Margin="0,0,0,0"/>
+                                   Foreground="#C7556B" FontFamily="Segoe UI" Margin="0,0,0,0"/>
                         <TextBlock Grid.Row="2" x:Name="ErrorMessageText"
                                    Text="Unknown error"
                                    FontSize="13" Foreground="#E8EAF0"
@@ -122,8 +122,8 @@
                                FontSize="11" FontWeight="SemiBold"
                                Foreground="#6B7A99" FontFamily="Segoe UI"/>
                     <Border Grid.Row="2"
-                            Background="#11001A"
-                            BorderBrush="#2B0F45"
+                            Background="#171718"
+                            BorderBrush="#262628"
                             BorderThickness="1"
                             CornerRadius="8">
                         <ScrollViewer VerticalScrollBarVisibility="Auto"
@@ -151,8 +151,8 @@
                                FontSize="11" FontWeight="SemiBold"
                                Foreground="#6B7A99" FontFamily="Segoe UI"/>
                     <Border Grid.Row="2"
-                            Background="#11001A"
-                            BorderBrush="#2B0F45"
+                            Background="#171718"
+                            BorderBrush="#262628"
                             BorderThickness="1"
                             CornerRadius="8">
                         <ScrollViewer VerticalScrollBarVisibility="Auto"
@@ -170,7 +170,7 @@
 
             <!-- ── Footer Actions ── -->
             <Border Grid.Row="2"
-                    Background="#0B0012"
+                    Background="#0B0B0C"
                     CornerRadius="0,0,12,12"
                     Padding="24,14">
                 <Grid>
@@ -185,7 +185,7 @@
                                    FontSize="10" Foreground="#6B7A99" FontFamily="Segoe UI"
                                    Margin="0,0,0,3"/>
                         <TextBlock x:Name="CrashPathText"
-                                   FontSize="11" Foreground="#A855F7"
+                                   FontSize="11" Foreground="#5E81AC"
                                    FontFamily="Consolas"
                                    TextTrimming="CharacterEllipsis"
                                    Cursor="Hand"
@@ -200,7 +200,7 @@
                         <Button x:Name="CopyButton"
                                 Content="Copy Report"
                                 Click="CopyReport_Click"
-                                Background="#2B0F45"
+                                Background="#262628"
                                 Foreground="#E8EAF0"
                                 BorderThickness="0"
                                 Padding="14,9"
@@ -217,7 +217,7 @@
                                     </Border>
                                     <ControlTemplate.Triggers>
                                         <Trigger Property="IsMouseOver" Value="True">
-                                            <Setter Property="Background" Value="#3D1060"/>
+                                            <Setter Property="Background" Value="#3A3A3D"/>
                                         </Trigger>
                                     </ControlTemplate.Triggers>
                                 </ControlTemplate>
@@ -228,7 +228,7 @@
                         <Button x:Name="OpenFolderButton"
                                 Content="Open Logs Folder"
                                 Click="OpenLogsFolder_Click"
-                                Background="#2B0F45"
+                                Background="#262628"
                                 Foreground="#E8EAF0"
                                 BorderThickness="0"
                                 Padding="14,9"
@@ -245,7 +245,7 @@
                                     </Border>
                                     <ControlTemplate.Triggers>
                                         <Trigger Property="IsMouseOver" Value="True">
-                                            <Setter Property="Background" Value="#3D1060"/>
+                                            <Setter Property="Background" Value="#3A3A3D"/>
                                         </Trigger>
                                     </ControlTemplate.Triggers>
                                 </ControlTemplate>
@@ -285,7 +285,7 @@
                         <Button x:Name="CloseButton"
                                 Content="Close Systema"
                                 Click="Close_Click"
-                                Background="#FF4560"
+                                Background="#C7556B"
                                 Foreground="White"
                                 BorderThickness="0"
                                 Padding="14,9"
@@ -302,7 +302,7 @@
                                     </Border>
                                     <ControlTemplate.Triggers>
                                         <Trigger Property="IsMouseOver" Value="True">
-                                            <Setter Property="Background" Value="#FF6B82"/>
+                                            <Setter Property="Background" Value="#D6677C"/>
                                         </Trigger>
                                     </ControlTemplate.Triggers>
                                 </ControlTemplate>

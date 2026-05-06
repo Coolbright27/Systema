@@ -41,9 +41,9 @@
                     <StackPanel Grid.Column="0" Margin="0,0,24,0">
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
                             <TextBlock Text="Performance Mode" Style="{StaticResource HeadingMedium}"/>
-                            <Border Background="{StaticResource AccentYellowBrush}" CornerRadius="4"
+                            <Border BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="3"
                                     Padding="6,2" Margin="10,0,0,0" VerticalAlignment="Center">
-                                <TextBlock Text="MODERATE" FontSize="9" FontWeight="Bold" Foreground="#0D0F14"/>
+                                <TextBlock Text="MODERATE" FontSize="9" FontWeight="SemiBold" Foreground="{StaticResource TextSecondaryBrush}"/>
                             </Border>
                         </StackPanel>
                         <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,0,0,10">
@@ -104,9 +104,9 @@
                         <!-- Header -->
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
                             <TextBlock Text="Battery Mode" Style="{StaticResource HeadingMedium}"/>
-                            <Border Background="{StaticResource AccentGreenBrush}" CornerRadius="4"
+                            <Border BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="3"
                                     Padding="6,2" Margin="10,0,0,0" VerticalAlignment="Center">
-                                <TextBlock Text="LAPTOP" FontSize="9" FontWeight="Bold" Foreground="#0D0F14"/>
+                                <TextBlock Text="LAPTOP" FontSize="9" FontWeight="SemiBold" Foreground="{StaticResource TextSecondaryBrush}"/>
                             </Border>
                         </StackPanel>
                         <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,0,0,16">
@@ -291,7 +291,7 @@
                         <!-- AC-power notice — only shown when a mode is selected but the cap is dormant -->
                         <StackPanel Visibility="{Binding IsOnAcWithBatteryPlanActive, Converter={StaticResource BoolToVis}}">
                             <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,4,0,0"/>
-                            <Border Background="#1AFCD34D" BorderBrush="{StaticResource AccentYellowBrush}"
+                            <Border Background="#1AC8A654" BorderBrush="{StaticResource AccentYellowBrush}"
                                     BorderThickness="1" CornerRadius="6" Padding="12,8" Margin="0,12,0,0">
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock Text="&#x26A1;" FontSize="14" Margin="0,0,8,0"
@@ -315,9 +315,9 @@
                 <StackPanel>
                     <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
                         <TextBlock Text="Animation Presets" Style="{StaticResource HeadingMedium}"/>
-                        <Border Background="{StaticResource AccentGreenBrush}" CornerRadius="4"
+                        <Border BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="3"
                                 Padding="6,2" Margin="10,0,0,0" VerticalAlignment="Center">
-                            <TextBlock Text="SAFE" FontSize="9" FontWeight="Bold" Foreground="#0D0F14"/>
+                            <TextBlock Text="SAFE" FontSize="9" FontWeight="SemiBold" Foreground="{StaticResource TextSecondaryBrush}"/>
                         </Border>
                     </StackPanel>
                     <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,0,0,16">
@@ -418,7 +418,7 @@
                                 Margin="0,16,0,0">
                     <TextBlock Style="{StaticResource CaptionText}" Margin="0,0,0,12"
                                Foreground="{StaticResource AccentBlueBrush}">
-                        💡 Not sure? Use the Animation Presets above — they're easier and cover most use cases.
+                        Not sure where to start? Use the Animation Presets above for a one-click setup.
                     </TextBlock>
 
                     <!-- Apply / Cancel — shown at top when changes are pending -->

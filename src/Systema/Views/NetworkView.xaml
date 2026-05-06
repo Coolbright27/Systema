@@ -72,9 +72,9 @@
                     <StackPanel Grid.Column="0" Margin="0,0,24,0">
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
                             <TextBlock Text="DNS Switcher" Style="{DynamicResource HeadingMedium}"/>
-                            <Border Background="{DynamicResource AccentYellowBrush}" CornerRadius="4"
+                            <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="3"
                                     Padding="6,2" Margin="10,0,0,0" VerticalAlignment="Center">
-                                <TextBlock Text="MODERATE" FontSize="9" FontWeight="Bold" Foreground="#0D0F14"/>
+                                <TextBlock Text="MODERATE" FontSize="9" FontWeight="SemiBold" Foreground="{DynamicResource TextSecondaryBrush}"/>
                             </Border>
                         </StackPanel>
                         <TextBlock Style="{DynamicResource CaptionText}" TextWrapping="Wrap" Margin="0,0,0,8">
@@ -107,9 +107,9 @@
                     <StackPanel>
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
                             <TextBlock Text="Ransomware Protection" Style="{DynamicResource HeadingMedium}"/>
-                            <Border Background="{DynamicResource AccentYellowBrush}" CornerRadius="4"
+                            <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="3"
                                     Padding="6,2" Margin="10,0,0,0" VerticalAlignment="Center">
-                                <TextBlock Text="MODERATE" FontSize="9" FontWeight="Bold" Foreground="#0D0F14"/>
+                                <TextBlock Text="MODERATE" FontSize="9" FontWeight="SemiBold" Foreground="{DynamicResource TextSecondaryBrush}"/>
                             </Border>
                         </StackPanel>
                         <TextBlock Text="Controlled Folder Access blocks untrusted programs from changing your personal files — your best defence against ransomware. Only affects unknown programs; your normal apps work fine."

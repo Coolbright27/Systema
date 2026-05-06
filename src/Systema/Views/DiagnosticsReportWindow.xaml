@@ -7,7 +7,7 @@
         Height="820" Width="1060"
         MinHeight="540" MinWidth="760"
         WindowStyle="None"
-        Background="#09000E"
+        Background="#0F0F10"
         WindowStartupLocation="CenterScreen"
         Topmost="False">
     <WindowChrome.WindowChrome>
@@ -18,8 +18,8 @@
                       UseAeroCaptionButtons="False"/>
     </WindowChrome.WindowChrome>
 
-    <Border Background="#09000E"
-            BorderBrush="#A855F7"
+    <Border Background="#0F0F10"
+            BorderBrush="#5E81AC"
             BorderThickness="1">
 
         <Grid>
@@ -31,7 +31,7 @@
 
             <!-- ── Title Bar ── -->
             <Border Grid.Row="0"
-                    Background="#0B0012"
+                    Background="#0B0B0C"
                     MouseLeftButtonDown="TitleBar_MouseDown">
                 <Grid Margin="16,0">
                     <Grid.ColumnDefinitions>
@@ -39,9 +39,9 @@
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                        <Ellipse Width="12" Height="12" Fill="#A855F7" Margin="0,0,10,0">
+                        <Ellipse Width="12" Height="12" Fill="#5E81AC" Margin="0,0,10,0">
                             <Ellipse.Effect>
-                                <DropShadowEffect Color="#A855F7" BlurRadius="8" ShadowDepth="0"/>
+                                <DropShadowEffect Color="#5E81AC" BlurRadius="8" ShadowDepth="0"/>
                             </Ellipse.Effect>
                         </Ellipse>
                         <TextBlock Text="SYSTEMA" FontWeight="Bold" FontSize="13"
@@ -113,41 +113,41 @@
                         <!-- LIVE badge -->
                         <Border Background="#071A0D" CornerRadius="4" Padding="8,4" Margin="0,0,12,0">
                             <StackPanel Orientation="Horizontal">
-                                <Ellipse Width="7" Height="7" Fill="#4ADE80" Margin="0,0,6,0" VerticalAlignment="Center">
+                                <Ellipse Width="7" Height="7" Fill="#5C9C7C" Margin="0,0,6,0" VerticalAlignment="Center">
                                     <Ellipse.Effect>
-                                        <DropShadowEffect Color="#4ADE80" BlurRadius="4" ShadowDepth="0"/>
+                                        <DropShadowEffect Color="#5C9C7C" BlurRadius="4" ShadowDepth="0"/>
                                     </Ellipse.Effect>
                                 </Ellipse>
                                 <TextBlock Text="LIVE" FontSize="10" FontWeight="Bold"
-                                           Foreground="#4ADE80" VerticalAlignment="Center"/>
+                                           Foreground="#5C9C7C" VerticalAlignment="Center"/>
                             </StackPanel>
                         </Border>
                         <TextBlock x:Name="CountText" Text="0 entries"
                                    FontSize="12" Foreground="#6B7A99" VerticalAlignment="Center"
                                    Margin="0,0,16,0"/>
                         <TextBlock x:Name="ErrorCountText" Text="" FontSize="12"
-                                   Foreground="#FF6B6B" FontWeight="SemiBold"
+                                   Foreground="#C7556B" FontWeight="SemiBold"
                                    VerticalAlignment="Center"/>
                     </StackPanel>
 
                     <!-- Right: search + open log file -->
                     <StackPanel Grid.Column="2" Orientation="Horizontal">
                         <!-- Search box -->
-                        <Border Background="#111825" BorderBrush="#2B0F45" BorderThickness="1"
+                        <Border Background="#111825" BorderBrush="#262628" BorderThickness="1"
                                 CornerRadius="5" Margin="0,0,8,0">
                             <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="🔍" FontSize="11" Foreground="#4A5A78"
+                                <TextBlock Text="" FontSize="11" Foreground="#4A5A78"
                                            VerticalAlignment="Center" Margin="8,0,4,0"/>
                                 <TextBox x:Name="SearchBox" Width="170" Height="32"
                                          Background="Transparent" BorderThickness="0"
                                          Foreground="#A8BBDD" FontSize="12" FontFamily="Segoe UI"
-                                         CaretBrush="#A855F7" VerticalContentAlignment="Center"
+                                         CaretBrush="#5E81AC" VerticalContentAlignment="Center"
                                          TextChanged="Search_Changed"
                                          Padding="0,0,8,0"/>
                             </StackPanel>
                         </Border>
                         <!-- Open log file -->
-                        <Button Content="📂  Open Log" Click="OpenLogFile_Click"
+                        <Button Content="Open Log" Click="OpenLogFile_Click"
                                 Background="#1A2235" Foreground="#A8BBDD" BorderThickness="0"
                                 Padding="12,7" Cursor="Hand" FontSize="11">
                             <Button.Template>
@@ -246,21 +246,21 @@
                                     <!-- Warning -->
                                     <DataTrigger Binding="{Binding Level}" Value="Warning">
                                         <Setter TargetName="LevelBadge" Property="Background" Value="#2A1E00"/>
-                                        <Setter TargetName="LevelText"  Property="Foreground" Value="#FCD34D"/>
+                                        <Setter TargetName="LevelText"  Property="Foreground" Value="#C8A654"/>
                                         <Setter TargetName="MsgText"    Property="Foreground" Value="#D4B860"/>
                                     </DataTrigger>
                                     <!-- Error -->
                                     <DataTrigger Binding="{Binding Level}" Value="Error">
                                         <Setter TargetName="RowBorder"  Property="Background" Value="#160808"/>
                                         <Setter TargetName="LevelBadge" Property="Background" Value="#3A0808"/>
-                                        <Setter TargetName="LevelText"  Property="Foreground" Value="#FF6B6B"/>
+                                        <Setter TargetName="LevelText"  Property="Foreground" Value="#C7556B"/>
                                         <Setter TargetName="MsgText"    Property="Foreground" Value="#E05555"/>
                                     </DataTrigger>
                                     <!-- Fatal -->
                                     <DataTrigger Binding="{Binding Level}" Value="Fatal">
                                         <Setter TargetName="RowBorder"  Property="Background" Value="#220000"/>
                                         <Setter TargetName="LevelBadge" Property="Background" Value="#5A0000"/>
-                                        <Setter TargetName="LevelText"  Property="Foreground" Value="#FF3333"/>
+                                        <Setter TargetName="LevelText"  Property="Foreground" Value="#C7556B"/>
                                         <Setter TargetName="MsgText"    Property="Foreground" Value="#FF4444"/>
                                         <Setter TargetName="SrcText"    Property="Foreground" Value="#CC5555"/>
                                     </DataTrigger>
@@ -273,7 +273,7 @@
 
             <!-- ── Footer ── -->
             <Border Grid.Row="2"
-                    Background="#0B0012"
+                    Background="#0B0B0C"
                     CornerRadius="0,0,12,12"
                     Padding="20,12">
                 <Grid>
@@ -284,15 +284,15 @@
 
                     <TextBlock Grid.Column="0" VerticalAlignment="Center"
                                FontSize="11" Foreground="#374560">
-                        Refreshes every <Run Foreground="#A855F7" FontWeight="SemiBold">2 s</Run>.
-                        Showing last <Run Foreground="#A855F7" FontWeight="SemiBold">3 000</Run> entries.
+                        Refreshes every <Run Foreground="#5E81AC" FontWeight="SemiBold">2 s</Run>.
+                        Showing last <Run Foreground="#5E81AC" FontWeight="SemiBold">3 000</Run> entries.
                         Click any row to select · paste into Discord for support.
                     </TextBlock>
 
                     <StackPanel Grid.Column="1" Orientation="Horizontal">
-                        <Button x:Name="CopyFullButton" Content="📄  Copy Full Report"
+                        <Button x:Name="CopyFullButton" Content="Copy Full Report"
                                 Click="CopyFullReport_Click"
-                                Background="#1A3A20" Foreground="#4ADE80"
+                                Background="#1A3A20" Foreground="#5C9C7C"
                                 BorderThickness="0" Padding="16,9"
                                 Cursor="Hand" FontFamily="Segoe UI"
                                 FontWeight="SemiBold" FontSize="13"
@@ -311,7 +311,7 @@
                                 </ControlTemplate>
                             </Button.Template>
                         </Button>
-                        <Button x:Name="CopyButton" Content="📋  Copy Log"
+                        <Button x:Name="CopyButton" Content="Copy Log"
                                 Click="CopyReport_Click"
                                 Background="#0077AA" Foreground="White"
                                 BorderThickness="0" Padding="16,9"
@@ -355,7 +355,7 @@
                         </Button>
                         <Button x:Name="CloseButton" Content="Close"
                                 Click="Close_Click"
-                                Background="#2B0F45" Foreground="#E8EAF0"
+                                Background="#262628" Foreground="#E8EAF0"
                                 BorderThickness="0" Padding="14,9"
                                 Cursor="Hand" FontFamily="Segoe UI" FontSize="13">
                             <Button.Template>
@@ -366,7 +366,7 @@
                                     </Border>
                                     <ControlTemplate.Triggers>
                                         <Trigger Property="IsMouseOver" Value="True">
-                                            <Setter Property="Background" Value="#3D1060"/>
+                                            <Setter Property="Background" Value="#3A3A3D"/>
                                         </Trigger>
                                     </ControlTemplate.Triggers>
                                 </ControlTemplate>
