@@ -5,18 +5,18 @@
     <!-- ============================================================ -->
     <!--  COLORS                                                      -->
     <!-- ============================================================ -->
-    <Color x:Key="BgPrimaryColor">#0D0F14</Color>
-    <Color x:Key="BgSurfaceColor">#161B25</Color>
-    <Color x:Key="BgSidebarColor">#111520</Color>
-    <Color x:Key="BgCardColor">#1A2035</Color>
-    <Color x:Key="AccentBlueColor">#00B4FF</Color>
+    <Color x:Key="BgPrimaryColor">#09000E</Color>
+    <Color x:Key="BgSurfaceColor">#11001A</Color>
+    <Color x:Key="BgSidebarColor">#0B0012</Color>
+    <Color x:Key="BgCardColor">#160022</Color>
+    <Color x:Key="AccentBlueColor">#A855F7</Color>
     <Color x:Key="AccentGreenColor">#00E5A0</Color>
     <Color x:Key="AccentYellowColor">#FFB800</Color>
     <Color x:Key="AccentRedColor">#FF4560</Color>
-    <Color x:Key="TextPrimaryColor">#E8EAF0</Color>
-    <Color x:Key="TextSecondaryColor">#6B7A99</Color>
-    <Color x:Key="BorderColor">#1F2B45</Color>
-    <Color x:Key="HoverColor">#1E2A40</Color>
+    <Color x:Key="TextPrimaryColor">#EDE8F5</Color>
+    <Color x:Key="TextSecondaryColor">#8B78A8</Color>
+    <Color x:Key="BorderColor">#2B0F45</Color>
+    <Color x:Key="HoverColor">#230A38</Color>
 
     <SolidColorBrush x:Key="BgPrimaryBrush" Color="{StaticResource BgPrimaryColor}"/>
     <SolidColorBrush x:Key="BgSurfaceBrush" Color="{StaticResource BgSurfaceColor}"/>
@@ -47,6 +47,13 @@
     <Style x:Key="HeadingMedium" TargetType="TextBlock">
         <Setter Property="FontFamily" Value="{StaticResource MainFont}"/>
         <Setter Property="FontSize" Value="16"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+    </Style>
+
+    <Style x:Key="HeadingSmall" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="{StaticResource MainFont}"/>
+        <Setter Property="FontSize" Value="14"/>
         <Setter Property="FontWeight" Value="SemiBold"/>
         <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
     </Style>
@@ -87,13 +94,13 @@
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter Property="Background" Value="#33C8FF"/>
+                            <Setter Property="Background" Value="#C084FC"/>
                         </Trigger>
                         <Trigger Property="IsPressed" Value="True">
                             <Setter TargetName="Root" Property="Opacity" Value="0.80"/>
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
-                            <Setter Property="Background" Value="#1F2B45"/>
+                            <Setter Property="Background" Value="#1C0A2E"/>
                             <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
@@ -113,6 +120,31 @@
                 <Setter Property="Background" Value="#FF6B82"/>
             </Trigger>
         </Style.Triggers>
+    </Style>
+
+    <!-- ============================================================ -->
+    <!--  EXPANDER BUTTON  (transparent, borderless section header)   -->
+    <!-- ============================================================ -->
+    <Style x:Key="ExpanderButton" TargetType="Button">
+        <Setter Property="Background"                 Value="Transparent"/>
+        <Setter Property="BorderThickness"            Value="0"/>
+        <Setter Property="Padding"                    Value="0"/>
+        <Setter Property="Cursor"                     Value="Hand"/>
+        <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="bg" Background="Transparent" CornerRadius="4" Padding="0">
+                        <ContentPresenter HorizontalAlignment="Stretch"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="bg" Property="Background" Value="#0CFFFFFF"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
     </Style>
 
     <!-- ============================================================ -->
@@ -237,7 +269,7 @@
                             <Setter Property="Background" Value="{StaticResource HoverBrush}"/>
                         </Trigger>
                         <Trigger Property="IsSelected" Value="True">
-                            <Setter Property="Background" Value="#1A3050"/>
+                            <Setter Property="Background" Value="#2A0A45"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -260,7 +292,7 @@
                                 <Thumb>
                                     <Thumb.Template>
                                         <ControlTemplate TargetType="Thumb">
-                                            <Border Background="#2A3A55" CornerRadius="3"/>
+                                            <Border Background="#3D1060" CornerRadius="3"/>
                                         </ControlTemplate>
                                     </Thumb.Template>
                                 </Thumb>
@@ -488,7 +520,7 @@
     </Style>
 
     <Style x:Key="StatusPillGray" TargetType="Border">
-        <Setter Property="Background" Value="#1A2035"/>
+        <Setter Property="Background" Value="#180028"/>
         <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
         <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="CornerRadius" Value="4"/>

@@ -218,7 +218,32 @@ public class SettingsService
     public string BatteryOptimizationMode
     {
         get => ReadString(nameof(BatteryOptimizationMode), defaultValue: "") ?? "";
-        set => WriteString(nameof(BatteryOptimizationMode), value);
+        set
+        {
+            // Guard against corrupt/unknown values — only "" | "balanced" | "max" are valid.
+            if (value != "" && value != "balanced" && value != "max") value = "";
+            WriteString(nameof(BatteryOptimizationMode), value);
+        }
+    }
+
+    /// <summary>
+    /// User explicitly toggled High Performance Mode on. When true, Systema restores
+    /// High Performance every time the user plugs back in after running on battery.
+    /// </summary>
+    public bool PerformanceModeEnabled
+    {
+        get => ReadBool(nameof(PerformanceModeEnabled), defaultValue: false);
+        set => WriteBool(nameof(PerformanceModeEnabled), value);
+    }
+
+    /// <summary>
+    /// The power plan that was active before battery optimization was enabled.
+    /// Persisted so a reboot or hibernate-resume restores the correct plan on plug-in.
+    /// </summary>
+    public string PlanBeforeOptimization
+    {
+        get => ReadString(nameof(PlanBeforeOptimization), defaultValue: "") ?? "";
+        set => WriteString(nameof(PlanBeforeOptimization), value);
     }
 
     // ── Game Booster — per-session actions ────────────────────────────────────
@@ -355,6 +380,71 @@ public class SettingsService
     {
         get => ReadBool(nameof(NtfsLastAccessDisabled), defaultValue: false);
         set => WriteBool(nameof(NtfsLastAccessDisabled), value);
+    }
+
+    // ── Sleep → Hibernate ────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Whether the Sleep → Hibernate feature is currently enabled.
+    /// When true, the laptop hibernates after <see cref="SleepToHibernateMinutes"/> of
+    /// sleep on battery power. Default: false.
+    /// </summary>
+    public bool SleepToHibernateEnabled
+    {
+        get => ReadBool(nameof(SleepToHibernateEnabled), defaultValue: false);
+        set => WriteBool(nameof(SleepToHibernateEnabled), value);
+    }
+
+    /// <summary>
+    /// Sleep → Hibernate timeout in minutes (battery only). Default: 30.
+    /// </summary>
+    public int SleepToHibernateMinutes
+    {
+        get => ReadInt(nameof(SleepToHibernateMinutes), defaultValue: 30);
+        set => WriteInt(nameof(SleepToHibernateMinutes), Math.Max(1, value));
+    }
+
+    /// <summary>
+    /// Whether the Sleep → Hibernate feature is enabled on AC power (plugged in).
+    /// Default: false.
+    /// </summary>
+    public bool SleepToHibernateAcEnabled
+    {
+        get => ReadBool(nameof(SleepToHibernateAcEnabled), defaultValue: false);
+        set => WriteBool(nameof(SleepToHibernateAcEnabled), value);
+    }
+
+    /// <summary>
+    /// Sleep → Hibernate timeout in minutes (AC / plugged-in). Default: 30.
+    /// </summary>
+    public int SleepToHibernateAcMinutes
+    {
+        get => ReadInt(nameof(SleepToHibernateAcMinutes), defaultValue: 30);
+        set => WriteInt(nameof(SleepToHibernateAcMinutes), Math.Max(1, value));
+    }
+
+    // ── Auto-Pilot Mode ───────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Fired (on whatever thread writes the property) whenever <see cref="AutoPilotModeEnabled"/>
+    /// changes. ViewModels subscribe so their <c>IsAutoPilotActive</c> property updates live
+    /// without needing a polling refresh.
+    /// </summary>
+    public static event EventHandler? AutoPilotModeChanged;
+
+    /// <summary>
+    /// When true, Auto-Pilot Mode is active: all Auto-Pilot-managed settings are locked,
+    /// their controls are grayed out in every view, and any drift is auto-healed every 30 s.
+    /// Persisted to HKCU so the mode survives updates and restarts. Default: false.
+    /// </summary>
+    public bool AutoPilotModeEnabled
+    {
+        get => ReadBool(nameof(AutoPilotModeEnabled), defaultValue: false);
+        set
+        {
+            WriteBool(nameof(AutoPilotModeEnabled), value);
+            AutoPilotModeChanged?.Invoke(null, EventArgs.Empty);
+        }
     }
 
     // ── Updates ───────────────────────────────────────────────────────────────

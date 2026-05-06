@@ -7,7 +7,7 @@
         Height="820" Width="1060"
         MinHeight="540" MinWidth="760"
         WindowStyle="None"
-        Background="#0D0F14"
+        Background="#09000E"
         WindowStartupLocation="CenterScreen"
         Topmost="False">
     <WindowChrome.WindowChrome>
@@ -18,8 +18,8 @@
                       UseAeroCaptionButtons="False"/>
     </WindowChrome.WindowChrome>
 
-    <Border Background="#0D0F14"
-            BorderBrush="#00B4FF"
+    <Border Background="#09000E"
+            BorderBrush="#A855F7"
             BorderThickness="1">
 
         <Grid>
@@ -31,7 +31,7 @@
 
             <!-- ── Title Bar ── -->
             <Border Grid.Row="0"
-                    Background="#111520"
+                    Background="#0B0012"
                     MouseLeftButtonDown="TitleBar_MouseDown">
                 <Grid Margin="16,0">
                     <Grid.ColumnDefinitions>
@@ -39,9 +39,9 @@
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                        <Ellipse Width="12" Height="12" Fill="#00B4FF" Margin="0,0,10,0">
+                        <Ellipse Width="12" Height="12" Fill="#A855F7" Margin="0,0,10,0">
                             <Ellipse.Effect>
-                                <DropShadowEffect Color="#00B4FF" BlurRadius="8" ShadowDepth="0"/>
+                                <DropShadowEffect Color="#A855F7" BlurRadius="8" ShadowDepth="0"/>
                             </Ellipse.Effect>
                         </Ellipse>
                         <TextBlock Text="SYSTEMA" FontWeight="Bold" FontSize="13"
@@ -133,7 +133,7 @@
                     <!-- Right: search + open log file -->
                     <StackPanel Grid.Column="2" Orientation="Horizontal">
                         <!-- Search box -->
-                        <Border Background="#111825" BorderBrush="#1F2B45" BorderThickness="1"
+                        <Border Background="#111825" BorderBrush="#2B0F45" BorderThickness="1"
                                 CornerRadius="5" Margin="0,0,8,0">
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="🔍" FontSize="11" Foreground="#4A5A78"
@@ -141,7 +141,7 @@
                                 <TextBox x:Name="SearchBox" Width="170" Height="32"
                                          Background="Transparent" BorderThickness="0"
                                          Foreground="#A8BBDD" FontSize="12" FontFamily="Segoe UI"
-                                         CaretBrush="#00B4FF" VerticalContentAlignment="Center"
+                                         CaretBrush="#A855F7" VerticalContentAlignment="Center"
                                          TextChanged="Search_Changed"
                                          Padding="0,0,8,0"/>
                             </StackPanel>
@@ -273,7 +273,7 @@
 
             <!-- ── Footer ── -->
             <Border Grid.Row="2"
-                    Background="#111520"
+                    Background="#0B0012"
                     CornerRadius="0,0,12,12"
                     Padding="20,12">
                 <Grid>
@@ -284,8 +284,8 @@
 
                     <TextBlock Grid.Column="0" VerticalAlignment="Center"
                                FontSize="11" Foreground="#374560">
-                        Refreshes every <Run Foreground="#00B4FF" FontWeight="SemiBold">2 s</Run>.
-                        Showing last <Run Foreground="#00B4FF" FontWeight="SemiBold">3 000</Run> entries.
+                        Refreshes every <Run Foreground="#A855F7" FontWeight="SemiBold">2 s</Run>.
+                        Showing last <Run Foreground="#A855F7" FontWeight="SemiBold">3 000</Run> entries.
                         Click any row to select · paste into Discord for support.
                     </TextBlock>
 
@@ -355,7 +355,7 @@
                         </Button>
                         <Button x:Name="CloseButton" Content="Close"
                                 Click="Close_Click"
-                                Background="#1F2B45" Foreground="#E8EAF0"
+                                Background="#2B0F45" Foreground="#E8EAF0"
                                 BorderThickness="0" Padding="14,9"
                                 Cursor="Hand" FontFamily="Segoe UI" FontSize="13">
                             <Button.Template>
@@ -366,7 +366,7 @@
                                     </Border>
                                     <ControlTemplate.Triggers>
                                         <Trigger Property="IsMouseOver" Value="True">
-                                            <Setter Property="Background" Value="#2A3A55"/>
+                                            <Setter Property="Background" Value="#3D1060"/>
                                         </Trigger>
                                     </ControlTemplate.Triggers>
                                 </ControlTemplate>

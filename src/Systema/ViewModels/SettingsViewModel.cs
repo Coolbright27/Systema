@@ -36,6 +36,9 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
     private readonly GameBoosterService  _gameBooster;
     private static readonly LoggerService _log = LoggerService.Instance;
 
+    /// <summary>True when Auto-Pilot Mode is on — Start with Windows toggle is grayed out.</summary>
+    public bool IsAutoPilotActive => _settings.AutoPilotModeEnabled;
+
     // Event handlers stored for cleanup in Dispose()
     private readonly Action<string> _onStatusChanged;
     private readonly Action<bool>   _onUpdateAvailableChanged;
@@ -105,7 +108,10 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         }
         catch (Exception ex)
         {
-            KeepRunningStatus = $"Failed: {ex.Message}";
+            KeepRunningStatus = $"Failed to {(value ? "enable" : "disable")} watchdog: {ex.Message}";
+            // Roll the toggle back so the UI reflects the actual state.
+            _keepSystemaRunning = !value;
+            OnPropertyChanged(nameof(KeepSystemaRunning));
         }
     }
 
@@ -445,14 +451,20 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         _updateService.IsDownloadingChanged    += _onIsDownloadingChanged;
         _updateService.DownloadProgressChanged += _onDownloadProgressChanged;
         _updateService.IsReadyToInstallChanged += _onIsReadyToInstallChanged;
+        SettingsService.AutoPilotModeChanged   += OnAutoPilotModeChanged;
     }
+
+    private void OnAutoPilotModeChanged(object? sender, EventArgs e) =>
+        System.Windows.Application.Current?.Dispatcher.BeginInvoke(
+            () => OnPropertyChanged(nameof(IsAutoPilotActive)));
 
     public void Dispose()
     {
-        _updateService.StatusChanged           -= _onStatusChanged;
-        _updateService.UpdateAvailableChanged  -= _onUpdateAvailableChanged;
-        _updateService.IsDownloadingChanged    -= _onIsDownloadingChanged;
-        _updateService.DownloadProgressChanged -= _onDownloadProgressChanged;
-        _updateService.IsReadyToInstallChanged -= _onIsReadyToInstallChanged;
+        _updateService.StatusChanged             -= _onStatusChanged;
+        _updateService.UpdateAvailableChanged    -= _onUpdateAvailableChanged;
+        _updateService.IsDownloadingChanged      -= _onIsDownloadingChanged;
+        _updateService.DownloadProgressChanged   -= _onDownloadProgressChanged;
+        _updateService.IsReadyToInstallChanged   -= _onIsReadyToInstallChanged;
+        SettingsService.AutoPilotModeChanged     -= OnAutoPilotModeChanged;
     }
 }

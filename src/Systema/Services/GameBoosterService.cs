@@ -291,11 +291,28 @@ public sealed class GameBoosterService : IDisposable
     };
 
     // ── Anti-cheat / engine detection ─────────────────────────────────────────
+    //
+    // Used by FindRunningGame() to detect a gaming session via anti-cheat proxy
+    // (when the game exe itself isn't in KnownGameProcesses).
+    //
+    // ALSO used by ApplyBoostOptions() to skip these processes during working-set
+    // trim — kernel-mode AC drivers (Vanguard, EAC, BattlEye, etc.) can intercept
+    // per-process memory API calls (OpenProcess, EmptyWorkingSet) and react with an
+    // unrecoverable AccessViolation that terminates our process, or flag Systema in
+    // the AC's telemetry and trigger a game ban. Never call memory trim APIs on them.
     private static readonly string[] AntiCheatProcesses =
     {
-        "vgc",           // Vanguard
-        "EasyAntiCheat",
-        "BEService",     // BattlEye
+        "vgc",           // Valorant Vanguard (kernel service, always running)
+        "EasyAntiCheat", // Easy Anti-Cheat  (Epic, many titles)
+        "BEService",     // BattlEye         (PUBG, Rainbow Six, Arma, DayZ)
+        "nProtect",      // nProtect GameGuard (Korean MMOs, Lost Ark)
+        "GameMon",       // GameGuard monitor process
+        "PnkBstrA",      // PunkBuster A     (Battlefield, legacy CoD)
+        "PnkBstrB",      // PunkBuster B
+        "FACEITClient",  // FACEIT AC        (CS2 competitive)
+        "mhyprot",       // miHoYo AC        (Genshin Impact, Honkai: Star Rail)
+        "xhunter1",      // XIGNCODE3        (Warface, Black Desert Online)
+        "ESEAClient",    // ESEA             (CS2 competitive platform)
     };
 
     // ── Default services to kill during boost ─────────────────────────────────
@@ -516,6 +533,41 @@ public sealed class GameBoosterService : IDisposable
         _manualBoostTimeoutTimer.Start();
 
         _log.Info("GameBoosterService", "Manual boost enabled (auto-off in 6 hours)");
+    }
+
+    /// <summary>
+    /// Forces a clean deactivation of the boost before a Systema update installs.
+    /// Unlike the normal paths, this deactivates regardless of whether a game is still
+    /// running — we must restore system state before the installer replaces the exe.
+    /// After deactivation, waits up to 8 s so OS service start commands can propagate
+    /// (svc.Start() is fire-and-forget at the SCM level; without this pause the installer
+    /// could replace DLLs while services are still transitioning to Running).
+    /// On return the boost snapshot is deleted and the system is back to pre-boost state.
+    /// </summary>
+    public async Task DeactivateForUpdateAsync()
+    {
+        if (!_boostActive) return;
+
+        _log.Info("GameBoosterService", "Pre-update: deactivating game boost before installer launches");
+
+        // Stop the check timer so it cannot try to re-activate while we're restoring
+        _gameCheckTimer?.Stop();
+        _manualBoostActive = false;
+        _manualBoostTimeoutTimer?.Stop();
+        _manualBoostTimeoutTimer = null;
+
+        // DeactivateBoost() must run off the UI thread (restores services, writes registry)
+        Action? postAction = await Task.Run(() =>
+        {
+            lock (_lock) return DeactivateBoost();
+        }).ConfigureAwait(true);
+        postAction?.Invoke();
+
+        // Give the OS time for service start commands to take effect.
+        // 8 s covers even slow services like WSearch / BITS (typically < 3 s).
+        _log.Info("GameBoosterService", "Pre-update: boost deactivated — waiting for services to start");
+        await Task.Delay(8_000);
+        _log.Info("GameBoosterService", "Pre-update deactivation complete — installer may proceed");
     }
 
     /// <summary>Manually deactivates boost (also cancels the 6-hour timer).</summary>
@@ -1001,6 +1053,17 @@ public sealed class GameBoosterService : IDisposable
                         if (proc.ProcessName.Equals(gameName, StringComparison.OrdinalIgnoreCase)) continue;
                         if (proc.Id <= 4) continue;
                         if (VsyncCriticalProcessNames.Contains(proc.ProcessName))
+                        {
+                            skipped++;
+                            continue;
+                        }
+                        // Never trim anti-cheat processes — kernel-mode AC drivers
+                        // (Vanguard, EAC, BattlEye, etc.) can intercept OpenProcess /
+                        // EmptyWorkingSet on their handles and react with an unrecoverable
+                        // AccessViolationException that terminates the whole process, or
+                        // flag Systema as a threat and cause a game ban.
+                        if (Array.Exists(AntiCheatProcesses, ac =>
+                            proc.ProcessName.Contains(ac, StringComparison.OrdinalIgnoreCase)))
                         {
                             skipped++;
                             continue;

@@ -28,7 +28,7 @@ using Systema.Services;
 
 namespace Systema.ViewModels;
 
-public partial class ToolsViewModel : ObservableObject, IAutoRefreshable
+public partial class ToolsViewModel : ObservableObject, IAutoRefreshable, IDisposable
 {
     // ── Services ──────────────────────────────────────────────────────────────
     private readonly RealtekCleanerService        _realtek;
@@ -40,6 +40,12 @@ public partial class ToolsViewModel : ObservableObject, IAutoRefreshable
     private readonly SystemStabilityService       _stability;
 
     private static readonly LoggerService _log = LoggerService.Instance;
+
+    /// <summary>
+    /// True when Auto-Pilot Mode is active — XAML binds this to IsEnabled (inverted)
+    /// so Auto-Pilot-managed controls are grayed out when the mode is on.
+    /// </summary>
+    public bool IsAutoPilotActive => _settings.AutoPilotModeEnabled;
 
     // Guard to prevent OnXxxChanged callbacks from triggering commands during load
     private bool _loading;
@@ -80,6 +86,26 @@ public partial class ToolsViewModel : ObservableObject, IAutoRefreshable
     [ObservableProperty] private bool _ntfsLastAccessDisabled;
     [ObservableProperty] private bool _isNtfsLastAccessLoading;
 
+    // ── Laptop detection ──────────────────────────────────────────────────────
+    /// <summary>
+    /// True when the system has a battery. Battery-only cards are hidden on desktops.
+    /// </summary>
+    [ObservableProperty] private bool _hasBattery;
+
+    // ── Sleep → Hibernate (battery) ───────────────────────────────────────────
+    [ObservableProperty] private bool _sleepToHibernateEnabled;
+    [ObservableProperty] private bool _isSleepToHibernateLoading;
+    [ObservableProperty] private int  _sleepToHibernateMinutes = 30;
+
+    // ── Sleep → Hibernate (AC / plugged-in) ───────────────────────────────────
+    [ObservableProperty] private bool _sleepToHibernateAcEnabled;
+    [ObservableProperty] private bool _isSleepToHibernateAcLoading;
+    [ObservableProperty] private int  _sleepToHibernateAcMinutes = 30;
+
+    /// <summary>Available timeout options shown in both Sleep → Hibernate ComboBoxes (minutes).</summary>
+    public IReadOnlyList<int> SleepToHibernateOptions { get; } =
+        new[] { 5, 15, 30, 45, 60, 120 };
+
     // ── Constructor ───────────────────────────────────────────────────────────
 
     public ToolsViewModel(
@@ -103,7 +129,15 @@ public partial class ToolsViewModel : ObservableObject, IAutoRefreshable
         foreach (var p in DnsService.Profiles)
             DnsProfiles.Add(p);
         SelectedDnsProfile = DnsProfiles.FirstOrDefault();
+
+        SettingsService.AutoPilotModeChanged += OnAutoPilotModeChanged;
     }
+
+    private void OnAutoPilotModeChanged(object? sender, EventArgs e) =>
+        System.Windows.Application.Current?.Dispatcher.BeginInvoke(
+            () => OnPropertyChanged(nameof(IsAutoPilotActive)));
+
+    public void Dispose() => SettingsService.AutoPilotModeChanged -= OnAutoPilotModeChanged;
 
     // ── IAutoRefreshable ──────────────────────────────────────────────────────
 
@@ -121,8 +155,28 @@ public partial class ToolsViewModel : ObservableObject, IAutoRefreshable
             string currentDns      = await Task.Run(() => _dnsService.GetCurrentDns());
             bool savedParkingPref  = _settings.CoreParkingEnabled;
             bool previewBlocked    = await Task.Run(() => _wuTweaks.IsPreviewUpdatesBlocked());
+
+            // Auto-heal: if the saved preference says "ON" but the registry policy is
+            // incomplete (e.g. AllowOptionalContent was added in a newer Systema version),
+            // silently re-apply the full block so monthly preview CUs are also suppressed.
+            if (!previewBlocked && _settings.BlockPreviewUpdatesEnabled && !IsPreviewUpdatesLoading)
+            {
+                _log.Info("ToolsViewModel", "Preview block incomplete — re-applying full policy (auto-heal)");
+                var heal = await _wuTweaks.BlockPreviewUpdatesAsync();
+                previewBlocked = heal.Success;
+            }
+
             bool fastStartupOff    = await Task.Run(() => _stability.IsFastStartupDisabled());
             bool ntfsLastAccessOff = await Task.Run(() => _stability.IsNtfsLastAccessDisabled());
+            bool hasBattery        = await Task.Run(() => _stability.HasBattery());
+            bool sleepHibernateOn  = await Task.Run(() => _stability.IsSleepToHibernateEnabled());
+            int  sleepHibMinutes   = sleepHibernateOn
+                ? await Task.Run(() => _stability.GetSleepToHibernateMinutes())
+                : _settings.SleepToHibernateMinutes;
+            bool sleepHibAcOn      = await Task.Run(() => _stability.IsSleepToHibernateAcEnabled());
+            int  sleepHibAcMinutes = sleepHibAcOn
+                ? await Task.Run(() => _stability.GetSleepToHibernateAcMinutes())
+                : _settings.SleepToHibernateAcMinutes;
 
             Application.Current?.Dispatcher.BeginInvoke(() =>
             {
@@ -131,6 +185,7 @@ public partial class ToolsViewModel : ObservableObject, IAutoRefreshable
                 {
                     HasRealtekHardware  = hasRealtek;
                     CurrentDns          = currentDns;
+                    HasBattery          = hasBattery;
 
                     // Core parking: reflect saved preference OR actual system state.
                     CoreParkingEnforced = savedParkingPref || parkingOn;
@@ -144,6 +199,14 @@ public partial class ToolsViewModel : ObservableObject, IAutoRefreshable
                     // Fast Startup + NTFS: reflect actual registry state.
                     FastStartupDisabled    = fastStartupOff;
                     NtfsLastAccessDisabled = ntfsLastAccessOff;
+
+                    // Sleep → Hibernate (battery): reflect actual powercfg state.
+                    SleepToHibernateEnabled = sleepHibernateOn;
+                    SleepToHibernateMinutes = sleepHibMinutes;
+
+                    // Sleep → Hibernate (AC): reflect actual powercfg state.
+                    SleepToHibernateAcEnabled = sleepHibAcOn;
+                    SleepToHibernateAcMinutes = sleepHibAcMinutes;
 
                     // Scan Realtek entries only if we haven't scanned yet in this session
                     // and Realtek hardware is detected
@@ -463,5 +526,107 @@ public partial class ToolsViewModel : ObservableObject, IAutoRefreshable
             _loading = false;
         }
         finally { IsNtfsLastAccessLoading = false; }
+    }
+
+    // ── Sleep → Hibernate (battery) callbacks ────────────────────────────────
+
+    partial void OnSleepToHibernateEnabledChanged(bool value)
+    {
+        if (_loading) return;
+        _ = ExecuteSleepToHibernateToggleAsync(value);
+    }
+
+    partial void OnSleepToHibernateMinutesChanged(int value)
+    {
+        if (_loading) return;
+        _settings.SleepToHibernateMinutes = value;
+        if (SleepToHibernateEnabled && !IsSleepToHibernateLoading)
+            _ = ExecuteSleepToHibernateToggleAsync(enable: true);
+    }
+
+    private async Task ExecuteSleepToHibernateToggleAsync(bool enable)
+    {
+        IsSleepToHibernateLoading = true;
+        int minutes = SleepToHibernateMinutes;
+        StatusMessage = enable
+            ? $"Enabling Sleep → Hibernate ({minutes} min on battery)..."
+            : "Disabling Sleep → Hibernate on battery (restoring Windows default)...";
+        try
+        {
+            TweakResult result = enable
+                ? await _stability.EnableSleepToHibernateAsync(minutes)
+                : await _stability.DisableSleepToHibernateAsync();
+
+            StatusMessage = result.Message;
+
+            if (result.Success)
+                _settings.SleepToHibernateEnabled = enable;
+            else
+            {
+                _loading = true;
+                SleepToHibernateEnabled = !enable;
+                _loading = false;
+            }
+        }
+        catch (Exception ex)
+        {
+            _log.Error("ToolsViewModel", $"SleepToHibernate (DC) toggle ({enable}) failed", ex);
+            StatusMessage = $"Error: {ex.Message}";
+            _loading = true;
+            SleepToHibernateEnabled = !enable;
+            _loading = false;
+        }
+        finally { IsSleepToHibernateLoading = false; }
+    }
+
+    // ── Sleep → Hibernate (AC) callbacks ─────────────────────────────────────
+
+    partial void OnSleepToHibernateAcEnabledChanged(bool value)
+    {
+        if (_loading) return;
+        _ = ExecuteSleepToHibernateAcToggleAsync(value);
+    }
+
+    partial void OnSleepToHibernateAcMinutesChanged(int value)
+    {
+        if (_loading) return;
+        _settings.SleepToHibernateAcMinutes = value;
+        if (SleepToHibernateAcEnabled && !IsSleepToHibernateAcLoading)
+            _ = ExecuteSleepToHibernateAcToggleAsync(enable: true);
+    }
+
+    private async Task ExecuteSleepToHibernateAcToggleAsync(bool enable)
+    {
+        IsSleepToHibernateAcLoading = true;
+        int minutes = SleepToHibernateAcMinutes;
+        StatusMessage = enable
+            ? $"Enabling Sleep → Hibernate ({minutes} min on AC)..."
+            : "Disabling Sleep → Hibernate on AC (restoring Windows default)...";
+        try
+        {
+            TweakResult result = enable
+                ? await _stability.EnableSleepToHibernateAcAsync(minutes)
+                : await _stability.DisableSleepToHibernateAcAsync();
+
+            StatusMessage = result.Message;
+
+            if (result.Success)
+                _settings.SleepToHibernateAcEnabled = enable;
+            else
+            {
+                _loading = true;
+                SleepToHibernateAcEnabled = !enable;
+                _loading = false;
+            }
+        }
+        catch (Exception ex)
+        {
+            _log.Error("ToolsViewModel", $"SleepToHibernate (AC) toggle ({enable}) failed", ex);
+            StatusMessage = $"Error: {ex.Message}";
+            _loading = true;
+            SleepToHibernateAcEnabled = !enable;
+            _loading = false;
+        }
+        finally { IsSleepToHibernateAcLoading = false; }
     }
 }

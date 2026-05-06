@@ -6,29 +6,6 @@
 
     <UserControl.Resources>
         <conv:BoolToVisibilityConverter x:Key="BoolToVis"/>
-
-        <!-- Transparent, borderless clickable button used for section expanders -->
-        <Style x:Key="ExpanderButton" TargetType="Button">
-            <Setter Property="Background"                 Value="Transparent"/>
-            <Setter Property="BorderThickness"            Value="0"/>
-            <Setter Property="Padding"                    Value="0"/>
-            <Setter Property="Cursor"                     Value="Hand"/>
-            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="bg" Background="Transparent" CornerRadius="4" Padding="0">
-                            <ContentPresenter HorizontalAlignment="Stretch"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="bg" Property="Background" Value="#0CFFFFFF"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
     </UserControl.Resources>
 
     <ScrollViewer VerticalScrollBarVisibility="Auto">
@@ -57,163 +34,278 @@
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="200"/>
+                        <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
 
-                    <!-- Left: description + active plan -->
+                    <!-- Left: title + description + status -->
                     <StackPanel Grid.Column="0" Margin="0,0,24,0">
-                        <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                            <TextBlock Text="Power Plan" Style="{StaticResource HeadingMedium}"/>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                            <TextBlock Text="Performance Mode" Style="{StaticResource HeadingMedium}"/>
                             <Border Background="{StaticResource AccentYellowBrush}" CornerRadius="4"
                                     Padding="6,2" Margin="10,0,0,0" VerticalAlignment="Center">
                                 <TextBlock Text="MODERATE" FontSize="9" FontWeight="Bold" Foreground="#0D0F14"/>
                             </Border>
                         </StackPanel>
-                        <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,0,0,12">
-                            Switches to a high-performance power plan so your CPU runs at full speed and doesn't throttle itself down.
-                            Best for gaming and heavy workloads. Click "Restore Balanced" to go back to the default plan.
+                        <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,0,0,10">
+                            Keeps your CPU at full speed — no throttling during gaming or heavy work.
+                            Automatically restores every time you plug back in after running on battery.
                         </TextBlock>
                         <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="Active Plan: " Style="{StaticResource CaptionText}"/>
+                            <TextBlock Text="Active plan: " Style="{StaticResource CaptionText}"/>
                             <TextBlock Text="{Binding ActivePowerPlan}" Style="{StaticResource CaptionText}"
                                        Foreground="{StaticResource AccentBlueBrush}" FontWeight="SemiBold"/>
                         </StackPanel>
-                        <!-- Battery Plan badge — shown when a battery optimization was applied -->
-                        <StackPanel Orientation="Horizontal" Margin="0,4,0,0"
-                                    Visibility="{Binding IsBatteryPlanActive, Converter={StaticResource BoolToVis}}">
-                            <Border Background="{StaticResource AccentGreenBrush}" CornerRadius="3"
-                                    Padding="5,1" Margin="0,0,6,0" VerticalAlignment="Center">
-                                <TextBlock Text="BATTERY PLAN" FontSize="9" FontWeight="Bold" Foreground="#0D0F14"/>
-                            </Border>
-                            <TextBlock Text="Battery optimization active" Style="{StaticResource CaptionText}"
-                                       Foreground="{StaticResource AccentGreenBrush}" VerticalAlignment="Center"/>
-                        </StackPanel>
                     </StackPanel>
 
-                    <!-- Right: plan buttons -->
-                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                        <Button Content="Activate Performance" Margin="0,0,0,10"
-                                Command="{Binding SetHighPerformanceCommand}"
-                                Visibility="{Binding IsHighPerformancePlanActive, Converter={StaticResource BoolToVis}, ConverterParameter=Invert}"
-                                Style="{StaticResource PrimaryButton}"/>
-                        <Button Content="Activate Performance" Margin="0,0,0,10"
-                                Command="{Binding SetHighPerformanceCommand}"
-                                Visibility="{Binding IsHighPerformancePlanActive, Converter={StaticResource BoolToVis}}"
-                                Style="{StaticResource GhostButton}"/>
-                        <Button Content="Restore Balanced"
-                                Command="{Binding SetBalancedCommand}"
-                                Visibility="{Binding IsHighPerformancePlanActive, Converter={StaticResource BoolToVis}}"
-                                Style="{StaticResource PrimaryButton}"/>
-                        <Button Content="Restore Balanced"
-                                Command="{Binding SetBalancedCommand}"
-                                Visibility="{Binding IsHighPerformancePlanActive, Converter={StaticResource BoolToVis}, ConverterParameter=Invert}"
-                                Style="{StaticResource GhostButton}"/>
+                    <!-- Right: single toggle -->
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBlock VerticalAlignment="Center" Margin="0,0,10,0" FontSize="13">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Text"       Value="Off"/>
+                                    <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding PerformanceModeEnabled}" Value="True">
+                                            <Setter Property="Text"       Value="On"/>
+                                            <Setter Property="Foreground" Value="{StaticResource AccentGreenBrush}"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                        <CheckBox IsChecked="{Binding PerformanceModeEnabled, Mode=TwoWay}"
+                                  VerticalAlignment="Center"
+                                  ToolTipService.ShowOnDisabled="True">
+                            <CheckBox.Style>
+                                <Style TargetType="CheckBox" BasedOn="{StaticResource ToggleSwitch}">
+                                    <Setter Property="ToolTip" Value="When on: High Performance plan stays active and restores automatically after charging"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsAutoPilotActive}" Value="True">
+                                            <Setter Property="IsEnabled" Value="False"/>
+                                            <Setter Property="Opacity"   Value="0.4"/>
+                                            <Setter Property="ToolTip"   Value="Controlled by Auto-Pilot — turn off Auto-Pilot Mode to change"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </CheckBox.Style>
+                        </CheckBox>
                     </StackPanel>
                 </Grid>
             </Border>
 
-            <!-- ══════════════════════════════════════════════════ Battery Optimization Card
-                 Wraps its own spacer so collapsing the StackPanel leaves no dead space. -->
+            <!-- ══════════════════════════════════════════════════ Battery Mode Card
+                 Hidden on desktops — collapses cleanly when no battery is detected. -->
             <StackPanel Grid.Row="3"
                         Visibility="{Binding HasBattery, Converter={StaticResource BoolToVis}}">
                 <Border Height="16"/>
                 <Border Style="{StaticResource Card}">
                     <StackPanel>
+
                         <!-- Header -->
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-                            <TextBlock Text="Battery Optimization" Style="{StaticResource HeadingMedium}"/>
+                            <TextBlock Text="Battery Mode" Style="{StaticResource HeadingMedium}"/>
                             <Border Background="{StaticResource AccentGreenBrush}" CornerRadius="4"
                                     Padding="6,2" Margin="10,0,0,0" VerticalAlignment="Center">
                                 <TextBlock Text="LAPTOP" FontSize="9" FontWeight="Bold" Foreground="#0D0F14"/>
                             </Border>
                         </StackPanel>
                         <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,0,0,16">
-                            These settings reduce battery drain by limiting CPU boost. They only apply
-                            to this system because a battery was detected.
+                            Limits CPU speed on battery only — plugged-in performance is always unchanged.
                         </TextBlock>
 
-                        <!-- Balanced on Battery -->
-                        <Grid Margin="0,0,0,4">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <StackPanel Grid.Column="0" Margin="0,0,20,0" VerticalAlignment="Center">
-                                <TextBlock Text="Balanced on Battery"
-                                           Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                                <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,3,0,0">
-                                    Caps CPU speed on battery to stop turbo-boost from draining the battery.
-                                    Plugged-in performance is unchanged.
-                                </TextBlock>
-                            </StackPanel>
-                            <Button Grid.Column="1" Content="Apply" VerticalAlignment="Center"
-                                    Padding="20,9"
-                                    Command="{Binding SetBalancedOnBatteryCommand}"
-                                    Style="{StaticResource GhostButton}"/>
-                        </Grid>
+                        <!-- ── Mode rows — tap a row to select ── -->
 
-                        <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,12,0,12"/>
+                        <!-- Off -->
+                        <Button Command="{Binding SetBatteryModeCommand}" CommandParameter=""
+                                Padding="0,10,0,10" BorderThickness="0"
+                                HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
+                                ToolTipService.ShowOnDisabled="True">
+                            <Button.Style>
+                                <Style TargetType="Button" BasedOn="{StaticResource GhostButton}">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsAutoPilotActive}" Value="True">
+                                            <Setter Property="IsEnabled" Value="False"/>
+                                            <Setter Property="Opacity"   Value="0.4"/>
+                                            <Setter Property="ToolTip"   Value="Controlled by Auto-Pilot — turn off Auto-Pilot Mode to change"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="20"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" Margin="0,0,16,0">
+                                    <TextBlock Text="Off" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
+                                    <TextBlock Text="No limits — full performance all the time."
+                                               Style="{StaticResource CaptionText}" Margin="0,2,0,0"/>
+                                </StackPanel>
+                                <!-- Radio dot -->
+                                <Border Grid.Column="1" Width="18" Height="18" CornerRadius="9"
+                                        BorderThickness="2" VerticalAlignment="Center" HorizontalAlignment="Center">
+                                    <Border.Style>
+                                        <Style TargetType="Border">
+                                            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
+                                            <Setter Property="Background"  Value="Transparent"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding ActiveBatteryMode}" Value="">
+                                                    <Setter Property="BorderBrush" Value="{StaticResource AccentBlueBrush}"/>
+                                                    <Setter Property="Background"  Value="{StaticResource AccentBlueBrush}"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
+                                    <Ellipse Width="8" Height="8" Fill="white" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                        <Ellipse.Style>
+                                            <Style TargetType="Ellipse">
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding ActiveBatteryMode}" Value="">
+                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Ellipse.Style>
+                                    </Ellipse>
+                                </Border>
+                            </Grid>
+                        </Button>
 
-                        <!-- Max Battery Life -->
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <StackPanel Grid.Column="0" Margin="0,0,20,0" VerticalAlignment="Center">
-                                <TextBlock Text="Max Battery Life"
-                                           Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                                <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,3,0,0">
-                                    Caps CPU to 80% on battery for maximum battery savings.
-                                    Plugged-in performance is unchanged.
-                                </TextBlock>
-                            </StackPanel>
-                            <Button Grid.Column="1" Content="Apply" VerticalAlignment="Center"
-                                    Padding="20,9"
-                                    Command="{Binding SetMaxBatteryLifeCommand}"
-                                    Style="{StaticResource GhostButton}"/>
-                        </Grid>
+                        <Border Height="1" Background="{StaticResource BorderBrush}"/>
 
-                        <!-- AC power notice — only shown when battery plan is active but plugged in -->
+                        <!-- Balanced No Turbo -->
+                        <Button Command="{Binding SetBatteryModeCommand}" CommandParameter="balanced"
+                                Padding="0,10,0,10" BorderThickness="0"
+                                HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
+                                ToolTipService.ShowOnDisabled="True">
+                            <Button.Style>
+                                <Style TargetType="Button" BasedOn="{StaticResource GhostButton}">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsAutoPilotActive}" Value="True">
+                                            <Setter Property="IsEnabled" Value="False"/>
+                                            <Setter Property="Opacity"   Value="0.4"/>
+                                            <Setter Property="ToolTip"   Value="Controlled by Auto-Pilot — turn off Auto-Pilot Mode to change"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="20"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" Margin="0,0,16,0">
+                                    <TextBlock Text="Balanced No Turbo" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
+                                    <TextBlock Text="Stops turbo-boost on battery. Plugged-in performance unchanged."
+                                               Style="{StaticResource CaptionText}" Margin="0,2,0,0"/>
+                                </StackPanel>
+                                <Border Grid.Column="1" Width="18" Height="18" CornerRadius="9"
+                                        BorderThickness="2" VerticalAlignment="Center" HorizontalAlignment="Center">
+                                    <Border.Style>
+                                        <Style TargetType="Border">
+                                            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
+                                            <Setter Property="Background"  Value="Transparent"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding ActiveBatteryMode}" Value="balanced">
+                                                    <Setter Property="BorderBrush" Value="{StaticResource AccentBlueBrush}"/>
+                                                    <Setter Property="Background"  Value="{StaticResource AccentBlueBrush}"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
+                                    <Ellipse Width="8" Height="8" Fill="white" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                        <Ellipse.Style>
+                                            <Style TargetType="Ellipse">
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding ActiveBatteryMode}" Value="balanced">
+                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Ellipse.Style>
+                                    </Ellipse>
+                                </Border>
+                            </Grid>
+                        </Button>
+
+                        <Border Height="1" Background="{StaticResource BorderBrush}"/>
+
+                        <!-- Max Life -->
+                        <Button Command="{Binding SetBatteryModeCommand}" CommandParameter="max"
+                                Padding="0,10,0,10" BorderThickness="0"
+                                HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
+                                ToolTipService.ShowOnDisabled="True">
+                            <Button.Style>
+                                <Style TargetType="Button" BasedOn="{StaticResource GhostButton}">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsAutoPilotActive}" Value="True">
+                                            <Setter Property="IsEnabled" Value="False"/>
+                                            <Setter Property="Opacity"   Value="0.4"/>
+                                            <Setter Property="ToolTip"   Value="Controlled by Auto-Pilot — turn off Auto-Pilot Mode to change"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="20"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" Margin="0,0,16,0">
+                                    <TextBlock Text="Max Life" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
+                                    <TextBlock Text="Caps CPU to 80% on battery for maximum runtime. Plugged-in performance unchanged."
+                                               Style="{StaticResource CaptionText}" Margin="0,2,0,0"/>
+                                </StackPanel>
+                                <Border Grid.Column="1" Width="18" Height="18" CornerRadius="9"
+                                        BorderThickness="2" VerticalAlignment="Center" HorizontalAlignment="Center">
+                                    <Border.Style>
+                                        <Style TargetType="Border">
+                                            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
+                                            <Setter Property="Background"  Value="Transparent"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding ActiveBatteryMode}" Value="max">
+                                                    <Setter Property="BorderBrush" Value="{StaticResource AccentBlueBrush}"/>
+                                                    <Setter Property="Background"  Value="{StaticResource AccentBlueBrush}"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
+                                    <Ellipse Width="8" Height="8" Fill="white" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                        <Ellipse.Style>
+                                            <Style TargetType="Ellipse">
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding ActiveBatteryMode}" Value="max">
+                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Ellipse.Style>
+                                    </Ellipse>
+                                </Border>
+                            </Grid>
+                        </Button>
+
+                        <!-- AC-power notice — only shown when a mode is selected but the cap is dormant -->
                         <StackPanel Visibility="{Binding IsOnAcWithBatteryPlanActive, Converter={StaticResource BoolToVis}}">
-                            <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,12,0,12"/>
+                            <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,4,0,0"/>
                             <Border Background="#1AFCD34D" BorderBrush="{StaticResource AccentYellowBrush}"
-                                    BorderThickness="1" CornerRadius="6" Padding="12,8">
+                                    BorderThickness="1" CornerRadius="6" Padding="12,8" Margin="0,12,0,0">
                                 <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="⚡" FontSize="14" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                    <TextBlock Text="&#x26A1;" FontSize="14" Margin="0,0,8,0"
+                                               FontFamily="Segoe UI, Segoe UI Symbol"
+                                               VerticalAlignment="Center"/>
                                     <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap"
                                                Foreground="{StaticResource AccentYellowBrush}">
-                                        <Run FontWeight="SemiBold" Text="On AC power — "/>
-                                        <Run Text="battery optimization is configured but inactive. The CPU cap only applies when running on battery."/>
+                                        <Run FontWeight="SemiBold" Text="On AC — "/>
+                                        <Run Text="the CPU cap is configured but dormant. It activates automatically the next time you unplug."/>
                                     </TextBlock>
                                 </StackPanel>
                             </Border>
                         </StackPanel>
 
-                        <!-- Stop Battery Optimization — only shown when active -->
-                        <StackPanel Visibility="{Binding IsBatteryPlanActive, Converter={StaticResource BoolToVis}}">
-                            <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,12,0,12"/>
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <StackPanel Grid.Column="0" Margin="0,0,20,0" VerticalAlignment="Center">
-                                    <TextBlock Text="Stop Battery Optimization"
-                                               Style="{StaticResource BodyText}" FontWeight="SemiBold"
-                                               Foreground="{StaticResource AccentYellowBrush}"/>
-                                    <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,3,0,0">
-                                        Removes the CPU cap and restores full battery performance.
-                                    </TextBlock>
-                                </StackPanel>
-                                <Button Grid.Column="1" Content="Stop" VerticalAlignment="Center"
-                                        Padding="20,9"
-                                        Command="{Binding StopBatteryOptimizationCommand}"
-                                        Style="{StaticResource GhostButton}"
-                                        BorderBrush="{StaticResource AccentYellowBrush}"
-                                        Foreground="{StaticResource AccentYellowBrush}"/>
-                            </Grid>
-                        </StackPanel>
                     </StackPanel>
                 </Border>
             </StackPanel>

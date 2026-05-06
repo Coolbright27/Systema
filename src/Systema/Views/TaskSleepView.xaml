@@ -26,45 +26,14 @@
                                 <Setter TargetName="bg" Property="Background" Value="#1AFFFFFF"/>
                             </Trigger>
                             <Trigger Property="IsChecked" Value="True">
-                                <Setter TargetName="bg" Property="Background" Value="#2563EB"/>
-                                <Setter TargetName="bg" Property="BorderBrush" Value="#3B82F6"/>
+                                <Setter TargetName="bg" Property="Background" Value="#7C3AED"/>
+                                <Setter TargetName="bg" Property="BorderBrush" Value="#8B5CF6"/>
                                 <Setter Property="Foreground" Value="White"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
-        </Style>
-
-        <!-- Transparent, borderless clickable button (used for the Advanced expander header) -->
-        <Style x:Key="ExpanderButton" TargetType="Button">
-            <Setter Property="Background"       Value="Transparent"/>
-            <Setter Property="BorderThickness"  Value="0"/>
-            <Setter Property="Padding"          Value="0"/>
-            <Setter Property="Cursor"           Value="Hand"/>
-            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="bg" Background="Transparent" CornerRadius="4" Padding="0">
-                            <ContentPresenter HorizontalAlignment="Stretch"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="bg" Property="Background" Value="#0CFFFFFF"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
-        <!-- Inline section label used inside the Advanced card -->
-        <Style x:Key="SectionLabel" TargetType="TextBlock">
-            <Setter Property="FontSize"   Value="10"/>
-            <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
-            <Setter Property="Margin"     Value="0,0,0,12"/>
         </Style>
 
         <!-- TextBox style for threshold inputs -->
@@ -90,10 +59,7 @@
                 <StackPanel Grid.Column="0">
                     <TextBlock Text="Task Sleep" Style="{StaticResource HeadingLarge}"/>
                     <TextBlock Text="Automatically sleeps apps you're not using to keep your PC fast and quiet."
-                               Margin="0,6,0,0"
-                               Style="{StaticResource BodyText}"
-                               Foreground="{StaticResource TextSecondaryBrush}"
-                               TextWrapping="Wrap"/>
+                               Style="{StaticResource CaptionText}" Margin="0,4,0,0"/>
                 </StackPanel>
 
                 <CheckBox Grid.Column="1"
@@ -272,7 +238,7 @@
                                                             <Setter Property="Background" Value="#78350F"/>
                                                         </DataTrigger>
                                                         <DataTrigger Binding="{Binding StatusLabel}" Value="Active">
-                                                            <Setter Property="Background" Value="#1E3A5F"/>
+                                                            <Setter Property="Background" Value="#2D1060"/>
                                                         </DataTrigger>
                                                         <DataTrigger Binding="{Binding StatusLabel}" Value="Pending">
                                                             <Setter Property="Background" Value="#2D1B5E"/>
@@ -293,7 +259,7 @@
                                                                 <Setter Property="Foreground" Value="#FCD34D"/>
                                                             </DataTrigger>
                                                             <DataTrigger Binding="{Binding StatusLabel}" Value="Active">
-                                                                <Setter Property="Foreground" Value="#60A5FA"/>
+                                                                <Setter Property="Foreground" Value="#C084FC"/>
                                                             </DataTrigger>
                                                             <DataTrigger Binding="{Binding StatusLabel}" Value="Pending">
                                                                 <Setter Property="Foreground" Value="#C084FC"/>
@@ -468,13 +434,13 @@
                                                             <Setter Property="Background" Value="#78350F"/>
                                                         </DataTrigger>
                                                         <DataTrigger Binding="{Binding Action}" Value="Brief Wake">
-                                                            <Setter Property="Background" Value="#1E3A5F"/>
+                                                            <Setter Property="Background" Value="#2D1060"/>
                                                         </DataTrigger>
                                                         <DataTrigger Binding="{Binding Action}" Value="Deep Wake">
                                                             <Setter Property="Background" Value="#1E1B4B"/>
                                                         </DataTrigger>
                                                         <DataTrigger Binding="{Binding Action}" Value="Tray Wake">
-                                                            <Setter Property="Background" Value="#1E3A5F"/>
+                                                            <Setter Property="Background" Value="#2D1060"/>
                                                         </DataTrigger>
                                                         <DataTrigger Binding="{Binding Action}" Value="Tray Deep Wake">
                                                             <Setter Property="Background" Value="#1E1B4B"/>
@@ -522,13 +488,13 @@
                                                                 <Setter Property="Foreground" Value="#FCD34D"/>
                                                             </DataTrigger>
                                                             <DataTrigger Binding="{Binding Action}" Value="Brief Wake">
-                                                                <Setter Property="Foreground" Value="#60A5FA"/>
+                                                                <Setter Property="Foreground" Value="#C084FC"/>
                                                             </DataTrigger>
                                                             <DataTrigger Binding="{Binding Action}" Value="Deep Wake">
                                                                 <Setter Property="Foreground" Value="#A5B4FC"/>
                                                             </DataTrigger>
                                                             <DataTrigger Binding="{Binding Action}" Value="Tray Wake">
-                                                                <Setter Property="Foreground" Value="#60A5FA"/>
+                                                                <Setter Property="Foreground" Value="#C084FC"/>
                                                             </DataTrigger>
                                                             <DataTrigger Binding="{Binding Action}" Value="Tray Deep Wake">
                                                                 <Setter Property="Foreground" Value="#A5B4FC"/>
@@ -931,8 +897,7 @@
                     <TextBlock Text="WAKE TIMING" Style="{StaticResource SectionLabel}" Margin="0,0,0,12"/>
 
                     <TextBlock Text="Minimized apps"
-                               FontSize="14" FontWeight="Bold"
-                               Foreground="{StaticResource TextPrimaryBrush}"
+                               Style="{StaticResource HeadingSmall}"
                                Margin="0,0,0,12"/>
 
                     <Grid Margin="0,0,0,10">
@@ -968,8 +933,7 @@
                     </Grid>
 
                     <TextBlock Text="Tray apps"
-                               FontSize="14" FontWeight="Bold"
-                               Foreground="{StaticResource TextPrimaryBrush}"
+                               Style="{StaticResource HeadingSmall}"
                                Margin="0,0,0,12"/>
 
                     <Grid Margin="0,0,0,10">
@@ -1006,8 +970,7 @@
 
                     <!-- Deep sleep — shared threshold for minimized + tray apps. -->
                     <TextBlock Text="Deep sleep"
-                               FontSize="14" FontWeight="Bold"
-                               Foreground="{StaticResource TextPrimaryBrush}"
+                               Style="{StaticResource HeadingSmall}"
                                Margin="0,0,0,12"/>
 
                     <Grid Margin="0,0,0,10">

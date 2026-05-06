@@ -4,7 +4,7 @@
         Title="Select Services to Kill"
         Width="620" Height="520"
         WindowStartupLocation="CenterOwner"
-        Background="#161B25"
+        Background="#11001A"
         Foreground="#E2E8F0"
         BorderBrush="#2D3748" BorderThickness="1"
         ResizeMode="NoResize">

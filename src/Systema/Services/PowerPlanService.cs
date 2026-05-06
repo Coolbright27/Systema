@@ -292,6 +292,25 @@ public class PowerPlanService
         });
     }
 
+    /// <summary>
+    /// Removes the battery CPU cap (restores 100% max processor state) without touching
+    /// the active power plan. Called when Battery Mode is set to "Off" so that
+    /// Performance Mode controls the plan independently.
+    /// </summary>
+    public Task<TweakResult> RemoveBatteryCpuCapAsync()
+    {
+        return RunOnLargeStackAsync<TweakResult>(() =>
+        {
+            try
+            {
+                RestoreMaxProcessorState();
+                _log.Info("PowerPlanService", "Battery CPU cap removed — plan unchanged");
+                return TweakResult.Ok("Battery CPU cap removed.");
+            }
+            catch (Exception ex) { return TweakResult.FromException(ex); }
+        });
+    }
+
     /// <summary>Removes the 80% DC processor cap — restores 100% max state on battery.</summary>
     public void RestoreMaxProcessorState()
     {

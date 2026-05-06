@@ -30,6 +30,9 @@ public partial class GameBoosterViewModel : ObservableObject, IAutoRefreshable, 
     private readonly SettingsService    _settings;
     private static readonly LoggerService _log = LoggerService.Instance;
 
+    /// <summary>True when Auto-Pilot Mode is on — master Game Boost switch is grayed out.</summary>
+    public bool IsAutoPilotActive => _settings.AutoPilotModeEnabled;
+
     // Event handlers stored for cleanup in Dispose()
     private readonly Action<string> _onBoostActivated;
     private readonly Action         _onBoostDeactivated;
@@ -71,6 +74,18 @@ public partial class GameBoosterViewModel : ObservableObject, IAutoRefreshable, 
     [ObservableProperty] private bool   _pauseChargingOnBoost;
     [ObservableProperty] private string _batteryPauseStatus    = "Detecting hardware support…";
     [ObservableProperty] private bool   _batteryPauseAvailable;
+    /// <summary>True when a battery is detected — hides the entire section on desktops.</summary>
+    [ObservableProperty] private bool   _isBatteryPresent = true; // default true so section shows during detection
+
+    /// <summary>
+    /// True when both the High Performance power plan boost AND Battery Optimization are
+    /// active simultaneously. These two settings conflict: during a game session the High
+    /// Performance plan overrides whatever power limits Battery Optimization set, leading
+    /// to unpredictable CPU/battery behaviour on AC-connected laptops.
+    /// Used by GameBoosterView.xaml to show an inline warning beneath the toggle.
+    /// </summary>
+    public bool IsHighPerfConflictActive =>
+        HighPerfPowerPlan && _settings.BatteryOptimizationMode != "";
 
     /// <summary>Persists and applies the master switch immediately — no Save click needed.</summary>
     partial void OnGameBoosterEnabledChanged(bool value)
@@ -79,6 +94,13 @@ public partial class GameBoosterViewModel : ObservableObject, IAutoRefreshable, 
         _gameBooster.SetEnabled(value);
         if (!value) { BoostActive = false; ActiveGameName = "—"; }
         StatusMessage = value ? "Game Booster enabled." : "Game Booster disabled — no games will be detected.";
+    }
+
+    // Recompute the conflict flag whenever the High Perf toggle changes so the warning
+    // banner in the UI appears/disappears immediately without a round-trip to settings.
+    partial void OnHighPerfPowerPlanChanged(bool value)
+    {
+        OnPropertyChanged(nameof(IsHighPerfConflictActive));
     }
 
     // ── Expander state ─────────────────────────────────────────────────────────
@@ -128,10 +150,11 @@ public partial class GameBoosterViewModel : ObservableObject, IAutoRefreshable, 
                 StatusMessage = "Manual boost auto-disabled after 6 hours.";
             });
 
-        _gameBooster.BoostActivated      += _onBoostActivated;
-        _gameBooster.BoostDeactivated    += _onBoostDeactivated;
+        _gameBooster.BoostActivated        += _onBoostActivated;
+        _gameBooster.BoostDeactivated      += _onBoostDeactivated;
         _gameBooster.GamesInstalledChanged += _onGamesInstalledChanged;
-        _gameBooster.ManualBoostTimedOut += _onManualBoostTimedOut;
+        _gameBooster.ManualBoostTimedOut   += _onManualBoostTimedOut;
+        SettingsService.AutoPilotModeChanged += OnAutoPilotModeChanged;
 
         try
         {
@@ -158,6 +181,7 @@ public partial class GameBoosterViewModel : ObservableObject, IAutoRefreshable, 
                 {
                     BatteryPauseStatus    = msg;
                     BatteryPauseAvailable = support == BatteryPauseSupport.Supported;
+                    IsBatteryPresent      = support != BatteryPauseSupport.NotALaptop;
                     if (!BatteryPauseAvailable && PauseChargingOnBoost)
                     {
                         // User had toggle on but device no longer supports it (e.g.
@@ -178,7 +202,18 @@ public partial class GameBoosterViewModel : ObservableObject, IAutoRefreshable, 
 
     public Task RefreshAsync()
     {
-        // Called by MainViewModel's DispatcherTimer — already on UI thread
+        // Called by MainViewModel's DispatcherTimer — already on UI thread.
+        // Re-sync GameBoosterEnabled from settings so the master switch reflects
+        // the persisted value even when Auto-Pilot toggled it in this session (M-3 fix).
+        // Use SetProperty directly on the backing field to raise OnPropertyChanged
+        // without triggering OnGameBoosterEnabledChanged (which calls SetEnabled +
+        // writes a status message and must not fire during a background refresh).
+        // MVVMTK0034 suppressed intentionally — bypassing the partial callback is the goal.
+#pragma warning disable MVVMTK0034
+        SetProperty(ref _gameBoosterEnabled, _settings.GameBoosterEnabled,
+            nameof(GameBoosterEnabled));
+#pragma warning restore MVVMTK0034
+
         BoostActive        = _gameBooster.BoostActive;
         ManualBoostEnabled = _gameBooster.ManualBoostActive;
         if (_gameBooster.ManualBoostActive)
@@ -371,6 +406,7 @@ public partial class GameBoosterViewModel : ObservableObject, IAutoRefreshable, 
         OnPropertyChanged(nameof(DisableSearchIndexingOnBoost));
         OnPropertyChanged(nameof(PauseChargingOnBoost));
         OnPropertyChanged(nameof(GameBoosterEnabled));
+        OnPropertyChanged(nameof(IsHighPerfConflictActive));
 
         var killList = _gameBooster.GetKillList();
         KillListItems.Clear();
@@ -384,12 +420,17 @@ public partial class GameBoosterViewModel : ObservableObject, IAutoRefreshable, 
         }
     }
 
+    private void OnAutoPilotModeChanged(object? sender, EventArgs e) =>
+        System.Windows.Application.Current?.Dispatcher.BeginInvoke(
+            () => OnPropertyChanged(nameof(IsAutoPilotActive)));
+
     public void Dispose()
     {
-        _gameBooster.BoostActivated      -= _onBoostActivated;
-        _gameBooster.BoostDeactivated    -= _onBoostDeactivated;
+        _gameBooster.BoostActivated        -= _onBoostActivated;
+        _gameBooster.BoostDeactivated      -= _onBoostDeactivated;
         _gameBooster.GamesInstalledChanged -= _onGamesInstalledChanged;
-        _gameBooster.ManualBoostTimedOut -= _onManualBoostTimedOut;
+        _gameBooster.ManualBoostTimedOut   -= _onManualBoostTimedOut;
+        SettingsService.AutoPilotModeChanged -= OnAutoPilotModeChanged;
     }
 
     private void OnBoostActivated(string gameName)

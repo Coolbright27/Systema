@@ -126,6 +126,14 @@ public class UpdateService : IDisposable
     /// </summary>
     public volatile bool IsGameModeActive;
 
+    /// <summary>
+    /// Optional async hook called just before the installer is launched.
+    /// Wire this up in App.xaml.cs to deactivate Game Boost cleanly so the
+    /// system is fully restored before the installer replaces Systema.exe on disk.
+    /// Exceptions from the hook are swallowed — a failed hook never blocks the update.
+    /// </summary>
+    public Func<Task>? PreShutdownAsync { get; set; }
+
     /// <summary>True while the installer .exe is being downloaded.</summary>
     public bool IsDownloading { get { lock (_downloadLock) return _isDownloading; } }
 
@@ -510,8 +518,26 @@ public class UpdateService : IDisposable
         try
         {
             _log.Info("AutoUpdate", $"Launching silent installer: {path}");
-            OnStatus("Installing update silently — Systema will restart shortly...");
 
+            // Pre-shutdown hook — if Game Boost is active, deactivate it cleanly and
+            // wait for services to restore before the installer replaces Systema.exe.
+            // This prevents the new version from finding the system in a half-boosted
+            // state and "forgetting" the original pre-boost settings.
+            if (PreShutdownAsync != null)
+            {
+                try
+                {
+                    OnStatus("Stopping Game Boost before update — restoring your system...");
+                    await PreShutdownAsync();
+                }
+                catch (Exception ex)
+                {
+                    // Non-fatal: a failed hook must never block the update.
+                    _log.Warn("AutoUpdate", $"Pre-shutdown hook failed (update will proceed anyway): {ex.Message}");
+                }
+            }
+
+            OnStatus("Installing update silently — Systema will restart shortly...");
             LaunchSilentInstaller(path);
 
             // Small pause so the status text is visible before shutdown

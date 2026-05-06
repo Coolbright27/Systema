@@ -91,6 +91,13 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
     [ObservableProperty] private int    _autoPilotPendingCount;
     [ObservableProperty] private string _autoPilotButtonText = "Checking…";
 
+    /// <summary>
+    /// Auto-Pilot Mode — when true, all Auto-Pilot-managed settings across every
+    /// tab are locked (grayed out) and auto-healed every 30 s if they drift.
+    /// Persisted to HKCU so the mode survives app updates and restarts.
+    /// </summary>
+    [ObservableProperty] private bool _autoPilotModeEnabled;
+
     // Throttle: re-check auto-pilot status at most once every 30s during refresh ticks
     private DateTime _lastAutoPilotCheck = DateTime.MinValue;
     private int      _autoPilotCheckInFlight; // Interlocked flag
@@ -124,6 +131,9 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
         _settings       = settings;
         _optFeatures    = optFeatures;
         _stability      = stability;
+
+        // Restore persisted mode — no PropertyChanged callback fires on field-init.
+        _autoPilotModeEnabled = _settings.AutoPilotModeEnabled;
 
         _ = InitAsync();
     }
@@ -360,18 +370,33 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
                 });
             });
 
-            // All registry/powercfg calls are done — now update the UI thread properties
-            AutoPilotPendingCount = pending;
-            IsAutoPilotApplied    = pending == 0;
-            AutoPilotButtonText   = IsAutoPilotApplied
-                ? "✓  All Optimized"
-                : $"Optimize Now  ({pending} item{(pending == 1 ? "" : "s")})";
+            // All registry/powercfg calls are done.
+            // RunOnLargeStackAsync continuations run on a ThreadPool thread, so ALL
+            // ObservableCollection mutations and UI-property writes must be marshalled
+            // back to the UI thread — otherwise WPF raises InvalidOperationException.
+            Application.Current?.Dispatcher.BeginInvoke(() =>
+            {
+                AutoPilotPendingCount = pending;
+                IsAutoPilotApplied    = pending == 0;
+                AutoPilotButtonText   = pending == 0
+                    ? "✓  All settings applied"
+                    : $"Apply settings once  ({pending} item{(pending == 1 ? "" : "s")})";
 
-            AutoPilotChecklist.Clear();
-            foreach (var item in items)
-                AutoPilotChecklist.Add(item);
+                AutoPilotChecklist.Clear();
+                foreach (var item in items)
+                    AutoPilotChecklist.Add(item);
 
-            RunAutoPilotCommand.NotifyCanExecuteChanged();
+                RunAutoPilotCommand.NotifyCanExecuteChanged();
+
+                // Auto-Pilot Mode enforcement: if the mode is on and any setting drifted
+                // (e.g. a Windows update reverted a policy), re-apply automatically.
+                if (_settings.AutoPilotModeEnabled && pending > 0 && !IsAutoPilotRunning)
+                {
+                    _log.Info("DashboardViewModel",
+                        $"Auto-Pilot Mode: {pending} setting(s) drifted — re-applying automatically");
+                    _ = RunAutoPilotAsync();
+                }
+            });
         }
         catch (Exception ex)
         {
@@ -379,11 +404,34 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
         }
     }
 
+    // ── Auto-Pilot Mode toggle ────────────────────────────────────────────────
+
+    /// <summary>
+    /// Fires when the user toggles Auto-Pilot Mode on or off.
+    /// ON  → persists, broadcasts to all ViewModels, immediately runs a full AutoPilot
+    ///        pass so settings are applied right away.
+    /// OFF → persists and broadcasts; no further action (settings stay as-is, just unlocked).
+    /// </summary>
+    partial void OnAutoPilotModeEnabledChanged(bool value)
+    {
+        _settings.AutoPilotModeEnabled = value;
+        // The SettingsService.AutoPilotModeEnabled setter fires AutoPilotModeChanged automatically,
+        // which propagates IsAutoPilotActive to VisualVm / ToolsVm / GameBoosterVm / SettingsVm.
+        _log.Info("DashboardViewModel",
+            value ? "Auto-Pilot Mode ON — applying settings and locking controls"
+                  : "Auto-Pilot Mode OFF — controls unlocked");
+
+        if (value)
+            _ = RunAutoPilotAsync();
+    }
+
     // ── Auto-Pilot run ────────────────────────────────────────────────────────
 
     [RelayCommand(CanExecute = nameof(CanRunAutoPilot))]
     private async Task RunAutoPilotAsync()
     {
+        // Guard against concurrent invocations (relay command CanExecute + direct calls).
+        if (IsAutoPilotRunning) return;
         IsAutoPilotRunning  = true;
         AutoPilotButtonText = "Optimizing…";
         RunAutoPilotCommand.NotifyCanExecuteChanged();
@@ -403,6 +451,11 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
 
             // 3. High Performance power plan
             await _powerPlan.SetHighPerformanceAsync();
+            // Persist the toggle so VisualViewModel shows it as ON and re-applies
+            // HP at every subsequent startup (hibernate-resume, app restart after
+            // update, etc.). Without this line the plan reverts to Balanced on
+            // restart because VisualViewModel only reads this setting at init.
+            _settings.PerformanceModeEnabled = true;
             _log.Info("DashboardViewModel", "Power plan → High Performance");
 
             // 4. Balanced on battery (if applicable) — set the persisted setting and apply
@@ -478,12 +531,10 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
         }
     }
 
-    private bool CanRunAutoPilot() => !IsAutoPilotRunning && !IsAutoPilotApplied;
+    // "Apply settings once" is always available — never gated on IsAutoPilotApplied.
+    private bool CanRunAutoPilot() => !IsAutoPilotRunning;
 
-    // Notify the command when the gate properties change
+    // The only gate property is IsAutoPilotRunning — notify when it changes.
     partial void OnIsAutoPilotRunningChanged(bool value) =>
-        RunAutoPilotCommand.NotifyCanExecuteChanged();
-
-    partial void OnIsAutoPilotAppliedChanged(bool value) =>
         RunAutoPilotCommand.NotifyCanExecuteChanged();
 }

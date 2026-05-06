@@ -35,7 +35,7 @@
                 <RowDefinition Height="Auto"/>  <!-- 4: auto-pilot card -->
                 <RowDefinition Height="20"/>    <!-- 5: spacer -->
                 <RowDefinition Height="Auto"/>  <!-- 6: napping card -->
-                <RowDefinition Height="16"/>    <!-- 7: spacer -->
+                <RowDefinition Height="20"/>    <!-- 7: spacer -->
                 <RowDefinition Height="Auto"/>  <!-- 8: footer info bar -->
             </Grid.RowDefinitions>
 
@@ -80,14 +80,25 @@
             <Grid Grid.Row="2">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="12"/>
+                    <ColumnDefinition Width="16"/>
                     <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="12"/>
+                    <ColumnDefinition Width="16"/>
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
 
-                <!-- â”€â”€ Task Sleep pill â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
-                <Border Grid.Column="0" Style="{StaticResource Card}" Padding="16,14">
+                <!-- ── Task Sleep pill ───────────────────────────────────────── -->
+                <Border Grid.Column=”0” Padding=”16,14”>
+                    <Border.Style>
+                        <Style TargetType=”Border” BasedOn=”{StaticResource Card}”>
+                            <Setter Property=”BorderThickness” Value=”3,1,1,1”/>
+                            <Setter Property=”BorderBrush”     Value=”{StaticResource BorderBrush}”/>
+                            <Style.Triggers>
+                                <DataTrigger Binding=”{Binding TaskSleepActive}” Value=”True”>
+                                    <Setter Property=”BorderBrush” Value=”{StaticResource AccentGreenBrush}”/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
                     <StackPanel>
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
                             <Ellipse>
@@ -119,8 +130,22 @@
                     </StackPanel>
                 </Border>
 
-                <!-- â”€â”€ Game Boost pill â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
-                <Border Grid.Column="2" Style="{StaticResource Card}" Padding="16,14">
+                <!-- ── Game Boost pill ───────────────────────────────────────── -->
+                <Border Grid.Column=”2” Padding=”16,14”>
+                    <Border.Style>
+                        <Style TargetType=”Border” BasedOn=”{StaticResource Card}”>
+                            <Setter Property=”BorderThickness” Value=”3,1,1,1”/>
+                            <Setter Property=”BorderBrush”     Value=”{StaticResource BorderBrush}”/>
+                            <Style.Triggers>
+                                <DataTrigger Binding=”{Binding GamesDetected}” Value=”True”>
+                                    <Setter Property=”BorderBrush” Value=”{StaticResource AccentBlueBrush}”/>
+                                </DataTrigger>
+                                <DataTrigger Binding=”{Binding GameBoostActive}” Value=”True”>
+                                    <Setter Property=”BorderBrush” Value=”{StaticResource AccentGreenBrush}”/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
                     <StackPanel>
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
                             <Ellipse>
@@ -161,8 +186,19 @@
                     </StackPanel>
                 </Border>
 
-                <!-- â”€â”€ Privacy pill â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
-                <Border Grid.Column="4" Style="{StaticResource Card}" Padding="16,14">
+                <!-- ── Privacy pill ──────────────────────────────────────────── -->
+                <Border Grid.Column=”4” Padding=”16,14”>
+                    <Border.Style>
+                        <Style TargetType=”Border” BasedOn=”{StaticResource Card}”>
+                            <Setter Property=”BorderThickness” Value=”3,1,1,1”/>
+                            <Setter Property=”BorderBrush”     Value=”{StaticResource AccentYellowBrush}”/>
+                            <Style.Triggers>
+                                <DataTrigger Binding=”{Binding DataCollectionBlocked}” Value=”True”>
+                                    <Setter Property=”BorderBrush” Value=”{StaticResource AccentGreenBrush}”/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
                     <StackPanel>
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
                             <Ellipse>
@@ -233,8 +269,8 @@
                                     <Grid Margin="0,0,0,7">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="18"/>
-                                            <ColumnDefinition Width="165"/>
-                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*" MinWidth="60"/>
                                         </Grid.ColumnDefinitions>
 
                                         <!-- Tick / cross -->
@@ -256,7 +292,7 @@
 
                                         <!-- Label -->
                                         <TextBlock Grid.Column="1" Text="{Binding Label}"
-                                                   FontWeight="SemiBold">
+                                                   FontWeight="SemiBold" Margin="0,0,10,0">
                                             <TextBlock.Style>
                                                 <Style TargetType="TextBlock" BasedOn="{StaticResource CheckLabel}">
                                                     <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
@@ -329,28 +365,34 @@
                         <!-- Divider -->
                         <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,4,0,10"/>
 
-                        <!-- Apply Once ghost button -->
+                        <!-- Apply Once — prominent primary button when not yet applied -->
                         <Button Command="{Binding RunAutoPilotCommand}"
-                                Style="{StaticResource GhostButton}"
-                                HorizontalAlignment="Left" Padding="0,4">
+                                Style="{StaticResource PrimaryButton}"
+                                HorizontalAlignment="Stretch" Padding="12,9"
+                                Visibility="{Binding IsAutoPilotApplied, Converter={StaticResource BoolToVis}, ConverterParameter=Invert}">
                             <TextBlock Text="{Binding AutoPilotButtonText}"
-                                       FontSize="12" Foreground="{StaticResource AccentBlueBrush}"/>
+                                       FontSize="13" FontWeight="SemiBold"/>
                         </Button>
 
-                        <!-- Loading indicator -->
-                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" Margin="0,6,0,6"
-                                    Visibility="{Binding IsAutoPilotRunning, Converter={StaticResource BoolToVis}}">
-                            <Ellipse Width="7" Height="7" Fill="{StaticResource AccentBlueBrush}"
-                                     Margin="0,0,6,0" VerticalAlignment="Center"/>
-                            <TextBlock Text="Applying settings..." Style="{StaticResource CaptionText}"
-                                       Foreground="{StaticResource AccentBlueBrush}" VerticalAlignment="Center"/>
-                        </StackPanel>
+                        <!-- Apply Once — green ghost when already applied -->
+                        <Button Command="{Binding RunAutoPilotCommand}"
+                                Style="{StaticResource GhostButton}"
+                                HorizontalAlignment="Stretch" Padding="12,9"
+                                Visibility="{Binding IsAutoPilotApplied, Converter={StaticResource BoolToVis}}">
+                            <TextBlock Text="{Binding AutoPilotButtonText}"
+                                       FontSize="12" FontWeight="SemiBold"
+                                       Foreground="{StaticResource AccentGreenBrush}"/>
+                        </Button>
 
-                        <TextBlock Margin="0,8,0,0" TextWrapping="Wrap"
-                                   Style="{StaticResource CaptionText}"
-                                   Foreground="{StaticResource TextSecondaryBrush}">
-                            All changes are reversible from their individual tabs.
-                        </TextBlock>
+                        <!-- Loading indicator — animated progress bar -->
+                        <StackPanel Margin="0,8,0,0"
+                                    Visibility="{Binding IsAutoPilotRunning, Converter={StaticResource BoolToVis}}">
+                            <ProgressBar IsIndeterminate="True" Height="3" Margin="0,0,0,5"
+                                         Background="Transparent"
+                                         Foreground="{StaticResource AccentBlueBrush}"/>
+                            <TextBlock Text="Applying optimizations…" Style="{StaticResource CaptionText}"
+                                       Foreground="{StaticResource AccentBlueBrush}"/>
+                        </StackPanel>
                     </StackPanel>
                 </Grid>
             </Border>
@@ -408,7 +450,8 @@
                             </ItemsControl.ItemsPanel>
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
-                                    <Border Background="#11001A" BorderBrush="{StaticResource BorderBrush}"
+                                    <Border Background="{StaticResource BgSurfaceBrush}"
+                                            BorderBrush="{StaticResource BorderBrush}"
                                             BorderThickness="1" CornerRadius="20" Padding="10,4" Margin="0,0,7,7">
                                         <StackPanel Orientation="Horizontal">
                                             <Ellipse Width="6" Height="6" Fill="{StaticResource AccentBlueBrush}"
@@ -422,8 +465,7 @@
                         </ItemsControl>
 
                         <!-- Empty state: Task Sleep on but nothing napping -->
-                        <TextBlock FontStyle="Italic"
-                                   Visibility="{Binding TaskSleepActive, Converter={StaticResource BoolToVis}}">
+                        <TextBlock Visibility="{Binding TaskSleepActive, Converter={StaticResource BoolToVis}}">
                             <TextBlock.Style>
                                 <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionText}">
                                     <Setter Property="Foreground"  Value="{StaticResource TextSecondaryBrush}"/>
@@ -449,22 +491,22 @@
                                    Foreground="{StaticResource TextSecondaryBrush}" FontFamily="Segoe UI"/>
 
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-                            <Ellipse Width="5" Height="5" Fill="{StaticResource AccentBlueBrush}"
+                            <Ellipse Width="7" Height="7" Fill="{StaticResource AccentBlueBrush}"
                                      VerticalAlignment="Center" Margin="0,0,7,0"/>
                             <TextBlock Text="Minimized apps" Style="{StaticResource CaptionText}"/>
                         </StackPanel>
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-                            <Ellipse Width="5" Height="5" Fill="{StaticResource AccentBlueBrush}"
+                            <Ellipse Width="7" Height="7" Fill="{StaticResource AccentBlueBrush}"
                                      VerticalAlignment="Center" Margin="0,0,7,0"/>
                             <TextBlock Text="System tray apps" Style="{StaticResource CaptionText}"/>
                         </StackPanel>
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-                            <Ellipse Width="5" Height="5" Fill="{StaticResource AccentBlueBrush}"
+                            <Ellipse Width="7" Height="7" Fill="{StaticResource AccentBlueBrush}"
                                      VerticalAlignment="Center" Margin="0,0,7,0"/>
                             <TextBlock Text="High-CPU background tasks" Style="{StaticResource CaptionText}"/>
                         </StackPanel>
                         <StackPanel Orientation="Horizontal">
-                            <Ellipse Width="5" Height="5" Fill="{StaticResource AccentGreenBrush}"
+                            <Ellipse Width="7" Height="7" Fill="{StaticResource AccentGreenBrush}"
                                      VerticalAlignment="Center" Margin="0,0,7,0"/>
                             <TextBlock Text="Games always protected" Style="{StaticResource CaptionText}"
                                        Foreground="{StaticResource AccentGreenBrush}"/>
