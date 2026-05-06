@@ -7,29 +7,6 @@
 
     <UserControl.Resources>
         <conv:BoolToVisibilityConverter x:Key="BoolToVis"/>
-
-        <!-- Transparent, borderless clickable button used for section expanders -->
-        <Style x:Key="ExpanderButton" TargetType="Button">
-            <Setter Property="Background"                 Value="Transparent"/>
-            <Setter Property="BorderThickness"            Value="0"/>
-            <Setter Property="Padding"                    Value="0"/>
-            <Setter Property="Cursor"                     Value="Hand"/>
-            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="bg" Background="Transparent" CornerRadius="4" Padding="0">
-                            <ContentPresenter HorizontalAlignment="Stretch"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="bg" Property="Background" Value="#0CFFFFFF"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
     </UserControl.Resources>
 
     <ScrollViewer VerticalScrollBarVisibility="Auto">
@@ -67,7 +44,7 @@
                                 <TextBlock Text="ADVANCED" FontSize="9" FontWeight="Bold" Foreground="White"/>
                             </Border>
                         </StackPanel>
-                        <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" MaxWidth="500">
+                        <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap">
                             Stops Windows from quietly sending usage statistics and diagnostics to Microsoft in the background.
                             Your internet, Windows Update, and security features are not affected.
                             You can allow collection again at any time.
@@ -90,15 +67,21 @@
                         </TextBlock>
                     </StackPanel>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                        <Button Command="{Binding ToggleTelemetryKillerCommand}">
+                        <Button Command="{Binding ToggleTelemetryKillerCommand}"
+                                ToolTipService.ShowOnDisabled="True">
                             <Button.Style>
                                 <Style TargetType="Button" BasedOn="{StaticResource DangerButton}">
                                     <Setter Property="Content" Value="Stop Data Collection"/>
                                     <Style.Triggers>
                                         <DataTrigger Binding="{Binding TelemetryKillerActive}" Value="True">
-                                            <Setter Property="Content" Value="Allow Data Collection"/>
+                                            <Setter Property="Content"    Value="Allow Data Collection"/>
                                             <Setter Property="Background" Value="{StaticResource AccentYellowBrush}"/>
                                             <Setter Property="Foreground" Value="#0D0F14"/>
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding IsAutoPilotActive}" Value="True">
+                                            <Setter Property="IsEnabled" Value="False"/>
+                                            <Setter Property="Opacity"   Value="0.4"/>
+                                            <Setter Property="ToolTip"   Value="Controlled by Auto-Pilot — turn off Auto-Pilot Mode to change"/>
                                         </DataTrigger>
                                     </Style.Triggers>
                                 </Style>
@@ -194,7 +177,7 @@
                                                     <TextBlock Text="{Binding DisplayName}"
                                                                Style="{StaticResource BodyText}" Margin="0,0,8,0"/>
                                                     <Border CornerRadius="4" Padding="5,1" VerticalAlignment="Center"
-                                                            Background="#1A00B4FF" BorderBrush="{StaticResource AccentBlueBrush}"
+                                                            Background="#1AA855F7" BorderBrush="{StaticResource AccentBlueBrush}"
                                                             BorderThickness="1"
                                                             Visibility="{Binding IsRecommended, Converter={StaticResource BoolToVis}}">
                                                         <TextBlock Text="RECOMMENDED" FontSize="8" FontWeight="Bold"

@@ -75,6 +75,21 @@ public partial class App : Application
         // Keep the app alive even when no window is visible (tray mode)
         ShutdownMode = ShutdownMode.OnExplicitShutdown;
 
+        // ── Uninstall cleanup mode ──────────────────────────────────────────────
+        // Triggered by Inno Setup [UninstallRun]: Systema.exe --cleanup
+        // Runs BEFORE the installer deletes files so all services are available.
+        // Skips single-instance mutex, CrashGuard, UI, and everything else.
+        if (e.Args.Contains("--cleanup"))
+        {
+            Log.Info("App", "=== --cleanup: restoring Windows settings before uninstall ===");
+            if (AdminCheckService.IsAdmin())
+                UninstallCleanupService.RunCleanup();
+            else
+                Log.Warn("App", "Cleanup skipped — not running as administrator");
+            Shutdown(0);
+            return;
+        }
+
         Log.Info("App", "Starting Systema...");
 
         // ── Single-instance guard ──
@@ -157,6 +172,23 @@ public partial class App : Application
             // is available in the background without the user having to opt-in.
             ApplyFirstRunDefaults(settingsService);
 
+            // ── Watchdog self-heal ──
+            // If the user has "Keep Systema Running" enabled but the Task Scheduler task
+            // was wiped by an update or OS reset, silently re-create it now.
+            if (settingsService.KeepSystemaRunning && !watchdogService.IsEnabled)
+            {
+                try
+                {
+                    var exePath = System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName ?? string.Empty;
+                    watchdogService.Enable(exePath);
+                    Log.Info("App", "Watchdog task re-registered (was missing on startup)");
+                }
+                catch (Exception ex)
+                {
+                    Log.Warn("App", $"Could not re-register watchdog on startup: {ex.Message}");
+                }
+            }
+
             // TaskSleepViewModel must be created before DashboardViewModel (dashboard reads its live process list)
             var taskSleepVm   = new TaskSleepViewModel();
 
@@ -165,7 +197,7 @@ public partial class App : Application
                 memoryService, dnsService, powerPlanService,
                 wuTweaksService, coreParkingService, settingsService, optFeatures, stabilityService);
 
-            var memoryVm      = new MemoryViewModel(memoryService, startupService);
+            var memoryVm      = new MemoryViewModel(memoryService, startupService, settingsService);
             var servicesVm    = new ServicesViewModel(serviceControl, optFeatures, restoreService, settingsService);
             var visualVm      = new VisualViewModel(animationService, powerPlanService, settingsService);
             var gameBoosterVm = new GameBoosterViewModel(gameboosterService, settingsService);
@@ -198,11 +230,24 @@ public partial class App : Application
             // ── Auto-updater ──
             // Starts the background loop: checks on startup (20 s delay), re-checks
             // every 2 days, and installs silently when CPU has been idle for 5 minutes.
+            // PreShutdownAsync fires first (deactivates Game Boost if active so the system
+            // is cleanly restored before the installer replaces Systema.exe on disk).
             // ShutdownRequested fires just before the installer launches.
+            _updateService.PreShutdownAsync = async () =>
+            {
+                if (!gameboosterService.BoostActive) return;
+                Log.Info("App", "Pre-update: Game Boost is active — deactivating before installer launches");
+                await gameboosterService.DeactivateForUpdateAsync();
+                Log.Info("App", "Pre-update: Game Boost deactivated — proceeding with update install");
+            };
             _updateService.ShutdownRequested += () =>
                 Dispatcher.Invoke(() =>
                 {
                     Log.Info("App", "Auto-updater requesting shutdown to apply update");
+                    // Disable the watchdog BEFORE shutting down so it cannot relaunch Systema
+                    // while the installer is replacing the exe on disk.
+                    try { watchdogService.Disable(); }
+                    catch (Exception ex) { Log.Warn("App", $"Could not disable watchdog before update: {ex.Message}"); }
                     CrashGuard.Stop();
                     _trayService?.Dispose();
                     Shutdown(0);

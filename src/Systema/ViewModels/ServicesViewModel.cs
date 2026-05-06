@@ -25,7 +25,7 @@ using Systema.Services;
 
 namespace Systema.ViewModels;
 
-public partial class ServicesViewModel : ObservableObject, IAutoRefreshable
+public partial class ServicesViewModel : ObservableObject, IAutoRefreshable, IDisposable
 {
     private readonly ServiceControlService   _serviceControl;
     private readonly OptionalFeaturesService _optFeatures;
@@ -48,6 +48,9 @@ public partial class ServicesViewModel : ObservableObject, IAutoRefreshable
 
     public bool GamesInstalled { get; set; }
 
+    /// <summary>True when Auto-Pilot Mode is on — Data Collection button is grayed out.</summary>
+    public bool IsAutoPilotActive => _settings.AutoPilotModeEnabled;
+
     public ServicesViewModel(
         ServiceControlService   serviceControl,
         OptionalFeaturesService optFeatures,
@@ -60,7 +63,15 @@ public partial class ServicesViewModel : ObservableObject, IAutoRefreshable
         _settings       = settings;
 
         _telemetryKillerActive = _serviceControl.AreTelemetryServicesDisabled();
+
+        SettingsService.AutoPilotModeChanged += OnAutoPilotModeChanged;
     }
+
+    private void OnAutoPilotModeChanged(object? sender, EventArgs e) =>
+        Application.Current?.Dispatcher.BeginInvoke(
+            () => OnPropertyChanged(nameof(IsAutoPilotActive)));
+
+    public void Dispose() => SettingsService.AutoPilotModeChanged -= OnAutoPilotModeChanged;
 
     public Task RefreshAsync() => DoRefreshAsync();
 

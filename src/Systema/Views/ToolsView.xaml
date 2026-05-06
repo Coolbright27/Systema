@@ -23,9 +23,13 @@
                 <RowDefinition Height="16"/>   <!-- 9: spacer -->
                 <RowDefinition Height="Auto"/> <!-- 10: NTFS Last-Access card -->
                 <RowDefinition Height="16"/>   <!-- 11: spacer -->
-                <RowDefinition Height="Auto"/> <!-- 12: Realtek card -->
+                <RowDefinition Height="Auto"/> <!-- 12: Sleep → Hibernate (Battery) card -->
                 <RowDefinition Height="16"/>   <!-- 13: spacer -->
-                <RowDefinition Height="Auto"/> <!-- 14: status bar -->
+                <RowDefinition Height="Auto"/> <!-- 14: Sleep → Hibernate (AC) card -->
+                <RowDefinition Height="16"/>   <!-- 15: spacer -->
+                <RowDefinition Height="Auto"/> <!-- 16: Realtek card -->
+                <RowDefinition Height="16"/>   <!-- 17: spacer -->
+                <RowDefinition Height="Auto"/> <!-- 18: status bar -->
             </Grid.RowDefinitions>
 
             <!-- ===== HEADER ===== -->
@@ -55,15 +59,28 @@
                                     <TextBlock Text="SAFE" FontSize="9" FontWeight="Bold" Foreground="#0D0F14"/>
                                 </Border>
                             </StackPanel>
-                            <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" MaxWidth="600">
-                                Stops Windows Update from offering unstable preview (Insider) builds.
-                                Regular security and feature updates still install as normal.
+                            <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap">
+                                Blocks Insider builds AND monthly "Preview" cumulative updates (e.g. the
+                                optional pre-Patch-Tuesday releases shown as "Preview Update" in Windows Update).
+                                Regular security and cumulative updates still install as normal.
                             </TextBlock>
                         </StackPanel>
 
                         <CheckBox Grid.Column="1" VerticalAlignment="Center"
-                                  Style="{StaticResource ToggleSwitch}"
-                                  IsChecked="{Binding BlockPreviewUpdates, Mode=TwoWay}"/>
+                                  IsChecked="{Binding BlockPreviewUpdates, Mode=TwoWay}"
+                                  ToolTipService.ShowOnDisabled="True">
+                            <CheckBox.Style>
+                                <Style TargetType="CheckBox" BasedOn="{StaticResource ToggleSwitch}">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsAutoPilotActive}" Value="True">
+                                            <Setter Property="IsEnabled" Value="False"/>
+                                            <Setter Property="Opacity"   Value="0.4"/>
+                                            <Setter Property="ToolTip"   Value="Controlled by Auto-Pilot — turn off Auto-Pilot Mode to change"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </CheckBox.Style>
+                        </CheckBox>
                     </Grid>
 
                     <!-- Status indicator -->
@@ -120,19 +137,58 @@
                                    Foreground="{StaticResource AccentBlueBrush}" FontWeight="SemiBold"/>
                     </StackPanel>
 
-                    <!-- Profile picker + buttons -->
+                    <!-- Profile picker + buttons — grayed out under Auto-Pilot -->
                     <StackPanel Orientation="Horizontal">
                         <ComboBox ItemsSource="{Binding DnsProfiles}"
                                   SelectedItem="{Binding SelectedDnsProfile}"
                                   DisplayMemberPath="Name"
                                   Width="240"
                                   Margin="0,0,10,0"
-                                  VerticalAlignment="Center"/>
-                        <Button Content="Apply DNS" Style="{StaticResource PrimaryButton}"
+                                  VerticalAlignment="Center"
+                                  ToolTipService.ShowOnDisabled="True">
+                            <ComboBox.Style>
+                                <Style TargetType="ComboBox" BasedOn="{StaticResource DarkComboBox}">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsAutoPilotActive}" Value="True">
+                                            <Setter Property="IsEnabled" Value="False"/>
+                                            <Setter Property="Opacity"   Value="0.4"/>
+                                            <Setter Property="ToolTip"   Value="Controlled by Auto-Pilot — turn off Auto-Pilot Mode to change"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </ComboBox.Style>
+                        </ComboBox>
+                        <Button Content="Apply DNS"
                                 Command="{Binding ApplyDnsCommand}"
-                                Margin="0,0,8,0"/>
-                        <Button Content="Reset to DHCP" Style="{StaticResource GhostButton}"
-                                Command="{Binding ResetDnsCommand}"/>
+                                Margin="0,0,8,0"
+                                ToolTipService.ShowOnDisabled="True">
+                            <Button.Style>
+                                <Style TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsAutoPilotActive}" Value="True">
+                                            <Setter Property="IsEnabled" Value="False"/>
+                                            <Setter Property="Opacity"   Value="0.4"/>
+                                            <Setter Property="ToolTip"   Value="Controlled by Auto-Pilot — turn off Auto-Pilot Mode to change"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
+                        </Button>
+                        <Button Content="Reset to DHCP"
+                                Command="{Binding ResetDnsCommand}"
+                                ToolTipService.ShowOnDisabled="True">
+                            <Button.Style>
+                                <Style TargetType="Button" BasedOn="{StaticResource GhostButton}">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsAutoPilotActive}" Value="True">
+                                            <Setter Property="IsEnabled" Value="False"/>
+                                            <Setter Property="Opacity"   Value="0.4"/>
+                                            <Setter Property="ToolTip"   Value="Controlled by Auto-Pilot — turn off Auto-Pilot Mode to change"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
+                        </Button>
                     </StackPanel>
 
                     <!-- Loading indicator -->
@@ -173,7 +229,7 @@
                                                Foreground="{StaticResource AccentGreenBrush}"/>
                                 </Border>
                             </StackPanel>
-                            <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" MaxWidth="600">
+                            <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap">
                                 Keeps Windows' idle core management on, so CPU cores automatically power down when not needed.
                                 Reduces heat and lets busy cores run faster.
                                 A startup task is created so the setting survives restarts.
@@ -181,8 +237,20 @@
                         </StackPanel>
 
                         <CheckBox Grid.Column="1" VerticalAlignment="Center"
-                                  Style="{StaticResource ToggleSwitch}"
-                                  IsChecked="{Binding CoreParkingEnforced, Mode=TwoWay}"/>
+                                  IsChecked="{Binding CoreParkingEnforced, Mode=TwoWay}"
+                                  ToolTipService.ShowOnDisabled="True">
+                            <CheckBox.Style>
+                                <Style TargetType="CheckBox" BasedOn="{StaticResource ToggleSwitch}">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsAutoPilotActive}" Value="True">
+                                            <Setter Property="IsEnabled" Value="False"/>
+                                            <Setter Property="Opacity"   Value="0.4"/>
+                                            <Setter Property="ToolTip"   Value="Controlled by Auto-Pilot — turn off Auto-Pilot Mode to change"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </CheckBox.Style>
+                        </CheckBox>
                     </Grid>
 
                     <!-- Status indicator -->
@@ -233,7 +301,7 @@
                                     <TextBlock Text="MODERATE" FontSize="9" FontWeight="Bold" Foreground="#0D0F14"/>
                                 </Border>
                             </StackPanel>
-                            <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" MaxWidth="600">
+                            <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap">
                                 Windows Fast Startup saves a kernel snapshot on shutdown to speed up the next boot.
                                 Disabling it forces a full clean shutdown each time, preventing driver state corruption,
                                 ensuring firmware updates apply correctly, and fixing shutdown/reboot issues on some PCs.
@@ -293,7 +361,7 @@
                                     <TextBlock Text="SAFE" FontSize="9" FontWeight="Bold" Foreground="#0D0F14"/>
                                 </Border>
                             </StackPanel>
-                            <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" MaxWidth="600">
+                            <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap">
                                 NTFS normally updates the "Date Accessed" timestamp on every file read, causing
                                 unnecessary disk writes on every open. Disabling this reduces background disk
                                 activity, lowers SSD write amplification, and can improve responsiveness on
@@ -334,8 +402,195 @@
                 </StackPanel>
             </Border>
 
-            <!-- ===== CARD: Remove Realtek Bloat ===== -->
+            <!-- ===== CARD: Sleep → Hibernate (Battery — laptop only) ===== -->
             <Border Grid.Row="12" Style="{StaticResource Card}"
+                    Visibility="{Binding HasBattery, Converter={StaticResource BoolToVis}}">
+                <StackPanel>
+
+                    <!-- Header row with toggle -->
+                    <Grid Margin="0,0,0,10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+
+                        <StackPanel Grid.Column="0">
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                <TextBlock Text="Sleep → Hibernate (Battery)"
+                                           Style="{StaticResource HeadingMedium}"/>
+                                <Border Background="{StaticResource AccentGreenBrush}" CornerRadius="4"
+                                        Padding="6,2" Margin="10,0,0,0" VerticalAlignment="Center">
+                                    <TextBlock Text="SAFE" FontSize="9" FontWeight="Bold" Foreground="#0D0F14"/>
+                                </Border>
+                            </StackPanel>
+                            <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap">
+                                When your laptop sleeps on battery, Windows normally stays in low-power sleep
+                                indefinitely. This drains the battery overnight. Enable this to automatically
+                                hibernate (zero battery drain) after the chosen timeout. Only applies on battery —
+                                plugged-in behavior is unchanged.
+                            </TextBlock>
+                        </StackPanel>
+
+                        <CheckBox Grid.Column="1" VerticalAlignment="Center"
+                                  Style="{StaticResource ToggleSwitch}"
+                                  IsChecked="{Binding SleepToHibernateEnabled, Mode=TwoWay}"/>
+                    </Grid>
+
+                    <!-- Timeout picker (visible when enabled) -->
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,8"
+                                Visibility="{Binding SleepToHibernateEnabled, Converter={StaticResource BoolToVis}}">
+                        <TextBlock Text="Hibernate after: " Style="{StaticResource CaptionText}"
+                                   VerticalAlignment="Center" Margin="0,0,6,0"/>
+                        <ComboBox ItemsSource="{Binding SleepToHibernateOptions}"
+                                  SelectedItem="{Binding SleepToHibernateMinutes, Mode=TwoWay}"
+                                  Width="110" VerticalAlignment="Center">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock>
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionText}">
+                                                <Setter Property="Text" Value="{Binding StringFormat='{}{0} min'}"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding}" Value="60">
+                                                        <Setter Property="Text" Value="1 hour"/>
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding}" Value="120">
+                                                        <Setter Property="Text" Value="2 hours"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                        <TextBlock Text="of sleep on battery" Style="{StaticResource CaptionText}"
+                                   VerticalAlignment="Center" Margin="8,0,0,0"/>
+                    </StackPanel>
+
+                    <!-- Status indicator -->
+                    <TextBlock Margin="0,2,0,0">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionText}">
+                                <Setter Property="Text" Value="Status: OFF  —  laptop stays in sleep on battery (Windows default)"/>
+                                <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding SleepToHibernateEnabled}" Value="True">
+                                        <Setter Property="Text" Value="Status: ON ✓  —  will hibernate on battery after the chosen timeout"/>
+                                        <Setter Property="Foreground" Value="{StaticResource AccentGreenBrush}"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+
+                    <!-- Loading indicator -->
+                    <StackPanel Orientation="Horizontal" Margin="0,6,0,0"
+                                Visibility="{Binding IsSleepToHibernateLoading, Converter={StaticResource BoolToVis}}">
+                        <ProgressBar IsIndeterminate="True" Width="160" Height="4"
+                                     Style="{StaticResource AccentProgressBar}" Margin="0,0,10,0"
+                                     VerticalAlignment="Center"/>
+                        <TextBlock Text="Applying..." Style="{StaticResource CaptionText}" VerticalAlignment="Center"/>
+                    </StackPanel>
+
+                </StackPanel>
+            </Border>
+
+            <!-- ===== CARD: Sleep → Hibernate (AC / plugged-in) ===== -->
+            <Border Grid.Row="14" Style="{StaticResource Card}">
+                <StackPanel>
+
+                    <!-- Header row with toggle -->
+                    <Grid Margin="0,0,0,10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+
+                        <StackPanel Grid.Column="0">
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                <TextBlock Text="Sleep → Hibernate (Plugged In)"
+                                           Style="{StaticResource HeadingMedium}"/>
+                                <Border Background="{StaticResource AccentGreenBrush}" CornerRadius="4"
+                                        Padding="6,2" Margin="10,0,0,0" VerticalAlignment="Center">
+                                    <TextBlock Text="SAFE" FontSize="9" FontWeight="Bold" Foreground="#0D0F14"/>
+                                </Border>
+                            </StackPanel>
+                            <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap">
+                                When your PC or laptop sleeps while plugged in, Windows stays in low-power sleep
+                                indefinitely by default. Enable this to automatically hibernate (zero power draw)
+                                after the chosen timeout. Useful for desktops and laptops left idle overnight.
+                                Only applies on AC power — battery behavior is controlled separately above.
+                            </TextBlock>
+                        </StackPanel>
+
+                        <CheckBox Grid.Column="1" VerticalAlignment="Center"
+                                  Style="{StaticResource ToggleSwitch}"
+                                  IsChecked="{Binding SleepToHibernateAcEnabled, Mode=TwoWay}"/>
+                    </Grid>
+
+                    <!-- Timeout picker (visible when enabled) -->
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,8"
+                                Visibility="{Binding SleepToHibernateAcEnabled, Converter={StaticResource BoolToVis}}">
+                        <TextBlock Text="Hibernate after: " Style="{StaticResource CaptionText}"
+                                   VerticalAlignment="Center" Margin="0,0,6,0"/>
+                        <ComboBox ItemsSource="{Binding SleepToHibernateOptions}"
+                                  SelectedItem="{Binding SleepToHibernateAcMinutes, Mode=TwoWay}"
+                                  Width="110" VerticalAlignment="Center">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock>
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionText}">
+                                                <Setter Property="Text" Value="{Binding StringFormat='{}{0} min'}"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding}" Value="60">
+                                                        <Setter Property="Text" Value="1 hour"/>
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding}" Value="120">
+                                                        <Setter Property="Text" Value="2 hours"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                        <TextBlock Text="of sleep while plugged in" Style="{StaticResource CaptionText}"
+                                   VerticalAlignment="Center" Margin="8,0,0,0"/>
+                    </StackPanel>
+
+                    <!-- Status indicator -->
+                    <TextBlock Margin="0,2,0,0">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionText}">
+                                <Setter Property="Text" Value="Status: OFF  —  PC stays in sleep while plugged in (Windows default)"/>
+                                <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding SleepToHibernateAcEnabled}" Value="True">
+                                        <Setter Property="Text" Value="Status: ON ✓  —  will hibernate on AC after the chosen timeout"/>
+                                        <Setter Property="Foreground" Value="{StaticResource AccentGreenBrush}"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+
+                    <!-- Loading indicator -->
+                    <StackPanel Orientation="Horizontal" Margin="0,6,0,0"
+                                Visibility="{Binding IsSleepToHibernateAcLoading, Converter={StaticResource BoolToVis}}">
+                        <ProgressBar IsIndeterminate="True" Width="160" Height="4"
+                                     Style="{StaticResource AccentProgressBar}" Margin="0,0,10,0"
+                                     VerticalAlignment="Center"/>
+                        <TextBlock Text="Applying..." Style="{StaticResource CaptionText}" VerticalAlignment="Center"/>
+                    </StackPanel>
+
+                </StackPanel>
+            </Border>
+
+            <!-- ===== CARD: Remove Realtek Bloat ===== -->
+            <Border Grid.Row="16" Style="{StaticResource Card}"
                     Visibility="{Binding HasRealtekHardware, Converter={StaticResource BoolToVis}}">
                 <StackPanel>
 
@@ -425,7 +680,7 @@
             </Border>
 
             <!-- ===== STATUS BAR ===== -->
-            <Grid Grid.Row="14" Margin="0,8,0,0">
+            <Grid Grid.Row="18" Margin="0,8,0,0">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>

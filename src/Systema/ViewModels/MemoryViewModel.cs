@@ -15,6 +15,7 @@
 // ════════════════════════════════════════════════════════════════════════════
 
 using System.Collections.ObjectModel;
+using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Systema.Core;
@@ -24,18 +25,19 @@ using static Systema.Core.ThreadHelper;
 
 namespace Systema.ViewModels;
 
-public partial class MemoryViewModel : ObservableObject, IAutoRefreshable
+public partial class MemoryViewModel : ObservableObject, IAutoRefreshable, IDisposable
 {
-    private readonly MemoryService _memoryService;
+    private readonly MemoryService  _memoryService;
     private readonly StartupService _startupService;
+    private readonly SettingsService _settings;
     private static readonly LoggerService _log = LoggerService.Instance;
-    private int _isRefreshing;
+    private int  _isRefreshing;
     private bool _hasLoadedOnce;
 
     [ObservableProperty] private long _totalRamMb;
     [ObservableProperty] private long _availableRamMb;
+    /// <summary>Single static page-file size. Passed as both initial and maximum to the service.</summary>
     [ObservableProperty] private int _pagefileInitialMb;
-    [ObservableProperty] private int _pagefileMaxMb;
     [ObservableProperty] private string _recommendedPagefileText = string.Empty;
     [ObservableProperty] private ObservableCollection<StartupItem> _startupItems = new();
     [ObservableProperty] private string _currentPagefileText = string.Empty;
@@ -49,16 +51,30 @@ public partial class MemoryViewModel : ObservableObject, IAutoRefreshable
     public long UsedRamMb => TotalRamMb - AvailableRamMb;
     public double RamUsagePercent => TotalRamMb > 0 ? (double)UsedRamMb / TotalRamMb * 100 : 0;
 
-    public MemoryViewModel(MemoryService memoryService, StartupService startupService)
+    /// <summary>
+    /// True when Auto-Pilot Mode is active — XAML binds this to IsEnabled (inverted)
+    /// so Auto-Pilot-managed controls are grayed out when the mode is on.
+    /// </summary>
+    public bool IsAutoPilotActive => _settings.AutoPilotModeEnabled;
+
+    public MemoryViewModel(MemoryService memoryService, StartupService startupService,
+                           SettingsService settings)
     {
         _memoryService  = memoryService;
         _startupService = startupService;
+        _settings       = settings;
 
-        // Set RAM-based defaults immediately
-        int recommended = _memoryService.GetRecommendedPagefileMb();
-        _pagefileInitialMb = recommended;
-        _pagefileMaxMb     = recommended;
+        // Set RAM-based default immediately so the TextBox is pre-filled on open.
+        _pagefileInitialMb = _memoryService.GetRecommendedPagefileMb();
+
+        SettingsService.AutoPilotModeChanged += OnAutoPilotModeChanged;
     }
+
+    private void OnAutoPilotModeChanged(object? sender, EventArgs e) =>
+        Application.Current?.Dispatcher.BeginInvoke(
+            () => OnPropertyChanged(nameof(IsAutoPilotActive)));
+
+    public void Dispose() => SettingsService.AutoPilotModeChanged -= OnAutoPilotModeChanged;
 
     // IAutoRefreshable — first call does a full refresh (loads startup items); subsequent timer calls are partial
     public Task RefreshAsync()
@@ -99,17 +115,15 @@ public partial class MemoryViewModel : ObservableObject, IAutoRefreshable
 
                 if (!isSystemManaged && init > 0)
                 {
-                    // Custom sizes configured — show them and pre-fill the text boxes
+                    // Custom/static size configured — pre-fill with the existing value (use init).
                     PagefileInitialMb = init;
-                    PagefileMaxMb     = max;
                     string usageNote = allocMb > 0 ? $"  ·  {usedMb:N0} MB in use now" : string.Empty;
-                    CurrentPagefileText = $"Set to: {init:N0} MB initial / {max:N0} MB max{usageNote}";
+                    CurrentPagefileText = $"Set to: {init:N0} MB static{usageNote}";
                 }
                 else
                 {
-                    // System-managed — show recommended defaults in text boxes + actual running size
+                    // System-managed or no custom size — show recommended default as starting point.
                     PagefileInitialMb = rec;
-                    PagefileMaxMb     = rec;
                     string runningNote = allocMb > 0 ? $"currently {allocMb:N0} MB" : "size varies";
                     CurrentPagefileText = $"Windows managed  ·  {runningNote}";
                 }
@@ -137,70 +151,58 @@ public partial class MemoryViewModel : ObservableObject, IAutoRefreshable
     [RelayCommand]
     private async Task ConfigurePagefileAsync()
     {
-        if (PagefileInitialMb <= 0 || PagefileMaxMb <= 0)
+        if (PagefileInitialMb <= 0)
         {
-            StatusMessage = "Pagefile size must be greater than 0.";
+            StatusMessage = "Page file size must be greater than 0.";
             return;
         }
 
         IsLoading = true;
-        StatusMessage = "Configuring pagefile...";
+        StatusMessage = $"Setting static page file to {PagefileInitialMb:N0} MB...";
         try
         {
-            var result = await _memoryService.ConfigurePagefileAsync(PagefileInitialMb, PagefileMaxMb);
+            // Static = initial == maximum so the size never fluctuates.
+            var result = await _memoryService.ConfigurePagefileAsync(PagefileInitialMb, PagefileInitialMb);
             StatusMessage = result.Message;
             if (result.Success)
-            {
-                CurrentPagefileText = $"Current: {PagefileInitialMb:N0} MB initial / {PagefileMaxMb:N0} MB max (restart required)";
-            }
+                CurrentPagefileText = $"Set to: {PagefileInitialMb:N0} MB static (restart required)";
             else
-            {
-                // Log failures even when no exception is thrown (e.g. disk space check)
-                _log.Error("MemoryViewModel", $"Pagefile configuration failed: {result.Message}");
-            }
+                _log.Error("MemoryViewModel", $"Page file configuration failed: {result.Message}");
         }
         catch (Exception ex)
         {
-            _log.Error("MemoryViewModel", "Pagefile configuration threw an unexpected exception", ex);
+            _log.Error("MemoryViewModel", "Page file configuration threw an unexpected exception", ex);
             StatusMessage = $"Error: {ex.Message}";
         }
-        finally
-        {
-            IsLoading = false;
-        }
+        finally { IsLoading = false; }
     }
 
     [RelayCommand]
     private async Task RevertPagefileAsync()
     {
+        int rec = _memoryService.GetRecommendedPagefileMb();
         IsLoading = true;
-        StatusMessage = "Reverting to Windows-managed pagefile...";
+        StatusMessage = $"Resetting page file to recommended size ({rec:N0} MB)...";
         try
         {
-            var result = await _memoryService.RevertToManagedPagefileAsync();
+            // "Reset to default" sets back to the RAM-based recommended static size.
+            // This avoids WMI complexity and is always reliable.
+            var result = await _memoryService.ConfigurePagefileAsync(rec, rec);
             StatusMessage = result.Message;
             if (result.Success)
             {
-                // Reset UI to show "System Managed" state
-                int rec = _memoryService.GetRecommendedPagefileMb();
-                PagefileInitialMb = rec;
-                PagefileMaxMb     = rec;
-                CurrentPagefileText = "Current: System Managed (restart required)";
+                PagefileInitialMb   = rec;
+                CurrentPagefileText = $"Set to: {rec:N0} MB static (restart required)";
             }
             else
-            {
-                _log.Error("MemoryViewModel", $"Pagefile revert failed: {result.Message}");
-            }
+                _log.Error("MemoryViewModel", $"Page file reset failed: {result.Message}");
         }
         catch (Exception ex)
         {
-            _log.Error("MemoryViewModel", "Pagefile revert threw an unexpected exception", ex);
+            _log.Error("MemoryViewModel", "Page file reset threw an unexpected exception", ex);
             StatusMessage = $"Error: {ex.Message}";
         }
-        finally
-        {
-            IsLoading = false;
-        }
+        finally { IsLoading = false; }
     }
 
     [RelayCommand]

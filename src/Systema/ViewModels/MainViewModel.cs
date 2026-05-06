@@ -197,8 +197,11 @@ public partial class MainViewModel : ObservableObject, IDisposable
         _refreshTimer.Stop();
         _heartbeatTimer.Stop();
         TaskSleepVm?.Dispose();
+        MemoryVm?.Dispose();
+        ServicesVm?.Dispose();
         VisualVm?.Dispose();
         GameBoosterVm?.Dispose();
         SettingsVm?.Dispose();
+        ToolsVm?.Dispose();
     }
 }

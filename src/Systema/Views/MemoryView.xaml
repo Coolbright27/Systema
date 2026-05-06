@@ -84,11 +84,11 @@
                     </StackPanel>
                 </Border>
 
-                <!-- Pagefile Card — disabled/grayed on HDD -->
+                <!-- Pagefile Card -->
                 <Border Grid.Column="2" Style="{StaticResource Card}">
                     <StackPanel>
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-                            <TextBlock Text="Virtual Memory (Pagefile)" Style="{StaticResource HeadingMedium}"/>
+                            <TextBlock Text="Virtual Memory (Page File)" Style="{StaticResource HeadingMedium}"/>
                             <Border Background="{StaticResource AccentYellowBrush}" CornerRadius="4"
                                     Padding="6,2" Margin="8,0,0,0" VerticalAlignment="Center">
                                 <TextBlock Text="MODERATE" FontSize="9" FontWeight="Bold" Foreground="#0D0F14"/>
@@ -97,8 +97,8 @@
 
                         <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,0,0,4">
                             Windows uses a hidden file on your drive as extra memory when RAM fills up.
-                            Locking the size prevents performance hiccups.
-                            Most users can leave this on the default setting. A restart is required to apply.
+                            Setting a fixed (static) size prevents performance hiccups caused by Windows
+                            resizing it on the fly. A restart is required to apply changes.
                         </TextBlock>
                         <TextBlock Text="{Binding CurrentPagefileText}"
                                    Style="{StaticResource CaptionText}"
@@ -109,31 +109,35 @@
                                    Foreground="{StaticResource AccentBlueBrush}"
                                    Margin="0,0,0,12"/>
 
-                        <Grid Margin="0,0,0,8">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="16"/>
-                                <ColumnDefinition Width="*"/>
-                            </Grid.ColumnDefinitions>
-                            <StackPanel Grid.Column="0">
-                                <TextBlock Text="Initial Size (MB)" Style="{StaticResource CaptionText}" Margin="0,0,0,4"/>
+                        <!-- Single static size input + buttons — grayed out under Auto-Pilot -->
+                        <StackPanel>
+                            <StackPanel.Style>
+                                <Style TargetType="StackPanel">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsAutoPilotActive}" Value="True">
+                                            <Setter Property="IsEnabled" Value="False"/>
+                                            <Setter Property="Opacity"   Value="0.4"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </StackPanel.Style>
+
+                            <StackPanel Margin="0,0,0,8" Width="160" HorizontalAlignment="Left">
+                                <TextBlock Text="Static Page File Size (MB)"
+                                           Style="{StaticResource CaptionText}" Margin="0,0,0,4"/>
                                 <TextBox Text="{Binding PagefileInitialMb, UpdateSourceTrigger=PropertyChanged}"
                                          Style="{StaticResource DarkTextBox}"/>
                             </StackPanel>
-                            <StackPanel Grid.Column="2">
-                                <TextBlock Text="Maximum Size (MB)" Style="{StaticResource CaptionText}" Margin="0,0,0,4"/>
-                                <TextBox Text="{Binding PagefileMaxMb, UpdateSourceTrigger=PropertyChanged}"
-                                         Style="{StaticResource DarkTextBox}"/>
+
+                            <StackPanel Orientation="Horizontal">
+                                <Button Content="Apply"
+                                        Command="{Binding ConfigurePagefileCommand}"
+                                        Style="{StaticResource PrimaryButton}"
+                                        Margin="0,0,10,0"/>
+                                <Button Content="Reset to Default"
+                                        Command="{Binding RevertPagefileCommand}"
+                                        Style="{StaticResource GhostButton}"/>
                             </StackPanel>
-                        </Grid>
-                        <StackPanel Orientation="Horizontal">
-                            <Button Content="Apply Changes"
-                                    Command="{Binding ConfigurePagefileCommand}"
-                                    Style="{StaticResource PrimaryButton}"
-                                    Margin="0,0,10,0"/>
-                            <Button Content="Reset to Default"
-                                    Command="{Binding RevertPagefileCommand}"
-                                    Style="{StaticResource GhostButton}"/>
                         </StackPanel>
                     </StackPanel>
                 </Border>
@@ -210,7 +214,7 @@
                                                 VerticalAlignment="Center" CornerRadius="4" Padding="7,3">
                                             <Border.Style>
                                                 <Style TargetType="Border">
-                                                    <Setter Property="Background" Value="#141F2B45"/>
+                                                    <Setter Property="Background" Value="#14A855F7"/>
                                                     <Style.Triggers>
                                                         <DataTrigger Binding="{Binding ImpactLabel}" Value="High">
                                                             <Setter Property="Background" Value="#22FF4560"/>
