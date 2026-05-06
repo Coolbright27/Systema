@@ -14,7 +14,7 @@
                 <RowDefinition Height="Auto"/>  <!-- 0: header -->
                 <RowDefinition Height="20"/>    <!-- 1: spacer -->
                 <RowDefinition Height="Auto"/>  <!-- 2: Boost Status card -->
-                <RowDefinition Height="16"/>    <!-- 3: spacer -->
+                <RowDefinition Height="20"/>    <!-- 3: spacer -->
                 <RowDefinition Height="Auto"/>  <!-- 4: Manual Boost card -->
                 <RowDefinition Height="20"/>    <!-- 5: spacer -->
                 <RowDefinition Height="Auto"/>  <!-- 6: Booster Settings card -->
@@ -573,7 +573,7 @@
                 <StackPanel>
                     <TextBlock Text="What Systema Detects" Style="{StaticResource HeadingMedium}" Margin="0,0,0,12"/>
                     <WrapPanel>
-                        <Border Background="#11001A" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
+                        <Border Background="{StaticResource BgSurfaceBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
                                 CornerRadius="6" Padding="10,6" Margin="0,0,8,8">
                             <StackPanel>
                                 <TextBlock Text="Games" Style="{StaticResource CaptionText}" FontWeight="Bold"
@@ -583,7 +583,7 @@
                                 <TextBlock Text="Elden Ring, Cyberpunk, more" Style="{StaticResource CaptionText}"/>
                             </StackPanel>
                         </Border>
-                        <Border Background="#11001A" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
+                        <Border Background="{StaticResource BgSurfaceBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
                                 CornerRadius="6" Padding="10,6" Margin="0,0,8,8">
                             <StackPanel>
                                 <TextBlock Text="Anti-Cheats" Style="{StaticResource CaptionText}" FontWeight="Bold"
@@ -593,7 +593,7 @@
                                 <TextBlock Text="BattlEye (BEService)" Style="{StaticResource CaptionText}"/>
                             </StackPanel>
                         </Border>
-                        <Border Background="#11001A" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
+                        <Border Background="{StaticResource BgSurfaceBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
                                 CornerRadius="6" Padding="10,6" Margin="0,0,8,8">
                             <StackPanel>
                                 <TextBlock Text="Launchers &amp; Platforms" Style="{StaticResource CaptionText}" FontWeight="Bold"

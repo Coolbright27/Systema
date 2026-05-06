@@ -14,21 +14,21 @@
                 <RowDefinition Height="Auto"/> <!-- 0: header -->
                 <RowDefinition Height="20"/>   <!-- 1: spacer -->
                 <RowDefinition Height="Auto"/> <!-- 2: Block Preview Updates card -->
-                <RowDefinition Height="16"/>   <!-- 3: spacer -->
+                <RowDefinition Height="20"/>   <!--3: spacer -->
                 <RowDefinition Height="Auto"/> <!-- 4: DNS card -->
-                <RowDefinition Height="16"/>   <!-- 5: spacer -->
+                <RowDefinition Height="20"/>   <!--5: spacer -->
                 <RowDefinition Height="Auto"/> <!-- 6: Core Parking card -->
-                <RowDefinition Height="16"/>   <!-- 7: spacer -->
+                <RowDefinition Height="20"/>   <!--7: spacer -->
                 <RowDefinition Height="Auto"/> <!-- 8: Fast Startup card -->
-                <RowDefinition Height="16"/>   <!-- 9: spacer -->
+                <RowDefinition Height="20"/>   <!--9: spacer -->
                 <RowDefinition Height="Auto"/> <!-- 10: NTFS Last-Access card -->
-                <RowDefinition Height="16"/>   <!-- 11: spacer -->
+                <RowDefinition Height="20"/>   <!--11: spacer -->
                 <RowDefinition Height="Auto"/> <!-- 12: Sleep → Hibernate (Battery) card -->
-                <RowDefinition Height="16"/>   <!-- 13: spacer -->
+                <RowDefinition Height="20"/>   <!--13: spacer -->
                 <RowDefinition Height="Auto"/> <!-- 14: Sleep → Hibernate (AC) card -->
-                <RowDefinition Height="16"/>   <!-- 15: spacer -->
+                <RowDefinition Height="20"/>   <!--15: spacer -->
                 <RowDefinition Height="Auto"/> <!-- 16: Realtek card -->
-                <RowDefinition Height="16"/>   <!-- 17: spacer -->
+                <RowDefinition Height="20"/>   <!--17: spacer -->
                 <RowDefinition Height="Auto"/> <!-- 18: status bar -->
             </Grid.RowDefinitions>
 

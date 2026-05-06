@@ -14,17 +14,17 @@
                 <RowDefinition Height="Auto"/>  <!-- 0: page header -->
                 <RowDefinition Height="28"/>    <!-- 1: spacer -->
                 <RowDefinition Height="Auto"/>  <!-- 2: System Restore card -->
-                <RowDefinition Height="16"/>    <!-- 3: spacer -->
+                <RowDefinition Height="20"/>    <!-- 3: spacer -->
                 <RowDefinition Height="Auto"/>  <!-- 4: Manage Restore Points card -->
-                <RowDefinition Height="16"/>    <!-- 5: spacer -->
+                <RowDefinition Height="20"/>    <!-- 5: spacer -->
                 <RowDefinition Height="Auto"/>  <!-- 6: Startup card -->
-                <RowDefinition Height="16"/>    <!-- 7: spacer -->
+                <RowDefinition Height="20"/>    <!-- 7: spacer -->
                 <RowDefinition Height="Auto"/>  <!-- 8: Export/Import card -->
-                <RowDefinition Height="16"/>    <!-- 9: spacer -->
+                <RowDefinition Height="20"/>    <!-- 9: spacer -->
                 <RowDefinition Height="Auto"/>  <!-- 10: bottom note -->
                 <RowDefinition Height="20"/>    <!-- 11: spacer -->
                 <RowDefinition Height="Auto"/>  <!-- 12: Diagnostic Report card -->
-                <RowDefinition Height="16"/>    <!-- 13: spacer -->
+                <RowDefinition Height="20"/>    <!-- 13: spacer -->
                 <RowDefinition Height="Auto"/>  <!-- 14: Updates card -->
                 <RowDefinition Height="20"/>    <!-- 15: spacer -->
                 <RowDefinition Height="Auto"/>  <!-- 16: Reset All Settings card -->
@@ -41,7 +41,7 @@
             </StackPanel>
 
             <!-- â”€â”€ System Restore â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
-            <Border Grid.Row="2" Background="{StaticResource BgCardBrush}" CornerRadius="10" Padding="20">
+            <Border Grid.Row="2" Style="{StaticResource Card}">
                 <StackPanel>
                     <TextBlock Text="System Restore" Style="{StaticResource HeadingMedium}" Margin="0,0,0,4"/>
                     <TextBlock Text="Systema creates a Windows restore point before making changes, so you can undo everything if something goes wrong."
@@ -75,7 +75,7 @@
             </Border>
 
             <!-- â”€â”€ Manage Restore Points â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
-            <Border Grid.Row="4" Background="{StaticResource BgCardBrush}" CornerRadius="10" Padding="20">
+            <Border Grid.Row="4" Style="{StaticResource Card}">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>
@@ -100,7 +100,7 @@
             </Border>
 
             <!-- â”€â”€ Startup â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
-            <Border Grid.Row="6" Background="{StaticResource BgCardBrush}" CornerRadius="10" Padding="20">
+            <Border Grid.Row="6" Style="{StaticResource Card}">
                 <StackPanel>
                     <TextBlock Text="Startup" Style="{StaticResource HeadingMedium}" Margin="0,0,0,4"/>
                     <TextBlock Text="Control whether Systema launches automatically when you sign in to Windows."
@@ -175,7 +175,7 @@
             </Border>
 
             <!-- â”€â”€ Export / Import Settings â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
-            <Border Grid.Row="8" Background="{StaticResource BgCardBrush}" CornerRadius="10" Padding="20">
+            <Border Grid.Row="8" Style="{StaticResource Card}">
                 <StackPanel>
                     <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
                         <TextBlock Text="Export / Import Settings" Style="{StaticResource HeadingMedium}"/>
@@ -224,7 +224,7 @@
                        TextWrapping="Wrap"/>
 
             <!-- â”€â”€ Diagnostic Report â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
-            <Border Grid.Row="12" Background="{StaticResource BgCardBrush}" CornerRadius="10" Padding="20">
+            <Border Grid.Row="12" Style="{StaticResource Card}">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>
@@ -253,7 +253,7 @@
             </Border>
 
             <!-- â”€â”€ Updates â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
-            <Border Grid.Row="14" Background="{StaticResource BgCardBrush}" CornerRadius="10" Padding="20">
+            <Border Grid.Row="14" Style="{StaticResource Card}">
                 <StackPanel>
                     <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
                         <TextBlock Text="Updates" Style="{StaticResource HeadingMedium}"/>

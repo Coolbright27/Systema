@@ -38,7 +38,7 @@
 
         <!-- TextBox style for threshold inputs -->
         <Style x:Key="ThresholdInput" TargetType="TextBox"
-               BasedOn="{StaticResource {x:Type TextBox}}">
+               BasedOn="{StaticResource DarkTextBox}">
             <Setter Property="Width"                   Value="64"/>
             <Setter Property="TextAlignment"           Value="Center"/>
             <Setter Property="VerticalContentAlignment" Value="Center"/>
