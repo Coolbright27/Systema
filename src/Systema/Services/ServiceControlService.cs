@@ -188,6 +188,26 @@ public class ServiceControlService
         ("WpcMonSvc",         "Parental Controls",
             "Monitors and logs all web browsing, app usage, and screen time — even when no child account is configured.",
             "Safe to disable if you don't use Windows Family Safety / parental controls."),
+
+        // ── Diagnostics / privacy expansion (added v1.7.76) ──────────────────
+        // These send diagnostic / personal data to Microsoft or to other apps;
+        // disabling them doesn't break Windows core or networking. We do NOT
+        // touch the indexer (WSearch is intentionally left non-Recommended).
+        ("DPS",               "Diagnostic Policy Service",
+            "Drives Windows' built-in troubleshooters and bundles per-component diagnostic data uploaded with telemetry.",
+            "Safe to disable. Troubleshooters still launch but skip the data-collection phase."),
+        ("WdiServiceHost",    "Diagnostic Service Host",
+            "Hosts user-mode diagnostic providers (network, power, performance) that report back to Microsoft.",
+            "Safe to disable. Companion to DPS — neither is needed for a healthy PC."),
+        ("MessagingService",  "Messaging Service",
+            "Legacy SMS-style messaging interop, used to relay text messages from a phone to Windows.",
+            "Safe to disable. Almost no consumer apps still use it; modern messaging uses the Phone Link app instead."),
+        ("PimIndexMaintenanceSvc", "Contact Data",
+            "Builds a searchable index of your Contacts, Calendar, and address-book data for the People app.",
+            "Safe to disable if you don't use the People app. Outlook/Mail keep their own contact stores."),
+        ("stisvc",            "Windows Image Acquisition (Scanners)",
+            "Provides scanner support for Windows. Webcams use a different service (FrameServer) and are unaffected.",
+            "Safe to disable if you don't have a flatbed/document scanner. Re-enable if a scanner stops working."),
     };
 
     // ── Telemetry service list (for master toggle) ──
@@ -304,6 +324,52 @@ public class ServiceControlService
             svc.Refresh();
             if (svc.Status == target) return;
             Thread.Sleep(200);
+        }
+    }
+
+    /// <summary>
+    /// Changes a service's Start value via <c>sc.exe config</c>. Used as a fallback
+    /// when direct registry writes fail with "Requested registry access is not allowed"
+    /// — some service keys (TrkWks, DPS, WdiServiceHost, etc.) are owned by
+    /// TrustedInstaller, and even an admin token can't write them directly.
+    /// The Service Control Manager handles the elevation internally, so going through
+    /// sc.exe succeeds where registry access fails.
+    /// </summary>
+    /// <param name="serviceName">Internal service name (e.g. "DPS").</param>
+    /// <param name="startMode">"disabled" | "demand" (Manual) | "auto".</param>
+    /// <returns>True on success (sc.exe exit 0), false otherwise.</returns>
+    private static bool SetStartTypeViaSc(string serviceName, string startMode)
+    {
+        try
+        {
+            var psi = new System.Diagnostics.ProcessStartInfo
+            {
+                FileName               = "sc.exe",
+                Arguments              = $"config \"{serviceName}\" start= {startMode}",
+                UseShellExecute        = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError  = true,
+                CreateNoWindow         = true,
+            };
+            using var proc = System.Diagnostics.Process.Start(psi);
+            if (proc == null) return false;
+            if (!proc.WaitForExit(5000))
+            {
+                try { proc.Kill(); } catch { }
+                return false;
+            }
+            if (proc.ExitCode != 0)
+            {
+                Log.Warn("ServiceControl",
+                    $"sc.exe config {serviceName} start={startMode} exited {proc.ExitCode}: {proc.StandardError.ReadToEnd().Trim()}");
+                return false;
+            }
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Log.Warn("ServiceControl", $"sc.exe config {serviceName} failed: {ex.Message}");
+            return false;
         }
     }
 
@@ -431,6 +497,137 @@ public class ServiceControlService
         });
     }
 
+    /// <summary>
+    /// Combined privacy cleanup: disables ALL telemetry services + tasks AND every
+    /// service that ComputeRecommended() flags as safe-to-disable for the current PC
+    /// (so e.g. Xbox services are skipped on machines with games installed).
+    ///
+    /// One-shot action: does not persist any "always enforce" flag — that
+    /// behaviour is owned by Auto-Pilot Mode (DashboardViewModel). Called from
+    /// both the merged ServicesView "Disable Privacy &amp; Background Services"
+    /// button and from Auto-Pilot's RunAutoPilotAsync flow.
+    /// </summary>
+    /// <param name="gamesInstalled">If true, Xbox/Game services are kept enabled.</param>
+    /// <returns>Summary of what was disabled, suitable for the status bar.</returns>
+    public async Task<TweakResult> DisablePrivacyAndRecommendedAsync(bool gamesInstalled)
+    {
+        // 1. Telemetry services + scheduled tasks
+        var telemetryResult = await DisableAllTelemetryServicesAsync();
+
+        // 2. Every "Recommended" optional service that isn't already disabled.
+        //    BITS is special — it's intentionally NOT marked Recommended (Windows
+        //    Update needs it), so the loop below already skips it.
+        int disabled = 0, alreadyOff = 0, failed = 0;
+        var skipped = new List<string>();
+
+        await Task.Run(() =>
+        {
+            foreach (var (name, _, _, _) in OptimizableServices)
+            {
+                if (!ComputeRecommended(name, gamesInstalled)) continue;
+
+                // Skip if already disabled
+                try
+                {
+                    using var key = Registry.LocalMachine.OpenSubKey(
+                        $@"SYSTEM\CurrentControlSet\Services\{name}");
+                    if (key != null && (int?)key.GetValue("Start") == 4)
+                    {
+                        alreadyOff++;
+                        continue;
+                    }
+                }
+                catch
+                {
+                    skipped.Add(name);
+                    continue;
+                }
+
+                try
+                {
+                    using var svc = new ServiceController(name);
+                    if (svc.Status == ServiceControllerStatus.Running)
+                    {
+                        try { svc.Stop(); PollForStatus(svc, ServiceControllerStatus.Stopped, 5); }
+                        catch (Exception ex) { Log.Warn("ServiceControl", $"Stop({name}) failed: {ex.Message}"); }
+                    }
+
+                    // Try direct registry write first (fastest path), then fall back to
+                    // sc.exe for TrustedInstaller-protected service keys (DPS, TrkWks,
+                    // WdiServiceHost, etc.) where registry writes return "access denied"
+                    // even with admin token — the SCM handles those internally.
+                    bool ok = false;
+                    try
+                    {
+                        using var key = Registry.LocalMachine.OpenSubKey(
+                            $@"SYSTEM\CurrentControlSet\Services\{name}", writable: true);
+                        if (key != null)
+                        {
+                            key.SetValue("Start", 4, RegistryValueKind.DWord);
+                            ok = true;
+                        }
+                    }
+                    catch (UnauthorizedAccessException) { /* fall through to sc.exe */ }
+                    catch (System.Security.SecurityException) { /* fall through to sc.exe */ }
+
+                    if (!ok)
+                        ok = SetStartTypeViaSc(name, "disabled");
+
+                    if (ok) disabled++; else failed++;
+                }
+                catch (InvalidOperationException)
+                {
+                    // Service not installed on this PC — silent skip.
+                    skipped.Add(name);
+                }
+                catch (Exception ex)
+                {
+                    Log.Warn("ServiceControl", $"DisablePrivacy: {name} failed: {ex.Message}");
+                    // Last-resort: try sc.exe even when something else threw.
+                    if (SetStartTypeViaSc(name, "disabled")) disabled++; else failed++;
+                }
+            }
+        });
+
+        InvalidateCache();
+
+        var msg = $"{telemetryResult.Message} Background services: {disabled} disabled" +
+                  (alreadyOff > 0 ? $", {alreadyOff} already off" : string.Empty) +
+                  (failed > 0    ? $", {failed} failed"           : string.Empty) + ".";
+        return TweakResult.Ok(msg);
+    }
+
+    /// <summary>
+    /// Checks whether every "Recommended" service for this PC is currently disabled.
+    /// Used by the Dashboard checklist to show the merged Privacy &amp; Background
+    /// Services item as Done / Pending. Counts already-not-installed services as
+    /// disabled (nothing to do) so a cloud / Pro / N edition PC doesn't get stuck
+    /// in Pending forever.
+    /// </summary>
+    public bool AreAllRecommendedDisabled(bool gamesInstalled)
+    {
+        foreach (var (name, _, _, _) in OptimizableServices)
+        {
+            if (!ComputeRecommended(name, gamesInstalled)) continue;
+
+            try
+            {
+                using var key = Registry.LocalMachine.OpenSubKey(
+                    $@"SYSTEM\CurrentControlSet\Services\{name}");
+                if (key == null) continue; // service not installed — treat as done
+                int start = (int?)key.GetValue("Start") ?? 2;
+                if (start != 4) return false;
+            }
+            catch (Exception ex)
+            {
+                Log.Warn("ServiceControl", $"AreAllRecommendedDisabled({name}): {ex.Message}");
+                // Conservative: treat as not-disabled so user knows to re-run the cleanup
+                return false;
+            }
+        }
+        return true;
+    }
+
     public async Task<TweakResult> RestoreTelemetryServicesAsync()
     {
         return await Task.Run(() =>
@@ -447,6 +644,70 @@ public class ServiceControlService
             }
             return TweakResult.Ok("Telemetry services restored.");
         });
+    }
+
+    /// <summary>
+    /// Reverses <see cref="DisablePrivacyAndRecommendedAsync"/>. Restores telemetry
+    /// services to Auto (Windows default) and sets every previously-disabled
+    /// Recommended service back to Manual start (3) — services start on demand
+    /// without auto-loading at boot, so memory impact is minimal but the user
+    /// gets full functionality back.
+    ///
+    /// Called when the user flips the Privacy &amp; Background Services toggle OFF.
+    /// </summary>
+    public async Task<TweakResult> RestorePrivacyAndRecommendedAsync(bool gamesInstalled)
+    {
+        // 1. Telemetry first
+        var telemetryResult = await RestoreTelemetryServicesAsync();
+
+        // 2. Every Recommended service that's currently disabled → Manual.
+        int restored = 0, skipped = 0;
+
+        await Task.Run(() =>
+        {
+            foreach (var (name, _, _, _) in OptimizableServices)
+            {
+                if (!ComputeRecommended(name, gamesInstalled)) continue;
+
+                // Read current state first (read-only access, never throws on locked keys).
+                int currentStart;
+                try
+                {
+                    using var readKey = Registry.LocalMachine.OpenSubKey(
+                        $@"SYSTEM\CurrentControlSet\Services\{name}");
+                    if (readKey == null) { skipped++; continue; }
+                    currentStart = (int?)readKey.GetValue("Start") ?? 3;
+                }
+                catch { skipped++; continue; }
+
+                if (currentStart != 4) { skipped++; continue; } // already not disabled
+
+                // Try direct registry write first, fall back to sc.exe for
+                // TrustedInstaller-protected keys (same pattern as the disable path).
+                bool ok = false;
+                try
+                {
+                    using var writeKey = Registry.LocalMachine.OpenSubKey(
+                        $@"SYSTEM\CurrentControlSet\Services\{name}", writable: true);
+                    if (writeKey != null)
+                    {
+                        writeKey.SetValue("Start", 3, RegistryValueKind.DWord); // Manual
+                        ok = true;
+                    }
+                }
+                catch (UnauthorizedAccessException)   { /* fall through to sc.exe */ }
+                catch (System.Security.SecurityException) { /* fall through to sc.exe */ }
+
+                if (!ok) ok = SetStartTypeViaSc(name, "demand"); // "demand" == Manual in sc.exe
+                if (ok) restored++; else skipped++;
+            }
+        });
+
+        InvalidateCache();
+
+        return TweakResult.Ok(
+            $"{telemetryResult.Message} Background services: {restored} restored to Manual" +
+            (skipped > 0 ? $", {skipped} left unchanged" : string.Empty) + ".");
     }
 
     private static void DisableTelemetryTasks()

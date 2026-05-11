@@ -6,6 +6,63 @@
 
     <UserControl.Resources>
         <conv:BoolToVisibilityConverter x:Key="BoolToVis"/>
+        <!--
+            IMPORTANT: All inline styles that use BasedOn with a style containing a ControlTemplate
+            (CheckBox/Button/ComboBox) MUST be declared here in UserControl.Resources.
+            WPF fails to resolve StaticResource for BasedOn during deferred template loading
+            when the style is defined inline inside an element's .Style property element.
+            TextBlock styles are exempt (no ControlTemplate). All others must live here.
+        -->
+        <!-- ComboBox: DNS Switcher — Auto-Pilot disable -->
+        <Style x:Key="DnsComboBoxStyle" TargetType="ComboBox" BasedOn="{StaticResource DarkComboBox}">
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsAutoPilotActive}" Value="True">
+                    <Setter Property="IsEnabled" Value="False"/>
+                    <Setter Property="Opacity"   Value="0.4"/>
+                    <Setter Property="ToolTip"   Value="Controlled by Auto-Pilot — turn off Auto-Pilot Mode to change"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+        <!-- CheckBox: Block Preview Updates toggle — Auto-Pilot disable -->
+        <Style x:Key="BlockPreviewUpdatesToggleStyle" TargetType="CheckBox" BasedOn="{StaticResource ToggleSwitch}">
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsAutoPilotActive}" Value="True">
+                    <Setter Property="IsEnabled" Value="False"/>
+                    <Setter Property="Opacity"   Value="0.4"/>
+                    <Setter Property="ToolTip"   Value="Controlled by Auto-Pilot — turn off Auto-Pilot Mode to change"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+        <!-- Button: Apply DNS — Auto-Pilot disable -->
+        <Style x:Key="ApplyDnsButtonStyle" TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsAutoPilotActive}" Value="True">
+                    <Setter Property="IsEnabled" Value="False"/>
+                    <Setter Property="Opacity"   Value="0.4"/>
+                    <Setter Property="ToolTip"   Value="Controlled by Auto-Pilot — turn off Auto-Pilot Mode to change"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+        <!-- Button: Reset to DHCP — Auto-Pilot disable -->
+        <Style x:Key="ResetDnsButtonStyle" TargetType="Button" BasedOn="{StaticResource GhostButton}">
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsAutoPilotActive}" Value="True">
+                    <Setter Property="IsEnabled" Value="False"/>
+                    <Setter Property="Opacity"   Value="0.4"/>
+                    <Setter Property="ToolTip"   Value="Controlled by Auto-Pilot — turn off Auto-Pilot Mode to change"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+        <!-- CheckBox: Core Parking toggle — Auto-Pilot disable -->
+        <Style x:Key="CoreParkingToggleStyle" TargetType="CheckBox" BasedOn="{StaticResource ToggleSwitch}">
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsAutoPilotActive}" Value="True">
+                    <Setter Property="IsEnabled" Value="False"/>
+                    <Setter Property="Opacity"   Value="0.4"/>
+                    <Setter Property="ToolTip"   Value="Controlled by Auto-Pilot — turn off Auto-Pilot Mode to change"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
     </UserControl.Resources>
 
     <ScrollViewer VerticalScrollBarVisibility="Auto">
@@ -67,19 +124,8 @@
 
                         <CheckBox Grid.Column="1" VerticalAlignment="Center"
                                   IsChecked="{Binding BlockPreviewUpdates, Mode=TwoWay}"
-                                  ToolTipService.ShowOnDisabled="True">
-                            <CheckBox.Style>
-                                <Style TargetType="CheckBox" BasedOn="{StaticResource ToggleSwitch}">
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding IsAutoPilotActive}" Value="True">
-                                            <Setter Property="IsEnabled" Value="False"/>
-                                            <Setter Property="Opacity"   Value="0.4"/>
-                                            <Setter Property="ToolTip"   Value="Controlled by Auto-Pilot — turn off Auto-Pilot Mode to change"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </CheckBox.Style>
-                        </CheckBox>
+                                  Style="{StaticResource BlockPreviewUpdatesToggleStyle}"
+                                  ToolTipService.ShowOnDisabled="True"/>
                     </Grid>
 
                     <!-- Status indicator -->
@@ -143,50 +189,17 @@
                                   Width="240"
                                   Margin="0,0,10,0"
                                   VerticalAlignment="Center"
-                                  ToolTipService.ShowOnDisabled="True">
-                            <ComboBox.Style>
-                                <Style TargetType="ComboBox" BasedOn="{StaticResource DarkComboBox}">
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding IsAutoPilotActive}" Value="True">
-                                            <Setter Property="IsEnabled" Value="False"/>
-                                            <Setter Property="Opacity"   Value="0.4"/>
-                                            <Setter Property="ToolTip"   Value="Controlled by Auto-Pilot — turn off Auto-Pilot Mode to change"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </ComboBox.Style>
-                        </ComboBox>
+                                  Style="{StaticResource DnsComboBoxStyle}"
+                                  ToolTipService.ShowOnDisabled="True"/>
                         <Button Content="Apply DNS"
                                 Command="{Binding ApplyDnsCommand}"
                                 Margin="0,0,8,0"
-                                ToolTipService.ShowOnDisabled="True">
-                            <Button.Style>
-                                <Style TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding IsAutoPilotActive}" Value="True">
-                                            <Setter Property="IsEnabled" Value="False"/>
-                                            <Setter Property="Opacity"   Value="0.4"/>
-                                            <Setter Property="ToolTip"   Value="Controlled by Auto-Pilot — turn off Auto-Pilot Mode to change"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </Button.Style>
-                        </Button>
+                                Style="{StaticResource ApplyDnsButtonStyle}"
+                                ToolTipService.ShowOnDisabled="True"/>
                         <Button Content="Reset to DHCP"
                                 Command="{Binding ResetDnsCommand}"
-                                ToolTipService.ShowOnDisabled="True">
-                            <Button.Style>
-                                <Style TargetType="Button" BasedOn="{StaticResource GhostButton}">
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding IsAutoPilotActive}" Value="True">
-                                            <Setter Property="IsEnabled" Value="False"/>
-                                            <Setter Property="Opacity"   Value="0.4"/>
-                                            <Setter Property="ToolTip"   Value="Controlled by Auto-Pilot — turn off Auto-Pilot Mode to change"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </Button.Style>
-                        </Button>
+                                Style="{StaticResource ResetDnsButtonStyle}"
+                                ToolTipService.ShowOnDisabled="True"/>
                     </StackPanel>
 
                     <!-- Loading indicator -->
@@ -235,19 +248,8 @@
 
                         <CheckBox Grid.Column="1" VerticalAlignment="Center"
                                   IsChecked="{Binding CoreParkingEnforced, Mode=TwoWay}"
-                                  ToolTipService.ShowOnDisabled="True">
-                            <CheckBox.Style>
-                                <Style TargetType="CheckBox" BasedOn="{StaticResource ToggleSwitch}">
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding IsAutoPilotActive}" Value="True">
-                                            <Setter Property="IsEnabled" Value="False"/>
-                                            <Setter Property="Opacity"   Value="0.4"/>
-                                            <Setter Property="ToolTip"   Value="Controlled by Auto-Pilot — turn off Auto-Pilot Mode to change"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </CheckBox.Style>
-                        </CheckBox>
+                                  Style="{StaticResource CoreParkingToggleStyle}"
+                                  ToolTipService.ShowOnDisabled="True"/>
                     </Grid>
 
                     <!-- Status indicator -->

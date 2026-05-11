@@ -249,14 +249,23 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
                         : $"Set to {recommended / 1024} GB (based on your {ramMb / 1024} GB RAM)",
                 });
 
-                // 2. Data collection
-                bool telOk = _serviceControl.AreTelemetryServicesDisabled();
-                if (!telOk) pending++;
+                // 2. Privacy & background services — merged check: telemetry services
+                //    must be disabled AND every Recommended optional service for this PC
+                //    (skips Xbox if games are installed, skips BITS, etc.).
+                bool gamesInstalled = _gameBooster.GamesInstalled;
+                bool telOk        = _serviceControl.AreTelemetryServicesDisabled();
+                bool recOk        = _serviceControl.AreAllRecommendedDisabled(gamesInstalled);
+                bool privacyOk    = telOk && recOk;
+                if (!privacyOk) pending++;
                 items.Add(new AutoPilotItem
                 {
-                    Label  = "Data collection",
-                    IsDone = telOk,
-                    Detail = telOk ? "Blocked" : "Telemetry services are active",
+                    Label  = "Privacy & background services",
+                    IsDone = privacyOk,
+                    Detail = privacyOk
+                        ? "Telemetry blocked, recommended services disabled"
+                        : !telOk && !recOk ? "Telemetry active and recommended services running"
+                        : !telOk           ? "Telemetry services are active"
+                                           : "Some recommended services are still running",
                 });
 
                 // 3. Power plan
@@ -445,9 +454,13 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
             await _memoryService.ConfigurePagefileAsync(recommended, recommended);
             _log.Info("DashboardViewModel", $"Page file set to {recommended / 1024} GB (RAM: {ramMb / 1024} GB)");
 
-            // 2. Disable data collection (telemetry services + tasks)
-            await _serviceControl.DisableAllTelemetryServicesAsync();
-            _log.Info("DashboardViewModel", "Data collection disabled");
+            // 2. Privacy cleanup — telemetry services + tasks AND every "Recommended"
+            //    background service in one pass. Replaces the old telemetry-only step.
+            //    Auto-Pilot Mode (toggle ON) re-applies this whenever drift is detected;
+            //    a one-shot "Apply settings" click runs it once and stops.
+            var gamesInstalled = _gameBooster.GamesInstalled;
+            await _serviceControl.DisablePrivacyAndRecommendedAsync(gamesInstalled);
+            _log.Info("DashboardViewModel", "Privacy cleanup applied (telemetry + recommended services)");
 
             // 3. High Performance power plan
             await _powerPlan.SetHighPerformanceAsync();

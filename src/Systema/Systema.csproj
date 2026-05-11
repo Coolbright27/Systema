@@ -11,7 +11,7 @@
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
     <AssemblyName>Systema</AssemblyName>
     <RootNamespace>Systema</RootNamespace>
-    <Version>1.7.72</Version>
+    <Version>99.9.9</Version>
     <Company>Systema</Company>
     <Product>Systema Optimization Suite</Product>
     <Description>High-performance Windows optimization suite</Description>
@@ -19,6 +19,25 @@
     <Optimize>true</Optimize>
     <Platforms>x64</Platforms>
     <ApplicationIcon>Assets\logo.ico</ApplicationIcon>
+  </PropertyGroup>
+
+  <!--
+    Single-file publish so the app ships as ONE Systema.exe instead of a folder full
+    of separate DLLs. Smart App Control (Windows 11 25H2 kernel-level WDAC policy)
+    rates each unsigned binary independently and was blocking Systema.dll on its
+    own. Bundling everything inside Systema.exe removes that surface entirely —
+    SAC and SmartScreen only see one file to evaluate.
+
+    These properties are publish-time only (dotnet build ignores them, dotnet publish
+    honours them), so they're safe to leave unconditional. The companion install
+    flags Unblock-File / Add-MpPreference still run from the installer post-install
+    section so the surviving Systema.exe doesn't trip SmartScreen on every launch.
+  -->
+  <PropertyGroup>
+    <PublishSingleFile>true</PublishSingleFile>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <IncludeAllContentForSelfExtract>true</IncludeAllContentForSelfExtract>
   </PropertyGroup>
 
   <ItemGroup>

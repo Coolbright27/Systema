@@ -22,6 +22,7 @@ desktop.ini
 
 # Installer output (compiled setup .exe — built from .iss, not source)
 installer/output/
+installer/Final/
 
 # Secrets / env
 .env

@@ -406,7 +406,7 @@
 
             <!-- Version footer -->
             <TextBlock Grid.Row="18"
-                       Text="Systema v1.7.72  Â·  For support visit discord.gg/DjxBswDeN8"
+                       Text="Systema v99.9.9  Â·  For support visit discord.gg/DjxBswDeN8"
                        Style="{StaticResource BodyText}" Foreground="{StaticResource TextSecondaryBrush}"
                        TextWrapping="Wrap"/>
         </Grid>

@@ -13,6 +13,18 @@
             <conv:SafetyLevelToColorConverter x:Key="GlobalSafetyColor"/>
             <conv:SafetyLevelToBadgeConverter x:Key="GlobalSafetyBadge"/>
             <conv:EqualityConverter x:Key="GlobalEquality"/>
+
+            <!--
+                Override the system "Window" brush key so any control that uses
+                SystemColors.WindowBrushKey for its popup/dropdown background
+                (notably ComboBox) renders dark instead of bright white.
+                Lives at app scope so all ComboBoxes pick it up automatically —
+                this previously lived inside the DarkComboBox style as a
+                <Setter Property="Resources"> block, which is invalid because
+                FrameworkElement.Resources is not a DependencyProperty and
+                caused a fatal XamlParseException during template load.
+            -->
+            <SolidColorBrush x:Key="{x:Static SystemColors.WindowBrushKey}" Color="#171718"/>
         </ResourceDictionary>
     </Application.Resources>
 </Application>

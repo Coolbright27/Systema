@@ -46,6 +46,29 @@ public class UpdateService : IDisposable
     private static readonly string ApiUrl =
         $"https://api.github.com/repos/{Owner}/{Repo}/releases";
 
+    // ── Migration sentinel ────────────────────────────────────────────────────
+    // v99.9.9 is a transient migration build whose sole job is to pull legacy
+    // 1.7.x users onto the v0.7.9 codebase. The version-reset (1.7.x → 0.7.9)
+    // can't happen through the normal "newer version wins" rule, so we ship a
+    // synthetic-high release and special-case the updater to redirect from it.
+    //
+    // Behaviour:
+    //   • When the running binary IS v99.9.9 → updater bypasses the
+    //     "must be higher" check and looks specifically for tag v0.7.9.
+    //   • When the running binary is anything else (e.g. v0.7.9) → updater
+    //     explicitly IGNORES v99.9.9 if it appears as a stable release,
+    //     preventing an upgrade loop back to the migration build.
+    //
+    // After every existing user has migrated to v0.7.9 and you've taken down
+    // (or pre-released) v99.9.9 on GitHub, this block becomes dead code, but
+    // we leave it in permanently as a safety net — newer codebases continue
+    // to skip the sentinel, which protects against any future operator error.
+    private static readonly Version MigrationSentinelVersion = new(99, 9, 9);
+    private const string            MigrationTargetTag       = "v0.7.9";
+
+    private static readonly string TagApiUrlTemplate =
+        $"https://api.github.com/repos/{Owner}/{Repo}/releases/tags/{{0}}";
+
     /// <summary>How often to re-check while the app is running (hours).</summary>
     private const double CheckIntervalHours = 2.0;
 
@@ -565,7 +588,19 @@ public class UpdateService : IDisposable
     {
         try
         {
-            var current  = GetCurrentVersion();
+            var current = GetCurrentVersion();
+
+            // ── Migration mode: running v99.9.9 → only ever return v0.7.9 ────
+            // See MigrationSentinelVersion comment at the top of the class.
+            if (current == MigrationSentinelVersion)
+            {
+                var target = await FetchReleaseByTagAsync(MigrationTargetTag);
+                if (target != null)
+                    _log.Info("AutoUpdate",
+                        $"Migration mode: redirecting v{current} → {MigrationTargetTag}");
+                return target;
+            }
+
             var json     = await Http.GetStringAsync(ApiUrl);
             var releases = JsonNode.Parse(json)?.AsArray();
             if (releases == null) return null;
@@ -584,6 +619,12 @@ public class UpdateService : IDisposable
 
                 var tagName = r["tag_name"]?.GetValue<string>() ?? string.Empty;
                 if (!TryParseVersion(tagName, out var ver)) continue;
+
+                // Never upgrade back to the migration sentinel — even if someone
+                // mistakenly re-publishes v99.9.9 as stable, normal binaries
+                // must ignore it.
+                if (ver == MigrationSentinelVersion) continue;
+
                 if (ver <= current) continue;
 
                 // Find the installer .exe asset
@@ -623,6 +664,69 @@ public class UpdateService : IDisposable
             return best;
         }
         catch { return null; }
+    }
+
+    /// <summary>
+    /// Fetches a single release by its exact tag name (e.g. "v0.7.9"). Used only
+    /// by the migration sentinel path — bypasses the "must be newer / must be
+    /// stable" filters because we explicitly want to redirect to a lower-numbered
+    /// version, even if that version is briefly published as a pre-release.
+    /// Returns null if the tag doesn't exist on GitHub (which is the normal
+    /// "wait until v0.7.9 is published" state for migration-mode binaries).
+    /// </summary>
+    private async Task<UpdateInfo?> FetchReleaseByTagAsync(string tag)
+    {
+        try
+        {
+            var url  = string.Format(TagApiUrlTemplate, tag);
+            var json = await Http.GetStringAsync(url);
+            var r    = JsonNode.Parse(json);
+            if (r == null) return null;
+
+            // Drafts are unpublished and have no usable download URL.
+            if (r["draft"]?.GetValue<bool>() == true) return null;
+
+            var tagName = r["tag_name"]?.GetValue<string>() ?? tag;
+            if (!TryParseVersion(tagName, out var ver)) return null;
+
+            string dlUrl = string.Empty;
+            var assets = r["assets"]?.AsArray();
+            if (assets != null)
+            {
+                foreach (var asset in assets)
+                {
+                    var name = asset?["name"]?.GetValue<string>() ?? string.Empty;
+                    if (name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+                    {
+                        dlUrl = asset?["browser_download_url"]?.GetValue<string>() ?? string.Empty;
+                        break;
+                    }
+                }
+            }
+            if (string.IsNullOrEmpty(dlUrl)) return null;
+
+            return new UpdateInfo(
+                Version:      ver,
+                TagName:      tagName,
+                Title:        r["name"]?.GetValue<string>() ?? tagName,
+                ReleaseNotes: r["body"]?.GetValue<string>() ?? string.Empty,
+                DownloadUrl:  dlUrl,
+                IsPreRelease: r["prerelease"]?.GetValue<bool>() ?? false,
+                PublishedAt:  DateTimeOffset.TryParse(
+                    r["published_at"]?.GetValue<string>(), out var dt)
+                    ? dt : DateTimeOffset.Now);
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            // Tag doesn't exist yet — normal during the window between pushing
+            // v99.9.9 and pushing v0.7.9. Silent return.
+            return null;
+        }
+        catch (Exception ex)
+        {
+            _log.Warn("AutoUpdate", $"FetchReleaseByTag({tag}) failed: {ex.Message}");
+            return null;
+        }
     }
 
     // ── Download & silent install ─────────────────────────────────────────────

