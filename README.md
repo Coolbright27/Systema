@@ -6,7 +6,7 @@
 
 [![Download](https://img.shields.io/badge/Download-v0.7.9-2ea44f?style=for-the-badge&logo=windows&logoColor=white)](../../releases/latest)
 [![Discord](https://img.shields.io/badge/Discord-Join-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/DjxBswDeN8)
-[![License](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)](LICENSE)
+[![License](https://img.shields.io/badge/License-Noncommercial-orange?style=for-the-badge)](LICENSE)
 
 Free · Windows 10 & 11 · No accounts · No ads · No telemetry
 
