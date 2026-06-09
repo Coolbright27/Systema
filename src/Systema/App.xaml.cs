@@ -55,13 +55,20 @@ public partial class App : Application
     private static int _crashHandlerActiveInt;
 
     // Services held at App level so they outlive any single window
-    private TrayService?   _trayService;
-    private MainWindow?    _mainWindow;
-    private MainViewModel? _mainVm;
-    private UpdateService? _updateService;
+    private TrayService?     _trayService;
+    private MainWindow?      _mainWindow;
+    private MainViewModel?   _mainVm;
+    private UpdateService?   _updateService;
+    private HeartbeatService? _heartbeat;
 
     // Single-instance guard — prevents the watchdog task from spawning duplicates
     private static Mutex? _singleInstanceMutex;
+
+    // True once the main window or tray icon has been shown successfully. Any
+    // exception caught BEFORE this point must shut the process down (instead of
+    // leaving a zombie that holds the single-instance mutex and prevents future
+    // launches until the user reinstalls).
+    private bool _startupCompleted;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -93,16 +100,40 @@ public partial class App : Application
         Log.Info("App", "Starting Systema...");
 
         // ── Single-instance guard ──
-        // If the watchdog task (or user) launches a second instance while Systema
-        // is already running, this mutex catches it and exits immediately.
+        // Normally another running instance owns the mutex and we exit. But if
+        // that running instance has WEDGED (timer deadlock, COM call hang, etc.)
+        // the mutex stays held forever and the user thinks "Systema won't open
+        // until I reinstall." HeartbeatService writes a timestamp file every
+        // ~10 s — if it's stale, the running instance is dead, so we kill it
+        // and reclaim the mutex instead of giving up.
         _singleInstanceMutex = new Mutex(true, "Global\\SystemaSingleInstance", out bool isNewInstance);
         if (!isNewInstance)
         {
-            Log.Info("App", "Another instance is already running — exiting");
-            _singleInstanceMutex.Dispose();
-            Shutdown(0);
-            return;
+            if (HeartbeatService.IsHeartbeatStale())
+            {
+                int killed = HeartbeatService.KillHungInstances();
+                Log.Warn("App",
+                    $"Existing Systema instance is unresponsive (heartbeat stale) — killed {killed} process(es); reclaiming the single-instance mutex");
+                try { _singleInstanceMutex.Dispose(); } catch { }
+                // Brief settle so the OS finishes tearing down the killed process
+                // and releases the mutex's kernel object reference.
+                System.Threading.Thread.Sleep(500);
+                _singleInstanceMutex = new Mutex(true, "Global\\SystemaSingleInstance", out isNewInstance);
+            }
+
+            if (!isNewInstance)
+            {
+                Log.Info("App", "Another instance is already running and is alive — exiting");
+                _singleInstanceMutex.Dispose();
+                Shutdown(0);
+                return;
+            }
         }
+
+        // We're the owning instance — start the heartbeat so a future duplicate
+        // launch can detect us and only kill us if we've actually hung.
+        _heartbeat = new HeartbeatService();
+        _heartbeat.Start();
 
         // ── Check for crash from previous session ──
         // CrashGuard writes a sentinel file before risky operations and deletes it
@@ -156,9 +187,13 @@ public partial class App : Application
             var gameboosterService  = new GameBoosterService(serviceControl, settingsService, processLassoService, batteryPauseService);
             var realtekService      = new RealtekCleanerService();
             var coreParkingService  = new CoreParkingService();
+            var thermalService      = new ThermalManagementService();
             var wuTweaksService     = new WindowsUpdateTweaksService();
+
             var stabilityService    = new SystemStabilityService();
+            var win11CleanupService = new Win11CleanupService();
             var bloatwareService    = new BloatwareService();
+            var intelGpuService     = new IntelGpuService();
             _updateService          = new UpdateService(settingsService);
             var watchdogService     = new WatchdogService();
             var healthService       = new HealthScoreService(
@@ -166,6 +201,45 @@ public partial class App : Application
                 animationService, powerPlanService);
 
             Log.Info("App", "All services instantiated");
+
+            // ── Core parking re-enforcement on startup ──
+            // The SystemaCoreParking scheduled task runs at boot as SYSTEM, but
+            // SYSTEM's active power scheme often differs from the signed-in user's,
+            // so the boot-time apply silently no-ops and core parking "only applies
+            // once." Re-apply it from the running (user-context, elevated) app ~20s
+            // after launch so the user's active scheme is corrected after every
+            // reboot or third-party power-plan reset. The 20 s delay keeps it off
+            // the critical startup path.
+            if (settingsService.CoreParkingEnabled)
+            {
+                _ = System.Threading.Tasks.Task.Run(async () =>
+                {
+                    try
+                    {
+                        await System.Threading.Tasks.Task.Delay(20_000);
+                        await coreParkingService.ReapplyCoreParkingAsync();
+                    }
+                    catch (Exception ex) { Log.Warn("App", $"Startup core-parking re-apply failed: {ex.Message}"); }
+                });
+            }
+
+            // ── Windows 11 nag reinforcement ──
+            // Disable Suggestions defaults ON, so on first run this applies it; on
+            // every later launch it re-asserts the HKCU values a feature update may
+            // have reset (the "never come back" reinforcement). Web search is opt-in
+            // and only re-applied when the user turned it on. Both are HKCU-only and
+            // run off the startup critical path.
+            _ = System.Threading.Tasks.Task.Run(async () =>
+            {
+                try
+                {
+                    if (settingsService.DisableSuggestionsEnabled)
+                        await win11CleanupService.DisableConsumerContentAsync();
+                    if (settingsService.DisableWebSearchEnabled)
+                        await win11CleanupService.DisableWebSearchAsync();
+                }
+                catch (Exception ex) { Log.Warn("App", $"Win11 nag reinforcement failed: {ex.Message}"); }
+            });
 
             // ── First-run defaults ──
             // Enable "Start with Windows" automatically on first launch so the app
@@ -198,17 +272,44 @@ public partial class App : Application
                 wuTweaksService, coreParkingService, settingsService, optFeatures, stabilityService);
 
             var memoryVm      = new MemoryViewModel(memoryService, startupService, settingsService);
-            var servicesVm    = new ServicesViewModel(serviceControl, optFeatures, restoreService, settingsService);
+            var servicesVm    = new ServicesViewModel(serviceControl, optFeatures, restoreService, settingsService, gameboosterService);
             var visualVm      = new VisualViewModel(animationService, powerPlanService, settingsService);
             var gameBoosterVm = new GameBoosterViewModel(gameboosterService, settingsService);
             var settingsVm    = new SettingsViewModel(settingsService, restoreService, _updateService, watchdogService, gameboosterService);
             var toolsVm       = new ToolsViewModel(
                 realtekService, coreParkingService, restoreService,
-                settingsService, dnsService, wuTweaksService, stabilityService);
+                settingsService, dnsService, wuTweaksService, stabilityService,
+                win11CleanupService);
             var bloatwareVm   = new BloatwareViewModel(bloatwareService, restoreService, settingsService);
+            var intelVm       = new IntelGpuViewModel(intelGpuService, settingsService);
+            var dellVm        = new DellViewModel(thermalService, settingsService, powerPlanService);
 
             _mainVm = new MainViewModel(dashboardVm, memoryVm, servicesVm,
-                                        visualVm, gameBoosterVm, settingsVm, toolsVm, taskSleepVm, bloatwareVm);
+                                        visualVm, gameBoosterVm, settingsVm, toolsVm, taskSleepVm, bloatwareVm, intelVm, dellVm);
+
+            // ── Intel iGPU profile re-apply on startup (opt-in) ──
+            // Intel driver updates sometimes wipe the display-adapter registry values. When
+            // the user opted in, re-apply the saved profile ~20 s after launch. Writes go to
+            // the ACTIVE adapter only (IntelGpuService.WriteValue → PrimaryAdapter).
+            if (settingsService.IntelGpuReapplyEnabled && intelVm.IsIntelPresent)
+            {
+                _ = System.Threading.Tasks.Task.Run(async () =>
+                {
+                    try
+                    {
+                        await System.Threading.Tasks.Task.Delay(20_000);
+                        var saved = settingsService.IntelGpuProfile;
+                        if (saved is { Count: > 0 })
+                        {
+                            var adapters = intelGpuService.DetectIntelAdapters();
+                            foreach (var (name, value) in saved)
+                                intelGpuService.WriteValue(adapters, name, value);
+                            Log.Info("App", $"Re-applied saved Intel iGPU profile ({saved.Count} value(s)) after startup.");
+                        }
+                    }
+                    catch (Exception ex) { Log.Warn("App", $"Startup Intel iGPU re-apply failed: {ex.Message}"); }
+                });
+            }
 
             Log.Info("App", "All ViewModels constructed");
 
@@ -223,6 +324,46 @@ public partial class App : Application
             _trayService = new TrayService();
             _trayService.ShowWindowRequested += ShowMainWindow;
             _trayService.ExitRequested       += ExplicitShutdown;
+
+            // ── Tray "Toggle Game Boost" ──
+            // Right-click the tray icon → start/stop Game Boost without opening the
+            // window. Toggles MANUAL boost: if any boost is currently active (manual
+            // OR game-detected), the click stops it; otherwise it starts a manual boost.
+            _trayService.ToggleBoostRequested += () =>
+            {
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        if (gameboosterService.BoostActive)
+                        {
+                            await gameboosterService.DisableManualBoostAsync();
+                        }
+                        else
+                        {
+                            await gameboosterService.EnableManualBoostAsync();
+                            // EnableManualBoostAsync silently no-ops when the Game Booster
+                            // master switch is off — give the user feedback instead of a
+                            // dead click they can't diagnose from the tray.
+                            if (!gameboosterService.BoostActive)
+                                _trayService?.ShowBalloon("Game Boost",
+                                    "Game Booster is turned off. Open Systema → Game Boost to enable it.",
+                                    System.Windows.Forms.ToolTipIcon.Warning);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Warn("App", $"Tray toggle-boost failed: {ex.Message}");
+                    }
+                });
+            };
+
+            // Keep the tray menu caption ("Start"/"Stop Game Boost") + checkmark in
+            // sync with the real boost state, regardless of what triggered the change.
+            gameboosterService.BoostActivated   += _  => _trayService?.UpdateBoostMenuState(true);
+            gameboosterService.BoostDeactivated += () => _trayService?.UpdateBoostMenuState(false);
+            // Reflect whatever state we start in (e.g. relaunched mid-boost).
+            _trayService.UpdateBoostMenuState(gameboosterService.BoostActive);
 
             // Start background game monitoring (passes tray ref for balloon notifications)
             gameboosterService.StartMonitoring(_trayService);
@@ -267,11 +408,26 @@ public partial class App : Application
             {
                 ShowMainWindow();
             }
+
+            // From here on, a UI-thread exception is a "running app" crash — we
+            // let OnDispatcherUnhandledException decide what to do. Before this
+            // point ANY thrown exception must shut the process down or it lingers
+            // as a zombie holding the single-instance mutex.
+            _startupCompleted = true;
         }
         catch (Exception ex)
         {
             Log.Fatal("App", "Startup composition failed", ex);
             ShowCrashOnUIThread(ex, "Application Startup");
+
+            // CRITICAL: don't leave a zombie holding the single-instance mutex.
+            // Without this Shutdown, the process keeps running invisibly (no
+            // window, no tray — ShutdownMode is OnExplicitShutdown), the mutex
+            // stays acquired, and every future double-click of the shortcut
+            // silently exits at the isNewInstance check above. That's the
+            // "Systema won't start until I reinstall" bug.
+            try { CrashGuard.Stop(); } catch { }
+            Shutdown(1);
         }
     }
 
@@ -307,6 +463,7 @@ public partial class App : Application
     {
         Log.Info("App", "User requested exit from tray");
         CrashGuard.Stop();
+        _heartbeat?.Dispose();
         _mainVm?.Dispose();
         _trayService?.Dispose();
         _mainWindow?.Close();
@@ -333,10 +490,19 @@ public partial class App : Application
         // XAML/layout exceptions re-fire on every WPF layout pass — CrashReportWindow
         // (a WPF window itself) cannot render when the layout engine is in a crash loop.
         // Use a Win32 MessageBox which bypasses WPF rendering entirely.
+        // Treat as "WPF render is broken" — bypass CrashReportWindow (a WPF Window)
+        // entirely and show a Win32 MessageBox. Without this, a font / layout
+        // exception fires every frame: opening the crash window re-triggers the
+        // measure pass, throws again, and the user sees "could not display the
+        // crash report" instead of the real stack trace.
         bool isXamlError = e.Exception is System.Windows.Markup.XamlParseException
             || e.Exception.InnerException is System.Windows.Markup.XamlParseException
             || e.Exception is InvalidOperationException
-               && (e.Exception.Message.Contains("TargetType") || e.Exception.Message.Contains("Style"));
+               && (e.Exception.Message.Contains("TargetType") || e.Exception.Message.Contains("Style"))
+            // Layout-pass crashes (font lookup, glyph cache, typeface fallback) —
+            // anything thrown inside Measure/Arrange/Render will re-fire when the
+            // crash window itself measures, so we can't use a WPF window to show it.
+            || HasLayoutFrame(e.Exception);
 
         if (isXamlError)
         {
@@ -354,6 +520,42 @@ public partial class App : Application
         }
 
         ShowCrashOnUIThread(e.Exception, "UI Thread Exception");
+
+        // If the crash happened BEFORE the main window or tray icon finished
+        // coming up, the user has no way to interact with us — without this
+        // shutdown the process would linger as a zombie holding the
+        // single-instance mutex (the "Systema won't start until I reinstall"
+        // bug). After startup we let the app keep running so a transient WPF
+        // glitch doesn't kill a live session.
+        if (!_startupCompleted)
+        {
+            Log.Warn("App", "UI exception fired before startup completed — shutting down to release single-instance mutex");
+            try { CrashGuard.Stop(); } catch { }
+            Shutdown(1);
+        }
+    }
+
+    /// <summary>
+    /// True when the exception originated inside the WPF layout / render pipeline
+    /// (Measure, Arrange, GlyphTypeface, TextFormatter, MediaContext, etc.).
+    /// These crashes re-fire on every layout pass, so opening a WPF crash window
+    /// is unsafe — it just hits the same exception while measuring itself.
+    /// </summary>
+    private static bool HasLayoutFrame(Exception? ex)
+    {
+        for (var cur = ex; cur != null; cur = cur.InnerException)
+        {
+            var st = cur.StackTrace;
+            if (st == null) continue;
+            if (st.Contains("MeasureOverride")
+             || st.Contains("ArrangeOverride")
+             || st.Contains("ContextLayoutManager")
+             || st.Contains("MediaContext.Render")
+             || st.Contains("GlyphTypeface")
+             || st.Contains("TextInterface.Font"))
+                return true;
+        }
+        return false;
     }
 
     private static bool IsWpfShutdownTelemetryError(Exception? ex)
@@ -425,6 +627,7 @@ public partial class App : Application
     {
         Log.Info("App", $"Windows session ending ({e.ReasonSessionEnding}) — disposing resources");
         CrashGuard.Stop();
+        _heartbeat?.Dispose();
         _updateService?.StopAutoUpdate();
         _trayService?.Dispose();
         _trayService = null;
@@ -434,6 +637,7 @@ public partial class App : Application
     protected override void OnExit(ExitEventArgs e)
     {
         CrashGuard.Stop();
+        _heartbeat?.Dispose();
         _mainVm?.Dispose();
         _trayService?.Dispose();
         Log.Info("App", $"Systema exiting with code {e.ApplicationExitCode}");

@@ -93,11 +93,50 @@ public sealed class GameBoosterService : IDisposable
     private static extern uint NtSetSystemInformation(int SystemInformationClass,
         ref uint SystemInformation, uint SystemInformationLength);
 
+    // Used to measure ullAvailPhys before and after the trim so the log reports
+    // an actual MB-freed number instead of just "trimmed N processes" — diagnostics
+    // are directly comparable with MemoryService.FreeRam now.
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
+    private sealed class MEMORYSTATUSEX
+    {
+        public uint  dwLength = (uint)Marshal.SizeOf(typeof(MEMORYSTATUSEX));
+        public uint  dwMemoryLoad;
+        public ulong ullTotalPhys;
+        public ulong ullAvailPhys;
+        public ulong ullTotalPageFile;
+        public ulong ullAvailPageFile;
+        public ulong ullTotalVirtual;
+        public ulong ullAvailVirtual;
+        public ulong ullAvailExtendedVirtual;
+    }
+    [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Auto)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GlobalMemoryStatusEx([In, Out] MEMORYSTATUSEX lpBuffer);
+
+    /// <summary>Returns currently-available physical RAM in MB. 0 on failure.</summary>
+    private static long GetAvailableRamMb()
+    {
+        try
+        {
+            var info = new MEMORYSTATUSEX();
+            return GlobalMemoryStatusEx(info) ? (long)(info.ullAvailPhys / (1024 * 1024)) : 0;
+        }
+        catch { return 0; }
+    }
+
     private const int  SystemMemoryListInformation = 80;
     private const uint MemoryFlushModifiedList     = 1; // move modified pages → standby
     private const uint MemoryPurgeStandbyList      = 2; // evict standby list → free
 
-    private const uint PROCESS_SET_INFORMATION = 0x0200;
+    private const uint PROCESS_SET_INFORMATION   = 0x0200;
+    // EmptyWorkingSet and SetProcessWorkingSetSize require BOTH of the rights
+    // below (per psapi.dll docs). Using PROCESS_SET_INFORMATION alone made every
+    // call silently fail with ERROR_ACCESS_DENIED — the loop still incremented
+    // its counter and logged "Trimmed N processes", but Task Manager showed
+    // zero RAM actually freed. Bug fixed v0.7.9.
+    private const uint PROCESS_QUERY_INFORMATION = 0x0400;
+    private const uint PROCESS_SET_QUOTA         = 0x0100;
+    private const uint PROCESS_TRIM_WORKING_SET  = PROCESS_QUERY_INFORMATION | PROCESS_SET_QUOTA;
 
     // ── VSync-critical processes (NEVER trim these) ──────────────────────────
     // Trimming dwm/audiodg/svchost/GPU-vendor working sets forces them to page
@@ -1044,6 +1083,12 @@ public sealed class GameBoosterService : IDisposable
         {
             try
             {
+                // Before/after measurement — without this we previously logged
+                // "Trimmed N processes" but had no idea whether anything was
+                // actually freed. Matches MemoryService.FreeRam's reporting so
+                // diagnostic logs are directly comparable.
+                long beforeAvailMb = GetAvailableRamMb();
+
                 var procs = Process.GetProcesses();
                 int trimmed = 0, skipped = 0;
                 foreach (var proc in procs)
@@ -1068,7 +1113,13 @@ public sealed class GameBoosterService : IDisposable
                             skipped++;
                             continue;
                         }
-                        IntPtr h = OpenProcess(PROCESS_SET_INFORMATION, false, proc.Id);
+                        // Open with the rights EmptyWorkingSet + SetProcessWorkingSetSize
+                        // BOTH require: PROCESS_QUERY_INFORMATION | PROCESS_SET_QUOTA.
+                        // The old code used PROCESS_SET_INFORMATION alone, which made
+                        // every EmptyWorkingSet call return false with ERROR_ACCESS_DENIED
+                        // — the loop counter still incremented and the log claimed
+                        // success, but Task Manager showed zero RAM actually freed.
+                        IntPtr h = OpenProcess(PROCESS_TRIM_WORKING_SET, false, proc.Id);
                         if (h == IntPtr.Zero) continue;
                         try
                         {
@@ -1097,7 +1148,14 @@ public sealed class GameBoosterService : IDisposable
                 }
                 catch (Exception ex2) { _log.Warn("GameBoosterService", $"StandbyPurge failed: {ex2.Message}"); }
 
-                _log.Info("GameBoosterService", $"Trimmed working sets of {trimmed} background processes to free RAM for {gameName} (skipped {skipped} VSync-critical)");
+                // Brief pause so Windows reclaims the trimmed pages before we re-sample,
+                // matching MemoryService.FreeRam (which sleeps 500ms for the same reason).
+                System.Threading.Thread.Sleep(500);
+                long afterAvailMb = GetAvailableRamMb();
+                long freedMb      = Math.Max(0, afterAvailMb - beforeAvailMb);
+
+                _log.Info("GameBoosterService",
+                    $"Freed ~{freedMb:N0} MB by trimming {trimmed} background processes for {gameName} (skipped {skipped} VSync-critical)");
             }
             catch (Exception ex) { _log.Warn("GameBoosterService", $"FreeMemory failed: {ex.Message}"); }
         }

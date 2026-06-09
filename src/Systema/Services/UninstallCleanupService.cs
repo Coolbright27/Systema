@@ -63,9 +63,24 @@ public static class UninstallCleanupService
         TryStep("Re-enable NTFS last-access timestamps", () =>
             new SystemStabilityService().EnableNtfsLastAccessAsync().GetAwaiter().GetResult());
 
+        // 6b. Engine responsiveness tweaks — restore Windows defaults for Foreground
+        //     Priority Boost, Instant App Focus, and Instant Startup Apps.
+        TryStep("Restore foreground priority boost", () =>
+            new SystemStabilityService().DisableForegroundBoostAsync().GetAwaiter().GetResult());
+        TryStep("Restore instant app focus", () =>
+            new SystemStabilityService().DisableInstantAppFocusAsync().GetAwaiter().GetResult());
+        TryStep("Restore startup app delay", () =>
+            new SystemStabilityService().DisableInstantStartupAppsAsync().GetAwaiter().GetResult());
+
         // 7. Windows Update — remove ManagePreviewBuilds / BranchReadinessLevel policy
         TryStep("Remove Windows Update preview build block", () =>
             new WindowsUpdateTweaksService().AllowPreviewUpdatesAsync().GetAwaiter().GetResult());
+
+        // 7b. Windows 11 cleanup — restore suggestions/nags and Start web search
+        TryStep("Restore Windows suggestions and nags", () =>
+            new Win11CleanupService().RestoreConsumerContentAsync().GetAwaiter().GetResult());
+        TryStep("Restore Start web search", () =>
+            new Win11CleanupService().RestoreWebSearchAsync().GetAwaiter().GetResult());
 
         // 8. DNS — restore all active adapters to DHCP (System Default)
         TryStep("Restore DNS to DHCP", () =>

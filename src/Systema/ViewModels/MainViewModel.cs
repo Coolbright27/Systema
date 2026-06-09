@@ -53,6 +53,21 @@ public partial class MainViewModel : ObservableObject, IDisposable
     public ToolsViewModel       ToolsVm       { get; }
     public TaskSleepViewModel   TaskSleepVm   { get; }
     public BloatwareViewModel   BloatwareVm   { get; }
+    public IntelGpuViewModel    IntelVm       { get; }
+    public DellViewModel        DellVm        { get; }
+
+    /// <summary>True only when an Intel iGPU is present — drives the Intel sidebar
+    /// section's visibility so it stays hidden on non-Intel systems.</summary>
+    public bool IsIntelGpuPresent => IntelVm.IsIntelPresent;
+
+    /// <summary>True only on Dell systems — drives the Dell sidebar section's visibility.</summary>
+    public bool IsDellPresent => DellVm.IsDellPresent;
+
+    /// <summary>
+    /// True when ANY on-device / hardware-specific section is present (Intel, Dell). Drives
+    /// the dedicated sidebar separator so it only appears when the group is non-empty.
+    /// </summary>
+    public bool HasOnDeviceSections => IsIntelGpuPresent || IsDellPresent;
 
     private readonly DispatcherTimer _refreshTimer;
     private readonly DispatcherTimer _heartbeatTimer;   // dedicated 1-second CrashGuard heartbeat
@@ -69,7 +84,9 @@ public partial class MainViewModel : ObservableObject, IDisposable
         SettingsViewModel    settingsVm,
         ToolsViewModel       toolsVm,
         TaskSleepViewModel   taskSleepVm,
-        BloatwareViewModel   bloatwareVm)
+        BloatwareViewModel   bloatwareVm,
+        IntelGpuViewModel    intelVm,
+        DellViewModel        dellVm)
     {
         DashboardVm   = dashboardVm;
         MemoryVm      = memoryVm;
@@ -80,6 +97,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
         ToolsVm       = toolsVm;
         TaskSleepVm   = taskSleepVm;
         BloatwareVm   = bloatwareVm;
+        IntelVm       = intelVm;
+        DellVm        = dellVm;
         CurrentView   = dashboardVm;
 
         // Dedicated 1-second heartbeat — always ticks regardless of app focus or refresh rate.
@@ -150,6 +169,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
                 "Tools"       => ToolsVm,
                 "TaskSleep"   => TaskSleepVm,
                 "Bloatware"   => BloatwareVm,
+                "Intel"       => IntelVm,
+                "Dell"        => DellVm,
                 _ => LogUnknownSection(section)
             };
             CurrentView = next;
@@ -203,5 +224,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         GameBoosterVm?.Dispose();
         SettingsVm?.Dispose();
         ToolsVm?.Dispose();
+        IntelVm?.Dispose();
+        DellVm?.Dispose();
     }
 }

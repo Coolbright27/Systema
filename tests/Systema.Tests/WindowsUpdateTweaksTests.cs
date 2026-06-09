@@ -257,79 +257,65 @@ public class WindowsUpdateTweaksTests
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // 4. EvaluateWufbState — Windows Update for Business activation check
+    // 4. WUfB activation is INTENTIONALLY no longer written (v0.7.9 hotfix)
     //
-    //    Context: AllowOptionalContent = 0 (in the core block) is ignored by the
-    //    WU client on Windows 11 22H2+ unless Windows Update for Business (WUfB)
-    //    quality update management is also active. This was the root cause of the
-    //    "2026 preview still shows as optional update" bug (v1.7.66).
+    //    History: v1.7.67 added DeferQualityUpdates=1 + DeferQualityUpdatesPeriodInDays=0
+    //    to BlockPreviewUpdatesAsync because AllowOptionalContent=0 is ignored on
+    //    Win11 22H2+ unless WUfB is active. Tests EvaluateWufbState_* used to
+    //    pin that behaviour.
     //
-    //    Fix (v1.7.67): BlockPreviewUpdatesAsync now also writes:
-    //      DeferQualityUpdates = 1             → activates WUfB
-    //      DeferQualityUpdatesPeriodInDays = 0 → zero delay (security patches unaffected)
-    //    AllowPreviewUpdatesAsync removes both keys on revert.
-    //
-    //    EvaluateWufbState checks exactly these two values and is called by
-    //    IsPreviewUpdatesBlocked() alongside EvaluateBlockState.
+    //    v0.7.9 hotfix: those two keys are NOT written anymore — and are actively
+    //    REMOVED on apply — because activating WUfB on a non-MDM consumer install
+    //    makes the WU client try to resolve management COM interfaces that don't
+    //    fully exist on standalone Pro/Home machines, returning 0x80004002
+    //    E_NOINTERFACE on the next update scan. The previous EvaluateWufbState_*
+    //    tests are removed (the method is gone). Replaced with the source-scan
+    //    regression guards below.
     // ══════════════════════════════════════════════════════════════════════════
 
     [Fact]
-    public void WufbState_BothCorrect_ReturnsTrue()
+    public void BlockPreviewUpdatesSource_DoesNotWriteDeferQualityUpdates()
     {
-        Assert.True(WindowsUpdateTweaksService.EvaluateWufbState(
-            deferQuality: (object)1,  // DeferQualityUpdates = 1 → WUfB active
-            deferDays:    (object)0)); // DeferQualityUpdatesPeriodInDays = 0 → no deferral
+        var src = ReadWindowsUpdateTweaksServiceSource();
+
+        var setDeferQuality = System.Text.RegularExpressions.Regex.Match(
+            src, @"SetValue\s*\(\s*""DeferQualityUpdates""");
+        Assert.False(setDeferQuality.Success,
+            "BlockPreviewUpdatesAsync must NOT write DeferQualityUpdates — it activates " +
+            "WUfB which breaks Windows Update on non-MDM machines (E_NOINTERFACE).");
+
+        var setDeferDays = System.Text.RegularExpressions.Regex.Match(
+            src, @"SetValue\s*\(\s*""DeferQualityUpdatesPeriodInDays""");
+        Assert.False(setDeferDays.Success,
+            "BlockPreviewUpdatesAsync must NOT write DeferQualityUpdatesPeriodInDays — " +
+            "see DeferQualityUpdates comment above.");
     }
 
     [Fact]
-    public void WufbState_MissingDeferQuality_ReturnsFalse()
+    public void BlockPreviewUpdatesSource_DeletesLegacyWufbKeys()
     {
-        // WUfB not activated — AllowOptionalContent will be ignored.
-        Assert.False(WindowsUpdateTweaksService.EvaluateWufbState(
-            deferQuality: null,
-            deferDays:    (object)0));
+        var src = ReadWindowsUpdateTweaksServiceSource();
+
+        var deleteQuality = System.Text.RegularExpressions.Regex.Match(
+            src, @"DeleteValue\s*\(\s*""DeferQualityUpdates""");
+        Assert.True(deleteQuality.Success,
+            "BlockPreviewUpdatesAsync should DeleteValue(\"DeferQualityUpdates\") so users " +
+            "who already have it set from an earlier Systema version get unbroken.");
+
+        var deleteDays = System.Text.RegularExpressions.Regex.Match(
+            src, @"DeleteValue\s*\(\s*""DeferQualityUpdatesPeriodInDays""");
+        Assert.True(deleteDays.Success,
+            "BlockPreviewUpdatesAsync should DeleteValue(\"DeferQualityUpdatesPeriodInDays\").");
     }
 
-    [Fact]
-    public void WufbState_MissingDeferDays_ReturnsFalse()
+    private static string ReadWindowsUpdateTweaksServiceSource()
     {
-        // DeferQualityUpdatesPeriodInDays absent — block is incomplete.
-        Assert.False(WindowsUpdateTweaksService.EvaluateWufbState(
-            deferQuality: (object)1,
-            deferDays:    null));
-    }
-
-    [Fact]
-    public void WufbState_AllNull_ReturnsFalse()
-    {
-        Assert.False(WindowsUpdateTweaksService.EvaluateWufbState(null, null));
-    }
-
-    [Fact]
-    public void WufbState_DeferQuality_WrongValue_ReturnsFalse()
-    {
-        // DeferQualityUpdates = 0 means WUfB quality management off.
-        Assert.False(WindowsUpdateTweaksService.EvaluateWufbState(
-            deferQuality: (object)0,
-            deferDays:    (object)0));
-    }
-
-    [Fact]
-    public void WufbState_DeferDays_NonZero_ReturnsFalse()
-    {
-        // DeferQualityUpdatesPeriodInDays > 0 means actual deferral is active.
-        // Systema only writes 0; any other value means a third party changed it.
-        Assert.False(WindowsUpdateTweaksService.EvaluateWufbState(
-            deferQuality: (object)1,
-            deferDays:    (object)7)); // 7-day deferral — not what Systema wrote
-    }
-
-    [Fact]
-    public void WufbState_WrongTypes_NotInt_ReturnsFalse()
-    {
-        // Registry.GetValue returning a string instead of int must not crash.
-        Assert.False(WindowsUpdateTweaksService.EvaluateWufbState(
-            deferQuality: "1",
-            deferDays:    "0"));
+        var asmDir = System.IO.Path.GetDirectoryName(
+            typeof(WindowsUpdateTweaksTests).Assembly.Location)!;
+        var path = System.IO.Path.GetFullPath(System.IO.Path.Combine(
+            asmDir, "..", "..", "..", "..", "..",
+            "src", "Systema", "Services", "WindowsUpdateTweaksService.cs"));
+        Assert.True(System.IO.File.Exists(path), $"Source file not found at {path}");
+        return System.IO.File.ReadAllText(path);
     }
 }

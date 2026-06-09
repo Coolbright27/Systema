@@ -1,8 +1,8 @@
-﻿<UserControl x:Class="Systema.Views.SettingsView"
+<UserControl x:Class="Systema.Views.SettingsView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:conv="clr-namespace:Systema.Core.Converters"
-             Background="{StaticResource BgPrimaryBrush}">
+             Background="Transparent">
 
     <UserControl.Resources>
         <conv:BoolToVisibilityConverter x:Key="GlobalBoolToVis"/>
@@ -40,12 +40,12 @@
                            Margin="0,4,0,0"/>
             </StackPanel>
 
-            <!-- â”€â”€ System Restore â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+            <!-- ============================================================ System Restore ============================================================ -->
             <Border Grid.Row="2" Style="{StaticResource Card}">
                 <StackPanel>
                     <TextBlock Text="System Restore" Style="{StaticResource HeadingMedium}" Margin="0,0,0,4"/>
                     <TextBlock Text="Systema creates a Windows restore point before making changes, so you can undo everything if something goes wrong."
-                               Style="{StaticResource BodyText}" Foreground="{StaticResource TextSecondaryBrush}"
+                               Style="{StaticResource CaptionText}" Foreground="{StaticResource TextSecondaryBrush}"
                                TextWrapping="Wrap" Margin="0,0,0,16"/>
 
                     <Grid>
@@ -57,7 +57,7 @@
                             <TextBlock Text="Skip safety restore point" Style="{StaticResource BodyText}"
                                        Foreground="{StaticResource TextPrimaryBrush}" FontWeight="SemiBold"/>
                             <TextBlock Text="When enabled, Systema will apply tweaks without creating a restore point first."
-                                       Style="{StaticResource BodyText}" Foreground="{StaticResource TextSecondaryBrush}"
+                                       Style="{StaticResource CaptionText}" Foreground="{StaticResource TextSecondaryBrush}"
                                        TextWrapping="Wrap" Margin="0,2,16,0"/>
                         </StackPanel>
                         <CheckBox Grid.Column="1" IsChecked="{Binding SkipRestorePoint}"
@@ -68,13 +68,13 @@
                             Visibility="{Binding SkipRestorePoint, Converter={StaticResource GlobalBoolToVis}}">
                         <TextBlock TextWrapping="Wrap" Style="{StaticResource BodyText}"
                                    Foreground="{StaticResource AccentRedBrush}">
-                            âš   Restore points are turned off. If something goes wrong after applying tweaks, you won't be able to roll back automatically.
+                            ⚠  Restore points are turned off. If something goes wrong after applying tweaks, you won't be able to roll back automatically.
                         </TextBlock>
                     </Border>
                 </StackPanel>
             </Border>
 
-            <!-- â”€â”€ Manage Restore Points â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+            <!-- ============================================================ Manage Restore Points ============================================================ -->
             <Border Grid.Row="4" Style="{StaticResource Card}">
                 <Grid>
                     <Grid.ColumnDefinitions>
@@ -85,7 +85,7 @@
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
                             <TextBlock Text="Restore Point Manager" Style="{StaticResource HeadingMedium}"/>
                         </StackPanel>
-                        <TextBlock TextWrapping="Wrap" Style="{StaticResource BodyText}"
+                        <TextBlock TextWrapping="Wrap" Style="{StaticResource CaptionText}"
                                    Foreground="{StaticResource TextSecondaryBrush}" Margin="0,2,0,0">
                             View, create, and delete Windows restore points. If something goes wrong
                             after making changes, use "Restore My PC" to roll your settings back to
@@ -99,12 +99,12 @@
                 </Grid>
             </Border>
 
-            <!-- â”€â”€ Startup â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+            <!-- ============================================================ Startup ============================================================ -->
             <Border Grid.Row="6" Style="{StaticResource Card}">
                 <StackPanel>
                     <TextBlock Text="Startup" Style="{StaticResource HeadingMedium}" Margin="0,0,0,4"/>
                     <TextBlock Text="Control whether Systema launches automatically when you sign in to Windows."
-                               Style="{StaticResource BodyText}" Foreground="{StaticResource TextSecondaryBrush}"
+                               Style="{StaticResource CaptionText}" Foreground="{StaticResource TextSecondaryBrush}"
                                TextWrapping="Wrap" Margin="0,0,0,16"/>
 
                     <Grid>
@@ -116,7 +116,7 @@
                             <TextBlock Text="Launch on Windows startup" Style="{StaticResource BodyText}"
                                        Foreground="{StaticResource TextPrimaryBrush}" FontWeight="SemiBold"/>
                             <TextBlock Text="Systema will start automatically when you sign in. Task Sleep waits ~45 seconds after boot so normal startup processes aren't affected."
-                                       Style="{StaticResource BodyText}" Foreground="{StaticResource TextSecondaryBrush}"
+                                       Style="{StaticResource CaptionText}" Foreground="{StaticResource TextSecondaryBrush}"
                                        TextWrapping="Wrap" Margin="0,2,16,0"/>
                         </StackPanel>
                         <CheckBox Grid.Column="1" IsChecked="{Binding StartWithWindows}"
@@ -147,10 +147,10 @@
                         <StackPanel Grid.Column="0" VerticalAlignment="Center">
                             <TextBlock Text="Keep Systema Running" Style="{StaticResource BodyText}"
                                        Foreground="{StaticResource TextPrimaryBrush}" FontWeight="SemiBold"/>
-                            <TextBlock Style="{StaticResource BodyText}" Foreground="{StaticResource TextSecondaryBrush}"
+                            <TextBlock Style="{StaticResource CaptionText}" Foreground="{StaticResource TextSecondaryBrush}"
                                        TextWrapping="Wrap" Margin="0,2,16,0">
                                 Registers a Windows Task Scheduler watchdog that checks every 5 minutes and
-                                restarts Systema automatically if it ever stops â€” even after a crash or accidental close.
+                                restarts Systema automatically if it ever stops — even after a crash or accidental close.
                             </TextBlock>
                             <!-- Status feedback -->
                             <TextBlock Text="{Binding KeepRunningStatus}"
@@ -174,7 +174,7 @@
                 </StackPanel>
             </Border>
 
-            <!-- â”€â”€ Export / Import Settings â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+            <!-- ============================================================ Export / Import Settings ============================================================ -->
             <Border Grid.Row="8" Style="{StaticResource Card}">
                 <StackPanel>
                     <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
@@ -184,7 +184,7 @@
                             <TextBlock Text="BACKUP" FontSize="9" FontWeight="SemiBold" Foreground="{StaticResource TextSecondaryBrush}"/>
                         </Border>
                     </StackPanel>
-                    <TextBlock TextWrapping="Wrap" Style="{StaticResource BodyText}"
+                    <TextBlock TextWrapping="Wrap" Style="{StaticResource CaptionText}"
                                Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,16">
                         Back up your Systema configuration to a JSON file, or restore it on a new machine.
                         This saves preferences like game boost settings, service kill list, and startup options.
@@ -199,7 +199,7 @@
                                 Command="{Binding ImportSettingsCommand}"
                                 Style="{StaticResource GhostButton}"/>
                     </StackPanel>
-                    <!-- Status feedback â€” visible only when non-empty -->
+                    <!-- Status feedback — visible only when non-empty -->
                     <TextBlock Text="{Binding ExportImportStatus}"
                                Foreground="{StaticResource AccentGreenBrush}"
                                TextWrapping="Wrap" FontSize="12">
@@ -220,10 +220,10 @@
             <!-- Bottom note -->
             <TextBlock Grid.Row="10"
                        Text="Settings are saved automatically to the Windows Registry under HKCU\Software\Systema."
-                       Style="{StaticResource BodyText}" Foreground="{StaticResource TextSecondaryBrush}"
+                       Style="{StaticResource CaptionText}" Foreground="{StaticResource TextSecondaryBrush}"
                        TextWrapping="Wrap"/>
 
-            <!-- â”€â”€ Diagnostic Report â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+            <!-- ============================================================ Diagnostic Report ============================================================ -->
             <Border Grid.Row="12" Style="{StaticResource Card}">
                 <Grid>
                     <Grid.ColumnDefinitions>
@@ -239,7 +239,7 @@
                                 <TextBlock Text="DIAGNOSTIC" FontSize="9" FontWeight="SemiBold" Foreground="{StaticResource TextSecondaryBrush}"/>
                             </Border>
                         </StackPanel>
-                        <TextBlock TextWrapping="Wrap" Style="{StaticResource BodyText}"
+                        <TextBlock TextWrapping="Wrap" Style="{StaticResource CaptionText}"
                                    Foreground="{StaticResource TextSecondaryBrush}" Margin="0,2,0,0">
                             Creates a report of recent errors and session activity that you can paste into Discord for support. Nothing is sent automatically.
                         </TextBlock>
@@ -252,12 +252,12 @@
                 </Grid>
             </Border>
 
-            <!-- â”€â”€ Updates â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+            <!-- ============================================================ Updates ============================================================ -->
             <Border Grid.Row="14" Style="{StaticResource Card}">
                 <StackPanel>
                     <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
                         <TextBlock Text="Updates" Style="{StaticResource HeadingMedium}"/>
-                        <!-- Badge â€” only visible when update is available -->
+                        <!-- Badge — only visible when update is available -->
                         <Border CornerRadius="4" Padding="6,2" Margin="10,0,0,0" VerticalAlignment="Center"
                                 Background="#1A5C9C7C">
                             <Border.Style>
@@ -275,7 +275,7 @@
                         </Border>
                     </StackPanel>
 
-                    <TextBlock TextWrapping="Wrap" Style="{StaticResource BodyText}"
+                    <TextBlock TextWrapping="Wrap" Style="{StaticResource CaptionText}"
                                Foreground="{StaticResource TextSecondaryBrush}" Margin="0,2,0,14">
                         Systema checks for updates every 2 hours and installs silently when your
                         CPU is idle. Updates are paused automatically during game sessions and
@@ -291,10 +291,10 @@
                         <StackPanel Grid.Column="0" VerticalAlignment="Center">
                             <TextBlock Text="Automatic updates" Style="{StaticResource BodyText}"
                                        Foreground="{StaticResource TextPrimaryBrush}" FontWeight="SemiBold"/>
-                            <TextBlock Style="{StaticResource BodyText}"
+                            <TextBlock Style="{StaticResource CaptionText}"
                                        Foreground="{StaticResource TextSecondaryBrush}"
                                        TextWrapping="Wrap" Margin="0,2,16,0">
-                                When on, Systema updates itself silently every 2 hours â€” paused during
+                                When on, Systema updates itself silently every 2 hours — paused during
                                 game mode or when CPU usage is high. Manual checks always work regardless.
                             </TextBlock>
                         </StackPanel>
@@ -331,7 +331,7 @@
                                 </TextBlock.Style>
                             </TextBlock>
 
-                            <!-- Download progress bar â€” shown while downloading -->
+                            <!-- Download progress bar — shown while downloading -->
                             <Grid Margin="0,8,16,0">
                                 <Grid.Style>
                                     <Style TargetType="Grid">
@@ -349,12 +349,12 @@
                             </Grid>
                         </StackPanel>
 
-                        <!-- Right-side buttons â€” contextual based on state -->
+                        <!-- Right-side buttons — contextual based on state -->
                         <StackPanel Grid.Column="1" Orientation="Horizontal"
                                     VerticalAlignment="Center" Margin="12,0,0,0">
 
-                            <!-- "Install Now" â€” only when installer is downloaded and ready -->
-                            <Button Content="â¬†  Install Now"
+                            <!-- "Install Now" — only when installer is downloaded and ready -->
+                            <Button Content="↑  Install Now"
                                     Padding="18,9" Margin="0,0,8,0"
                                     Command="{Binding InstallNowCommand}">
                                 <Button.Style>
@@ -369,7 +369,7 @@
                                 </Button.Style>
                             </Button>
 
-                            <!-- "Check Now" â€” always available unless actively checking/downloading -->
+                            <!-- "Check Now" — always available unless actively checking/downloading -->
                             <Button Content="Check Now"
                                     Padding="18,9"
                                     IsEnabled="{Binding CanCheckNow}"
@@ -399,15 +399,15 @@
                     <Button Grid.Column="1" Content="Reset to Defaults"
                             Command="{Binding ResetAllSettingsCommand}"
                             Style="{StaticResource GhostButton}"
-                            Foreground="#F87171"
+                            Foreground="{StaticResource AccentRedBrush}"
                             VerticalAlignment="Center"/>
                 </Grid>
             </Border>
 
             <!-- Version footer -->
             <TextBlock Grid.Row="18"
-                       Text="Systema v99.9.9  Â·  For support visit discord.gg/DjxBswDeN8"
-                       Style="{StaticResource BodyText}" Foreground="{StaticResource TextSecondaryBrush}"
+                       Text="Systema v0.7.86  ·  For support visit discord.gg/DjxBswDeN8"
+                       Style="{StaticResource CaptionText}" Foreground="{StaticResource TextSecondaryBrush}"
                        TextWrapping="Wrap"/>
         </Grid>
     </ScrollViewer>

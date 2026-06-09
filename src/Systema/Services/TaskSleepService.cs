@@ -566,8 +566,10 @@ public sealed class TaskSleepService : IDisposable
     // ── Priority class constants ───────────────────────────────────────────────
     private const uint IDLE_PRIORITY_CLASS   = 0x00000040;
     private const uint NORMAL_PRIORITY_CLASS = 0x00000020;
+    private const uint HIGH_PRIORITY_CLASS   = 0x00000080;   // Launch Boost — CPU High
     private const uint BELOW_NORMAL_PRIORITY_CLASS = 0x00004000;
     private const int  IO_PRIORITY_LOW              = 1;
+    private const int  IO_PRIORITY_HIGH             = 3;       // Launch Boost — I/O High
 
     // ── Process access rights ──────────────────────────────────────────────────
     private const uint PROCESS_TERMINATE                 = 0x0001;
@@ -597,6 +599,14 @@ public sealed class TaskSleepService : IDisposable
     private volatile int  _pendingCpuCapPercent;
     private volatile bool _pendingCpuCapEnabled;
 
+    // Set of PIDs that have already had their working set trimmed for the
+    // current deep-sleep cycle. Used by the "compress in deep sleep" feature so
+    // we don't trim a process on every monitor tick — just once when it first
+    // crosses the deep-sleep threshold, and again after each brief wake (the
+    // brief-wake-start code removes the PID from this set, so the next deep-
+    // sleep scan re-trims it). PIDs are cleared on full restore.
+    private readonly HashSet<int> _deepSleepTrimmedPids = new();
+
     public void UpdateSettings(TaskSleepSettings settings)
     {
         // ── Validate settings before applying ────────────────────────────────
@@ -612,16 +622,19 @@ public sealed class TaskSleepService : IDisposable
         int  oldMaxWakes;
         lock (_settingsLock)
         {
-            oldCapEnabled = _settings.NappedCpuCapEnabled;
-            oldCapPercent = _settings.NappedCpuCapPercent;
-            oldMaxWakes   = _settings.MaxConcurrentBriefWakes;
-            _settings     = settings;
-            _appRules     = settings.AppRules.ToDictionary(r => r.ProcessName, StringComparer.OrdinalIgnoreCase);
+            oldCapEnabled    = _settings.NappedCpuCapEnabled;
+            oldCapPercent    = _settings.NappedCpuCapPercent;
+            oldMaxWakes      = _settings.MaxConcurrentBriefWakes;
+            _settings        = settings;
+            _appRules        = settings.AppRules.ToDictionary(r => r.ProcessName, StringComparer.OrdinalIgnoreCase);
         }
 
         // If the cap was reduced, signal the monitor thread to enforce it on the very next tick.
         if (settings.MaxConcurrentBriefWakes < oldMaxWakes)
             _enforceWakeCapOnNextTick = true;
+
+        // Arm / disarm Launch Boost to match the new settings.
+        ApplyLaunchBoostState(settings);
 
         // ── Live-update CPU cap on already-throttled processes ────────────────
         // Signal the monitor thread to apply the change on the next Tick.
@@ -656,6 +669,11 @@ public sealed class TaskSleepService : IDisposable
         };
         _monitorThread.Start();
 
+        // Arm Launch Boost if it was enabled in the persisted settings.
+        TaskSleepSettings startupSettings;
+        lock (_settingsLock) { startupSettings = _settings; }
+        ApplyLaunchBoostState(startupSettings);
+
         _log.Info("TaskSleepService", "Started");
         Notify("Task Sleep active — monitoring background processes.");
     }
@@ -664,6 +682,7 @@ public sealed class TaskSleepService : IDisposable
     {
         if (!_running) return;
         _running = false;
+        StopLaunchBoost();
         _monitorThread?.Join(3000); // wait for monitor thread to exit cleanly
         _monitorThread = null;
         RestoreAll();
@@ -800,6 +819,38 @@ public sealed class TaskSleepService : IDisposable
                 }
                 _log.Info("TaskSleepService", $"CPU cap live-updated to {capPercent}% on all napped processes");
             }
+        }
+
+        // 4f. Compress-in-deep-sleep sweep.
+        //      For every napped PID, check whether it has now been napped long
+        //      enough to be considered "deep sleep" (≥ MinimizeDeepSleepThresholdMs
+        //      or TrayDeepSleepThresholdMs depending on which nap type). If yes
+        //      and we have not yet trimmed it for this deep-sleep cycle, trim
+        //      its working set so Windows can compress the pages on the standby
+        //      list. The HashSet guard avoids re-trimming a process every tick;
+        //      a brief wake clears the PID from the set so the next sweep after
+        //      the wake re-trims (this is the "re-trim after every brief wake
+        //      while in deep sleep" half of the feature).
+        if (s.CompressDeepSleep && _throttledPids.Count > 0)
+        {
+            DateTime now = DateTime.UtcNow;
+            int trimmed = 0;
+            foreach (int pid in _throttledPids.Keys.ToList())
+            {
+                if (_deepSleepTrimmedPids.Contains(pid)) continue;       // already done
+                if (!IsInDeepSleep(pid, s, now))           continue;     // not deep yet
+
+                IntPtr h = OpenProcess(PROCESS_SET_QUOTA | PROCESS_QUERY_LIMITED_INFORMATION, false, pid);
+                if (h == IntPtr.Zero) continue;
+                try { TrimProcessWorkingSet(h); }
+                finally { CloseHandle(h); }
+
+                _deepSleepTrimmedPids.Add(pid);
+                trimmed++;
+            }
+            if (trimmed > 0)
+                _log.Info("TaskSleepService",
+                    $"Deep-sleep compression: trimmed {trimmed} process(es) (working set → standby/compressed)");
         }
 
         // 0. Clear skip reasons and log batch from last tick
@@ -989,19 +1040,17 @@ public sealed class TaskSleepService : IDisposable
                 _napSince.Remove(pid);
             }
             else if (protectedPids.Contains(pid) &&
-                     (_backgroundNapPids.Contains(pid) || _idleNapPids.Contains(pid)))
+                     !_minimizedNapPids.Contains(pid) && !_trayNapPids.Contains(pid))
             {
-                // Family match (same exe name or app family as the foreground pid) AND
-                // this sibling is bg/idle-napped. Previously this branch left the helper
-                // napped "because the user didn't directly focus it" — which caused Steam
-                // webhelpers, Electron/Chromium renderers, Discord helpers, etc. to stay
-                // stuck at the 3% napped CPU cap while the main app was foreground,
-                // making the whole app feel unusably slow.
+                // This napped pid is part of the foreground app's process tree (background-,
+                // idle-, or CPU-napped helper). Previously only bg/idle helpers were restored
+                // here, which left CPU-napped windowless helpers (Firefox/Chromium content
+                // processes, Steam webhelpers, Electron/Discord renderers) stuck at the napped
+                // cap while the main app was foreground — making the whole app feel slow.
                 //
-                // Restore the helper so it can render/process alongside its parent.
-                // Minimize/tray-napped family members are NOT restored here — the user
-                // deliberately hid those, and their own branches below handle un-minimize
-                // / visibility / audio restore.
+                // Restore the helper so it can render/process alongside its parent. Minimize/
+                // tray-napped family members are NOT restored here — the user deliberately hid
+                // those, and their own branches below handle un-minimize / visibility / audio.
                 shouldRestore = true; restoreReason = "app family focused";
                 _backgroundNapPids.Remove(pid); _idleNapPids.Remove(pid);
                 _napSince.Remove(pid);
@@ -1278,6 +1327,20 @@ public sealed class TaskSleepService : IDisposable
                             _processNames.TryGetValue(proc.Id, out string? rn);
                             AddEvent(rn ?? proc.ProcessName, proc.Id,
                                 "Re-napping", "brief wake ended");
+
+                            // Re-tighten any children that loosened with this parent.
+                            if (s.NapChildrenEnabled && s.NappedCpuCapEnabled)
+                                SetNapChildCaps(proc.Id, s.NappedCpuCapPercent);
+
+                            // Compress-in-deep-sleep: re-trim immediately if the process
+                            // was in deep sleep when the brief wake started. The brief
+                            // wake faulted pages back in; this push them straight back
+                            // to the standby list so Windows can re-compress.
+                            if (s.CompressDeepSleep && IsInDeepSleep(proc.Id, s, DateTime.UtcNow))
+                            {
+                                TrimWorkingSetByPid(proc.Id, rn ?? proc.ProcessName);
+                                _deepSleepTrimmedPids.Add(proc.Id);
+                            }
                         }
                     }
                     // Whether we just restored, re-throttled, or are still in the wake window,
@@ -1314,6 +1377,17 @@ public sealed class TaskSleepService : IDisposable
                             _processNames.TryGetValue(proc.Id, out string? tn);
                             AddEvent(tn ?? proc.ProcessName, proc.Id,
                                 "Tray Re-nap", "brief wake ended");
+
+                            // Re-tighten any children that loosened with this parent.
+                            if (s.NapChildrenEnabled && s.NappedCpuCapEnabled)
+                                SetNapChildCaps(proc.Id, s.NappedCpuCapPercent);
+
+                            // Compress-in-deep-sleep: see the matching minimize-nap branch above.
+                            if (s.CompressDeepSleep && IsInDeepSleep(proc.Id, s, DateTime.UtcNow))
+                            {
+                                TrimWorkingSetByPid(proc.Id, tn ?? proc.ProcessName);
+                                _deepSleepTrimmedPids.Add(proc.Id);
+                            }
                         }
                     }
                     continue;
@@ -1584,9 +1658,19 @@ public sealed class TaskSleepService : IDisposable
                     _overThresholdSince.Remove(proc.Id);
                     continue;
                 }
-                if (s.CpuTriggeredNapEnabled && shouldConsiderThrottling &&
-                    cpuMap.TryGetValue(proc.Id, out double procCpu) &&
-                    procCpu >= s.ProcessCpuStartPercent)
+                // A single process eating a big slice of the whole CPU is always a nap
+                // candidate, even when overall system load is below the trigger — this is
+                // what catches a lone windowless content process burning 50%. It still
+                // only reaches here if NOT visible-on-monitor (guarded above) and NOT
+                // foreground-protected (guarded below), so a visible app is never touched.
+                cpuMap.TryGetValue(proc.Id, out double procCpu);
+                bool singleHog = procCpu >= Math.Max(25, s.ProcessCpuStartPercent * 3);
+
+                if (s.CpuTriggeredNapEnabled &&
+                    (shouldConsiderThrottling || singleHog) &&
+                    procCpu >= s.ProcessCpuStartPercent &&
+                    !protectedPids.Contains(proc.Id) &&
+                    !ShouldSkip(proc, protectedPids, s, rules, audioPids))
                 {
                     if (!_overThresholdSince.TryGetValue(proc.Id, out DateTime since))
                     {
@@ -1679,6 +1763,22 @@ public sealed class TaskSleepService : IDisposable
             }
         }
 
+        // 6d. New-child sweep — a napped app that spawns a child AFTER it was napped
+        //     (Steam download worker, a new browser/Electron renderer, an updater
+        //     child) would otherwise run completely uncapped. Re-scan each currently
+        //     NAPPED parent for new children and bring them under the same nap throttle
+        //     + cap. NapChildProcesses skips children already throttled, so this only
+        //     catches the new ones. Parents mid-brief-wake aren't in _throttledPids, so
+        //     they're correctly skipped (their children are handled via SetNapChildCaps).
+        if (s.NapChildrenEnabled)
+        {
+            foreach (int parentPid in _throttledPids.Keys.ToList())
+            {
+                if (!_minimizedNapPids.Contains(parentPid) && !_trayNapPids.Contains(parentPid)) continue;
+                NapChildProcesses(parentPid, all, parentMap, protectedPids, audioPids, s, rules);
+            }
+        }
+
         // 7. Re-enforce: re-apply throttle if a process raised its own priority back
         if (s.EnforceSettings)
         {
@@ -1748,16 +1848,37 @@ public sealed class TaskSleepService : IDisposable
                         // Process stayed at idle — reset its counter
                         _reEnforceCounter.Reset(pid);
                     }
+
+                    // ── Reinforcement: re-assert the kernel CPU cap every tick ─────
+                    // A sandboxed/multi-process app could otherwise drift; re-asserting
+                    // the rate cap each enforce tick makes it much harder to escape.
+                    // Only for pids STILL napped after the priority re-enforce above
+                    // (skips ones we just restored / auto-whitelisted). These are never
+                    // mid-brief-wake (BeginBriefWake removes them from _throttledPids),
+                    // so the nap-level clamp is always the correct target.
+                    if (_throttledPids.ContainsKey(pid) &&
+                        s.NappedCpuCapEnabled && s.NappedCpuCapPercent > 0 &&
+                        _cpuCapJobs.TryGetValue(pid, out IntPtr hjob) && hjob != IntPtr.Zero)
+                    {
+                        UpdateCpuCap(pid, Math.Clamp(s.NappedCpuCapPercent, 1, 100));
+                    }
                 }
                 catch (Exception ex) { _log.Warn("TaskSleepService", $"Re-enforce failed for PID {pid}: {ex.Message}"); }
                 finally { CloseHandle(h); }
             }
         }
 
+        // 7b. Diagnostic: surface why a high-CPU app isn't being capped.
+        DiagnoseHighCpuNotCapped(cpuMap, protectedPids, s);
+
         // 8. Build and publish monitoring snapshot
         BuildAndPublishSnapshot(sysCpu, protectedPids, s, freeRamMb, ramPressure);
 
-        int count = _throttledPids.Count;
+        // Use the count captured by the snapshot, not a fresh _throttledPids.Count.
+        // Re-reading the dictionary here lets a process exit between the snapshot
+        // build and this line slip into the gap, which is why the bottom status
+        // line and the top "X napping" pill kept showing off-by-one counts.
+        int count = _latestSnapshot?.TotalThrottled ?? _throttledPids.Count;
         Notify($"Task Sleep active — {count} {(count == 1 ? "process napping" : "processes napping")}.  System CPU: {sysCpu:F0}%");
     }
 
@@ -1989,6 +2110,8 @@ public sealed class TaskSleepService : IDisposable
 
             if (moveToECores)
             {
+                // E-core steering only — affinity is NOT used to confine on CPUs
+                // without E-cores (the kernel CPU rate cap is the hard limiter there).
                 UIntPtr eCoreMask = GetOrDetectECoreMask(s.DetectECores);
                 if (eCoreMask != UIntPtr.Zero &&
                     GetProcessAffinityMask(handle, out UIntPtr origAffinity, out _))
@@ -2036,6 +2159,10 @@ public sealed class TaskSleepService : IDisposable
     private void TryRestoreProcess(int pid)
     {
         if (!_throttledPids.TryRemove(pid, out uint original)) return;
+
+        // Process is no longer napped — drop it from deep-sleep tracking so
+        // a subsequent re-nap starts the deep-sleep timer (and trim) fresh.
+        _deepSleepTrimmedPids.Remove(pid);
 
         IntPtr handle = OpenProcess(
             PROCESS_SET_INFORMATION | PROCESS_QUERY_LIMITED_INFORMATION,
@@ -2095,10 +2222,20 @@ public sealed class TaskSleepService : IDisposable
             return;
         }
 
+        // Belt-and-suspenders. If the kernel HARD cap is attached, the brief wake can
+        // safely lift every soft throttle — the hard cap (loosened to
+        // BriefWakeCpuCapPercent below) still bounds the process, so it's fully
+        // responsive. But if the hard cap is a SENTINEL (Chromium sandbox / UWP / AV
+        // refused the Job Object), lifting EcoQoS too would let it spike a core during
+        // the wake with nothing holding it. In that case we KEEP EcoQoS (efficiency
+        // mode) on as the soft cap — bounded, just slower. FullyRestoreFromBriefWake
+        // and the re-nap path clear/re-assert it at the right times.
+        bool hardCapActive = _cpuCapJobs.TryGetValue(pid, out IntPtr hJob) && hJob != IntPtr.Zero;
+
         try
         {
             if (original != 0) SetPriorityClass(handle, original);
-            SetEfficiencyMode(handle, false);
+            if (hardCapActive) SetEfficiencyMode(handle, false); // else keep EcoQoS on as the soft cap
             SetIoPriorityLevel(handle, IO_PRIORITY_NORMAL);
             SetMemoryPriority(handle, MEMORY_PRIORITY_NORMAL);
 
@@ -2110,15 +2247,27 @@ public sealed class TaskSleepService : IDisposable
 
             // Loosen (but do not remove) the kernel CPU cap for the wake window.
             // If the process was cap-skipped (sentinel IntPtr.Zero), UpdateCpuCap is a no-op
-            // and the app runs with only priority restored — same behaviour as before.
+            // and the app runs bounded by the EcoQoS soft cap kept on above.
             if (s.NappedCpuCapEnabled && s.BriefWakeCpuCapPercent > 0)
                 UpdateCpuCap(pid, Math.Clamp(s.BriefWakeCpuCapPercent, 1, 100));
+
+            // Brief wake brings pages back into the working set — clear the deep-sleep
+            // trimmed marker so the next compress-deep-sleep sweep after the brief
+            // wake ends will re-trim. Called regardless of CompressDeepSleep state so
+            // flipping the setting on at runtime catches the next brief-wake cycle.
+            _deepSleepTrimmedPids.Remove(pid);
         }
         catch (Exception ex)
         {
             _log.Warn("TaskSleepService", $"BeginBriefWake PID {pid} failed: {ex.Message}");
         }
         finally { CloseHandle(handle); }
+
+        // Children napped alongside this parent follow it into the wake — loosen their
+        // hard cap to the brief-wake level too. (Their soft throttle stays on, so a
+        // sentinel child can't spike.) Re-tightened when the parent re-naps.
+        if (s.NapChildrenEnabled && s.NappedCpuCapEnabled && s.BriefWakeCpuCapPercent > 0)
+            SetNapChildCaps(pid, s.BriefWakeCpuCapPercent);
     }
 
     /// <summary>
@@ -2135,6 +2284,17 @@ public sealed class TaskSleepService : IDisposable
     /// </summary>
     private void FullyRestoreFromBriefWake(int pid)
     {
+        // If this process kept EcoQoS on as a soft cap during the wake (the hard-cap
+        // sentinel branch in BeginBriefWake), clear it now so it's fully unthrottled.
+        // Idempotent for the normal case where EcoQoS was already lifted at wake start.
+        IntPtr h = OpenProcess(PROCESS_SET_INFORMATION | PROCESS_QUERY_LIMITED_INFORMATION, false, pid);
+        if (h != IntPtr.Zero)
+        {
+            try { SetEfficiencyMode(h, false); }
+            catch (Exception ex) { _log.Warn("TaskSleepService", $"FullyRestoreFromBriefWake EcoQoS clear failed for PID {pid}: {ex.Message}"); }
+            finally { CloseHandle(h); }
+        }
+
         RemoveCpuCap(pid);                          // release the kernel Job Object cap
         _minimizedNapPids.Remove(pid);
         _trayNapPids.Remove(pid);
@@ -2721,6 +2881,32 @@ public sealed class TaskSleepService : IDisposable
             TryRestoreProcess(childPid);
             _throttledAt.Remove(childPid);
         }
+    }
+
+    /// <summary>
+    /// Propagates a CPU-cap level to every nap-child of the given parent. Used so a
+    /// parent's brief-wake (loosen → BriefWakeCpuCapPercent) and re-nap (tighten →
+    /// NappedCpuCapPercent) transitions carry through to the children that were
+    /// napped alongside it — otherwise a child doing the actual work (Steam download
+    /// helper, browser/Electron renderer) stays pinned at the nap cap while the
+    /// parent briefly wakes, so nothing progresses.
+    /// <para>
+    /// Only the kernel hard cap is modulated here. A child whose hard cap is a
+    /// sentinel (Job Object refused) keeps its soft throttle — EcoQoS + idle priority
+    /// — on continuously, so it stays bounded through the whole cycle regardless.
+    /// UpdateCpuCap is a no-op for sentinel children.
+    /// </para>
+    /// </summary>
+    private void SetNapChildCaps(int parentPid, int capPercent)
+    {
+        if (capPercent <= 0) return;
+        int clamped = Math.Clamp(capPercent, 1, 100);
+        var children = _parentOfNapChild
+            .Where(kv => kv.Value == parentPid)
+            .Select(kv => kv.Key)
+            .ToList();
+        foreach (int childPid in children)
+            UpdateCpuCap(childPid, clamped);
     }
 
     private static uint GetForegroundPid()
@@ -3438,6 +3624,51 @@ public sealed class TaskSleepService : IDisposable
         catch (Exception ex) { _log.Warn("TaskSleepService", $"TrimProcessWorkingSet failed: {ex.Message}"); }
     }
 
+    /// <summary>
+    /// BETA — see <see cref="TaskSleepSettings.ReTrimAfterBriefWake"/>.
+    /// Opens a short-lived handle to <paramref name="pid"/> and calls
+    /// <see cref="TrimProcessWorkingSet"/>. Used by the compress-in-deep-sleep
+    /// path: once when a process first crosses the deep-sleep threshold, and
+    /// again after each brief wake that ends while the process is still in
+    /// deep sleep. Failures are logged at Debug level and never thrown.
+    /// </summary>
+    private static void TrimWorkingSetByPid(int pid, string processName)
+    {
+        IntPtr h = IntPtr.Zero;
+        try
+        {
+            h = OpenProcess(PROCESS_SET_QUOTA | PROCESS_QUERY_LIMITED_INFORMATION, false, pid);
+            if (h == IntPtr.Zero) return;       // process gone or insufficient rights — silent
+            TrimProcessWorkingSet(h);
+        }
+        catch (Exception ex)
+        {
+            _log.Warn("TaskSleepService", $"TrimWorkingSetByPid({processName}/{pid}) failed: {ex.Message}");
+        }
+        finally
+        {
+            if (h != IntPtr.Zero) CloseHandle(h);
+        }
+    }
+
+    /// <summary>
+    /// True when <paramref name="pid"/> has been napped for at least the
+    /// deep-sleep threshold appropriate for its nap type (tray vs minimize).
+    /// Returns false if the PID isn't currently napped or its nap timer is
+    /// missing. Single source of truth for "is this process in deep sleep"
+    /// — used by both the diagnostic display and the compress-in-deep-sleep
+    /// trim trigger so the two never disagree.
+    /// </summary>
+    private bool IsInDeepSleep(int pid, TaskSleepSettings s, DateTime now)
+    {
+        if (!_napSince.TryGetValue(pid, out DateTime napStart)) return false;
+        double nappedMs = (now - napStart).TotalMilliseconds;
+        bool isTray = _trayNapPids.Contains(pid);
+        return isTray
+            ? (s.TrayDeepSleepEnabled && nappedMs >= s.TrayDeepSleepThresholdMs)
+            : (nappedMs >= s.MinimizeDeepSleepThresholdMs);
+    }
+
     // ── Priority parsing helpers ───────────────────────────────────────────────
 
     private static uint ParseCpuPriorityClass(string? s) => s switch
@@ -3459,6 +3690,47 @@ public sealed class TaskSleepService : IDisposable
     };
 
     // ── E-core Detection & Affinity ────────────────────────────────────────────
+
+    private DateTime _lastHighCpuDiag;
+
+    /// <summary>
+    /// Logs (at most once / 20 s) the single highest-CPU non-Systema process and its
+    /// full nap/cap state, so "CPU won't drop" reports are debuggable straight from
+    /// the log: it shows whether the hog is napped, whether a hard cap is attached
+    /// (vs. a sentinel), whether it's foreground-protected or mid-brief-wake, and the
+    /// exact skip reason. Pure diagnostics — changes no behaviour.
+    /// </summary>
+    private void DiagnoseHighCpuNotCapped(Dictionary<int, double> cpuMap, HashSet<int> protectedPids, TaskSleepSettings s)
+    {
+        try
+        {
+            if ((DateTime.UtcNow - _lastHighCpuDiag).TotalSeconds < 20) return;
+
+            int topPid = -1; double topCpu = 0;
+            foreach (var kv in cpuMap)
+            {
+                if (kv.Value <= topCpu) continue;
+                _processNames.TryGetValue(kv.Key, out string? nm);
+                if (nm == null || nm.Equals("Systema", StringComparison.OrdinalIgnoreCase)) continue;
+                topPid = kv.Key; topCpu = kv.Value;
+            }
+            if (topPid < 0 || topCpu < 20) return;   // nothing notably busy — stay quiet
+            _lastHighCpuDiag = DateTime.UtcNow;
+
+            _processNames.TryGetValue(topPid, out string? topName);
+            bool napped    = _throttledPids.ContainsKey(topPid);
+            bool hasCap    = _cpuCapJobs.TryGetValue(topPid, out IntPtr cj) && cj != IntPtr.Zero;
+            bool sentinel  = _cpuCapJobs.TryGetValue(topPid, out IntPtr cj2) && cj2 == IntPtr.Zero;
+            bool prot      = protectedPids.Contains(topPid);
+            bool briefWake = _briefWakeEndAt.ContainsKey(topPid) || _trayBriefWakeEndAt.ContainsKey(topPid);
+            _skipReasons.TryGetValue(topPid, out string? skip);
+            _log.Info("TaskSleepService",
+                $"CPU-CAP DIAG: top hog {topName ?? "?"} (PID {topPid}) at {topCpu:F0}% of total — " +
+                $"napped={napped} hardCap={hasCap} capSentinel={sentinel} foregroundProtected={prot} " +
+                $"briefWake={briefWake} skipReason={skip ?? "(none)"} napCap={s.NappedCpuCapPercent}% capEnabled={s.NappedCpuCapEnabled}");
+        }
+        catch (Exception ex) { _log.Warn("TaskSleepService", $"HighCpu diag failed: {ex.Message}"); }
+    }
 
     private UIntPtr GetOrDetectECoreMask(bool detect)
     {
@@ -3559,6 +3831,483 @@ public sealed class TaskSleepService : IDisposable
     }
 
     // ── Monitoring helpers ─────────────────────────────────────────────────────
+
+    // ════════════════════════════════════════════════════════════════════════════
+    //  Launch Boost
+    // ════════════════════════════════════════════════════════════════════════════
+    //
+    // When enabled, a dedicated 1.5 s timer watches for newly-launched processes.
+    // Each new user app gets a temporary boost — CPU High, I/O High, efficiency
+    // mode off (RAM unchanged; GPU scheduling NEVER touched) — for a configurable
+    // window (default 20 s), then its original priorities are restored so Windows
+    // takes scheduling back over. Fully self-contained: owns its own state and a
+    // thread-safe event-log path; reuses the same priority P/Invokes the napping
+    // engine uses (no new native surface for Defender/SAC to flag).
+
+    private System.Threading.Timer? _launchBoostTimer;
+    private readonly object _launchBoostLock = new();
+    private HashSet<int> _lbKnownPids = new();
+    private readonly Dictionary<int, LaunchBoostEntry> _lbBoosted = new();
+
+    // Event-driven launch detection. Win32_ProcessStartTrace fires the instant a
+    // process is created (ETW-backed, near-zero overhead), so the boost lands from
+    // the app's first moments — DLL loads and init — instead of up to 1.5s later.
+    // The 1.5s polling timer above is kept as a fallback (belt-and-suspenders) for
+    // anything the watcher misses or in case the watcher fails to start.
+    private ManagementEventWatcher? _lbStartWatcher;
+
+    // GPU boost auto-disable: counts non-zero returns from D3DKMT and, after
+    // enough in a row, stops calling it for the rest of the session as a safety
+    // net. The threshold is intentionally high (50) because helper subprocesses
+    // inside multi-process apps (Spotify, Discord, ChatGPT, Claude, etc.)
+    // routinely return non-zero for benign per-process reasons — they don't
+    // have a D3D device — and that's fine. A truly broken WDDM driver still
+    // trips the threshold eventually; a brief burst from a multi-process app
+    // launch never will. A successful call resets the counter.
+    private const int GpuBoostFailureThreshold = 50;
+    private int  _gpuBoostFailureCount;
+    private bool _gpuBoostDisabledForSession;
+
+    // LaunchBoostTick reentrancy guard. The 1.5s System.Threading.Timer fires
+    // on a threadpool thread; if a single tick takes >1.5s (heavy boost dict,
+    // slow P/Invoke, etc.) the next tick will start while the first is still
+    // running, contending on _launchBoostLock. Worst case: any P/Invoke that
+    // genuinely hangs leaves the lock held, and every subsequent tick blocks
+    // forever waiting on it — eventually starving the threadpool, which is
+    // exactly the "process alive but UI-dead" pattern. 0/1 flip via
+    // Interlocked guarantees at most one tick body runs at a time.
+    private int _lbTickInFlight;
+
+    // Admin / maintenance binaries that are NOT user-app launches. Boosting them
+    // wastes the slot, fills the boost dictionary (so the 1.5 s re-assert tick
+    // does more work and more P/Invokes), and on weak GPUs amplifies WDDM stress.
+    // None of these are something the user is "opening" — they're Windows
+    // servicing tools, COM helpers, UAC prompts, NGEN compilation, etc.
+    private static readonly HashSet<string> LaunchBoostExclusionExtras =
+        new(StringComparer.OrdinalIgnoreCase)
+    {
+        // Command-line / scripting / config utilities
+        "cmd", "powershell", "pwsh", "wscript", "cscript", "reg", "regedit",
+        "schtasks", "sc", "fsutil", "powercfg", "where", "whoami", "tasklist",
+        "taskkill", "wmic", "net", "net1", "netsh", "ipconfig", "nslookup",
+        "ping", "tracert", "route", "arp", "icacls",
+        // UAC and user-mode security prompts
+        "consent", "RuntimeBroker",
+        // .NET Framework NGEN — fires in big bursts after every Windows Update;
+        // boosting twenty of these at once is what overwhelms the boost dict and
+        // hammers the GPU scheduler with priority calls.
+        "mscorsvw", "ngen", "ngentask",
+        // Windows Update / servicing
+        "TiWorker", "TrustedInstaller", "Dism", "DismHost", "wimserv",
+        "sdbinst", "wuaucltcore", "MoUsoCoreWorker", "MusNotification",
+        "MusNotifyIcon", "musnotificationux",
+        // Telemetry / compatibility scans (Microsoft's own background tasks)
+        "CompatTelRunner", "DeviceCensus", "deviceenroller", "diskaudit",
+        // Modern Windows shell hosts / picker hosts (system internal UI)
+        "UIEOrchestrator", "UIEOrchestratorStub", "PickerHost",
+        "DataExchangeHost", "ShellHost", "CrossDeviceResume",
+        // Volume / Disk / Firmware system services
+        "vds", "vdsldr", "VSSVC", "FirmwareTPM",
+        // Generic Win32 helpers used by system tasks
+        "rundll32", "regsvr32", "CompPkgSrv", "OpenWith",
+        // Search indexing helpers
+        "SearchFilterHost", "SearchProtocolHost", "WmiApSrv",
+        // Crash / error reporters
+        "crashreporter", "crashhelper", "WerFault", "WerFaultSecure",
+        // CHX SmartScreen helper
+        "CHXSmartScreen",
+        // Dell / OEM inventory + driver-update agents seen on test machines
+        "invcol", "DRVUpdate", "SalomanDock", "provtool",
+        // Background "open hint" prompts
+        "downloader", "updatesrv", "pingsender", "ByteCodeGenerator",
+        // Our own installer (the previous build's setup) — never boost it
+        "Systema_Setup",
+    };
+
+    private sealed class LaunchBoostEntry
+    {
+        public DateTime Expiry;       // UTC
+        public uint     OriginalCpu;  // CPU priority class to restore
+        public int?     OriginalGpu;  // GPU sched priority to restore (null = GPU not boosted)
+        public string   Name = "";
+    }
+
+    /// <summary>Starts or stops the Launch Boost watcher to match the current settings.</summary>
+    private void ApplyLaunchBoostState(TaskSleepSettings s)
+    {
+        if (s.LaunchBoostEnabled && _running) StartLaunchBoost();
+        else                                  StopLaunchBoost();
+    }
+
+    private void StartLaunchBoost()
+    {
+        lock (_launchBoostLock)
+        {
+            if (_launchBoostTimer != null) return;                 // already armed
+            _lbKnownPids = CurrentLaunchBoostPids();                 // baseline — only boost NEW launches
+            _launchBoostTimer = new System.Threading.Timer(_ => LaunchBoostTick(), null, 1500, 1500);
+        }
+        StartLaunchBoostWatcher();
+        _log.Info("TaskSleepService", "Launch Boost armed — new apps get a temporary priority boost on launch");
+    }
+
+    /// <summary>
+    /// Arms the Win32_ProcessStartTrace event watcher so launches are boosted the
+    /// instant the process is created. Best-effort: if WMI rejects the query (rare),
+    /// the 1.5s polling timer still covers everything.
+    /// </summary>
+    private void StartLaunchBoostWatcher()
+    {
+        lock (_launchBoostLock)
+        {
+            if (_lbStartWatcher != null) return; // already watching
+            try
+            {
+                // Win32_ProcessStartTrace is an extrinsic ETW event — selecting specific
+                // columns throws WBEM_E_INVALID_PARAMETER on many systems, so use "*".
+                // The event still carries ProcessID / ProcessName / ParentProcessID.
+                var query = new WqlEventQuery("SELECT * FROM Win32_ProcessStartTrace");
+                _lbStartWatcher = new ManagementEventWatcher(query);
+                _lbStartWatcher.EventArrived += OnProcessStarted;
+                _lbStartWatcher.Start();
+                _log.Info("TaskSleepService", "Launch Boost: instant process-start watcher armed");
+            }
+            catch (Exception ex)
+            {
+                _log.Warn("TaskSleepService",
+                    $"Launch Boost: process-start watcher failed to arm — falling back to 1.5s polling ({ex.Message})");
+                try { _lbStartWatcher?.Dispose(); } catch { }
+                _lbStartWatcher = null;
+            }
+        }
+    }
+
+    private void StopLaunchBoost()
+    {
+        System.Threading.Timer? t;
+        ManagementEventWatcher? w;
+        List<KeyValuePair<int, LaunchBoostEntry>> toRestore;
+        lock (_launchBoostLock)
+        {
+            t = _launchBoostTimer;
+            _launchBoostTimer = null;
+            w = _lbStartWatcher;
+            _lbStartWatcher = null;
+            toRestore = _lbBoosted.ToList();
+            _lbBoosted.Clear();
+        }
+        // Tear down the event watcher first so no new boosts land mid-restore.
+        if (w != null)
+        {
+            try { w.EventArrived -= OnProcessStarted; w.Stop(); w.Dispose(); }
+            catch (Exception ex) { _log.Warn("TaskSleepService", $"Launch Boost watcher teardown failed: {ex.Message}"); }
+        }
+        if (t == null) return;
+        t.Dispose();
+        foreach (var kv in toRestore) RestoreLaunchBoost(kv.Key, kv.Value);
+        _log.Info("TaskSleepService", "Launch Boost disarmed — in-flight boosts restored");
+    }
+
+    /// <summary>
+    /// Fires the instant any process is created. Boosts it immediately if it's a
+    /// normal user-app launch, OR if its parent is currently boosted (so child /
+    /// helper processes that spawn a moment later — game exes launched by Steam/Epic,
+    /// renderer subprocesses — ride the same boost window). Runs on a WMI callback
+    /// thread; ApplyLaunchBoost is concurrency-safe via the _lbBoosted claim guard.
+    /// </summary>
+    private void OnProcessStarted(object sender, EventArrivedEventArgs e)
+    {
+        try
+        {
+            TaskSleepSettings s;
+            lock (_settingsLock) { s = _settings; }
+            if (!s.LaunchBoostEnabled || !_running) return;
+
+            var props = e.NewEvent.Properties;
+            int pid  = Convert.ToInt32(props["ProcessID"].Value);
+            int ppid = Convert.ToInt32(props["ParentProcessID"].Value);
+            string raw = props["ProcessName"].Value?.ToString() ?? "";
+            if (pid <= 0 || string.IsNullOrEmpty(raw)) return;
+
+            // Win32_ProcessStartTrace reports "name.exe"; the exclusion sets use the
+            // bare process name (matching Process.ProcessName), so strip the extension.
+            string name = raw.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)
+                ? raw[..^4] : raw;
+
+            bool parentBoosted;
+            lock (_launchBoostLock) parentBoosted = _lbBoosted.ContainsKey(ppid);
+
+            // A normal boostable launch, or a child the boosted app just spawned.
+            if (!IsBoostableLaunch(name) && !(parentBoosted && IsBoostableChild(name)))
+                return;
+
+            int durSec = Math.Clamp(s.LaunchBoostDurationSeconds, 3, 120);
+            ApplyLaunchBoost(pid, name, s, DateTime.UtcNow.AddSeconds(durSec));
+        }
+        catch (Exception ex)
+        {
+            _log.Warn("TaskSleepService", $"OnProcessStarted failed: {ex.Message}");
+        }
+    }
+
+    private void LaunchBoostTick()
+    {
+        // Reentrancy guard: skip if the previous tick is still in progress.
+        // Returning is correct — the next 1.5s timer fires automatically.
+        if (System.Threading.Interlocked.CompareExchange(ref _lbTickInFlight, 1, 0) != 0)
+            return;
+        try
+        {
+            TaskSleepSettings s;
+            lock (_settingsLock) { s = _settings; }
+            if (!s.LaunchBoostEnabled) return;
+
+            int durSec = Math.Clamp(s.LaunchBoostDurationSeconds, 3, 120);
+            var now = DateTime.UtcNow;
+
+            // 1. Restore boosts whose window has elapsed.
+            List<KeyValuePair<int, LaunchBoostEntry>> expired;
+            lock (_launchBoostLock)
+                expired = _lbBoosted.Where(kv => now >= kv.Value.Expiry).ToList();
+            foreach (var kv in expired)
+            {
+                RestoreLaunchBoost(kv.Key, kv.Value);
+                lock (_launchBoostLock) _lbBoosted.Remove(kv.Key);
+            }
+
+            // 1b. Re-assert the boost on still-active processes EVERY tick. This is
+            // the whole point of the efficiency toggle: Windows' EcoQoS scheduler
+            // will silently flip efficiency mode back ON on a freshly-launched
+            // process, even one in the foreground. Re-applying each tick forces it
+            // back off (and keeps CPU/I-O High pinned) for the full boost window.
+            List<int> active;
+            lock (_launchBoostLock) active = _lbBoosted.Where(kv => now < kv.Value.Expiry).Select(kv => kv.Key).ToList();
+            foreach (int pid in active) ReassertLaunchBoost(pid, s);
+
+            // 2. Detect newly-launched processes and boost them.
+            var current = LaunchBoostSnapshot();                 // (pid, name)
+            var currentPids = new HashSet<int>(current.Count);
+            foreach (var (pid, name) in current)
+            {
+                currentPids.Add(pid);
+                if (_lbKnownPids.Contains(pid)) continue;        // was already running
+                bool alreadyBoosted;
+                lock (_launchBoostLock) alreadyBoosted = _lbBoosted.ContainsKey(pid);
+                if (alreadyBoosted) continue;
+                if (!IsBoostableLaunch(name)) continue;          // skip system / AV / our own process
+
+                ApplyLaunchBoost(pid, name, s, now.AddSeconds(durSec));
+            }
+            _lbKnownPids = currentPids;                          // forget exited PIDs; mark current as seen
+        }
+        catch (Exception ex)
+        {
+            _log.Warn("TaskSleepService", $"LaunchBoostTick failed: {ex.Message}");
+        }
+        finally
+        {
+            System.Threading.Interlocked.Exchange(ref _lbTickInFlight, 0);
+        }
+    }
+
+    private HashSet<int> CurrentLaunchBoostPids()
+    {
+        var set = new HashSet<int>();
+        try { foreach (var p in System.Diagnostics.Process.GetProcesses()) { try { set.Add(p.Id); } catch { } finally { p.Dispose(); } } }
+        catch { }
+        return set;
+    }
+
+    private List<(int pid, string name)> LaunchBoostSnapshot()
+    {
+        var list = new List<(int, string)>();
+        try
+        {
+            foreach (var p in System.Diagnostics.Process.GetProcesses())
+            {
+                try { list.Add((p.Id, p.ProcessName)); } catch { } finally { p.Dispose(); }
+            }
+        }
+        catch { }
+        return list;
+    }
+
+    /// <summary>True for ordinary user apps — excludes OS, security, AV, and Systema itself.</summary>
+    private bool IsBoostableLaunch(string name)
+    {
+        if (string.IsNullOrEmpty(name)) return false;
+        if (name.Equals("Systema", StringComparison.OrdinalIgnoreCase)) return false;
+        if (SystemProcessNames.Contains(name))         return false;
+        if (SecurityCriticalProcessNames.Contains(name)) return false;
+        if (_detectedAvProcessNames.Contains(name))    return false;
+        if (LaunchBoostExclusionExtras.Contains(name)) return false;
+        // Defensive prefix check for things like "Systema_Setup_0.7.28" / "...tmp"
+        // — we never want to boost our own installer or its temp helpers.
+        if (name.StartsWith("Systema_Setup", StringComparison.OrdinalIgnoreCase)) return false;
+        return true;
+    }
+
+    /// <summary>
+    /// Eligibility for boosting a CHILD process that a currently-boosted app spawned.
+    /// Looser than <see cref="IsBoostableLaunch"/> — it still blocks the truly critical
+    /// sets (system, security/AV, Systema, our installer) but ALLOWS the "extras"
+    /// (rundll32, helper hosts, etc.) because the boosted app intentionally spawned
+    /// them as part of its launch, and they often do the real startup work.
+    /// </summary>
+    private bool IsBoostableChild(string name)
+    {
+        if (string.IsNullOrEmpty(name)) return false;
+        if (name.Equals("Systema", StringComparison.OrdinalIgnoreCase)) return false;
+        if (SystemProcessNames.Contains(name))           return false;
+        if (SecurityCriticalProcessNames.Contains(name)) return false;
+        if (_detectedAvProcessNames.Contains(name))      return false;
+        if (name.StartsWith("Systema_Setup", StringComparison.OrdinalIgnoreCase)) return false;
+        return true;
+    }
+
+    private void ApplyLaunchBoost(int pid, string name, TaskSleepSettings s, DateTime expiryUtc)
+    {
+        IntPtr h = OpenProcess(PROCESS_SET_INFORMATION | PROCESS_QUERY_LIMITED_INFORMATION, false, pid);
+        if (h == IntPtr.Zero) return;
+        try
+        {
+            uint orig = GetPriorityClass(h);
+            if (s.LaunchBoostCpu)               SetPriorityClass(h, HIGH_PRIORITY_CLASS);
+            if (s.LaunchBoostIo)                SetIoPriorityLevel(h, IO_PRIORITY_HIGH);
+            if (s.LaunchBoostDisableEfficiency) SetEfficiencyMode(h, false);
+
+            // GPU scheduling priority — opt-in only (default off). Capture the
+            // original so it's restored exactly when the boost ends.
+            //
+            // SAFETY: if the WDDM driver starts returning non-zero NTSTATUS (the
+            // pattern on older Intel iGPUs / unstable WDDM), keep calling it would
+            // risk triggering a TDR (graphics device reset) which kills WPF
+            // rendering and leaves the app alive but UI-frozen. We count failures
+            // and silently stop touching GPU priority for the rest of the session
+            // after 3 strikes — the boost still applies CPU/I-O priority and
+            // efficiency-off, just no GPU. A log line tells us once.
+            int?  origGpu    = null;
+            bool  gpuApplied = false;
+            if (s.LaunchBoostGpu && !_gpuBoostDisabledForSession)
+            {
+                try
+                {
+                    int getRc = D3DKMTGetProcessSchedulingPriorityClass(h, out int g);
+                    if (getRc == 0) origGpu = g;
+                    int setRc = D3DKMTSetProcessSchedulingPriorityClass(h, D3DKMT_GPU_PRIORITY_HIGH);
+                    if (setRc == 0)
+                    {
+                        gpuApplied = true;
+                        // A successful set resets the strike counter — transient blips
+                        // shouldn't permanently disable a working GPU boost.
+                        _gpuBoostFailureCount = 0;
+                    }
+                    else
+                    {
+                        // Non-zero return. Most often this is just a helper subprocess
+                        // (multi-process Electron apps) that has no D3D device, so the
+                        // call doesn't apply — totally benign. Count toward the safety
+                        // threshold so a TRULY broken driver still gets the brakes,
+                        // but the threshold is high enough that normal app launches
+                        // never disable GPU boost prematurely.
+                        _gpuBoostFailureCount++;
+                        if (_gpuBoostFailureCount >= GpuBoostFailureThreshold)
+                        {
+                            _gpuBoostDisabledForSession = true;
+                            _log.Warn("TaskSleepService",
+                                "GPU boost auto-DISABLED for this session — D3DKMT kept returning errors. " +
+                                "Turn off 'GPU priority → Max' in Task Sleep settings if this keeps happening.");
+                        }
+                        origGpu = null;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _gpuBoostFailureCount++;
+                    _log.Warn("TaskSleepService", $"GPU boost for {name} threw ({_gpuBoostFailureCount}/3): {ex.Message}");
+                    if (_gpuBoostFailureCount >= 3)
+                    {
+                        _gpuBoostDisabledForSession = true;
+                        _log.Warn("TaskSleepService",
+                            "GPU boost auto-DISABLED for this session after repeated exceptions from D3DKMT.");
+                    }
+                    origGpu = null;
+                }
+            }
+
+            bool claimed;
+            lock (_launchBoostLock)
+            {
+                // Concurrency guard: the event watcher and the 1.5s timer can both
+                // reach the same fresh PID. Whoever records the entry first owns the
+                // original-priority value — never overwrite it, or a redundant second
+                // boost would capture the already-HIGH priority as the "original" and
+                // leave the app stuck High after restore.
+                if (_lbBoosted.ContainsKey(pid)) { claimed = false; }
+                else
+                {
+                    _lbBoosted[pid] = new LaunchBoostEntry { Expiry = expiryUtc, OriginalCpu = orig, OriginalGpu = origGpu, Name = name };
+                    claimed = true;
+                }
+            }
+            if (!claimed) return;   // someone else already booked this PID — our redundant Set* calls are idempotent
+
+            string what = "CPU/I-O High, efficiency off" + (gpuApplied ? ", GPU High" : "");
+            AddLaunchBoostEvent(name, pid, "Launch Boost", $"boosted for {s.LaunchBoostDurationSeconds}s — {what}");
+        }
+        catch (Exception ex) { _log.Warn("TaskSleepService", $"ApplyLaunchBoost({name}) failed: {ex.Message}"); }
+        finally { CloseHandle(h); }
+    }
+
+    /// <summary>Re-applies the boost rules to an already-boosted process. Called every
+    /// tick so Windows can't quietly re-enable efficiency mode (EcoQoS) or decay the
+    /// priority during the boost window. GPU is set once at launch (not re-asserted
+    /// here) to avoid needless GPU-scheduler churn.</summary>
+    private void ReassertLaunchBoost(int pid, TaskSleepSettings s)
+    {
+        IntPtr h = OpenProcess(PROCESS_SET_INFORMATION | PROCESS_QUERY_LIMITED_INFORMATION, false, pid);
+        if (h == IntPtr.Zero) return;
+        try
+        {
+            if (s.LaunchBoostCpu)               SetPriorityClass(h, HIGH_PRIORITY_CLASS);
+            if (s.LaunchBoostIo)                SetIoPriorityLevel(h, IO_PRIORITY_HIGH);
+            if (s.LaunchBoostDisableEfficiency) SetEfficiencyMode(h, false);   // force EcoQoS back off
+        }
+        catch { /* process may have exited mid-tick — harmless */ }
+        finally { CloseHandle(h); }
+    }
+
+    private void RestoreLaunchBoost(int pid, LaunchBoostEntry e)
+    {
+        IntPtr h = OpenProcess(PROCESS_SET_INFORMATION | PROCESS_QUERY_LIMITED_INFORMATION, false, pid);
+        if (h == IntPtr.Zero) return;   // process exited — nothing to restore
+        try
+        {
+            // Hand scheduling back to Windows: restore the original CPU class (or
+            // Normal if it was unknown) and Normal I/O. Efficiency mode was only
+            // cleared (off) — that's the default for user apps, so we leave it.
+            SetPriorityClass(h, e.OriginalCpu != 0 ? e.OriginalCpu : NORMAL_PRIORITY_CLASS);
+            SetIoPriorityLevel(h, IO_PRIORITY_NORMAL);
+            // Restore GPU scheduling priority if we changed it.
+            if (e.OriginalGpu.HasValue)
+            {
+                try { D3DKMTSetProcessSchedulingPriorityClass(h, e.OriginalGpu.Value); }
+                catch (Exception ex) { _log.Warn("TaskSleepService", $"GPU restore for {e.Name} failed: {ex.Message}"); }
+            }
+            AddLaunchBoostEvent(e.Name, pid, "Boost ended", "priority restored to default");
+        }
+        catch (Exception ex) { _log.Warn("TaskSleepService", $"RestoreLaunchBoost({e.Name}) failed: {ex.Message}"); }
+        finally { CloseHandle(h); }
+    }
+
+    /// <summary>Thread-safe activity-log entry for Launch Boost (the timer runs off the monitor thread,
+    /// so it must NOT touch the monitor-thread-owned batch dictionary used by AddEvent).</summary>
+    private void AddLaunchBoostEvent(string name, int pid, string action, string detail)
+    {
+        _eventLog.Enqueue(new MonitorEvent(DateTime.Now, name, pid, action, detail));
+        while (_eventLog.Count > MaxEvents) _eventLog.TryDequeue(out _);
+        _log.Info("TaskSleepService", $"{action}: {name} (PID {pid}) — {detail}");
+    }
 
     private void AddEvent(string name, int pid, string action, string detail = "")
     {
@@ -3811,6 +4560,15 @@ public sealed class TaskSleepService : IDisposable
     [DllImport("kernel32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool CloseHandle(IntPtr hObject);
+
+    // GPU scheduling priority (Launch Boost — opt-in only). NTSTATUS return; 0 = success.
+    // D3DKMT priority classes: 0 Idle, 1 BelowNormal, 2 Normal, 3 AboveNormal, 4 High, 5 Realtime.
+    [DllImport("gdi32.dll")]
+    private static extern int D3DKMTSetProcessSchedulingPriorityClass(IntPtr hProcess, int priorityClass);
+    [DllImport("gdi32.dll")]
+    private static extern int D3DKMTGetProcessSchedulingPriorityClass(IntPtr hProcess, out int priorityClass);
+    private const int D3DKMT_GPU_PRIORITY_NORMAL = 2;
+    private const int D3DKMT_GPU_PRIORITY_HIGH   = 4;
 
     // ── Integrity level (elevated/admin process detection) ──────────────────
     [DllImport("advapi32.dll", SetLastError = true)]

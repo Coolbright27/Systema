@@ -2,7 +2,7 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:conv="clr-namespace:Systema.Core.Converters"
-             Background="{StaticResource BgPrimaryBrush}">
+             Background="Transparent">
 
     <UserControl.Resources>
         <conv:BoolToVisibilityConverter x:Key="BoolToVis"/>
@@ -76,9 +76,9 @@
                 <RowDefinition Height="20"/>   <!--5: spacer -->
                 <RowDefinition Height="Auto"/> <!-- 6: Core Parking card -->
                 <RowDefinition Height="20"/>   <!--7: spacer -->
-                <RowDefinition Height="Auto"/> <!-- 8: Fast Startup card -->
+                <RowDefinition Height="Auto"/> <!-- 8: NTFS Last-Access card -->
                 <RowDefinition Height="20"/>   <!--9: spacer -->
-                <RowDefinition Height="Auto"/> <!-- 10: NTFS Last-Access card -->
+                <RowDefinition Height="Auto"/> <!-- 10: Responsiveness card -->
                 <RowDefinition Height="20"/>   <!--11: spacer -->
                 <RowDefinition Height="Auto"/> <!-- 12: Sleep → Hibernate (Battery) card -->
                 <RowDefinition Height="20"/>   <!--13: spacer -->
@@ -116,9 +116,11 @@
                                     <TextBlock Text="SAFE" FontSize="9" FontWeight="SemiBold" Foreground="{StaticResource TextSecondaryBrush}"/>
                                 </Border>
                             </StackPanel>
-                            <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap">
-                                Blocks Windows Insider builds and monthly preview cumulative updates.
-                                Regular security and quality updates continue to install normally.
+                            <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" MaxWidth="640">
+                                Blocks Windows Insider Program builds and monthly preview cumulative
+                                updates from appearing in Windows Update — including the optional-updates
+                                section. Regular security, quality, and feature updates continue to
+                                install normally.
                             </TextBlock>
                         </StackPanel>
 
@@ -136,7 +138,7 @@
                                 <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
                                 <Style.Triggers>
                                     <DataTrigger Binding="{Binding BlockPreviewUpdates}" Value="True">
-                                        <Setter Property="Text" Value="Status: ON ✓  —  Preview updates are blocked"/>
+                                        <Setter Property="Text" Value="Status: ON ✓  —  Preview updates and Insider builds blocked"/>
                                         <Setter Property="Foreground" Value="{StaticResource AccentGreenBrush}"/>
                                     </DataTrigger>
                                 </Style.Triggers>
@@ -280,67 +282,8 @@
                 </StackPanel>
             </Border>
 
-            <!-- ===== CARD: Disable Fast Startup ===== -->
-            <Border Grid.Row="8" Style="{StaticResource Card}">
-                <StackPanel>
-
-                    <!-- Header row with toggle -->
-                    <Grid Margin="0,0,0,10">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-
-                        <StackPanel Grid.Column="0">
-                            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                                <TextBlock Text="Disable Fast Startup"
-                                           Style="{StaticResource HeadingMedium}"/>
-                                <Border BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="3"
-                                        Padding="6,2" Margin="10,0,0,0" VerticalAlignment="Center">
-                                    <TextBlock Text="MODERATE" FontSize="9" FontWeight="SemiBold" Foreground="{StaticResource TextSecondaryBrush}"/>
-                                </Border>
-                            </StackPanel>
-                            <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap">
-                                Forces a full clean shutdown instead of the cached kernel snapshot.
-                                Prevents driver-state corruption, ensures firmware updates apply, and fixes shutdown issues on some PCs.
-                            </TextBlock>
-                        </StackPanel>
-
-                        <CheckBox Grid.Column="1" VerticalAlignment="Center"
-                                  Style="{StaticResource ToggleSwitch}"
-                                  IsChecked="{Binding FastStartupDisabled, Mode=TwoWay}"/>
-                    </Grid>
-
-                    <!-- Status indicator -->
-                    <TextBlock Margin="0,2,0,0">
-                        <TextBlock.Style>
-                            <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionText}">
-                                <Setter Property="Text" Value="Status: OFF  —  Fast Startup is enabled (Windows default)"/>
-                                <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding FastStartupDisabled}" Value="True">
-                                        <Setter Property="Text" Value="Status: ON ✓  —  Fast Startup is disabled (full clean shutdown)"/>
-                                        <Setter Property="Foreground" Value="{StaticResource AccentGreenBrush}"/>
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </TextBlock.Style>
-                    </TextBlock>
-
-                    <!-- Loading indicator -->
-                    <StackPanel Orientation="Horizontal" Margin="0,6,0,0"
-                                Visibility="{Binding IsFastStartupLoading, Converter={StaticResource BoolToVis}}">
-                        <ProgressBar IsIndeterminate="True" Width="160" Height="4"
-                                     Style="{StaticResource AccentProgressBar}" Margin="0,0,10,0"
-                                     VerticalAlignment="Center"/>
-                        <TextBlock Text="Applying..." Style="{StaticResource CaptionText}" VerticalAlignment="Center"/>
-                    </StackPanel>
-
-                </StackPanel>
-            </Border>
-
             <!-- ===== CARD: Disable NTFS Last-Access Timestamps ===== -->
-            <Border Grid.Row="10" Style="{StaticResource Card}">
+            <Border Grid.Row="8" Style="{StaticResource Card}">
                 <StackPanel>
 
                     <!-- Header row with toggle -->
@@ -397,6 +340,122 @@
 
                 </StackPanel>
             </Border>
+
+            <!-- Foreground Priority Boost + Instant App Focus moved to the Systema
+                 Engine tab (see TaskSleepView). Row 10 now holds the Win11 cleanup
+                 cards (Disable Suggestions + Disable Web Search). -->
+            <StackPanel Grid.Row="10">
+
+                <!-- ===== CARD: Disable Windows Suggestions & Nags ===== -->
+                <Border Style="{StaticResource Card}">
+                    <StackPanel>
+                        <Grid Margin="0,0,0,10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                    <TextBlock Text="Disable Suggestions &amp; Nags"
+                                               Style="{StaticResource HeadingMedium}"/>
+                                    <Border BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="3"
+                                            Padding="6,2" Margin="10,0,0,0" VerticalAlignment="Center">
+                                        <TextBlock Text="SAFE" FontSize="9" FontWeight="SemiBold" Foreground="{StaticResource TextSecondaryBrush}"/>
+                                    </Border>
+                                </StackPanel>
+                                <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" MaxWidth="640">
+                                    Turns off Start-menu app suggestions, lock-screen spotlight tips, "tips &amp; tricks"
+                                    notifications, "Finish setting up your device" prompts, suggested content in Settings,
+                                    and OneDrive ads in File Explorer. When on, it's re-applied each launch so the nags
+                                    never come back. Fully reversible.
+                                </TextBlock>
+                            </StackPanel>
+                            <CheckBox Grid.Column="1" VerticalAlignment="Center"
+                                      Style="{StaticResource ToggleSwitch}"
+                                      IsChecked="{Binding DisableSuggestions, Mode=TwoWay}"/>
+                        </Grid>
+
+                        <TextBlock Margin="0,2,0,0">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionText}">
+                                    <Setter Property="Text" Value="Status: OFF  —  Windows suggestions and tips are shown"/>
+                                    <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding DisableSuggestions}" Value="True">
+                                            <Setter Property="Text" Value="Status: ON ✓  —  Suggestions, tips, and setup nags are off"/>
+                                            <Setter Property="Foreground" Value="{StaticResource AccentGreenBrush}"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+
+                        <StackPanel Orientation="Horizontal" Margin="0,6,0,0"
+                                    Visibility="{Binding IsSuggestionsLoading, Converter={StaticResource BoolToVis}}">
+                            <ProgressBar IsIndeterminate="True" Width="160" Height="4"
+                                         Style="{StaticResource AccentProgressBar}" Margin="0,0,10,0"
+                                         VerticalAlignment="Center"/>
+                            <TextBlock Text="Applying..." Style="{StaticResource CaptionText}" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <!-- spacer -->
+                <Border Height="20" Background="Transparent"/>
+
+                <!-- ===== CARD: Disable Bing / Web Results in Start Search ===== -->
+                <Border Style="{StaticResource Card}">
+                    <StackPanel>
+                        <Grid Margin="0,0,0,10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                    <TextBlock Text="Disable Web Search in Start"
+                                               Style="{StaticResource HeadingMedium}"/>
+                                    <Border BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="3"
+                                            Padding="6,2" Margin="10,0,0,0" VerticalAlignment="Center">
+                                        <TextBlock Text="SAFE" FontSize="9" FontWeight="SemiBold" Foreground="{StaticResource TextSecondaryBrush}"/>
+                                    </Border>
+                                </StackPanel>
+                                <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" MaxWidth="640">
+                                    Stops the Start menu from sending your typing to Bing and showing web results — searches
+                                    return only your local apps and files, which is faster and needs no network. Off by default.
+                                    Fully reversible.
+                                </TextBlock>
+                            </StackPanel>
+                            <CheckBox Grid.Column="1" VerticalAlignment="Center"
+                                      Style="{StaticResource ToggleSwitch}"
+                                      IsChecked="{Binding DisableWebSearch, Mode=TwoWay}"/>
+                        </Grid>
+
+                        <TextBlock Margin="0,2,0,0">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionText}">
+                                    <Setter Property="Text" Value="Status: OFF  —  Start search shows Bing/web results"/>
+                                    <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding DisableWebSearch}" Value="True">
+                                            <Setter Property="Text" Value="Status: ON ✓  —  Start search is local-only (no web)"/>
+                                            <Setter Property="Foreground" Value="{StaticResource AccentGreenBrush}"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+
+                        <StackPanel Orientation="Horizontal" Margin="0,6,0,0"
+                                    Visibility="{Binding IsWebSearchLoading, Converter={StaticResource BoolToVis}}">
+                            <ProgressBar IsIndeterminate="True" Width="160" Height="4"
+                                         Style="{StaticResource AccentProgressBar}" Margin="0,0,10,0"
+                                         VerticalAlignment="Center"/>
+                            <TextBlock Text="Applying..." Style="{StaticResource CaptionText}" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
 
             <!-- ===== CARD: Sleep → Hibernate (Battery — laptop only) ===== -->
             <Border Grid.Row="12" Style="{StaticResource Card}"

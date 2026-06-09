@@ -63,6 +63,13 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
     private readonly SystemStabilityService     _stability;
     private static readonly LoggerService _log = LoggerService.Instance;
 
+    // ── Header badges ───────────────────────────────────────────────────────
+    // Reflects the actual elevation state of the running process rather than a
+    // hardcoded label. The app gates launch on elevation (see AdminCheckService),
+    // so in practice this is true — but binding it keeps the badge honest.
+    public bool   IsAdministrator   => AdminCheckService.IsAdmin();
+    public string AdminBadgeText    => IsAdministrator ? "Administrator" : "Standard User";
+
     // ── Status pills ──────────────────────────────────────────────────────────
     [ObservableProperty] private bool   _taskSleepActive;
     [ObservableProperty] private int    _nappedAppCount;
@@ -75,6 +82,11 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
 
     [ObservableProperty] private bool   _dataCollectionBlocked;
     [ObservableProperty] private string _dataCollectionStatus = "Checking…";
+
+    // System Health — single aggregate indicator across the modules. Optimal when the
+    // app is elevated, telemetry is blocked, and Auto-Pilot's recommendations are applied.
+    [ObservableProperty] private bool   _systemHealthOptimal = true;
+    [ObservableProperty] private string _systemHealthStatus  = "Checking…";
 
     // ── Napping list ──────────────────────────────────────────────────────────
     /// <summary>Names of processes currently napped by Task Sleep (top 8).</summary>
@@ -190,6 +202,11 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
         }
         catch (Exception ex) { _log.Warn("DashboardViewModel", $"Telemetry status check failed: {ex.Message}"); DataCollectionStatus = "Unknown"; }
 
+        // System Health — coarse aggregate the user can read at a glance.
+        bool healthy = IsAdministrator && DataCollectionBlocked && IsAutoPilotApplied;
+        SystemHealthOptimal = healthy;
+        SystemHealthStatus  = healthy ? "All systems optimal" : "Some items need attention";
+
         // RAM ────────────────────────────────────────────────────────
         try
         {
@@ -254,39 +271,57 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
                 //    (skips Xbox if games are installed, skips BITS, etc.).
                 bool gamesInstalled = _gameBooster.GamesInstalled;
                 bool telOk        = _serviceControl.AreTelemetryServicesDisabled();
-                bool recOk        = _serviceControl.AreAllRecommendedDisabled(gamesInstalled);
+                var  remaining    = _serviceControl.GetRemainingRecommendedServices(gamesInstalled);
+                bool recOk        = remaining.Count == 0;
                 bool privacyOk    = telOk && recOk;
                 if (!privacyOk) pending++;
+
+                // Build a useful detail line that names the offending services rather
+                // than the old generic "Some recommended services are still running."
+                // The list comes from the SAME helper the toggle uses, so the two
+                // views can no longer disagree about whether the cleanup is complete.
+                string detail;
+                if (privacyOk)
+                    detail = "Telemetry blocked, recommended services disabled";
+                else if (!telOk && !recOk)
+                    detail = $"Telemetry active and {remaining.Count} service(s) running: {Truncate(remaining)}";
+                else if (!telOk)
+                    detail = "Telemetry services are active";
+                else
+                    detail = $"Still running: {Truncate(remaining)}";
+
                 items.Add(new AutoPilotItem
                 {
                     Label  = "Privacy & background services",
                     IsDone = privacyOk,
-                    Detail = privacyOk
-                        ? "Telemetry blocked, recommended services disabled"
-                        : !telOk && !recOk ? "Telemetry active and recommended services running"
-                        : !telOk           ? "Telemetry services are active"
-                                           : "Some recommended services are still running",
+                    Detail = detail,
                 });
 
                 // 3. Power plan
                 string plan  = _powerPlan.GetActivePlan();
                 bool hasBattery = _powerPlan.HasBattery();
+                bool onBattery  = _powerPlan.IsOnBattery();
                 bool batteryOptConfigured = !string.IsNullOrEmpty(_settings.BatteryOptimizationMode);
                 bool isHighPerf = plan.Contains("High Performance", StringComparison.OrdinalIgnoreCase)
                                || plan.Contains("Ultimate", StringComparison.OrdinalIgnoreCase);
-                // On a laptop with battery optimization configured, the plan switching
-                // to Balanced on battery is expected behaviour — not a problem.
+                // When the laptop is on battery with battery optimization configured,
+                // a battery-appropriate plan is the CORRECT state — not a failure.
+                // That can be either "Balanced" (balanced mode) or "Power Saver"
+                // (max battery life / Max mode). Previously only "Balanced" counted,
+                // so being on battery in Max mode (Power Saver) wrongly showed a red X.
+                bool batteryPlanActive = plan.Contains("Balanced",    StringComparison.OrdinalIgnoreCase)
+                                      || plan.Contains("Power Saver",  StringComparison.OrdinalIgnoreCase)
+                                      || plan.Contains("Power saver",  StringComparison.OrdinalIgnoreCase);
                 bool planOk = isHighPerf
-                           || (hasBattery && batteryOptConfigured &&
-                               plan.Contains("Balanced", StringComparison.OrdinalIgnoreCase));
+                           || (hasBattery && batteryOptConfigured && onBattery && batteryPlanActive);
                 if (!planOk) pending++;
                 items.Add(new AutoPilotItem
                 {
                     Label  = "Power plan",
                     IsDone = planOk,
-                    Detail = isHighPerf ? "High Performance"
-                           : planOk    ? "Balanced on battery (auto-switching enabled)"
-                                       : $"Currently: {plan}",
+                    Detail = isHighPerf       ? "High Performance"
+                           : planOk           ? $"On battery — {plan} (auto-switches to High Performance on AC)"
+                                              : $"Currently: {plan}",
                 });
                 ActivePlan = plan;
 
@@ -376,6 +411,26 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
                     Label  = "NTFS last-access timestamps",
                     IsDone = ntfsOk,
                     Detail = ntfsOk ? "Disabled — reduces unnecessary disk writes" : "Enabled (default) — click Optimize to disable",
+                });
+
+                // 12. Foreground priority boost
+                bool fgBoostOk = _stability.IsForegroundBoostEnabled();
+                if (!fgBoostOk) pending++;
+                items.Add(new AutoPilotItem
+                {
+                    Label  = "Foreground priority boost",
+                    IsDone = fgBoostOk,
+                    Detail = fgBoostOk ? "Active window gets boosted CPU priority" : "Off (default) — click Optimize to enable",
+                });
+
+                // 13. Launch Boost (newly launched apps get a temporary priority boost)
+                bool launchBoostOk = _taskSleepVm.IsEnabled && _taskSleepVm.LaunchBoostEnabled;
+                if (!launchBoostOk) pending++;
+                items.Add(new AutoPilotItem
+                {
+                    Label  = "Launch Boost",
+                    IsDone = launchBoostOk,
+                    Detail = launchBoostOk ? "Apps get a priority boost when they launch" : "Off (default) — click Optimize to enable",
                 });
             });
 
@@ -528,6 +583,22 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
                 _log.Info("DashboardViewModel", "NTFS last-access timestamps disabled");
             }
 
+            // 12. Foreground priority boost — keeps the active app responsive under load.
+            if (!_stability.IsForegroundBoostEnabled())
+            {
+                await _stability.EnableForegroundBoostAsync();
+                _settings.ForegroundBoostEnabled = true;
+                _log.Info("DashboardViewModel", "Foreground priority boost enabled");
+            }
+
+            // 13. Launch Boost — newly launched apps get a temporary priority boost
+            // so they open faster. Requires Task Sleep to be enabled.
+            if (!_taskSleepVm.IsEnabled || !_taskSleepVm.LaunchBoostEnabled)
+            {
+                _taskSleepVm.EnableLaunchBoost();
+                _log.Info("DashboardViewModel", "Launch Boost enabled");
+            }
+
             _log.Info("DashboardViewModel", "Auto-Pilot completed successfully");
             StatusMessage = "Auto-Pilot complete — your PC is fully optimized.";
         }
@@ -541,7 +612,21 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
             IsAutoPilotRunning = false;
             // Re-check all settings so the checklist and button state update
             await CheckAutoPilotStatusAsync();
+            // Notify ViewModels that depend on post-run state (e.g. ServicesViewModel
+            // refreshing the merged Privacy & Background Services toggle reflection).
+            SettingsService.RaiseOptimizationsApplied();
         }
+    }
+
+    /// <summary>
+    /// Renders the "still running" list for the Privacy & background services
+    /// checklist detail. Shows up to 3 names so the line stays scannable; anything
+    /// beyond gets a "+N more" suffix.
+    /// </summary>
+    private static string Truncate(List<string> names)
+    {
+        if (names.Count <= 3) return string.Join(", ", names);
+        return $"{string.Join(", ", names.Take(3))} +{names.Count - 3} more";
     }
 
     // "Apply settings once" is always available — never gated on IsAutoPilotApplied.

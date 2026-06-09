@@ -94,17 +94,9 @@ public class WindowsUpdateTweaksService
     // ── Public API ────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Returns true only when the full preview-build block policy is applied.
-    /// All six values must be present: ManagePreviewBuilds, ManagePreviewBuildsPolicyValue,
-    /// BranchReadinessLevel, AllowOptionalContent, DeferQualityUpdates, AND
-    /// DeferQualityUpdatesPeriodInDays.
-    ///
-    /// AllowOptionalContent=0 is required to suppress monthly "Preview" cumulative updates
-    /// (e.g. "2026-04 Preview Update KB5083631") which are NOT Insider builds and are
-    /// NOT blocked by the other four keys alone. However, on Windows 11 22H2+ the WU client
-    /// ignores AllowOptionalContent unless Windows Update for Business (WUfB) quality update
-    /// management is also active — hence DeferQualityUpdates=1 (WUfB enabled) and
-    /// DeferQualityUpdatesPeriodInDays=0 (zero deferral, no delay to security patches).
+    /// Returns true when the preview-build block is fully applied — meaning all
+    /// four GPO values are set AND the UX opt-in is off. Anything less and the
+    /// auto-heal in ToolsViewModel will silently re-apply.
     /// </summary>
     public bool IsPreviewUpdatesBlocked()
     {
@@ -112,24 +104,25 @@ public class WindowsUpdateTweaksService
         {
             using var key = Registry.LocalMachine.OpenSubKey(WuPolicyKey);
             if (key == null) return false;
-            return EvaluateBlockState(
-                       key.GetValue("ManagePreviewBuilds"),
-                       key.GetValue("ManagePreviewBuildsPolicyValue"),
-                       key.GetValue("BranchReadinessLevel"),
-                       key.GetValue("AllowOptionalContent")) &&
-                   EvaluateWufbState(
-                       key.GetValue("DeferQualityUpdates"),
-                       key.GetValue("DeferQualityUpdatesPeriodInDays"));
+            bool gpoOk = EvaluateBlockState(
+                key.GetValue("ManagePreviewBuilds"),
+                key.GetValue("ManagePreviewBuildsPolicyValue"),
+                key.GetValue("BranchReadinessLevel"),
+                key.GetValue("AllowOptionalContent"));
+            if (!gpoOk) return false;
+
+            using var uxKey = Registry.LocalMachine.OpenSubKey(WuUxSettingsKey);
+            return uxKey?.GetValue("IsContinuousInnovationOptedIn") is int v && v == 0;
         }
         catch (Exception ex)
         {
-            Log.Warn("WUTweaks", "Could not read preview build policy state", ex);
+            Log.Warn("WUTweaks", "Could not read preview block state", ex);
             return false;
         }
     }
 
     /// <summary>
-    /// Pure evaluation of the four registry values that make up the core preview block.
+    /// Pure evaluation of the four registry values that make up the preview block.
     /// Exposed as internal so unit tests can verify the logic without touching the registry.
     /// </summary>
     internal static bool EvaluateBlockState(object? manage, object? policyVal, object? branch, object? optional)
@@ -137,20 +130,6 @@ public class WindowsUpdateTweaksService
            policyVal is int v && v == 0  &&
            branch   is int b && b == 16 &&
            optional is int o && o == 0;
-
-    /// <summary>
-    /// Pure evaluation of the two Windows Update for Business (WUfB) registry values
-    /// that activate WUfB quality update management.
-    ///
-    /// AllowOptionalContent=0 is only enforced by the WU client when WUfB is active.
-    /// DeferQualityUpdates=1 activates it; DeferQualityUpdatesPeriodInDays=0 means zero
-    /// deferral delay — mandatory security patches still install immediately.
-    ///
-    /// Exposed as internal so unit tests can verify the logic without touching the registry.
-    /// </summary>
-    internal static bool EvaluateWufbState(object? deferQuality, object? deferDays)
-        => deferQuality is int q && q == 1 &&
-           deferDays   is int d && d == 0;
 
     /// <summary>
     /// Blocks Windows preview / insider builds from showing in Windows Update.
@@ -163,64 +142,94 @@ public class WindowsUpdateTweaksService
         {
             try
             {
-                Log.Info("WUTweaks", "Applying preview update block policy");
+                Log.Info("WUTweaks", "Applying full preview update + Insider Program block");
 
-                using var key = Registry.LocalMachine.CreateSubKey(WuPolicyKey, writable: true);
-                if (key == null)
+                // ────────────────────────────────────────────────────────────────
+                // Real block. Earlier v0.7.9 builds tried to do this UX-only after
+                // we wrongly blamed these GPO writes for the WU 0x80004002 crashes.
+                // Root cause turned out to be the Privacy & Background Services
+                // toggle disabling DPS / WdiServiceHost / DoSvc / WpcMonSvc, which
+                // are all now in _noRecommendedTag and never get touched. With
+                // that fixed, these classic preview-block keys are safe to write
+                // again. They are the same keys community tools like ShutUp10
+                // and O&O have used on consumer Pro for years.
+                //
+                // What each value does:
+                //
+                //   ManagePreviewBuilds            = 1   Enable preview-build management.
+                //   ManagePreviewBuildsPolicyValue = 0   0 = block all Insider rings
+                //                                          AND force-off any active ring.
+                //   BranchReadinessLevel           = 16  Lock to General Availability
+                //                                          (stable) channel. Without this,
+                //                                          machines already on a preview
+                //                                          ring keep getting preview builds.
+                //   AllowOptionalContent           = 0   Block monthly "Preview" cumulative
+                //                                          updates (e.g. KB5083631).
+                //   IsContinuousInnovationOptedIn  = 0   Disable the "Get the latest
+                //                                          updates as soon as they're
+                //                                          available" Settings switch.
+                //
+                // What this DOES NOT touch (intentionally — these are the real
+                // WUfB activators that DO break WU on non-MDM Pro):
+                //
+                //   DeferQualityUpdates / DeferQualityUpdatesPeriodInDays
+                //   DeferFeatureUpdates / DeferFeatureUpdatesPeriodInDays
+                //   Pause* values
+                //
+                // Result: Insider Program blocked, monthly preview CUs blocked,
+                // optional preview offers hidden. Security / quality / feature
+                // updates and Defender definitions continue to install normally.
+                // ────────────────────────────────────────────────────────────────
+
+                using (var key = Registry.LocalMachine.CreateSubKey(WuPolicyKey, writable: true))
                 {
-                    Log.Error("WUTweaks", "Failed to open/create WindowsUpdate policy key — access denied?");
-                    return TweakResult.Fail("Could not open the Windows Update policy registry key. " +
-                                           "Make sure Systema is running as Administrator.");
+                    if (key == null)
+                    {
+                        Log.Error("WUTweaks", "Failed to open/create WindowsUpdate policy key — access denied?");
+                        return TweakResult.Fail("Could not open the Windows Update policy registry key. " +
+                                               "Make sure Systema is running as Administrator.");
+                    }
+
+                    key.SetValue("ManagePreviewBuilds",            1,  RegistryValueKind.DWord);
+                    key.SetValue("ManagePreviewBuildsPolicyValue", 0,  RegistryValueKind.DWord);
+                    key.SetValue("BranchReadinessLevel",           16, RegistryValueKind.DWord);
+                    key.SetValue("AllowOptionalContent",           0,  RegistryValueKind.DWord);
+
+                    // Defensive: actively REMOVE the WUfB-activating defer / pause
+                    // values if a prior Systema build (or anything else) left them
+                    // behind. Those are the keys that put WU into managed mode and
+                    // returned E_NOINTERFACE.
+                    key.DeleteValue("DeferQualityUpdates",             throwOnMissingValue: false);
+                    key.DeleteValue("DeferQualityUpdatesPeriodInDays", throwOnMissingValue: false);
+                    key.DeleteValue("DeferFeatureUpdates",             throwOnMissingValue: false);
+                    key.DeleteValue("DeferFeatureUpdatesPeriodInDays", throwOnMissingValue: false);
+                    key.DeleteValue("PauseQualityUpdates",             throwOnMissingValue: false);
+                    key.DeleteValue("PauseQualityUpdatesStartTime",    throwOnMissingValue: false);
+                    key.DeleteValue("PauseFeatureUpdates",             throwOnMissingValue: false);
+                    key.DeleteValue("PauseFeatureUpdatesStartTime",    throwOnMissingValue: false);
                 }
 
-                // Blocks Insider Program enrollment and forces off any active insider ring.
-                key.SetValue("ManagePreviewBuilds",            1,  RegistryValueKind.DWord);
-                key.SetValue("ManagePreviewBuildsPolicyValue", 0,  RegistryValueKind.DWord);
-
-                // Locks Windows Update to the General Availability channel (stable only).
-                // Without this, ManagePreviewBuilds alone only blocks NEW enrollment;
-                // machines already on a preview ring keep receiving preview builds.
-                // 16 = General Availability Channel (stable); 2/4/8 = Insider rings.
-                key.SetValue("BranchReadinessLevel",           16, RegistryValueKind.DWord);
-
-                // Blocks monthly "Preview" cumulative updates (e.g. "2026-04 Preview Update
-                // KB5083631"). These are NOT Insider builds — they are optional pre-Patch-Tuesday
-                // releases offered to all Windows users via the "Get latest updates as soon as
-                // they're available" feature. The above three keys do NOT suppress these.
-                // 0 = block all optional/preview content; 1 = allow (Windows default).
-                key.SetValue("AllowOptionalContent",           0,  RegistryValueKind.DWord);
-
-                // Activate Windows Update for Business (WUfB) quality update management.
-                // On Windows 11 22H2+ the WU client ignores AllowOptionalContent = 0 unless
-                // WUfB is active — without these two keys the "2026 Preview" and similar
-                // optional preview CUs still surface in Windows Update even though
-                // AllowOptionalContent is set.
-                // DeferQualityUpdates = 1              → enables WUfB quality update control
-                // DeferQualityUpdatesPeriodInDays = 0  → zero deferral: no delay on security
-                //                                        patches (installs immediately as normal)
-                key.SetValue("DeferQualityUpdates",              1, RegistryValueKind.DWord);
-                key.SetValue("DeferQualityUpdatesPeriodInDays",  0, RegistryValueKind.DWord);
-
-                // Block the "Get the latest updates as soon as they're available" UX opt-in.
-                // On Windows 11 22H2+ this is a separate delivery surface that is NOT controlled
-                // by the four policy keys above. IsContinuousInnovationOptedIn = 0 disables it
-                // at the machine level. Non-fatal if the key or path doesn't exist.
+                // Block the Win11 22H2+ "Get the latest updates as soon as they're
+                // available" UX opt-in. Separate surface from the policy keys above.
                 try
                 {
                     using var uxKey = Registry.LocalMachine.CreateSubKey(WuUxSettingsKey, writable: true);
                     uxKey?.SetValue("IsContinuousInnovationOptedIn", 0, RegistryValueKind.DWord);
                 }
-                catch (Exception ex) { Log.Warn("WUTweaks", $"Could not write IsContinuousInnovationOptedIn (non-fatal): {ex.Message}"); }
+                catch (Exception ex)
+                {
+                    Log.Warn("WUTweaks", $"Could not write IsContinuousInnovationOptedIn (non-fatal): {ex.Message}");
+                }
 
-                // Force a Group Policy refresh and trigger a WU scan so the preview update
-                // offer disappears from the Windows Update UI promptly (without this it can
-                // linger for hours until the next scheduled WU scan).
+                // Refresh GP + kick a WU scan so the WU UI drops any offered
+                // preview update promptly instead of waiting hours for the next
+                // scheduled scan.
                 RunGpUpdateAndScan();
 
-                Log.Info("WUTweaks", "Preview update block applied — ManagePreviewBuilds=1, PolicyValue=0, BranchReadinessLevel=16, AllowOptionalContent=0, DeferQualityUpdates=1, DeferQualityUpdatesPeriodInDays=0, IsContinuousInnovationOptedIn=0");
+                Log.Info("WUTweaks", "Preview block applied — Insider builds blocked, AllowOptionalContent=0, IsContinuousInnovationOptedIn=0");
                 return TweakResult.Ok(
-                    "Preview updates blocked. Insider builds and monthly preview cumulative updates " +
-                    "are now suppressed. Normal security and cumulative updates are unaffected.");
+                    "Preview updates and Windows Insider Program blocked. Regular security, " +
+                    "quality, and feature updates continue to install normally.");
             }
             catch (Exception ex)
             {
@@ -228,6 +237,66 @@ public class WindowsUpdateTweaksService
                 return TweakResult.FromException(ex);
             }
         });
+    }
+
+    /// <summary>
+    /// Deletes every Windows-Update-for-Business activation value Systema (or an
+    /// earlier Systema build) may have left under
+    /// HKLM\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate, and removes the
+    /// parent key if it ends up empty.
+    ///
+    /// Called from BlockPreviewUpdatesAsync, AllowPreviewUpdatesAsync, and the
+    /// app-startup heal path so a user who damaged their machine on an older
+    /// Systema build recovers Windows Update access automatically.
+    /// </summary>
+    public static void ScrubLegacyWufbPolicyKeys()
+    {
+        // Every value here is a WUfB-activating policy per Microsoft's Policy CSP.
+        // The presence of ANY of them — even with values that "look harmless" —
+        // is enough to put the WU client into managed mode and cause E_NOINTERFACE
+        // on a non-MDM consumer Pro install.
+        string[] valuesToDelete =
+        {
+            "ManagePreviewBuilds",
+            "ManagePreviewBuildsPolicyValue",
+            "BranchReadinessLevel",
+            "AllowOptionalContent",
+            "DeferQualityUpdates",
+            "DeferQualityUpdatesPeriodInDays",
+            "DeferFeatureUpdates",
+            "DeferFeatureUpdatesPeriodInDays",
+            "PauseQualityUpdates",
+            "PauseQualityUpdatesStartTime",
+            "PauseFeatureUpdates",
+            "PauseFeatureUpdatesStartTime",
+        };
+
+        bool emptyAfter = false;
+        try
+        {
+            using (var key = Registry.LocalMachine.OpenSubKey(WuPolicyKey, writable: true))
+            {
+                if (key == null) return; // nothing to clean
+                foreach (var v in valuesToDelete)
+                {
+                    try { key.DeleteValue(v, throwOnMissingValue: false); }
+                    catch (Exception ex) { Log.Warn("WUTweaks", $"Scrub: delete {v} failed: {ex.Message}"); }
+                }
+                emptyAfter = key.ValueCount == 0 && key.SubKeyCount == 0;
+            }
+
+            // Empty policy keys still count as "managed" on some Windows builds.
+            // Drop the parent key entirely if nothing else lives under it.
+            if (emptyAfter)
+            {
+                try { Registry.LocalMachine.DeleteSubKey(WuPolicyKey, throwOnMissingSubKey: false); }
+                catch (Exception ex) { Log.Warn("WUTweaks", $"Scrub: delete empty parent failed: {ex.Message}"); }
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Warn("WUTweaks", $"ScrubLegacyWufbPolicyKeys failed (non-fatal): {ex.Message}");
+        }
     }
 
     /// <summary>
@@ -242,43 +311,29 @@ public class WindowsUpdateTweaksService
         {
             try
             {
-                Log.Info("WUTweaks", "Removing preview update block policy");
+                Log.Info("WUTweaks", "Removing preview update block (UX value + any legacy WUfB keys)");
 
-                // Track whether the parent key becomes empty BEFORE releasing the handle.
-                // We delete the parent key AFTER the using block ends so we never call
-                // key.Close() manually inside a using scope (causes a double-dispose and
-                // obscures the real execution order).
-                bool deleteParentKey = false;
-
-                using (var key = Registry.LocalMachine.OpenSubKey(WuPolicyKey, writable: true))
+                // Defensive: clear DisableWindowsUpdateAccess if it was left set
+                // to 1 by any prior code path. Systema never writes it, but
+                // strip it just in case so users get their WU access back.
+                try
                 {
-                    if (key != null)
+                    using var key = Registry.LocalMachine.OpenSubKey(WuPolicyKey, writable: true);
+                    if (key?.GetValue("DisableWindowsUpdateAccess") is int d && d == 1)
                     {
-                        // Remove all values we wrote.
-                        key.DeleteValue("ManagePreviewBuilds",            throwOnMissingValue: false);
-                        key.DeleteValue("ManagePreviewBuildsPolicyValue", throwOnMissingValue: false);
-                        key.DeleteValue("BranchReadinessLevel",           throwOnMissingValue: false);
-                        key.DeleteValue("AllowOptionalContent",           throwOnMissingValue: false);
-                        key.DeleteValue("DeferQualityUpdates",            throwOnMissingValue: false);
-                        key.DeleteValue("DeferQualityUpdatesPeriodInDays",throwOnMissingValue: false);
-
-                        // Safety guard: also clear DisableWindowsUpdateAccess if it was left set
-                        // to 1 by any code path. This value blocks ALL Windows Update access.
-                        // Systema never sets it, but remove it defensively to ensure updates work.
-                        var disableAccess = key.GetValue("DisableWindowsUpdateAccess");
-                        if (disableAccess is int d && d == 1)
-                        {
-                            key.DeleteValue("DisableWindowsUpdateAccess", throwOnMissingValue: false);
-                            Log.Warn("WUTweaks", "Found DisableWindowsUpdateAccess=1 — cleared to restore update access");
-                        }
-
-                        // If the key is now empty, mark it for deletion after we release the handle.
-                        // An empty policy key can still be read as "managed" by the WU client.
-                        deleteParentKey = key.ValueCount == 0 && key.SubKeyCount == 0;
+                        key.DeleteValue("DisableWindowsUpdateAccess", throwOnMissingValue: false);
+                        Log.Warn("WUTweaks", "Found DisableWindowsUpdateAccess=1 — cleared to restore update access");
                     }
-                } // key handle released here — safe to delete the parent key now
+                }
+                catch (Exception ex) { Log.Warn("WUTweaks", $"DisableWindowsUpdateAccess check failed (non-fatal): {ex.Message}"); }
 
-                // Remove the UX opt-in value we wrote during blocking.
+                // Strip every WUfB-activating policy value (and the parent key if
+                // it ends up empty). Shared helper used by the BLOCK path too,
+                // and by the app-startup auto-heal, so the two paths can never
+                // drift out of sync.
+                ScrubLegacyWufbPolicyKeys();
+
+                // Remove the one value the BLOCK path writes (the UX opt-in).
                 try
                 {
                     using var uxKey = Registry.LocalMachine.OpenSubKey(WuUxSettingsKey, writable: true);
@@ -289,15 +344,6 @@ public class WindowsUpdateTweaksService
                     }
                 }
                 catch (Exception ex) { Log.Warn("WUTweaks", $"Could not remove IsContinuousInnovationOptedIn (non-fatal): {ex.Message}"); }
-
-                if (deleteParentKey)
-                {
-                    // Wrap separately so a failure here (e.g. another process has the key open)
-                    // does NOT cause AllowPreviewUpdatesAsync to report failure — the values
-                    // are already gone and the policy is lifted regardless.
-                    try { Registry.LocalMachine.DeleteSubKey(WuPolicyKey, throwOnMissingSubKey: false); }
-                    catch (Exception ex) { Log.Warn("WUTweaks", $"Could not remove empty policy key (non-fatal): {ex.Message}"); }
-                }
 
                 // Force a Group Policy refresh and trigger a WU scan so the preview update
                 // offer disappears from the Windows Update UI promptly (without this it can

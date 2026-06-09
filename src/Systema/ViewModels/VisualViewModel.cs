@@ -13,6 +13,7 @@
 //   Views/VisualView.xaml     — toggle switches and power plan dropdown
 // ════════════════════════════════════════════════════════════════════════════
 
+using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Win32;
@@ -31,6 +32,10 @@ public partial class VisualViewModel : ObservableObject, IAutoRefreshable, IDisp
 
     // Suppress OnPropertyChanged callbacks during bulk load (preset / refresh)
     private bool _loading;
+
+    // NOTE: The Dell BIOS Thermal Profile feature moved to DellViewModel / DellView
+    // (the Dell sidebar section). The persisted keys are unchanged so existing
+    // settings carry over.
 
     // ── Granular animation toggles ─────────────────────────────────────────────
     [ObservableProperty] private bool _animateControlsEnabled;

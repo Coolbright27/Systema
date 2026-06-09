@@ -45,6 +45,7 @@
         <Setter Property="FontSize" Value="24"/>
         <Setter Property="FontWeight" Value="SemiBold"/>
         <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+        <Setter Property="HorizontalAlignment" Value="Left"/>
     </Style>
 
     <Style x:Key="HeadingMedium" TargetType="TextBlock">
@@ -52,6 +53,7 @@
         <Setter Property="FontSize" Value="16"/>
         <Setter Property="FontWeight" Value="SemiBold"/>
         <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+        <Setter Property="HorizontalAlignment" Value="Left"/>
     </Style>
 
     <Style x:Key="HeadingSmall" TargetType="TextBlock">
@@ -59,18 +61,24 @@
         <Setter Property="FontSize" Value="14"/>
         <Setter Property="FontWeight" Value="SemiBold"/>
         <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+        <Setter Property="HorizontalAlignment" Value="Left"/>
     </Style>
 
     <Style x:Key="BodyText" TargetType="TextBlock">
         <Setter Property="FontFamily" Value="{StaticResource MainFont}"/>
         <Setter Property="FontSize" Value="13"/>
         <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+        <!-- Left-align so a MaxWidth-constrained block stays under its heading instead of
+             being centered in a wider slot (WPF centers Stretch elements past MaxWidth).
+             An explicit HorizontalAlignment on the element still overrides this. -->
+        <Setter Property="HorizontalAlignment" Value="Left"/>
     </Style>
 
     <Style x:Key="CaptionText" TargetType="TextBlock">
         <Setter Property="FontFamily" Value="{StaticResource MainFont}"/>
         <Setter Property="FontSize" Value="11"/>
         <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+        <Setter Property="HorizontalAlignment" Value="Left"/>
     </Style>
 
     <!-- ============================================================ -->
@@ -92,6 +100,7 @@
                     <Border x:Name="Root"
                             Background="{TemplateBinding Background}"
                             CornerRadius="6"
+                            BorderBrush="Transparent" BorderThickness="2"
                             Padding="{TemplateBinding Padding}">
                         <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                     </Border>
@@ -101,6 +110,9 @@
                         </Trigger>
                         <Trigger Property="IsPressed" Value="True">
                             <Setter TargetName="Root" Property="Opacity" Value="0.80"/>
+                        </Trigger>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="Root" Property="BorderBrush" Value="{StaticResource TextPrimaryBrush}"/>
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
                             <Setter Property="Background" Value="#1F1F21"/>
@@ -182,6 +194,9 @@
                         <Trigger Property="IsPressed" Value="True">
                             <Setter TargetName="Root" Property="Opacity" Value="0.75"/>
                         </Trigger>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="Root" Property="BorderBrush" Value="{StaticResource AccentBlueBrush}"/>
+                        </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
             </Setter.Value>
@@ -192,7 +207,10 @@
     <!--  CARD / SURFACE PANEL                                        -->
     <!-- ============================================================ -->
     <Style x:Key="Card" TargetType="Border">
-        <Setter Property="Background" Value="{StaticResource BgCardBrush}"/>
+        <!-- Translucent (#C2 ≈ 76%) so the app backdrop shows through the card the
+             way it does behind the sidebar. Text stays high-contrast because the
+             card colour is near-black and the backdrop is dimmed. -->
+        <Setter Property="Background" Value="#C2161617"/>
         <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
         <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="CornerRadius" Value="10"/>
@@ -207,21 +225,22 @@
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="CheckBox">
-                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <StackPanel x:Name="Root" Orientation="Horizontal" VerticalAlignment="Center">
                         <Border x:Name="Track" Width="44" Height="24" CornerRadius="12"
-                                Background="{StaticResource BorderBrush}" Cursor="Hand">
+                                Background="{StaticResource BorderBrush}" Cursor="Hand"
+                                BorderBrush="Transparent" BorderThickness="2">
                             <!-- Thumb uses a Grid so we can transition via opacity/margin cleanly -->
                             <Grid>
                                 <!-- Off thumb -->
-                                <Border x:Name="ThumbOff" Width="18" Height="18" CornerRadius="9"
+                                <Border x:Name="ThumbOff" Width="16" Height="16" CornerRadius="8"
                                         Background="{StaticResource TextSecondaryBrush}"
                                         HorizontalAlignment="Left" VerticalAlignment="Center"
-                                        Margin="3,0,0,0"/>
+                                        Margin="2,0,0,0"/>
                                 <!-- On thumb (overlaid, hidden by default) -->
-                                <Border x:Name="ThumbOn" Width="18" Height="18" CornerRadius="9"
+                                <Border x:Name="ThumbOn" Width="16" Height="16" CornerRadius="8"
                                         Background="White"
                                         HorizontalAlignment="Right" VerticalAlignment="Center"
-                                        Margin="0,0,3,0"
+                                        Margin="0,0,2,0"
                                         Opacity="0"/>
                             </Grid>
                         </Border>
@@ -235,6 +254,15 @@
                         </Trigger>
                         <Trigger Property="IsMouseOver" Value="True">
                             <Setter TargetName="Track" Property="Opacity" Value="0.85"/>
+                        </Trigger>
+                        <!-- Keyboard focus ring -->
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="Track" Property="BorderBrush" Value="{StaticResource AccentBlueBrush}"/>
+                        </Trigger>
+                        <!-- Disabled: dim the whole control so it reads as non-interactive -->
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter TargetName="Root"   Property="Opacity" Value="0.4"/>
+                            <Setter TargetName="Track"  Property="Cursor"  Value="Arrow"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -283,28 +311,65 @@
     <!-- ============================================================ -->
     <!--  SCROLLBAR                                                   -->
     <!-- ============================================================ -->
+    <!-- Reusable thumb: rounded pill that brightens on hover/drag and never
+         shrinks below a usable size on very long content (MinHeight/MinWidth). -->
+    <Style x:Key="ScrollThumb" TargetType="Thumb">
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Thumb">
+                    <Border x:Name="ThumbBorder" Background="#3A3A3D" CornerRadius="3"
+                            MinHeight="24" MinWidth="6"/>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="ThumbBorder" Property="Background" Value="#54545A"/>
+                        </Trigger>
+                        <Trigger Property="IsDragging" Value="True">
+                            <Setter TargetName="ThumbBorder" Property="Background" Value="#6A6A72"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
     <Style TargetType="ScrollBar">
         <Setter Property="Background" Value="Transparent"/>
-        <Setter Property="Width" Value="6"/>
+        <Setter Property="Width" Value="8"/>
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="ScrollBar">
                     <Grid>
                         <Track x:Name="PART_Track" IsDirectionReversed="True">
                             <Track.Thumb>
-                                <Thumb>
-                                    <Thumb.Template>
-                                        <ControlTemplate TargetType="Thumb">
-                                            <Border Background="#3A3A3D" CornerRadius="3"/>
-                                        </ControlTemplate>
-                                    </Thumb.Template>
-                                </Thumb>
+                                <Thumb Style="{StaticResource ScrollThumb}"/>
                             </Track.Thumb>
                         </Track>
                     </Grid>
                 </ControlTemplate>
             </Setter.Value>
         </Setter>
+        <!-- Horizontal orientation: swap the dimensions and un-reverse the track
+             so dark-themed horizontal bars match (previously fell back to white
+             Win11 chrome). -->
+        <Style.Triggers>
+            <Trigger Property="Orientation" Value="Horizontal">
+                <Setter Property="Width" Value="Auto"/>
+                <Setter Property="Height" Value="8"/>
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="ScrollBar">
+                            <Grid>
+                                <Track x:Name="PART_Track" IsDirectionReversed="False">
+                                    <Track.Thumb>
+                                        <Thumb Style="{StaticResource ScrollThumb}"/>
+                                    </Track.Thumb>
+                                </Track>
+                            </Grid>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Trigger>
+        </Style.Triggers>
     </Style>
 
     <!-- ============================================================ -->
@@ -390,7 +455,7 @@
                                           ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
                                           ContentTemplateSelector="{TemplateBinding ItemTemplateSelector}"
                                           ContentStringFormat="{TemplateBinding SelectionBoxItemStringFormat}"
-                                          Margin="{TemplateBinding Padding}"
+                                          Margin="10,6,28,6"
                                           HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
                                           VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
                                           TextElement.Foreground="{TemplateBinding Foreground}"
@@ -529,6 +594,14 @@
                         <Trigger Property="IsPressed" Value="True">
                             <Setter TargetName="Bg" Property="Opacity" Value="0.75"/>
                         </Trigger>
+                        <!-- Keyboard focus: reuse the sidebar's own visual language — a
+                             soft background highlight + the left accent bar — instead of
+                             a hard blue outline box, which clashed with the flat nav. -->
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="Bg"        Property="Background" Value="{StaticResource HoverBrush}"/>
+                            <Setter TargetName="AccentBar" Property="Opacity"    Value="0.6"/>
+                            <Setter Property="Foreground"  Value="{StaticResource TextPrimaryBrush}"/>
+                        </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
                             <Setter Property="Opacity" Value="1"/>
                         </Trigger>
@@ -614,6 +687,7 @@
         <Setter Property="FontWeight" Value="SemiBold"/>
         <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
         <Setter Property="Margin" Value="0,0,0,8"/>
+        <Setter Property="HorizontalAlignment" Value="Left"/>
     </Style>
 
     <!-- ============================================================ -->

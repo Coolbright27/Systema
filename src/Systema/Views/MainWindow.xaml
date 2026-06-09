@@ -16,9 +16,10 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="clr-namespace:Systema.ViewModels"
         xmlns:views="clr-namespace:Systema.Views"
-        Title="Systema" Height="720" Width="1100"
-        MinHeight="600" MinWidth="900"
+        xmlns:conv="clr-namespace:Systema.Core.Converters"
+        Title="Systema" Height="820" Width="1280"
         WindowStyle="None"
+        ResizeMode="NoResize"
         Background="{StaticResource BgPrimaryBrush}"
         WindowStartupLocation="CenterScreen"
         Activated="Window_Activated"
@@ -26,16 +27,18 @@
     <WindowChrome.WindowChrome>
         <!-- Custom chrome without the VSync-breaking layered-window path.
              CaptionHeight=0: our own title bar handles drag via MouseLeftButtonDown.
-             ResizeBorderThickness=6: users can still resize by grabbing edges.
+             ResizeBorderThickness=0: the window is fixed-size (ResizeMode=NoResize) so
+             there is no resize grip.
              GlassFrameThickness=0 + UseAeroCaptionButtons=False: no native caption. -->
         <WindowChrome CaptionHeight="0"
                       CornerRadius="0"
                       GlassFrameThickness="0"
-                      ResizeBorderThickness="6"
+                      ResizeBorderThickness="0"
                       UseAeroCaptionButtons="False"/>
     </WindowChrome.WindowChrome>
 
     <Window.Resources>
+        <conv:BoolToVisibilityConverter x:Key="BoolToVis"/>
         <DataTemplate DataType="{x:Type vm:DashboardViewModel}">
             <views:DashboardView/>
         </DataTemplate>
@@ -63,6 +66,12 @@
         <DataTemplate DataType="{x:Type vm:BloatwareViewModel}">
             <views:BloatwareView/>
         </DataTemplate>
+        <DataTemplate DataType="{x:Type vm:IntelGpuViewModel}">
+            <views:IntelView/>
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type vm:DellViewModel}">
+            <views:DellView/>
+        </DataTemplate>
     </Window.Resources>
 
     <!-- Rounded corners are provided by DWM on Win11 via DwmSetWindowAttribute in
@@ -73,6 +82,12 @@
             BorderThickness="1">
 
         <Grid>
+            <!-- ===== APP BACKDROP (behind everything; never intercepts input) ===== -->
+            <views:BackdropLayer/>
+            <!-- Light dim so card text stays high-contrast without washing out the art. -->
+            <Rectangle Fill="#090B11" Opacity="0.12" IsHitTestVisible="False"/>
+
+            <Grid>
             <Grid.RowDefinitions>
                 <RowDefinition Height="48"/>
                 <RowDefinition Height="*"/>
@@ -80,7 +95,7 @@
 
             <!-- ===== TITLE BAR ===== -->
             <Border Grid.Row="0"
-                    Background="{StaticResource BgSidebarBrush}"
+                    Background="#D9090B11"
                     MouseLeftButtonDown="TitleBar_MouseLeftButtonDown">
                 <Grid>
                     <Grid.ColumnDefinitions>
@@ -103,6 +118,10 @@
                                    VerticalAlignment="Center"/>
                     </StackPanel>
 
+                    <!-- (Download + Discord moved to the sidebar footer, bottom-left.)
+                         This middle column stays empty so it remains a draggable title-bar area. -->
+                    <StackPanel Grid.Column="1"/>
+
                     <!-- Window Buttons -->
                     <StackPanel Grid.Column="2" Orientation="Horizontal" Margin="0,0,12,0">
                         <Button Click="MinimizeButton_Click" Width="36" Height="36"
@@ -111,12 +130,7 @@
                             <TextBlock Text="&#x2013;" FontSize="12" FontFamily="Segoe UI, Segoe UI Symbol"
                                        Foreground="{StaticResource TextSecondaryBrush}"/>
                         </Button>
-                        <Button Click="MaximizeButton_Click" Width="36" Height="36"
-                                ToolTip="Maximize" Style="{StaticResource GhostButton}"
-                                BorderThickness="0" Padding="0">
-                            <TextBlock Text="&#x25A1;" FontSize="12" FontFamily="Segoe UI, Segoe UI Symbol"
-                                       Foreground="{StaticResource TextSecondaryBrush}"/>
-                        </Button>
+                        <!-- No Maximize button — the window is fixed-size (ResizeMode=NoResize). -->
                         <Button Click="CloseButton_Click" Width="36" Height="36"
                                 ToolTip="Close to Tray" Style="{StaticResource GhostButton}"
                                 BorderThickness="0" Padding="0">
@@ -134,115 +148,265 @@
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
 
-                <!-- ===== SIDEBAR ===== -->
+                <!-- ===== SIDEBAR (frosted glass over the backdrop) ===== -->
                 <Border Grid.Column="0"
-                        Background="{StaticResource BgSidebarBrush}"
+                        Background="Transparent"
                         BorderBrush="{StaticResource BorderBrush}"
-                        BorderThickness="0,0,1,0">
+                        BorderThickness="0,0,1,0"
+                        ClipToBounds="True">
                     <Grid>
                         <Grid.RowDefinitions>
                             <RowDefinition Height="*"/>
                             <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
 
-                        <StackPanel Grid.Row="0" Margin="8,16,8,0">
+                        <!-- Darkened-glass sidebar: a translucent dark tint over the
+                             shared window backdrop (which sits behind this column).
+                             No live BlurEffect — a GPU pixel-shader effect on an
+                             unsigned binary is a needless SmartScreen/Defender
+                             heuristic risk. The tint softens the artwork enough to
+                             read as a frosted panel. -->
+                        <Rectangle Grid.RowSpan="2" Fill="#0B0B0C" Opacity="0.50" IsHitTestVisible="False"/>
+
+                        <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto"
+                                      HorizontalScrollBarVisibility="Disabled">
+                        <StackPanel Margin="8,16,8,0">
+                            <!-- Crisp vector line-icons (Lucide-style). Shared style sets the
+                                 stroke look; each Path supplies its own 24x24 geometry, scaled
+                                 by a Viewbox so the stroke stays razor-sharp at any DPI. -->
+                            <StackPanel.Resources>
+                                <Style x:Key="NavIcon" TargetType="Path">
+                                    <Setter Property="Stroke" Value="{StaticResource TextSecondaryBrush}"/>
+                                    <Setter Property="StrokeThickness" Value="1.7"/>
+                                    <Setter Property="StrokeLineJoin" Value="Round"/>
+                                    <Setter Property="StrokeStartLineCap" Value="Round"/>
+                                    <Setter Property="StrokeEndLineCap" Value="Round"/>
+                                    <Setter Property="Fill" Value="Transparent"/>
+                                </Style>
+                            </StackPanel.Resources>
+
+                            <!-- Dashboard — home -->
                             <Button Command="{Binding NavigateCommand}" CommandParameter="Dashboard"
                                     Tag="Dashboard" Style="{StaticResource NavButton}">
                                 <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="&#x2B21;" FontSize="14" Margin="0,0,10,0"
-                                               FontFamily="Segoe UI, Segoe UI Symbol"
-                                               Foreground="{StaticResource AccentBlueBrush}"/>
+                                    <Viewbox Width="18" Height="18" Margin="0,0,12,0" VerticalAlignment="Center">
+                                        <Path Style="{StaticResource NavIcon}"
+                                              Data="M3 10.5 L12 3 L21 10.5 M5.5 9 V19.5 A1 1 0 0 0 6.5 20.5 H17.5 A1 1 0 0 0 18.5 19.5 V9 M9.5 20.5 V14.5 H14.5 V20.5"/>
+                                    </Viewbox>
                                     <TextBlock Text="Dashboard"/>
                                 </StackPanel>
                             </Button>
+
+                            <!-- Memory &amp; Startup — grid -->
                             <Button Command="{Binding NavigateCommand}" CommandParameter="Memory"
                                     Tag="Memory" Style="{StaticResource NavButton}">
                                 <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="&#x25A6;" FontSize="14" Margin="0,0,10,0"
-                                               FontFamily="Segoe UI, Segoe UI Symbol"
-                                               Foreground="{StaticResource TextSecondaryBrush}"/>
+                                    <Viewbox Width="18" Height="18" Margin="0,0,12,0" VerticalAlignment="Center">
+                                        <Path Style="{StaticResource NavIcon}"
+                                              Data="M4 5 H20 A1 1 0 0 1 21 6 V18 A1 1 0 0 1 20 19 H4 A1 1 0 0 1 3 18 V6 A1 1 0 0 1 4 5 Z M3 12 H21 M12 5 V19"/>
+                                    </Viewbox>
                                     <TextBlock Text="Memory &amp; Startup"/>
                                 </StackPanel>
                             </Button>
+
+                            <!-- Cleanup &amp; Services — droplet -->
                             <Button Command="{Binding NavigateCommand}" CommandParameter="Services"
                                     Tag="Services" Style="{StaticResource NavButton}">
                                 <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="&#x25C8;" FontSize="14" Margin="0,0,10,0"
-                                               FontFamily="Segoe UI, Segoe UI Symbol"
-                                               Foreground="{StaticResource TextSecondaryBrush}"/>
+                                    <Viewbox Width="18" Height="18" Margin="0,0,12,0" VerticalAlignment="Center">
+                                        <Path Style="{StaticResource NavIcon}"
+                                              Data="M12 3 C12 3 5.5 10 5.5 14.5 A6.5 6.5 0 0 0 18.5 14.5 C18.5 10 12 3 12 3 Z"/>
+                                    </Viewbox>
                                     <TextBlock Text="Cleanup &amp; Services"/>
                                 </StackPanel>
                             </Button>
+
+                            <!-- Visual &amp; Power — lightning -->
                             <Button Command="{Binding NavigateCommand}" CommandParameter="Visual"
                                     Tag="Visual" Style="{StaticResource NavButton}">
                                 <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="&#x2726;" FontSize="14" Margin="0,0,10,0"
-                                               FontFamily="Segoe UI, Segoe UI Symbol"
-                                               Foreground="{StaticResource TextSecondaryBrush}"/>
+                                    <Viewbox Width="18" Height="18" Margin="0,0,12,0" VerticalAlignment="Center">
+                                        <Path Style="{StaticResource NavIcon}"
+                                              Data="M13 2.5 L4.5 13.5 H11 L11 21.5 L19.5 10.5 H13 L13 2.5 Z"/>
+                                    </Viewbox>
                                     <TextBlock Text="Visual &amp; Power"/>
                                 </StackPanel>
                             </Button>
+
+                            <!-- Game Booster — share / network -->
                             <Button Command="{Binding NavigateCommand}" CommandParameter="GameBooster"
                                     Tag="GameBooster" Style="{StaticResource NavButton}">
                                 <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="&#x25C6;" FontSize="14" Margin="0,0,10,0"
-                                               FontFamily="Segoe UI, Segoe UI Symbol"
-                                               Foreground="{StaticResource TextSecondaryBrush}"/>
+                                    <Viewbox Width="18" Height="18" Margin="0,0,12,0" VerticalAlignment="Center">
+                                        <Path Style="{StaticResource NavIcon}"
+                                              Data="M8.8 10.8 L15.2 6.9 M8.8 13.2 L15.2 17.1 M15 6 A2.2 2.2 0 1 0 19.4 6 A2.2 2.2 0 1 0 15 6 Z M4.6 12 A2.2 2.2 0 1 0 9 12 A2.2 2.2 0 1 0 4.6 12 Z M15 18 A2.2 2.2 0 1 0 19.4 18 A2.2 2.2 0 1 0 15 18 Z"/>
+                                    </Viewbox>
                                     <TextBlock Text="Game Booster"/>
                                 </StackPanel>
                             </Button>
+
+                            <!-- System Tweaks — shield + check -->
                             <Button Command="{Binding NavigateCommand}" CommandParameter="Tools"
                                     Tag="Tools" Style="{StaticResource NavButton}">
                                 <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="&#x25E7;" FontSize="14" Margin="0,0,10,0"
-                                               FontFamily="Segoe UI, Segoe UI Symbol"
-                                               Foreground="{StaticResource TextSecondaryBrush}"/>
+                                    <Viewbox Width="18" Height="18" Margin="0,0,12,0" VerticalAlignment="Center">
+                                        <Path Style="{StaticResource NavIcon}"
+                                              Data="M12 3 L19 6 V11.5 C19 16 16 19.5 12 21 C8 19.5 5 16 5 11.5 V6 L12 3 Z M9.3 12 L11 13.7 L14.7 10"/>
+                                    </Viewbox>
                                     <TextBlock Text="System Tweaks"/>
                                 </StackPanel>
                             </Button>
+
+                            <!-- Systema Engine (Task Sleep + Launch Boost + responsiveness) — sparkles -->
                             <Button Command="{Binding NavigateCommand}" CommandParameter="TaskSleep"
                                     Tag="TaskSleep" Style="{StaticResource NavButton}">
                                 <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="&#x25CE;" FontSize="14" Margin="0,0,10,0"
-                                               FontFamily="Segoe UI, Segoe UI Symbol"
-                                               Foreground="{StaticResource TextSecondaryBrush}"/>
-                                    <TextBlock Text="Task Sleep"/>
+                                    <Viewbox Width="18" Height="18" Margin="0,0,12,0" VerticalAlignment="Center">
+                                        <Path Style="{StaticResource NavIcon}"
+                                              Data="M12 3 L13.6 9.4 L20 11 L13.6 12.6 L12 19 L10.4 12.6 L4 11 L10.4 9.4 Z M18 16 L18.6 18.4 L21 19 L18.6 19.6 L18 22 L17.4 19.6 L15 19 L17.4 18.4 Z"/>
+                                    </Viewbox>
+                                    <TextBlock Text="Systema Engine"/>
                                 </StackPanel>
                             </Button>
+
+                            <!-- App Cleanup — gamepad -->
                             <Button Command="{Binding NavigateCommand}" CommandParameter="Bloatware"
                                     Tag="Bloatware" Style="{StaticResource NavButton}">
                                 <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="&#x25FB;" FontSize="14" Margin="0,0,10,0"
-                                               FontFamily="Segoe UI, Segoe UI Symbol"
-                                               Foreground="{StaticResource TextSecondaryBrush}"/>
+                                    <Viewbox Width="18" Height="18" Margin="0,0,12,0" VerticalAlignment="Center">
+                                        <Path Style="{StaticResource NavIcon}"
+                                              Data="M8 9 H16 A5 5 0 0 1 21 14 A2 2 0 0 1 17.4 15.2 L16 13.5 H8 L6.6 15.2 A2 2 0 0 1 3 14 A5 5 0 0 1 8 9 Z M6.7 11.7 V13.7 M5.7 12.7 H7.7 M15 12 A0.55 0.55 0 1 0 15.01 12 Z M16.8 13.7 A0.55 0.55 0 1 0 16.81 13.7 Z"/>
+                                    </Viewbox>
                                     <TextBlock Text="App Cleanup"/>
                                 </StackPanel>
                             </Button>
 
-                            <!-- Separator -->
+                            <!-- Separator before hardware section -->
+                            <Border Height="1" Background="{StaticResource BorderBrush}" Margin="8,12"
+                                    Visibility="{Binding HasOnDeviceSections, Converter={StaticResource BoolToVis}}"/>
+
+                            <!-- Intel Graphics — monitor -->
+                            <Button Command="{Binding NavigateCommand}" CommandParameter="Intel"
+                                    Tag="Intel" Style="{StaticResource NavButton}"
+                                    Visibility="{Binding IsIntelGpuPresent, Converter={StaticResource BoolToVis}}">
+                                <StackPanel Orientation="Horizontal">
+                                    <Viewbox Width="18" Height="18" Margin="0,0,12,0" VerticalAlignment="Center">
+                                        <Path Style="{StaticResource NavIcon}"
+                                              Data="M3.5 5 H20.5 A0.5 0.5 0 0 1 21 5.5 V15.5 A0.5 0.5 0 0 1 20.5 16 H3.5 A0.5 0.5 0 0 1 3 15.5 V5.5 A0.5 0.5 0 0 1 3.5 5 Z M8 20 H16 M12 16 V20"/>
+                                    </Viewbox>
+                                    <TextBlock Text="Intel Graphics"/>
+                                </StackPanel>
+                            </Button>
+
+                            <!-- Dell — display -->
+                            <Button Command="{Binding NavigateCommand}" CommandParameter="Dell"
+                                    Tag="Dell" Style="{StaticResource NavButton}"
+                                    Visibility="{Binding IsDellPresent, Converter={StaticResource BoolToVis}}">
+                                <StackPanel Orientation="Horizontal">
+                                    <Viewbox Width="18" Height="18" Margin="0,0,12,0" VerticalAlignment="Center">
+                                        <Path Style="{StaticResource NavIcon}"
+                                              Data="M4.5 5 H19.5 A0.5 0.5 0 0 1 20 5.5 V18.5 A0.5 0.5 0 0 1 19.5 19 H4.5 A0.5 0.5 0 0 1 4 18.5 V5.5 A0.5 0.5 0 0 1 4.5 5 Z M9 10 H15 V14 H9 Z"/>
+                                    </Viewbox>
+                                    <TextBlock Text="Dell"/>
+                                </StackPanel>
+                            </Button>
+
+                            <!-- Separator before Settings -->
                             <Border Height="1" Background="{StaticResource BorderBrush}" Margin="8,12"/>
 
+                            <!-- Settings — gear -->
                             <Button Command="{Binding NavigateCommand}" CommandParameter="Settings"
                                     Tag="Settings" Style="{StaticResource NavButton}">
                                 <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="&#x2699;" FontSize="14" Margin="0,0,10,0"
-                                               FontFamily="Segoe UI, Segoe UI Symbol"
-                                               Foreground="{StaticResource TextSecondaryBrush}"/>
+                                    <Viewbox Width="18" Height="18" Margin="0,0,12,0" VerticalAlignment="Center">
+                                        <Path Style="{StaticResource NavIcon}"
+                                              Data="M9 12 A3 3 0 1 0 15 12 A3 3 0 1 0 9 12 Z M12 3.5 V6 M12 18 V20.5 M3.5 12 H6 M18 12 H20.5 M5.6 5.6 L7.4 7.4 M16.6 16.6 L18.4 18.4 M18.4 5.6 L16.6 7.4 M7.4 16.6 L5.6 18.4"/>
+                                    </Viewbox>
                                     <TextBlock Text="Settings"/>
                                 </StackPanel>
                             </Button>
                         </StackPanel>
+                        </ScrollViewer>
 
-                        <!-- Version footer -->
-                        <TextBlock Grid.Row="1" Text="v99.9.9" Margin="16,0,0,16"
-                                   Style="{StaticResource CaptionText}"/>
+                        <!-- ===== UPDATE / VERSION FOOTER CARD =====
+                             Binds to the shared SettingsVm so the check/download/install state
+                             is identical to the Settings → Updates card (single source of truth). -->
+                        <Border Grid.Row="1" Margin="8,8,8,12" Padding="12,10"
+                                Background="{StaticResource BgSurfaceBrush}"
+                                BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="10">
+                            <StackPanel>
+                                <TextBlock Text="Systema v0.7.86" FontSize="11" FontWeight="SemiBold"
+                                           Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,7"/>
+
+                                <!-- Live status: green check + status text from the updater -->
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,9">
+                                    <Viewbox Width="13" Height="13" Margin="0,0,6,0" VerticalAlignment="Center">
+                                        <Path Data="M3 12.5 L9 18 L21 5"
+                                              Stroke="{StaticResource AccentGreenBrush}" StrokeThickness="2.6"
+                                              StrokeLineJoin="Round" StrokeStartLineCap="Round"
+                                              StrokeEndLineCap="Round" Fill="Transparent"/>
+                                    </Viewbox>
+                                    <TextBlock Text="{Binding SettingsVm.UpdateStatus}"
+                                               Style="{StaticResource CaptionText}"
+                                               Foreground="{StaticResource TextSecondaryBrush}"
+                                               TextTrimming="CharacterEllipsis" MaxWidth="135"
+                                               VerticalAlignment="Center"
+                                               ToolTip="{Binding SettingsVm.UpdateStatus}"/>
+                                </StackPanel>
+
+                                <!-- Check for updates — same command as Settings → Updates -->
+                                <Button Content="Check for updates" Style="{StaticResource GhostButton}"
+                                        HorizontalAlignment="Stretch" Padding="0,6" FontSize="11"
+                                        Command="{Binding SettingsVm.CheckForUpdatesCommand}"
+                                        IsEnabled="{Binding SettingsVm.CanCheckNow}"/>
+
+                                <!-- Install updates — only when an update is downloaded and ready -->
+                                <Button Content="Install updates" Style="{StaticResource PrimaryButton}"
+                                        HorizontalAlignment="Stretch" Padding="0,6" FontSize="11" Margin="0,6,0,0"
+                                        Command="{Binding SettingsVm.InstallNowCommand}"
+                                        Visibility="{Binding SettingsVm.IsReadyToInstall, Converter={StaticResource BoolToVis}}"/>
+
+                                <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,10,0,8"/>
+
+                                <!-- Download + Discord (moved here from the title bar) -->
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Button Grid.Column="0" Click="DownloadButton_Click"
+                                            Style="{StaticResource GhostButton}" Padding="4,5" FontSize="11"
+                                            Margin="0,0,3,0" ToolTip="Open the Systema releases page on GitHub">
+                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                            <TextBlock Text="&#xE896;" FontFamily="Segoe MDL2 Assets" FontSize="11"
+                                                       Margin="0,0,5,0" Foreground="{StaticResource TextSecondaryBrush}"
+                                                       VerticalAlignment="Center"/>
+                                            <TextBlock Text="Download" Foreground="{StaticResource TextSecondaryBrush}"
+                                                       VerticalAlignment="Center"/>
+                                        </StackPanel>
+                                    </Button>
+                                    <Button Grid.Column="1" Click="DiscordButton_Click"
+                                            Style="{StaticResource GhostButton}" Padding="4,5" FontSize="11"
+                                            Margin="3,0,0,0" ToolTip="Join the Systema Discord">
+                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                            <TextBlock Text="&#xE8BD;" FontFamily="Segoe MDL2 Assets" FontSize="11"
+                                                       Margin="0,0,5,0" Foreground="{StaticResource TextSecondaryBrush}"
+                                                       VerticalAlignment="Center"/>
+                                            <TextBlock Text="Discord" Foreground="{StaticResource TextSecondaryBrush}"
+                                                       VerticalAlignment="Center"/>
+                                        </StackPanel>
+                                    </Button>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
                     </Grid>
                 </Border>
 
                 <!-- ===== MAIN CONTENT ===== -->
                 <ContentControl Grid.Column="1"
                                 Content="{Binding CurrentView}"
-                                Background="{StaticResource BgPrimaryBrush}"/>
+                                Background="Transparent"/>
+            </Grid>
             </Grid>
         </Grid>
     </Border>

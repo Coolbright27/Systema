@@ -47,11 +47,22 @@ public sealed class TrayService : IDisposable
     private bool _isGhostMode;
     public bool IsGhostMode => _isGhostMode;
 
+    // The "Toggle Game Boost" menu item — kept as a field so its caption and
+    // checkmark can be refreshed by UpdateBoostMenuState() when the boost state
+    // changes (whether triggered from the tray, the UI, or game auto-detection).
+    private ToolStripMenuItem? _boostItem;
+
     /// <summary>Fired when the user requests to show the main window from the tray menu.</summary>
     public event Action? ShowWindowRequested;
 
     /// <summary>Fired when the user requests to exit from the tray menu.</summary>
     public event Action? ExitRequested;
+
+    /// <summary>
+    /// Fired when the user clicks "Toggle Game Boost" in the tray menu.
+    /// App.xaml.cs wires this to GameBoosterService.Enable/DisableManualBoostAsync.
+    /// </summary>
+    public event Action? ToggleBoostRequested;
 
     // ── Constructor ────────────────────────────────────────────────────────────
     public TrayService()
@@ -123,6 +134,28 @@ public sealed class TrayService : IDisposable
         _notifyIcon.Text = text.Length > 63 ? text[..63] : text;
     }
 
+    /// <summary>
+    /// Refreshes the "Toggle Game Boost" tray menu item to reflect the current
+    /// boost state. Call from App.xaml.cs on BoostActivated / BoostDeactivated so
+    /// the menu caption + checkmark stay in sync no matter what triggered the
+    /// change (tray click, in-app toggle, or game auto-detection).
+    /// Safe to call from any thread — marshals onto the NotifyIcon's owning thread.
+    /// </summary>
+    public void UpdateBoostMenuState(bool boostActive)
+    {
+        if (_boostItem == null) return;
+        void Apply()
+        {
+            _boostItem.Text    = boostActive ? "Stop Game Boost" : "Start Game Boost";
+            _boostItem.Checked = boostActive;
+        }
+        // ContextMenuStrip is a WinForms control — touch it on its own thread.
+        if (_notifyIcon.ContextMenuStrip is { } cms && cms.InvokeRequired)
+            cms.BeginInvoke((Action)Apply);
+        else
+            Apply();
+    }
+
     // ── Private helpers ────────────────────────────────────────────────────────
 
     private ContextMenuStrip BuildContextMenu()
@@ -137,10 +170,17 @@ public sealed class TrayService : IDisposable
         menu.Disposed += (_, _) => boldFont.Dispose();
         openItem.Click += (_, _) => ShowWindowRequested?.Invoke();
 
+        // "Toggle Game Boost" — lets the user start/stop Game Boost without opening
+        // the window. Caption + checkmark are refreshed by UpdateBoostMenuState().
+        _boostItem = new ToolStripMenuItem("Start Game Boost");
+        _boostItem.Click += (_, _) => ToggleBoostRequested?.Invoke();
+
         var exitItem = new ToolStripMenuItem("Exit");
         exitItem.Click += (_, _) => ExitRequested?.Invoke();
 
         menu.Items.Add(openItem);
+        menu.Items.Add(new ToolStripSeparator());
+        menu.Items.Add(_boostItem);
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(exitItem);
         return menu;

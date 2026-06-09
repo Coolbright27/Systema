@@ -146,7 +146,12 @@ public partial class GameBoosterViewModel : ObservableObject, IAutoRefreshable, 
         _onManualBoostTimedOut =
             () => Application.Current?.Dispatcher.BeginInvoke(() =>
             {
+                // The service already deactivated the boost on timeout — just sync
+                // the toggle. Suppress the side effect so OnManualBoostEnabledChanged
+                // doesn't call DisableManualBoostAsync a second time.
+                _suppressManualBoostSideEffect = true;
                 ManualBoostEnabled = false;
+                _suppressManualBoostSideEffect = false;
                 StatusMessage = "Manual boost auto-disabled after 6 hours.";
             });
 
@@ -214,8 +219,12 @@ public partial class GameBoosterViewModel : ObservableObject, IAutoRefreshable, 
             nameof(GameBoosterEnabled));
 #pragma warning restore MVVMTK0034
 
-        BoostActive        = _gameBooster.BoostActive;
+        BoostActive = _gameBooster.BoostActive;
+        // Sync the toggle from the service WITHOUT triggering OnManualBoostEnabledChanged —
+        // a background refresh tick is not a user click and must not call the service.
+        _suppressManualBoostSideEffect = true;
         ManualBoostEnabled = _gameBooster.ManualBoostActive;
+        _suppressManualBoostSideEffect = false;
         if (_gameBooster.ManualBoostActive)
         {
             var elapsed  = DateTime.UtcNow - _gameBooster.ManualBoostStartedAt;
@@ -243,22 +252,64 @@ public partial class GameBoosterViewModel : ObservableObject, IAutoRefreshable, 
 
     // ── Commands ──────────────────────────────────────────────────────────────
 
-    [RelayCommand]
-    private async Task ToggleManualBoost()
+    // Re-entrancy guard so a rapid double-click can't fire two overlapping
+    // enable/disable calls into the service.
+    private bool _manualBoostBusy;
+
+    // Set true around PROGRAMMATIC writes to ManualBoostEnabled (RefreshAsync
+    // sync, timeout handler) so OnManualBoostEnabledChanged doesn't mistake a
+    // state sync for a user click and call the service again.
+    private bool _suppressManualBoostSideEffect;
+
+    /// <summary>
+    /// Fires whenever the Manual Boost toggle changes.
+    ///
+    /// The CheckBox in GameBoosterView.xaml is two-way bound to
+    /// <see cref="ManualBoostEnabled"/> with NO Command — so this callback is
+    /// the only thing that actually activates / deactivates the boost.
+    ///
+    /// Bug history: earlier builds declared a <c>[RelayCommand] ToggleManualBoost</c>
+    /// that nothing in the XAML or VM ever referenced. The toggle was dead UI —
+    /// clicking it flipped the bool but never called the service, and the next
+    /// auto-refresh tick reset the bool from <c>_gameBooster.ManualBoostActive</c>
+    /// (still false), so the switch "toggled right back off" with no boost.
+    /// </summary>
+    partial void OnManualBoostEnabledChanged(bool value)
     {
-        if (ManualBoostEnabled)
+        if (_suppressManualBoostSideEffect) return;   // programmatic sync, not a user click
+        _ = ApplyManualBoostAsync(value);
+    }
+
+    private async Task ApplyManualBoostAsync(bool enable)
+    {
+        if (_manualBoostBusy) return;
+        _manualBoostBusy = true;
+        try
         {
-            await _gameBooster.DisableManualBoostAsync();
-            ManualBoostEnabled = false;
-            StatusMessage = "Manual boost disabled.";
+            if (enable)
+            {
+                StatusMessage = "Activating boost...";
+                await _gameBooster.EnableManualBoostAsync();
+                StatusMessage = "Manual boost enabled — auto-disables after 6 hours.";
+            }
+            else
+            {
+                await _gameBooster.DisableManualBoostAsync();
+                StatusMessage = "Manual boost disabled.";
+            }
         }
-        else
+        catch (Exception ex)
         {
-            StatusMessage = "Activating boost...";
-            await _gameBooster.EnableManualBoostAsync();
-            ManualBoostEnabled = true;
-            StatusMessage = "Manual boost enabled — auto-disables after 6 hours.";
+            _log.Error("GameBoosterViewModel",
+                $"Manual boost {(enable ? "enable" : "disable")} failed", ex);
+            StatusMessage = $"Manual boost error: {ex.Message}";
+            // Snap the toggle back to the service's real state without re-firing
+            // this handler (otherwise a failed enable would leave the UI lying).
+            _suppressManualBoostSideEffect = true;
+            ManualBoostEnabled = _gameBooster.ManualBoostActive;
+            _suppressManualBoostSideEffect = false;
         }
+        finally { _manualBoostBusy = false; }
     }
 
     [RelayCommand]

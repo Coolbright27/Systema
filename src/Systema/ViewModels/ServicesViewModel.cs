@@ -31,6 +31,7 @@ public partial class ServicesViewModel : ObservableObject, IAutoRefreshable, IDi
     private readonly OptionalFeaturesService _optFeatures;
     private readonly RestorePointService     _restoreService;
     private readonly SettingsService         _settings;
+    private readonly GameBoosterService      _gameBooster;
     private static readonly LoggerService    _log = LoggerService.Instance;
     private int _isRefreshing;
     private volatile bool _hasLoadedFeaturesOnce;
@@ -55,7 +56,16 @@ public partial class ServicesViewModel : ObservableObject, IAutoRefreshable, IDi
     [ObservableProperty] private bool _showWindowsFeatures;
     [RelayCommand] private void ToggleWindowsFeatures() => ShowWindowsFeatures = !ShowWindowsFeatures;
 
-    public bool GamesInstalled { get; set; }
+    /// <summary>
+    /// Mirrors <see cref="GameBoosterService.GamesInstalled"/>. Initialised in the
+    /// constructor and kept live via the GamesInstalledChanged event. Used by
+    /// <see cref="ServiceControlService.AreAllRecommendedDisabled"/> so the
+    /// Privacy &amp; Background Services toggle reflects the same set of services
+    /// the Dashboard Auto-Pilot actually touches — without this sync, the toggle
+    /// kept reading false after Auto-Pilot finished because the two paths
+    /// disagreed about whether Xbox services should count as "Recommended."
+    /// </summary>
+    public bool GamesInstalled { get; private set; }
 
     /// <summary>True when Auto-Pilot Mode is on — Data Collection button is grayed out.</summary>
     public bool IsAutoPilotActive => _settings.AutoPilotModeEnabled;
@@ -64,28 +74,81 @@ public partial class ServicesViewModel : ObservableObject, IAutoRefreshable, IDi
         ServiceControlService   serviceControl,
         OptionalFeaturesService optFeatures,
         RestorePointService     restoreService,
-        SettingsService         settings)
+        SettingsService         settings,
+        GameBoosterService      gameBooster)
     {
         _serviceControl = serviceControl;
         _optFeatures    = optFeatures;
         _restoreService = restoreService;
         _settings       = settings;
+        _gameBooster    = gameBooster;
+
+        // Initial GamesInstalled snapshot — kept in sync via GamesInstalledChanged below.
+        // Without this, the toggle's status check used the wrong "recommended" set
+        // and the toggle showed OFF after Auto-Pilot finished (Xbox services were
+        // skipped because games ARE installed, but our check expected them gone).
+        GamesInstalled = gameBooster.GamesInstalled;
+        gameBooster.GamesInstalledChanged += OnGamesInstalledChanged;
 
         // Set initial state without triggering the toggle side effect.
         _suppressPrivacyToggleSideEffect = true;
         _privacyCleanupApplied =
             _serviceControl.AreTelemetryServicesDisabled()
-            && _serviceControl.AreAllRecommendedDisabled(GamesInstalled);
+            && _serviceControl.AreAllRecommendedDisabled(_gameBooster.GamesInstalled);
         _suppressPrivacyToggleSideEffect = false;
 
         SettingsService.AutoPilotModeChanged += OnAutoPilotModeChanged;
+        SettingsService.OptimizationsApplied += OnOptimizationsApplied;
     }
 
-    private void OnAutoPilotModeChanged(object? sender, EventArgs e) =>
-        Application.Current?.Dispatcher.BeginInvoke(
-            () => OnPropertyChanged(nameof(IsAutoPilotActive)));
+    /// <summary>
+    /// Fired by DashboardViewModel after Auto-Pilot / "Apply settings once" finishes.
+    /// We refresh so the Privacy &amp; Background Services toggle reflects the
+    /// post-cleanup service state instead of the stale pre-cleanup snapshot.
+    /// Without this hook the toggle stayed OFF after Auto-Pilot finished, while
+    /// IsAutoPilotActive flipped to true and grayed out the rows below — exactly
+    /// the bug the user reported in v0.7.9.
+    /// </summary>
+    private void OnOptimizationsApplied(object? sender, EventArgs e)
+    {
+        Application.Current?.Dispatcher.BeginInvoke(() => _ = DoRefreshAsync());
+    }
 
-    public void Dispose() => SettingsService.AutoPilotModeChanged -= OnAutoPilotModeChanged;
+    /// <summary>
+    /// Fired by GameBoosterService when the installed-games state changes (e.g. user
+    /// installs Steam, the periodic re-scan finds a new game). Updates our cached
+    /// flag AND triggers a refresh so the Privacy toggle re-evaluates against the
+    /// correct "recommended" set immediately.
+    /// </summary>
+    private void OnGamesInstalledChanged(bool nowInstalled)
+    {
+        GamesInstalled = nowInstalled;
+        // Refresh so PrivacyCleanupApplied re-evaluates with the new flag.
+        Application.Current?.Dispatcher.BeginInvoke(() => _ = DoRefreshAsync());
+    }
+
+    private void OnAutoPilotModeChanged(object? sender, EventArgs e)
+    {
+        // Three things change when Auto-Pilot mode flips:
+        //  1. IsAutoPilotActive — drives the gray-out triggers in the XAML.
+        //  2. Auto-Pilot just finished running its cleanup steps (on toggle ON)
+        //     or is about to drift back (on toggle OFF) — refresh so the
+        //     PrivacyCleanupApplied toggle re-reads the actual service state
+        //     instead of staying stale.
+        Application.Current?.Dispatcher.BeginInvoke(() =>
+        {
+            OnPropertyChanged(nameof(IsAutoPilotActive));
+            _ = DoRefreshAsync();
+        });
+    }
+
+    public void Dispose()
+    {
+        SettingsService.AutoPilotModeChanged -= OnAutoPilotModeChanged;
+        SettingsService.OptimizationsApplied -= OnOptimizationsApplied;
+        if (_gameBooster != null)
+            _gameBooster.GamesInstalledChanged -= OnGamesInstalledChanged;
+    }
 
     public Task RefreshAsync() => DoRefreshAsync();
 
@@ -106,7 +169,7 @@ public partial class ServicesViewModel : ObservableObject, IAutoRefreshable, IDi
             _suppressPrivacyToggleSideEffect = true;
             PrivacyCleanupApplied =
                 _serviceControl.AreTelemetryServicesDisabled()
-                && _serviceControl.AreAllRecommendedDisabled(GamesInstalled);
+                && _serviceControl.AreAllRecommendedDisabled(_gameBooster.GamesInstalled);
             _suppressPrivacyToggleSideEffect = false;
 
             // Load feature states only on first load (DISM is extremely slow — 30-60s)
@@ -373,7 +436,7 @@ public partial class ServicesViewModel : ObservableObject, IAutoRefreshable, IDi
             _suppressPrivacyToggleSideEffect = true;
             PrivacyCleanupApplied =
                 _serviceControl.AreTelemetryServicesDisabled()
-                && _serviceControl.AreAllRecommendedDisabled(GamesInstalled);
+                && _serviceControl.AreAllRecommendedDisabled(_gameBooster.GamesInstalled);
             _suppressPrivacyToggleSideEffect = false;
         }
         finally

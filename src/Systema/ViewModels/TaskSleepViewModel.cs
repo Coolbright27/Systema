@@ -52,12 +52,28 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
 
     private readonly TaskSleepService _service;
 
+    // Stateless registry-tweak service used for the engine's responsiveness boosts
+    // (Foreground Priority Boost + Instant App Focus). Safe to instantiate freely —
+    // App.xaml.cs constructs it the same way.
+    private readonly SystemStabilityService _stability = new();
+
     // ── Observable properties ─────────────────────────────────────────────────
 
     // ── Core Controls ────────────────────────────────────────────────────────
     [ObservableProperty] private bool   _isEnabled               = true;
 
     [ObservableProperty] private bool _napChildrenEnabled     = false;
+
+    // Compress memory in deep sleep — closest Windows equivalent to macOS's
+    // compressed-memory behaviour. ON by default. When a napped process crosses
+    // the deep-sleep threshold (default ~10 min idle), trim its working set so
+    // Windows can compress those pages on the standby list. Re-trim after each
+    // brief wake while the process is still in deep sleep.
+    //
+    // Replaces the v0.7.9 "Aggressive re-trim after brief wakes",
+    // "Max RAM per napped app", and "Also cap foreground app's helpers" toggles.
+    // See TaskSleepSettings.CompressDeepSleep.
+    [ObservableProperty] private bool _compressDeepSleep = true;
 
     // ── CPU Thresholds (fixed defaults — preset selector removed in 1.7.32) ──
     [ObservableProperty] private int _systemCpuTriggerPercent = 12;
@@ -94,8 +110,39 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
 
     // ── CPU Cap ──────────────────────────────────────────────────────────────
     [ObservableProperty] private bool _nappedCpuCapEnabled     = true;
-    [ObservableProperty] private int  _nappedCpuCapPercent     = 3;
-    [ObservableProperty] private int  _briefWakeCpuCapPercent  = 7;
+    [ObservableProperty] private int  _nappedCpuCapPercent     = 2;
+    [ObservableProperty] private int  _briefWakeCpuCapPercent  = 5;
+
+    // Preset dropdown options for the CPU Cap + Wake Timing selectors. (Legacy
+    // defaults 3% / 7% are kept in the lists so an existing saved value still
+    // shows instead of going blank after the textbox→dropdown switch.)
+    public int[] CpuCapWhileSleepingOptions   { get; } = { 1, 2, 3, 5, 8, 10 };
+    public int[] CpuCapBriefWakeOptions        { get; } = { 3, 5, 7, 8, 10, 15, 20 };
+    public int[] MaxConcurrentBriefWakeOptions { get; } = { 1, 2, 3, 4, 5, 8 };
+    public int[] MinimizedBriefWakeIntervalOptions { get; } = { 30, 45, 60, 90, 120, 180, 300 }; // seconds
+    public int[] BriefWakeDurationOptions      { get; } = { 5, 10, 15, 20, 30 };                 // seconds
+    public int[] TrayBriefWakeIntervalOptions  { get; } = { 1, 2, 5, 10, 15, 30 };               // minutes
+    public int[] DeepSleepAfterOptions         { get; } = { 5, 10, 15, 20, 30, 45, 60 };         // minutes
+    public int[] TrayDeepWakeOptions           { get; } = { 5, 10, 15, 20, 30, 60 };             // minutes
+
+    // ── Launch Boost ──────────────────────────────────────────────────────────
+    [ObservableProperty] private bool _launchBoostEnabled           = false;
+    [ObservableProperty] private int  _launchBoostDurationSeconds    = 20;
+    [ObservableProperty] private bool _launchBoostCpu               = true;
+    [ObservableProperty] private bool _launchBoostIo                = true;
+    [ObservableProperty] private bool _launchBoostDisableEfficiency = true;
+    [ObservableProperty] private bool _launchBoostGpu               = false;
+    /// <summary>Selectable boost durations (seconds) for the dropdown.</summary>
+    public int[] LaunchBoostDurationOptions { get; } = { 5, 10, 20, 40 };
+
+    // ── Responsiveness (engine-gated) ─────────────────────────────────────────
+    // Foreground Priority Boost + Instant App Focus + Instant Startup Apps. All
+    // belong to the Systema Engine: they run only while the engine is on, default
+    // on when it is, and are forced off (and the cards gray out) when the engine is
+    // turned off.
+    [ObservableProperty] private bool _foregroundBoostEnabled = true;
+    [ObservableProperty] private bool _instantAppFocusEnabled = true;
+    [ObservableProperty] private bool _instantStartupApps     = true;
 
     // ── Game Mode interaction ────────────────────────────────────────────────
     [ObservableProperty] private bool _suppressBriefWakesDuringGameMode = true;
@@ -142,6 +189,12 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
     private readonly DispatcherTimer _processRefreshTimer;
     private bool _isGameModeActive;
 
+    // True only while LoadSettings() is populating properties from the registry.
+    // Suppresses the OnChanged → SaveSettings round-trip so loading an early
+    // non-default setting can't overwrite later, not-yet-loaded settings with
+    // their defaults (which was resetting the Launch Boost toggles on restart).
+    private bool _loadingSettings;
+
     [ObservableProperty] private string _statusMessage = "Task Sleep is off.";
 
     // ── Constructor ───────────────────────────────────────────────────────────
@@ -166,11 +219,49 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
         LoadSettings();
         LoadWhitelist();
 
+        // Push the fully-loaded settings to the service in one shot. During
+        // LoadSettings the per-property OnChanged → PushSettings round-trips are
+        // suppressed (see _loadingSettings), so this is what actually hands the
+        // service the saved configuration after a restart.
+        _service.UpdateSettings(BuildSettings());
+
         // Explicitly sync service state after loading settings.
         // CommunityToolkit.Mvvm skips OnIsEnabledChanged when the loaded value
         // equals the field default (both true), so the service would never start
         // on subsequent launches without this explicit call.
         if (IsEnabled) _service.Start();
+
+        // Responsiveness boosts follow the engine: default on when the engine is on,
+        // off when it's off. Field defaults are true, so when the engine is on we
+        // apply enable explicitly (the setters skip OnChanged for an unchanged value);
+        // when off, setting false cascades to DisableX through the OnChanged handlers.
+        ForegroundBoostEnabled = IsEnabled;
+        InstantAppFocusEnabled = IsEnabled;
+        InstantStartupApps     = IsEnabled;
+        if (IsEnabled)
+        {
+            _ = _stability.EnableForegroundBoostAsync();
+            _ = _stability.EnableInstantAppFocusAsync();
+            _ = _stability.EnableInstantStartupAppsAsync();
+        }
+
+        // StartupDelayInMSec lives in Explorer's Serialize key, which Explorer itself
+        // actively rewrites during the logon sequence. When Systema auto-launches
+        // mid-logon (the common case — it starts with Windows), the apply above races
+        // Explorer and gets clobbered (proven: the value vanishes despite logging
+        // success, while the other two responsiveness tweaks land fine). Re-assert it
+        // ~60 s later, once logon has settled, so it persists and is read on the NEXT
+        // boot. Idempotent and respects an in-session toggle-off.
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(60_000);
+                if (InstantStartupApps && IsEnabled && !_stability.IsStartupAppDelayDisabled())
+                    await _stability.EnableInstantStartupAppsAsync();
+            }
+            catch (Exception ex) { _log.Warn("TaskSleepViewModel", $"Delayed StartupDelay re-assert failed: {ex.Message}"); }
+        });
 
         _monitorTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
         _monitorTimer.Tick += (_, _) => RefreshMonitor();
@@ -202,6 +293,23 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
 
     partial void OnIsEnabledChanged(bool value)
     {
+        if (_loadingSettings) return;   // load path syncs the service explicitly
+        // Launch Boost depends on Task Sleep running. If Task Sleep is turned off,
+        // force Launch Boost off too (and gray it) so it can't run on its own.
+        if (!value && LaunchBoostEnabled)
+            LaunchBoostEnabled = false;   // cascades through OnLaunchBoostEnabledChanged → PushSettings
+
+        // Responsiveness boosts (Foreground Priority Boost + Instant App Focus +
+        // Instant Startup Apps) are part of the engine: on when the engine is on
+        // (default), off when it's off. Setting these cascades to the registry
+        // through their OnChanged handlers.
+        ForegroundBoostEnabled = value;
+        InstantAppFocusEnabled = value;
+        InstantStartupApps     = value;
+
+        OnPropertyChanged(nameof(CanUseLaunchBoost));
+        OnPropertyChanged(nameof(CanUseResponsiveness));
+
         _service.UpdateSettings(BuildSettings());
         SaveSettings();
         if (value) _service.Start();
@@ -209,6 +317,68 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
     }
 
     partial void OnNapChildrenEnabledChanged(bool value)    => PushSettings();
+    partial void OnCompressDeepSleepChanged(bool value)     => PushSettings();
+
+    // ── Launch Boost ──────────────────────────────────────────────────────────
+    partial void OnLaunchBoostEnabledChanged(bool value)
+    {
+        OnPropertyChanged(nameof(IsLaunchBoostConfigEnabled)); // re-gray the sub-controls
+        PushSettings();
+    }
+    partial void OnLaunchBoostDurationSecondsChanged(int value)
+    {
+        int c = Math.Clamp(value, 3, 120);
+        if (c != value) { LaunchBoostDurationSeconds = c; return; }
+        PushSettings();
+    }
+    partial void OnLaunchBoostCpuChanged(bool value)               => PushSettings();
+    partial void OnLaunchBoostIoChanged(bool value)                => PushSettings();
+    partial void OnLaunchBoostDisableEfficiencyChanged(bool value) => PushSettings();
+    partial void OnLaunchBoostGpuChanged(bool value)               => PushSettings();
+
+    /// <summary>True when the Launch Boost sub-settings should be interactive
+    /// (i.e. the master toggle is on). XAML binds IsEnabled to this so everything
+    /// below the toggle is grayed out until Launch Boost is enabled.</summary>
+    public bool IsLaunchBoostConfigEnabled => LaunchBoostEnabled;
+
+    /// <summary>Launch Boost can only be used while Task Sleep itself is on. When
+    /// Task Sleep is off the whole card is grayed and the master toggle disabled.</summary>
+    public bool CanUseLaunchBoost => IsEnabled;
+
+    // ── Responsiveness (Foreground Priority Boost + Instant App Focus) ─────────
+    partial void OnForegroundBoostEnabledChanged(bool value)
+    {
+        if (_loadingSettings) return;
+        if (value) _ = _stability.EnableForegroundBoostAsync();
+        else       _ = _stability.DisableForegroundBoostAsync();
+    }
+
+    partial void OnInstantAppFocusEnabledChanged(bool value)
+    {
+        if (_loadingSettings) return;
+        if (value) _ = _stability.EnableInstantAppFocusAsync();
+        else       _ = _stability.DisableInstantAppFocusAsync();
+    }
+
+    partial void OnInstantStartupAppsChanged(bool value)
+    {
+        if (_loadingSettings) return;
+        if (value) _ = _stability.EnableInstantStartupAppsAsync();
+        else       _ = _stability.DisableInstantStartupAppsAsync();
+    }
+
+    /// <summary>The responsiveness boosts can only be used while the engine is on.
+    /// When it's off the cards gray out and the toggles are forced off.</summary>
+    public bool CanUseResponsiveness => IsEnabled;
+
+    /// <summary>Enables Launch Boost from Auto-Pilot. Launch Boost depends on Task
+    /// Sleep running, so this turns Task Sleep on first (if needed) and then arms
+    /// Launch Boost. Both changes persist and push to the service.</summary>
+    public void EnableLaunchBoost()
+    {
+        if (!IsEnabled) IsEnabled = true;          // OnIsEnabledChanged starts the service + saves
+        if (!LaunchBoostEnabled) LaunchBoostEnabled = true; // OnLaunchBoostEnabledChanged pushes + persists
+    }
 
     partial void OnSystemCpuTriggerPercentChanged(int value)  => PushSettings();
     partial void OnProcessCpuStartPercentChanged(int value)   => PushSettings();
@@ -373,6 +543,7 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
 
     private void PushSettings()
     {
+        if (_loadingSettings) return;   // don't push/save mid-load
         _service.UpdateSettings(BuildSettings());
         SaveSettings();
     }
@@ -495,6 +666,10 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
         // Always-on core behavior (hardcoded — no UI toggle needed)
         LowerCpuPriority        = true,
         IgnoreForeground        = true,
+        // Foreground app's helper processes are protected from napping by default.
+        // The v0.7.9 UI toggle for this is gone — it was paired with the hard
+        // RAM cap, which has been removed. The underlying setting stays here as
+        // a hardcoded safe default; expose a new toggle if future use cases need it.
         ActOnForegroundChildren = false,
         ExcludeSystemServices   = true,
         EnableEfficiencyMode    = true,
@@ -508,12 +683,20 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
         MoveToECores            = true,
         LowerMemoryPriority     = true,
         TrimWorkingSet          = true,
+        // Compress in deep sleep — on by default. Trim once when a process
+        // crosses the deep-sleep threshold AND after every brief wake while
+        // still in deep sleep. Replaces the v0.7.9 hard RAM cap + re-trim-
+        // after-brief-wake + ActOnForegroundChildren toggles.
+        CompressDeepSleep       = CompressDeepSleep,
         AdaptiveTick            = true,
         // User-configurable
-        // CpuTriggeredNapEnabled is hardcoded false — MinimizeNap/TrayNap/BackgroundNap/IdleNap
-        // already cover every path that needs to nap something. A plain CPU trigger risked
-        // throttling visible apps the user was actively using, which is the wrong default.
-        CpuTriggeredNapEnabled  = false,
+        // CpuTriggeredNapEnabled is ON. It's the ONLY path that catches a WINDOWLESS
+        // high-CPU helper — e.g. a Firefox/Chromium content process burning 50% that has
+        // no window (so minimize/tray-nap can't see it) and a broken parent link (so
+        // child-nap misses it). The CPU-nap path is guarded so it never touches a visible
+        // or foreground app: it skips anything visible-on-any-monitor and anything in the
+        // foreground-protected set, so only true background hogs get napped + capped.
+        CpuTriggeredNapEnabled  = true,
         NapChildrenEnabled      = NapChildrenEnabled,
         SystemCpuTriggerPercent = SystemCpuTriggerPercent,
         ProcessCpuStartPercent  = ProcessCpuStartPercent,
@@ -564,6 +747,13 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
                                       IsBlacklisted = true
                                   }).ToList(),
         IsGameModeActive        = _isGameModeActive,
+        // Launch Boost
+        LaunchBoostEnabled           = LaunchBoostEnabled,
+        LaunchBoostDurationSeconds   = Math.Clamp(LaunchBoostDurationSeconds, 3, 120),
+        LaunchBoostCpu               = LaunchBoostCpu,
+        LaunchBoostIo                = LaunchBoostIo,
+        LaunchBoostDisableEfficiency = LaunchBoostDisableEfficiency,
+        LaunchBoostGpu               = LaunchBoostGpu,
     };
 
     // ── Registry persistence (scalar settings) ────────────────────────────────
@@ -571,6 +761,7 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
     private void LoadSettings()
     {
         _log.Info("TaskSleepViewModel", "LoadSettings starting — reading registry");
+        _loadingSettings = true;
         try
         {
             using var key = Registry.CurrentUser.OpenSubKey(RegKey, writable: false);
@@ -578,6 +769,10 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
 
             IsEnabled               = ReadBool(key, "IsEnabled",               true);
             NapChildrenEnabled      = ReadBool(key, "NapChildrenEnabled",      false);
+            // CompressDeepSleep defaults to true — existing users who never had this
+            // key (upgraders from < v0.7.9) get the new default automatically; users
+            // who explicitly disabled it will see their preference preserved.
+            CompressDeepSleep       = ReadBool(key, "CompressDeepSleep",       true);
             SystemCpuTriggerPercent = Math.Clamp(ReadInt(key, "SystemCpuTriggerPercent",  12), 1, 100);
             ProcessCpuStartPercent  = Math.Clamp(ReadInt(key, "ProcessCpuStartPercent",    7), 1, 100);
             ProcessCpuStopPercent   = Math.Clamp(ReadInt(key, "ProcessCpuStopPercent",     3), 0, 100);
@@ -596,8 +791,8 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
             TrayDeepSleepThresholdMs    = Math.Clamp(ReadInt(key, "TrayDeepSleepThresholdMs",    600_000), 60_000, 3_600_000);
             TrayDeepSleepWakeIntervalMs = Math.Clamp(ReadInt(key, "TrayDeepSleepWakeIntervalMs", 600_000), 60_000, 3_600_000);
             NappedCpuCapEnabled         = ReadBool(key, "NappedCpuCapEnabled",         true);
-            NappedCpuCapPercent         = Math.Clamp(ReadInt(key, "NappedCpuCapPercent", 3), 1, 100);
-            BriefWakeCpuCapPercent      = Math.Clamp(ReadInt(key, "BriefWakeCpuCapPercent", 7), 1, 100);
+            NappedCpuCapPercent         = Math.Clamp(ReadInt(key, "NappedCpuCapPercent", 2), 1, 100);
+            BriefWakeCpuCapPercent      = Math.Clamp(ReadInt(key, "BriefWakeCpuCapPercent", 5), 1, 100);
             SuppressBriefWakesDuringGameMode = ReadBool(key, "SuppressBriefWakesDuringGameMode", true);
             MaxConcurrentBriefWakes     = Math.Clamp(ReadInt(key, "MaxConcurrentBriefWakes",  3), 1, 10);
             // Advanced + Beta features
@@ -617,17 +812,31 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
             BackgroundNapAfterMs               = Math.Clamp(ReadInt(key, "BackgroundNapAfterMs",         180_000), 30_000, 600_000);
             IdleNapEnabled                     = ReadBool(key, "IdleNapEnabled",                     true);
             IdleNapAfterMs                     = Math.Clamp(ReadInt(key, "IdleNapAfterMs",               120_000), 30_000, 600_000);
+            // Launch Boost (off by default — opt-in)
+            LaunchBoostEnabled                 = ReadBool(key, "LaunchBoostEnabled",                 false);
+            LaunchBoostDurationSeconds         = Math.Clamp(ReadInt(key, "LaunchBoostDurationSeconds", 20), 3, 120);
+            LaunchBoostCpu                     = ReadBool(key, "LaunchBoostCpu",                      true);
+            LaunchBoostIo                      = ReadBool(key, "LaunchBoostIo",                       true);
+            LaunchBoostDisableEfficiency       = ReadBool(key, "LaunchBoostDisableEfficiency",       true);
+            LaunchBoostGpu                     = ReadBool(key, "LaunchBoostGpu",                      false);
         }
         catch (Exception ex)
         {
             _log.Warn("TaskSleepViewModel", $"LoadSettings failed: {ex.Message}");
         }
+        finally
+        {
+            _loadingSettings = false;
+        }
     }
 
     private void SaveSettings()
     {
+        if (_loadingSettings) return;   // never persist while loading from the registry
         var caller = new System.Diagnostics.StackTrace(1, false).ToString().Split('\n')[0].Trim();
-        _log.Info("TaskSleepViewModel", $"SaveSettings called — NappedCpuCapPercent={NappedCpuCapPercent} — caller: {caller}");
+        _log.Info("TaskSleepViewModel",
+            $"SaveSettings called — NappedCpuCapPercent={NappedCpuCapPercent}, " +
+            $"CompressDeepSleep={CompressDeepSleep} — caller: {caller}");
         try
         {
             using var key = Registry.CurrentUser.CreateSubKey(RegKey, writable: true);
@@ -635,6 +844,7 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
 
             key.SetValue("IsEnabled",               IsEnabled               ? 1 : 0, RegistryValueKind.DWord);
             key.SetValue("NapChildrenEnabled",      NapChildrenEnabled      ? 1 : 0, RegistryValueKind.DWord);
+            key.SetValue("CompressDeepSleep",       CompressDeepSleep       ? 1 : 0, RegistryValueKind.DWord);
             key.SetValue("SystemCpuTriggerPercent", SystemCpuTriggerPercent,          RegistryValueKind.DWord);
             key.SetValue("ProcessCpuStartPercent",  ProcessCpuStartPercent,           RegistryValueKind.DWord);
             key.SetValue("ProcessCpuStopPercent",   ProcessCpuStopPercent,            RegistryValueKind.DWord);
@@ -674,6 +884,13 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
             key.SetValue("BackgroundNapAfterMs",               BackgroundNapAfterMs,                        RegistryValueKind.DWord);
             key.SetValue("IdleNapEnabled",                     IdleNapEnabled                     ? 1 : 0, RegistryValueKind.DWord);
             key.SetValue("IdleNapAfterMs",                     IdleNapAfterMs,                              RegistryValueKind.DWord);
+            // Launch Boost
+            key.SetValue("LaunchBoostEnabled",                 LaunchBoostEnabled                 ? 1 : 0, RegistryValueKind.DWord);
+            key.SetValue("LaunchBoostDurationSeconds",         LaunchBoostDurationSeconds,                  RegistryValueKind.DWord);
+            key.SetValue("LaunchBoostCpu",                     LaunchBoostCpu                     ? 1 : 0, RegistryValueKind.DWord);
+            key.SetValue("LaunchBoostIo",                      LaunchBoostIo                      ? 1 : 0, RegistryValueKind.DWord);
+            key.SetValue("LaunchBoostDisableEfficiency",       LaunchBoostDisableEfficiency       ? 1 : 0, RegistryValueKind.DWord);
+            key.SetValue("LaunchBoostGpu",                     LaunchBoostGpu                     ? 1 : 0, RegistryValueKind.DWord);
             _log.Info("TaskSleepViewModel", $"SaveSettings completed successfully — NappedCpuCapPercent={NappedCpuCapPercent}");
         }
         catch (Exception ex)

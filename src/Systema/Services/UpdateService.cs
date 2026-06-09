@@ -47,23 +47,30 @@ public class UpdateService : IDisposable
         $"https://api.github.com/repos/{Owner}/{Repo}/releases";
 
     // ── Migration sentinel ────────────────────────────────────────────────────
-    // v99.9.9 is a transient migration build whose sole job is to pull legacy
-    // 1.7.x users onto the v0.7.9 codebase. The version-reset (1.7.x → 0.7.9)
-    // can't happen through the normal "newer version wins" rule, so we ship a
-    // synthetic-high release and special-case the updater to redirect from it.
+    // v9.9.99 is the synthetic beta-tester build that was handed out before the
+    // public v0.7.9 release. Its sole job is to pull every beta tester onto the
+    // public v0.7.9 codebase so the version line resets cleanly and future
+    // 0.7.x → 0.7.y bumps work via the normal "newer version wins" rule.
+    //
+    // The reset (9.9.99 → 0.7.9) is a HARD DOWNGRADE in semver terms, so we
+    // ship a synthetic-high beta build and special-case the updater to redirect.
     //
     // Behaviour:
-    //   • When the running binary IS v99.9.9 → updater bypasses the
-    //     "must be higher" check and looks specifically for tag v0.7.9.
+    //   • When the running binary IS v9.9.99 → updater bypasses the
+    //     "must be higher" check and pulls tag v0.7.9 specifically.
     //   • When the running binary is anything else (e.g. v0.7.9) → updater
-    //     explicitly IGNORES v99.9.9 if it appears as a stable release,
-    //     preventing an upgrade loop back to the migration build.
+    //     explicitly IGNORES v9.9.99 if it ever appears as a release, so a
+    //     freshly-updated user can never get pulled back to the beta sentinel.
     //
-    // After every existing user has migrated to v0.7.9 and you've taken down
-    // (or pre-released) v99.9.9 on GitHub, this block becomes dead code, but
-    // we leave it in permanently as a safety net — newer codebases continue
-    // to skip the sentinel, which protects against any future operator error.
-    private static readonly Version MigrationSentinelVersion = new(99, 9, 9);
+    // Once every beta tester has migrated and v9.9.99 is taken down (or marked
+    // pre-release) on GitHub, this block becomes dead code, but we leave it
+    // permanent as a safety net — newer codebases keep skipping the sentinel.
+    // v9.9.99 is the synthetic beta-tester build whose only job is to pull
+    // beta testers onto the public v0.7.9 codebase. We do NOT need to defend
+    // against a v0.7.9 user pulling v9.9.99 back as "newer" — the v9.9.99
+    // GitHub release is flagged as a prerelease, and the main update loop
+    // already skips prereleases (see `if (isPreRelease && !IsPreReleaseBuild)`).
+    private static readonly Version MigrationSentinelVersion = new(9, 9, 99);
     private const string            MigrationTargetTag       = "v0.7.9";
 
     private static readonly string TagApiUrlTemplate =
@@ -590,7 +597,7 @@ public class UpdateService : IDisposable
         {
             var current = GetCurrentVersion();
 
-            // ── Migration mode: running v99.9.9 → only ever return v0.7.9 ────
+            // ── Migration mode: running v9.9.99 → only ever return v0.7.9 ────
             // See MigrationSentinelVersion comment at the top of the class.
             if (current == MigrationSentinelVersion)
             {
@@ -621,7 +628,7 @@ public class UpdateService : IDisposable
                 if (!TryParseVersion(tagName, out var ver)) continue;
 
                 // Never upgrade back to the migration sentinel — even if someone
-                // mistakenly re-publishes v99.9.9 as stable, normal binaries
+                // mistakenly re-publishes v9.9.99 as stable, normal binaries
                 // must ignore it.
                 if (ver == MigrationSentinelVersion) continue;
 
@@ -719,7 +726,7 @@ public class UpdateService : IDisposable
         catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
         {
             // Tag doesn't exist yet — normal during the window between pushing
-            // v99.9.9 and pushing v0.7.9. Silent return.
+            // v9.9.99 and pushing v0.7.9. Silent return.
             return null;
         }
         catch (Exception ex)

@@ -1,0 +1,241 @@
+<UserControl x:Class="Systema.Views.IntelView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:conv="clr-namespace:Systema.Core.Converters"
+             Background="Transparent">
+
+    <UserControl.Resources>
+        <conv:BoolToVisibilityConverter x:Key="BoolToVis"/>
+    </UserControl.Resources>
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="32,28,32,28">
+
+            <!-- ===== HEADER ===== -->
+            <Grid Margin="0,0,0,20">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0">
+                    <TextBlock Text="Intel Graphics" Style="{StaticResource HeadingLarge}"/>
+                    <TextBlock Text="{Binding AdapterName}" Style="{StaticResource CaptionText}"
+                               Foreground="{StaticResource TextSecondaryBrush}" Margin="0,4,0,0"/>
+                </StackPanel>
+                <Button Grid.Column="1" Content="Re-detect" VerticalAlignment="Center"
+                        Style="{StaticResource GhostButton}" Padding="14,8"
+                        Command="{Binding DetectCommand}"/>
+            </Grid>
+
+            <!-- ===== REBOOT HINT ===== -->
+            <Border Margin="0,0,0,16" Padding="12,8" CornerRadius="6" Background="#1A4F8DF7"
+                    Visibility="{Binding ShowRebootHint, Converter={StaticResource BoolToVis}}">
+                <TextBlock TextWrapping="Wrap" Style="{StaticResource CaptionText}"
+                           Foreground="{StaticResource AccentBlueBrush}"
+                           Text="Some Intel graphics changes take effect after you restart your PC."/>
+            </Border>
+
+            <!-- ===== CARD: Power Policy ===== -->
+            <Border Style="{StaticResource Card}" Margin="0,0,0,20"
+                    Visibility="{Binding ShowPowerPolicy, Converter={StaticResource BoolToVis}}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0" Margin="0,0,20,0">
+                        <TextBlock Text="Power Policy" Style="{StaticResource HeadingMedium}" Margin="0,0,0,4"/>
+                        <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" MaxWidth="560">
+                            Controls how the Intel graphics chip balances performance against power saving.
+                            <Run FontWeight="SemiBold">Recommended: Max Performance</Run> when plugged in for the smoothest experience;
+                            Default lets the driver decide. <Run FontStyle="Italic">Takes effect after a restart.</Run>
+                        </TextBlock>
+                        <TextBlock Margin="0,6,0,0" Style="{StaticResource CaptionText}">
+                            <Run Text="Current: "/><Run Text="{Binding PowerPolicyDetected, Mode=OneWay}"
+                                 Foreground="{StaticResource AccentGreenBrush}" FontWeight="SemiBold"/>
+                        </TextBlock>
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                        <ComboBox Width="170" ItemsSource="{Binding PowerPolicyOptions}"
+                                  SelectedItem="{Binding SelectedPowerPolicy, Mode=TwoWay}"/>
+                        <Button Content="Reset to Default" Style="{StaticResource GhostButton}"
+                                Margin="0,8,0,0" HorizontalAlignment="Right" FontSize="11" Padding="10,4"
+                                Command="{Binding ResetSettingCommand}" CommandParameter="PowerPolicy"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <!-- ===== CARD: RC6 Render Standby ===== -->
+            <Border Style="{StaticResource Card}" Margin="0,0,0,20"
+                    Visibility="{Binding ShowRc6, Converter={StaticResource BoolToVis}}">
+                <StackPanel>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" Margin="0,0,20,0">
+                            <TextBlock Text="RC6 Render Standby" Style="{StaticResource HeadingMedium}" Margin="0,0,0,4"/>
+                            <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" MaxWidth="560">
+                                Lets the graphics chip briefly sleep when idle to save power and run cooler.
+                                <Run FontWeight="SemiBold">Recommended: On.</Run> Turn it Off only if you want the GPU to stay
+                                fully awake for maximum consistency (uses more power and runs warmer). <Run FontStyle="Italic">Takes effect after a restart.</Run>
+                            </TextBlock>
+                            <TextBlock Margin="0,6,0,0" Style="{StaticResource CaptionText}">
+                                <Run Text="Current: "/><Run Text="{Binding Rc6Detected, Mode=OneWay}"
+                                     Foreground="{StaticResource AccentGreenBrush}" FontWeight="SemiBold"/>
+                            </TextBlock>
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <CheckBox Style="{StaticResource ToggleSwitch}" HorizontalAlignment="Right"
+                                      IsChecked="{Binding Rc6On, Mode=TwoWay}"/>
+                            <Button Content="Reset to Default" Style="{StaticResource GhostButton}"
+                                    Margin="0,8,0,0" HorizontalAlignment="Right" FontSize="11" Padding="10,4"
+                                    Command="{Binding ResetSettingCommand}" CommandParameter="RC6"/>
+                        </StackPanel>
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <!-- Panel Self Refresh toggle was removed — disabling it black-screened some
+                 laptop panels on battery, with no in-app way to recover. PSR stays at the
+                 driver default; Revert All still clears any stale PSR override. -->
+
+            <!-- ===== CARD: Display Power Saving (DPST) ===== -->
+            <Border Style="{StaticResource Card}" Margin="0,0,0,20"
+                    Visibility="{Binding ShowDpst, Converter={StaticResource BoolToVis}}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0" Margin="0,0,20,0">
+                        <TextBlock Text="Display Power Saving (DPST)" Style="{StaticResource HeadingMedium}" Margin="0,0,0,4"/>
+                        <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" MaxWidth="560">
+                            Dims and adjusts the backlight automatically to save battery. <Run FontWeight="SemiBold">Recommended: On</Run>
+                            for longer battery life; turn it Off if the auto-dimming is distracting or you want consistent
+                            brightness for photo/video work. <Run FontStyle="Italic">Takes effect after a restart.</Run>
+                        </TextBlock>
+                        <TextBlock Margin="0,6,0,0" Style="{StaticResource CaptionText}">
+                            <Run Text="Current: "/><Run Text="{Binding DpstDetected, Mode=OneWay}"
+                                 Foreground="{StaticResource AccentGreenBrush}" FontWeight="SemiBold"/>
+                        </TextBlock>
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                        <CheckBox Style="{StaticResource ToggleSwitch}" HorizontalAlignment="Right"
+                                  IsChecked="{Binding DpstOn, Mode=TwoWay}"/>
+                        <Button Content="Reset to Default" Style="{StaticResource GhostButton}"
+                                Margin="0,8,0,0" HorizontalAlignment="Right" FontSize="11" Padding="10,4"
+                                Command="{Binding ResetSettingCommand}" CommandParameter="DPST"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <!-- ===== CARD: Dynamic Refresh Switching (DRRS) ===== -->
+            <Border Style="{StaticResource Card}" Margin="0,0,0,20"
+                    Visibility="{Binding ShowDrrs, Converter={StaticResource BoolToVis}}">
+                <StackPanel>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" Margin="0,0,20,0">
+                            <TextBlock Text="Dynamic Refresh Switching" Style="{StaticResource HeadingMedium}" Margin="0,0,0,4"/>
+                            <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" MaxWidth="560">
+                                Lowers the built-in screen's refresh rate when showing static content to save power.
+                                <Run FontWeight="SemiBold">Recommended: On</Run> on a laptop. Turn it Off if you notice
+                                stutter when the refresh rate switches. <Run FontStyle="Italic">Takes effect after a restart.</Run>
+                            </TextBlock>
+                            <TextBlock Margin="0,6,0,0" Style="{StaticResource CaptionText}">
+                                <Run Text="Current: "/><Run Text="{Binding DrrsDetected, Mode=OneWay}"
+                                     Foreground="{StaticResource AccentGreenBrush}" FontWeight="SemiBold"/>
+                            </TextBlock>
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <CheckBox Style="{StaticResource ToggleSwitch}" HorizontalAlignment="Right"
+                                      IsChecked="{Binding DrrsOn, Mode=TwoWay}"/>
+                            <Button Content="Reset to Default" Style="{StaticResource GhostButton}"
+                                    Margin="0,8,0,0" HorizontalAlignment="Right" FontSize="11" Padding="10,4"
+                                    Command="{Binding ResetSettingCommand}" CommandParameter="DRRS"/>
+                        </StackPanel>
+                    </Grid>
+                    <Border Margin="0,12,0,0" Padding="12,8" CornerRadius="6" Background="#1AE0A030"
+                            Visibility="{Binding DrrsNoEffect, Converter={StaticResource BoolToVis}}">
+                        <TextBlock TextWrapping="Wrap" Style="{StaticResource CaptionText}"
+                                   Text="{Binding DrrsNoEffectNote}"/>
+                    </Border>
+                </StackPanel>
+            </Border>
+
+            <!-- ===== CARD: Frame Buffer Compression (FBC) ===== -->
+            <Border Style="{StaticResource Card}" Margin="0,0,0,20"
+                    Visibility="{Binding ShowFbc, Converter={StaticResource BoolToVis}}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0" Margin="0,0,20,0">
+                        <TextBlock Text="Frame Buffer Compression" Style="{StaticResource HeadingMedium}" Margin="0,0,0,4"/>
+                        <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" MaxWidth="560">
+                            Compresses the screen image in memory to save power. <Run FontWeight="SemiBold">Recommended: On.</Run>
+                            Turn it Off only if you see faint flicker on the built-in display. <Run FontStyle="Italic">Takes effect after a restart.</Run>
+                        </TextBlock>
+                        <TextBlock Margin="0,6,0,0" Style="{StaticResource CaptionText}">
+                            <Run Text="Current: "/><Run Text="{Binding FbcDetected, Mode=OneWay}"
+                                 Foreground="{StaticResource AccentGreenBrush}" FontWeight="SemiBold"/>
+                        </TextBlock>
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                        <CheckBox Style="{StaticResource ToggleSwitch}" HorizontalAlignment="Right"
+                                  IsChecked="{Binding FbcOn, Mode=TwoWay}"/>
+                        <Button Content="Reset to Default" Style="{StaticResource GhostButton}"
+                                Margin="0,8,0,0" HorizontalAlignment="Right" FontSize="11" Padding="10,4"
+                                Command="{Binding ResetSettingCommand}" CommandParameter="FBC"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <!-- ===== PERSISTENCE + REVERT ALL ===== -->
+            <Border Style="{StaticResource Card}" Margin="0,0,0,0"
+                    Visibility="{Binding AnySettingSupported, Converter={StaticResource BoolToVis}}">
+                <StackPanel>
+                    <Grid Margin="0,0,0,12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" Margin="0,0,20,0">
+                            <TextBlock Text="Re-apply after driver updates" Style="{StaticResource HeadingMedium}" Margin="0,0,0,4"/>
+                            <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" MaxWidth="560"
+                                       Text="Intel driver updates can wipe these settings. When on, Systema re-applies your choices a few seconds after startup."/>
+                        </StackPanel>
+                        <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}" VerticalAlignment="Center"
+                                  IsChecked="{Binding ReapplyAfterDriverUpdate, Mode=TwoWay}"/>
+                    </Grid>
+
+                    <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,4,0,12"/>
+
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" VerticalAlignment="Center" Margin="0,0,20,0"
+                                   TextWrapping="Wrap" Style="{StaticResource CaptionText}"
+                                   Text="Restore every Intel graphics setting to the driver's defaults."/>
+                        <Button Grid.Column="1" Content="Revert All Intel Settings to Default"
+                                Style="{StaticResource GhostButton}" Padding="14,8"
+                                Command="{Binding RevertAllCommand}"/>
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <!-- ===== STATUS ===== -->
+            <TextBlock Text="{Binding StatusMessage}" Style="{StaticResource CaptionText}"
+                       Foreground="{StaticResource TextSecondaryBrush}" TextWrapping="Wrap" Margin="2,14,0,0"/>
+
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

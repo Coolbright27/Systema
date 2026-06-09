@@ -227,6 +227,28 @@ public class SettingsService
     }
 
     /// <summary>
+    /// Dell BIOS thermal profile to apply while on AC power (or on a desktop).
+    /// Empty = Systema doesn't manage the thermal profile. Value is the raw BIOS
+    /// enum value (e.g. "Optimized", "UltraPerformance"), validated against the
+    /// machine's actual PossibleValues by ThermalManagementService before use.
+    /// </summary>
+    public string ThermalModeAc
+    {
+        get => ReadString(nameof(ThermalModeAc), defaultValue: "") ?? "";
+        set => WriteString(nameof(ThermalModeAc), value);
+    }
+
+    /// <summary>
+    /// Dell BIOS thermal profile to apply while on battery. Empty = unmanaged.
+    /// Only meaningful on laptops; ignored on desktops.
+    /// </summary>
+    public string ThermalModeBattery
+    {
+        get => ReadString(nameof(ThermalModeBattery), defaultValue: "") ?? "";
+        set => WriteString(nameof(ThermalModeBattery), value);
+    }
+
+    /// <summary>
     /// User explicitly toggled High Performance Mode on. When true, Systema restores
     /// High Performance every time the user plugs back in after running on battery.
     /// </summary>
@@ -366,6 +388,41 @@ public class SettingsService
         set => WriteBool(nameof(GameBoosterPauseCharging), value);
     }
 
+    // ── Intel iGPU panel ──────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Opt-in: when true, Systema re-applies the saved Intel iGPU profile at startup.
+    /// Intel driver updates sometimes wipe these registry values, so this lets the
+    /// user's chosen settings survive a driver upgrade. Off by default — we never
+    /// re-write display-adapter keys unless the user explicitly asked us to.
+    /// </summary>
+    public bool IntelGpuReapplyEnabled
+    {
+        get => ReadBool(nameof(IntelGpuReapplyEnabled), defaultValue: false);
+        set => WriteBool(nameof(IntelGpuReapplyEnabled), value);
+    }
+
+    /// <summary>
+    /// JSON map of Intel managed value-name → int the user last applied. Used to
+    /// re-apply after a driver update when <see cref="IntelGpuReapplyEnabled"/> is on.
+    /// Null = nothing saved yet.
+    /// </summary>
+    public Dictionary<string, int>? IntelGpuProfile
+    {
+        get
+        {
+            var json = ReadString(nameof(IntelGpuProfile), defaultValue: null);
+            if (json == null) return null;
+            try { return JsonSerializer.Deserialize<Dictionary<string, int>>(json); }
+            catch { return null; }
+        }
+        set
+        {
+            if (value == null) DeleteValue(nameof(IntelGpuProfile));
+            else WriteString(nameof(IntelGpuProfile), JsonSerializer.Serialize(value));
+        }
+    }
+
     // ── System Stability tweaks ───────────────────────────────────────────────
 
     /// <summary>Whether the user has disabled Windows Fast Startup (off by default).</summary>
@@ -381,6 +438,29 @@ public class SettingsService
         get => ReadBool(nameof(NtfsLastAccessDisabled), defaultValue: false);
         set => WriteBool(nameof(NtfsLastAccessDisabled), value);
     }
+
+    /// <summary>Foreground priority boost (Win32PrioritySeparation=38). Off by default.</summary>
+    public bool ForegroundBoostEnabled
+    {
+        get => ReadBool(nameof(ForegroundBoostEnabled), defaultValue: false);
+        set => WriteBool(nameof(ForegroundBoostEnabled), value);
+    }
+
+    /// <summary>Disable Windows 11 suggestions / spotlight / setup nags. Off by default;
+    /// when the user turns it on it is reinforced on launch so the nags never come back.</summary>
+    public bool DisableSuggestionsEnabled
+    {
+        get => ReadBool(nameof(DisableSuggestionsEnabled), defaultValue: false);
+        set => WriteBool(nameof(DisableSuggestionsEnabled), value);
+    }
+
+    /// <summary>Disable Bing/web results in Start search. Off by default.</summary>
+    public bool DisableWebSearchEnabled
+    {
+        get => ReadBool(nameof(DisableWebSearchEnabled), defaultValue: false);
+        set => WriteBool(nameof(DisableWebSearchEnabled), value);
+    }
+
 
     // ── Sleep → Hibernate ────────────────────────────────────────────────────
 
@@ -431,6 +511,19 @@ public class SettingsService
     /// without needing a polling refresh.
     /// </summary>
     public static event EventHandler? AutoPilotModeChanged;
+
+    /// <summary>
+    /// Fired after Auto-Pilot's <c>RunAutoPilotAsync</c> finishes (whether the
+    /// user toggled the mode ON, clicked "Apply settings once," or it was
+    /// triggered by a drift re-check). Used by ServicesViewModel to refresh
+    /// the merged "Privacy &amp; Background Services" toggle so it reflects
+    /// the post-cleanup state — without this, the refresh fires when
+    /// AutoPilotModeChanged is raised at the START of the run, before the
+    /// service-disable calls actually complete, and the toggle stays stuck OFF.
+    /// </summary>
+    public static event EventHandler? OptimizationsApplied;
+    public static void RaiseOptimizationsApplied() =>
+        OptimizationsApplied?.Invoke(null, EventArgs.Empty);
 
     /// <summary>
     /// When true, Auto-Pilot Mode is active: all Auto-Pilot-managed settings are locked,

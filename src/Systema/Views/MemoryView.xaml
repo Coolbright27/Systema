@@ -1,7 +1,7 @@
 <UserControl x:Class="Systema.Views.MemoryView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             Background="{StaticResource BgPrimaryBrush}">
+             Background="Transparent">
 
     <ScrollViewer VerticalScrollBarVisibility="Auto">
         <Grid Margin="32,28,32,28">
@@ -88,10 +88,6 @@
                     <StackPanel>
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
                             <TextBlock Text="Virtual Memory (Page File)" Style="{StaticResource HeadingMedium}"/>
-                            <Border BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="3"
-                                    Padding="6,2" Margin="8,0,0,0" VerticalAlignment="Center">
-                                <TextBlock Text="MODERATE" FontSize="9" FontWeight="SemiBold" Foreground="{StaticResource TextSecondaryBrush}"/>
-                            </Border>
                         </StackPanel>
 
                         <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,0,0,4">

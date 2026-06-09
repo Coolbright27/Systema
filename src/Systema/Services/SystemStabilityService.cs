@@ -145,6 +145,199 @@ public class SystemStabilityService
         }
     });
 
+    // ── Responsiveness: Foreground Priority Boost ─────────────────────────────
+    //
+    // Win32PrioritySeparation controls how the scheduler splits CPU quantum
+    // between foreground and background threads.
+    //   2    = Windows default (fixed-length quantums, mild foreground bias)
+    //   0x26 = short, variable, BOOSTED quantums for the foreground app — the
+    //          active window stays responsive under background load. This is the
+    //          value Windows itself uses for "Adjust for best performance of
+    //          Programs." Pairs naturally with Task Sleep (which demotes the
+    //          background side). Instant effect, no reboot, fully reversible.
+
+    private const string PriorityControlKey =
+        @"SYSTEM\CurrentControlSet\Control\PriorityControl";
+    private const int ForegroundBoostValue       = 0x26; // 38
+    private const int PrioritySeparationDefault   = 2;
+
+    /// <summary>True when foreground priority boost is applied (Win32PrioritySeparation = 38).</summary>
+    public bool IsForegroundBoostEnabled()
+    {
+        try
+        {
+            using var key = Registry.LocalMachine.OpenSubKey(PriorityControlKey);
+            return key?.GetValue("Win32PrioritySeparation") is int v && v == ForegroundBoostValue;
+        }
+        catch (Exception ex)
+        {
+            Log.Warn("SystemStability", $"IsForegroundBoostEnabled read failed: {ex.Message}");
+            return false;
+        }
+    }
+
+    public Task<TweakResult> EnableForegroundBoostAsync() => Task.Run(() =>
+    {
+        try
+        {
+            using var key = Registry.LocalMachine.OpenSubKey(PriorityControlKey, writable: true);
+            if (key == null)
+                return TweakResult.Fail("Could not open PriorityControl key. Run Systema as Administrator.");
+            key.SetValue("Win32PrioritySeparation", ForegroundBoostValue, RegistryValueKind.DWord);
+            Log.Info("SystemStability", $"Foreground priority boost enabled (Win32PrioritySeparation={ForegroundBoostValue})");
+            return TweakResult.Ok("Foreground priority boost enabled — the active window now gets more CPU time.");
+        }
+        catch (Exception ex)
+        {
+            Log.Error("SystemStability", "EnableForegroundBoost failed", ex);
+            return TweakResult.FromException(ex);
+        }
+    });
+
+    /// <summary>Restores the Windows default (Win32PrioritySeparation = 2).</summary>
+    public Task<TweakResult> DisableForegroundBoostAsync() => Task.Run(() =>
+    {
+        try
+        {
+            using var key = Registry.LocalMachine.OpenSubKey(PriorityControlKey, writable: true);
+            key?.SetValue("Win32PrioritySeparation", PrioritySeparationDefault, RegistryValueKind.DWord);
+            Log.Info("SystemStability", $"Foreground priority boost disabled (Win32PrioritySeparation={PrioritySeparationDefault} — Windows default)");
+            return TweakResult.Ok("Foreground priority boost disabled — restored Windows default.");
+        }
+        catch (Exception ex)
+        {
+            Log.Error("SystemStability", "DisableForegroundBoost failed", ex);
+            return TweakResult.FromException(ex);
+        }
+    });
+
+    // ── Instant App Focus (ForegroundLockTimeout) ─────────────────────────────
+    // Windows makes a freshly-launched app "wait its turn" before it can take the
+    // foreground (ForegroundLockTimeout — default 200000 ms). Setting it to 0 lets
+    // the app you just launched come to the front immediately, so it feels snappier.
+    // HKCU value, no admin needed, applied live via SystemParametersInfo, reversible.
+    private const string DesktopKey = @"Control Panel\Desktop";
+    private const int    ForegroundLockDefault = 0x30D40; // 200000 ms (Windows default)
+    private const uint   SPI_SETFOREGROUNDLOCKTIMEOUT = 0x2001;
+    private const uint   SPIF_UPDATEINIFILE = 0x0001;
+    private const uint   SPIF_SENDCHANGE    = 0x0002;
+
+    [System.Runtime.InteropServices.DllImport("user32.dll", SetLastError = true)]
+    private static extern bool SystemParametersInfo(uint uiAction, uint uiParam, UIntPtr pvParam, uint fWinIni);
+
+    /// <summary>True when ForegroundLockTimeout is 0 (launched apps focus instantly).</summary>
+    public bool IsInstantAppFocusEnabled()
+    {
+        try
+        {
+            using var key = Registry.CurrentUser.OpenSubKey(DesktopKey);
+            var raw = key?.GetValue("ForegroundLockTimeout");
+            if (raw is int i) return i == 0;
+            if (raw is string s && int.TryParse(s, out int v)) return v == 0;
+            return false;
+        }
+        catch (Exception ex)
+        {
+            Log.Warn("SystemStability", $"IsInstantAppFocusEnabled read failed: {ex.Message}");
+            return false;
+        }
+    }
+
+    public Task<TweakResult> EnableInstantAppFocusAsync() => Task.Run(() =>
+        SetForegroundLock(0, "Instant app focus enabled — apps you launch now come to the front immediately."));
+
+    /// <summary>Restores the Windows default (ForegroundLockTimeout = 200000 ms).</summary>
+    public Task<TweakResult> DisableInstantAppFocusAsync() => Task.Run(() =>
+        SetForegroundLock(ForegroundLockDefault, "Instant app focus disabled — restored Windows default."));
+
+    private TweakResult SetForegroundLock(int timeout, string okMsg)
+    {
+        try
+        {
+            using (var key = Registry.CurrentUser.CreateSubKey(DesktopKey, writable: true))
+                key?.SetValue("ForegroundLockTimeout", timeout, RegistryValueKind.DWord);
+            // Apply live (and persist to the user profile) so no re-login is needed.
+            SystemParametersInfo(SPI_SETFOREGROUNDLOCKTIMEOUT, 0, new UIntPtr((uint)timeout),
+                                 SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
+            Log.Info("SystemStability", $"ForegroundLockTimeout set to {timeout}");
+            return TweakResult.Ok(okMsg);
+        }
+        catch (Exception ex)
+        {
+            Log.Error("SystemStability", "SetForegroundLock failed", ex);
+            return TweakResult.FromException(ex);
+        }
+    }
+
+    // ── Instant Startup Apps (StartupDelayInMSec) ─────────────────────────────
+    // After every boot / sign-in, Windows artificially delays your auto-start apps
+    // (the Serialize\StartupDelayInMSec throttle — typically ~10 s) so the desktop
+    // "settles" first. Setting it to 0 launches your startup apps immediately.
+    // HKCU value, no admin needed, reversible (the value is deleted to restore the
+    // Windows default delay).
+    private const string StartupSerializeKey =
+        @"Software\Microsoft\Windows\CurrentVersion\Explorer\Serialize";
+
+    /// <summary>True when the Windows startup-app delay is removed (StartupDelayInMSec = 0).</summary>
+    public bool IsStartupAppDelayDisabled()
+    {
+        try
+        {
+            using var key = Registry.CurrentUser.OpenSubKey(StartupSerializeKey);
+            return key?.GetValue("StartupDelayInMSec") is int v && v == 0;
+        }
+        catch (Exception ex)
+        {
+            Log.Warn("SystemStability", $"IsStartupAppDelayDisabled read failed: {ex.Message}");
+            return false;
+        }
+    }
+
+    public Task<TweakResult> EnableInstantStartupAppsAsync() => Task.Run(() =>
+    {
+        try
+        {
+            using (var key = Registry.CurrentUser.CreateSubKey(StartupSerializeKey, writable: true))
+            {
+                if (key == null) return TweakResult.Fail("Could not open the Explorer Serialize key.");
+                key.SetValue("StartupDelayInMSec", 0, RegistryValueKind.DWord);
+            }
+            // Verify it actually persisted. Explorer OWNS the Serialize key and
+            // actively rewrites it during the logon sequence — if Systema applies this
+            // while auto-launching mid-logon, Explorer clobbers our value moments later.
+            // The ViewModel re-asserts this on a delay (after logon settles) to win that
+            // race; the read-back here makes the clobber visible in the log.
+            bool landed = IsStartupAppDelayDisabled();
+            if (landed)
+                Log.Info("SystemStability", "StartupDelayInMSec set to 0 — startup apps launch immediately after boot.");
+            else
+                Log.Warn("SystemStability", "StartupDelayInMSec write did not persist (Explorer rewrote the Serialize key during logon) — will be re-asserted after logon settles.");
+            return TweakResult.Ok("Startup app delay removed — your startup apps now launch immediately after a reboot. Takes effect on the next boot.");
+        }
+        catch (Exception ex)
+        {
+            Log.Error("SystemStability", "EnableInstantStartupApps failed", ex);
+            return TweakResult.FromException(ex);
+        }
+    });
+
+    /// <summary>Restores the Windows default startup-app settle delay (deletes StartupDelayInMSec).</summary>
+    public Task<TweakResult> DisableInstantStartupAppsAsync() => Task.Run(() =>
+    {
+        try
+        {
+            using (var key = Registry.CurrentUser.OpenSubKey(StartupSerializeKey, writable: true))
+                key?.DeleteValue("StartupDelayInMSec", throwOnMissingValue: false);
+            Log.Info("SystemStability", "StartupDelayInMSec removed — restored Windows default startup delay.");
+            return TweakResult.Ok("Startup app delay restored to the Windows default.");
+        }
+        catch (Exception ex)
+        {
+            Log.Error("SystemStability", "DisableInstantStartupApps failed", ex);
+            return TweakResult.FromException(ex);
+        }
+    });
+
     // ── NTFS Last-Access Timestamps ───────────────────────────────────────────
     //
     // Modern Windows manages NtfsDisableLastAccessUpdate via fsutil, not the
@@ -152,8 +345,14 @@ public class SystemStabilityService
     // boot. We use `fsutil behavior set disablelastaccess 1` which persists
     // correctly across reboots.
     //
-    // fsutil values: 0 = enabled, 1 = user-disabled, 2 = system-disabled, 3 = system-enabled
-    // Values 1 and 2 both mean disabled.
+    // fsutil "DisableLastAccess" values (per Microsoft docs):
+    //   0 = User Managed,  Last Access Updates ENABLED
+    //   1 = User Managed,  Last Access Updates DISABLED
+    //   2 = System Managed, Last Access Updates ENABLED  ← Win10 1803+ DEFAULT
+    //   3 = System Managed, Last Access Updates DISABLED
+    // So "disabled" = 1 OR 3. (The old code wrongly treated 2 as disabled, which
+    // made a default machine always report "already disabled" and the toggle
+    // appeared stuck on.)
 
     /// <summary>
     /// Returns true when NTFS last-access timestamp updates are disabled.
@@ -179,7 +378,7 @@ public class SystemStabilityService
             // Extract the digit after "= "
             int idx = output.IndexOf('=');
             if (idx >= 0 && idx + 2 < output.Length && int.TryParse(output.AsSpan(idx + 2, 1), out int v))
-                return v == 1 || v == 2;
+                return v == 1 || v == 3;   // 1/3 = disabled; 0/2 = enabled
             return false;
         }
         catch (Exception ex)

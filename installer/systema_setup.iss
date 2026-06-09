@@ -3,7 +3,7 @@
 ; ============================================================
 
 #define MyAppName "Systema"
-#define MyAppVersion "99.9.9"
+#define MyAppVersion "0.7.86"
 #define MyAppPublisher "Systema"
 #define MyAppURL "https://github.com/systema-app"
 #define MyAppExeName "Systema.exe"
@@ -23,7 +23,7 @@ DefaultDirName={autopf}\{#MyAppName}
 DefaultGroupName={#MyAppName}
 AllowNoIcons=yes
 LicenseFile=
-OutputDir=.\output
+OutputDir=.\Final
 OutputBaseFilename=Systema_Setup_{#MyAppVersion}
 SetupIconFile=..\src\Systema\Assets\logo.ico
 Compression=lzma2/ultra64
@@ -31,12 +31,22 @@ SolidCompression=yes
 WizardStyle=modern
 PrivilegesRequired=admin
 PrivilegesRequiredOverridesAllowed=dialog
+; Force-close any running Systema before copying files. Systema relaunches itself
+; (launch-on-startup), so without this the running Systema.exe stays locked and the
+; installer silently skips overwriting it — leaving the user on the old version.
+CloseApplications=force
+RestartApplications=no
+CloseApplicationsFilter=*.exe,*.dll
 MinVersion=10.0.17763
 ArchitecturesInstallIn64BitMode=x64
 ArchitecturesAllowed=x64
 UninstallDisplayName={#MyAppName}
 UninstallDisplayIcon={app}\{#MyAppExeName}
 WizardResizable=yes
+; We intentionally write one HKCU value (DOTNET_BUNDLE_EXTRACT_BASE_DIR) from
+; this admin installer. Inno Setup correctly maps the write to the original
+; interactive user's hive — that is the desired behaviour. Suppress the warning.
+UsedUserAreasWarning=no
 ; Version info embedded in setup EXE - improves SmartScreen reputation scoring
 VersionInfoVersion={#MyAppVersion}.0
 VersionInfoCompany={#MyAppPublisher}
@@ -56,6 +66,18 @@ Name: "quicklaunchicon"; Description: "{cm:CreateQuickLaunchIcon}"; GroupDescrip
 ; Main executable and all runtime files
 Source: "{#PublishDir}\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#PublishDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+
+[Registry]
+; Redirect .NET 8 single-file bundle extraction from %LOCALAPPDATA%\Temp\.net\
+; into {app}\runtime. This keeps every file Systema touches inside one tidy
+; folder. The DLLs that .NET unpacks there at first launch (System.Windows.*,
+; the WPF native libs, etc.) are all Microsoft Authenticode-signed — they keep
+; their signatures through single-file extraction, so SmartScreen / SAC ignore
+; them. Only Systema.exe itself is unsigned, and it's a single bundled file.
+;
+; HKCU\Environment is the standard "per-user environment variable" location;
+; Windows applies it for every process the user starts going forward.
+Root: HKCU; Subkey: "Environment"; ValueType: string; ValueName: "DOTNET_BUNDLE_EXTRACT_BASE_DIR"; ValueData: "{app}\runtime"; Flags: preservestringtype uninsdeletevalue
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
@@ -79,9 +101,48 @@ Filename: "{app}\{#MyAppExeName}"; Parameters: "--cleanup"; RunOnceId: "SystemaC
   Flags: runhidden waituntilterminated runascurrentuser
 
 [Code]
+// ════════════════════════════════════════════════════════════════════════════
+//  Why this [Code] section is deliberately minimal
+// ════════════════════════════════════════════════════════════════════════════
+//
+// Earlier versions of this installer ran six hidden `powershell.exe` processes
+// with `-ExecutionPolicy Bypass`, calling `Add-MpPreference` to add Systema to
+// Windows Defender's exclusion list and `Unblock-File` to strip Zone.Identifier
+// ADS from the extracted files.
+//
+// That was a mistake. An UNSIGNED installer spawning hidden PowerShell to
+// exclude itself from Defender is the single most recognisable malware
+// behavioural signature there is — Defender's behavioural engine flags the
+// PATTERN regardless of what the script actually does. The "mitigations" were
+// the thing getting the installer blocked.
+//
+// They were also unnecessary:
+//   • Unblock-File:  Inno Setup writes freshly-created files into {app}. Those
+//                    files do NOT inherit the Zone.Identifier ADS — only the
+//                    downloaded Systema_Setup.exe itself carries it. We were
+//                    unblocking files that were never blocked.
+//   • ExclusionPath: The real SAC problem (a separate unsigned Systema.dll)
+//                    was already solved by single-file publish. Everything is
+//                    bundled inside Systema.exe; the .NET runtime DLLs that
+//                    get extracted to {app}\runtime are Microsoft-signed.
+//   • ExclusionProcess: same — self-excluding from an unsigned installer is
+//                    the trigger, not the cure.
+//
+// The installer is now a plain file-copy installer. The ONE remaining first-run
+// hurdle — the SmartScreen "Windows protected your PC" prompt on the unsigned
+// Systema_Setup.exe itself — is unavoidable without a code-signing certificate
+// and is a one-time "More info → Run anyway" click. The welcome message below
+// tells the user exactly that.
+//
+// If a user's Defender ever flags the RUNNING app's behaviour (Task Sleep's
+// working-set trimming, the sc.exe service calls, etc.), the correct fix is for
+// the USER to add an exclusion manually from their own elevated PowerShell —
+// NOT for our unsigned binary to do it for them.
+// ════════════════════════════════════════════════════════════════════════════
+
 // Check Windows version. Minimum supported: Windows 10.
-// A friendly welcome notice is shown in interactive mode so users who hit a
-// Windows protection prompt know how to proceed. Silent auto-updates skip this.
+// A friendly welcome notice is shown in interactive mode so users who hit the
+// SmartScreen prompt know how to proceed. Silent auto-updates skip this.
 function InitializeSetup(): Boolean;
 var
   Version: TWindowsVersion;
@@ -100,55 +161,17 @@ begin
     begin
       WelcomeMsg := 'Welcome to Systema Setup' + #10#10 +
         'Systema is a free, open-source Windows optimization tool.' + #10#10 +
-        'If Windows shows a protection prompt during install:' + #10 +
+        'Systema is not code-signed, so Windows SmartScreen may show a' + #10 +
+        '"Windows protected your PC" prompt. This is expected for any' + #10 +
+        'unsigned app. To continue:' + #10 +
         '  1. Click More info' + #10 +
         '  2. Click Run anyway' + #10#10 +
+        'You only have to do this once per download.' + #10#10 +
         'Always download from the official GitHub releases page:' + #10 +
         'https://github.com/Coolbright27/Systema/releases' + #10#10 +
         'Click OK to continue.';
       MsgBox(WelcomeMsg, mbInformation, MB_OK);
     end;
     Result := True;
-  end;
-end;
-
-// Post-install: strip Zone.Identifier ADS and add Defender exclusion.
-//
-// Zone.Identifier is the NTFS alternate data stream Windows attaches to every
-// file downloaded from the internet (Zone 3). SmartScreen reads this stream and
-// shows its "Windows protected your PC" block on EVERY launch of a file that
-// still carries it — not just the first time. Removing it with Unblock-File
-// makes SmartScreen fire only once (on the installer itself, which is expected
-// for unsigned apps) and never again on the installed application.
-//
-// Add-MpPreference -ExclusionPath tells Defender to stop scanning the install
-// folder on every launch, which prevents the repeated "harmful app blocked"
-// popups that occur when Defender doesn't recognise a newly installed unsigned
-// executable. The installer already runs as admin so this is allowed.
-//
-// Both commands are run hidden and fire-and-forget (ewNoWait) so they do not
-// block the installer UI or delay the "Launch Systema" step.
-procedure CurStepChanged(CurStep: TSetupStep);
-var
-  AppDir: String;
-  ResultCode: Integer;
-begin
-  if CurStep = ssPostInstall then
-  begin
-    AppDir := ExpandConstant('{app}');
-
-    // 1. Unblock all extracted files — removes Zone.Identifier ADS so
-    //    SmartScreen does not trigger on subsequent launches.
-    Exec('powershell.exe',
-      '-NonInteractive -NoProfile -ExecutionPolicy Bypass -Command ' +
-      '"Get-ChildItem -Path ''' + AppDir + ''' -Recurse -File | Unblock-File -ErrorAction SilentlyContinue"',
-      '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-
-    // 2. Add Defender exclusion for the install directory — prevents repeated
-    //    "harmful app blocked" dialogs on an unsigned executable.
-    Exec('powershell.exe',
-      '-NonInteractive -NoProfile -ExecutionPolicy Bypass -Command ' +
-      '"Add-MpPreference -ExclusionPath ''' + AppDir + ''' -ErrorAction SilentlyContinue"',
-      '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
   end;
 end;

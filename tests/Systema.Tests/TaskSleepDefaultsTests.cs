@@ -7,6 +7,9 @@
 //             On first launch (no registry key), LoadSettings exits early and
 //             the field default becomes the effective value shown in the UI.
 //             Fix: changed field default from 5 → 3.
+//   v0.7.77 — Defaults lowered for lighter idle CPU use:
+//             NappedCpuCapPercent 3 → 2, BriefWakeCpuCapPercent 7 → 5.
+//             Updated in the model, the VM field, AND the LoadSettings fallback.
 // ════════════════════════════════════════════════════════════════════════════
 
 using Systema.Models;
@@ -20,10 +23,17 @@ public class TaskSleepDefaultsTests
     // If any default changes intentionally, update both the class AND this test.
 
     [Fact]
-    public void TaskSleepSettings_NappedCpuCapPercent_DefaultIs3()
+    public void TaskSleepSettings_NappedCpuCapPercent_DefaultIs2()
     {
         var s = new TaskSleepSettings();
-        Assert.Equal(3, s.NappedCpuCapPercent);
+        Assert.Equal(2, s.NappedCpuCapPercent);
+    }
+
+    [Fact]
+    public void TaskSleepSettings_BriefWakeCpuCapPercent_DefaultIs5()
+    {
+        var s = new TaskSleepSettings();
+        Assert.Equal(5, s.BriefWakeCpuCapPercent);
     }
 
     [Fact]
@@ -97,8 +107,8 @@ public class TaskSleepDefaultsTests
     }
 
     // ── Cross-check: ViewModel LoadSettings fallback must match model default ─
-    // The VM's ReadInt(key, "NappedCpuCapPercent", 3) fallback and the field
-    // default must both be 3. This test encodes that expectation explicitly so
+    // The VM's ReadInt(key, "NappedCpuCapPercent", 2) fallback and the field
+    // default must both be 2. This test encodes that expectation explicitly so
     // a future change to either value triggers a visible failure.
 
     [Fact]
@@ -110,7 +120,7 @@ public class TaskSleepDefaultsTests
         // LoadSettings fallback (the second arg to ReadInt) — must stay in sync.
         // If someone changes TaskSleepSettings default, they must also update
         // the ReadInt fallback in LoadSettings, and vice versa.
-        const int loadSettingsFallback = 3; // matches ReadInt(key, "NappedCpuCapPercent", 3) on line 607
+        const int loadSettingsFallback = 2; // matches ReadInt(key, "NappedCpuCapPercent", 2)
 
         Assert.Equal(loadSettingsFallback, modelDefault);
     }
@@ -136,10 +146,10 @@ public class TaskSleepDefaultsTests
     }
 
     [Fact]
-    public void NappedCpuCapPercent_DefaultOf3_SurvivesClamping()
+    public void NappedCpuCapPercent_DefaultOf2_SurvivesClamping()
     {
-        // The default 3 must not be modified by the clamp.
-        int clamped = Math.Clamp(3, 1, 100);
-        Assert.Equal(3, clamped);
+        // The default 2 must not be modified by the clamp.
+        int clamped = Math.Clamp(2, 1, 100);
+        Assert.Equal(2, clamped);
     }
 }

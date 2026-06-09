@@ -81,6 +81,25 @@ public class TaskSleepSettings
     public bool TrimWorkingSet { get; set; } = true;
 
     /// <summary>
+    /// Closest Windows equivalent to macOS's compressed-memory behavior.
+    ///
+    /// When a napped process crosses into deep sleep (idle for the deep-sleep
+    /// threshold, default ~10 min), trim its working set with
+    /// <c>SetProcessWorkingSetSize(-1,-1)</c> + <c>EmptyWorkingSet</c>. Pages get
+    /// pushed to the standby list where Windows 10+ compresses them in place at
+    /// roughly 2-4× ratio. Also re-trims after every brief wake that ends while
+    /// the process is still in deep sleep, so the compressed footprint stays
+    /// stable across many wake cycles.
+    ///
+    /// On by default — this replaces the v0.7.9-era "hard RAM cap" and
+    /// "re-trim after brief wake" toggles. The hard cap was removed because
+    /// modern Windows handles working-set compression automatically; this
+    /// gentler trim-on-deep-sleep approach achieves the same outcome with no
+    /// risk of crashing apps that don't tolerate a hard cap.
+    /// </summary>
+    public bool CompressDeepSleep { get; set; } = true;
+
+    /// <summary>
     /// Slow the monitor tick to 2 500 ms when the system is idle and nothing is throttled,
     /// reducing the monitor's own scheduling and CPU overhead.
     /// </summary>
@@ -165,19 +184,19 @@ public class TaskSleepSettings
 
     /// <summary>
     /// Maximum CPU usage (percent, 1–100) for napped processes. Uses Job Object
-    /// CPU rate control — a real kernel-level cap. Default: 3%.
+    /// CPU rate control — a real kernel-level cap. Default: 2%.
     /// </summary>
-    public int NappedCpuCapPercent { get; set; } = 3;
+    public int NappedCpuCapPercent { get; set; } = 2;
 
     /// <summary>
     /// CPU cap (percent, 1–100) applied DURING brief wake windows instead of fully
     /// releasing the cap. Lets napped apps make real progress during their wake window
-    /// without letting them spike. 7% ≈ 2.3× the nap cap — enough to process a message
+    /// without letting them spike. 5% ≈ 2.5× the nap cap — enough to process a message
     /// queue or fire a setInterval callback, but keeps concurrent-wake CPU bounded
-    /// (3 wakes × 7% = 21%, under the 12% system nap trigger's steady-state budget).
-    /// Default: 7%.
+    /// (3 wakes × 5% = 15%, under the system nap trigger's steady-state budget).
+    /// Default: 5%.
     /// </summary>
-    public int BriefWakeCpuCapPercent { get; set; } = 7;
+    public int BriefWakeCpuCapPercent { get; set; } = 5;
 
     /// <summary>
     /// When true, scheduled brief wakes (both minimize-nap and tray-nap) are suspended
@@ -329,4 +348,32 @@ public class TaskSleepSettings
     /// CPU stays fully available to the game.
     /// </summary>
     public bool IsGameModeActive { get; set; } = false;
+
+    // ── Launch Boost ──────────────────────────────────────────────────────────
+    /// <summary>
+    /// Master switch for Launch Boost. When on, a newly-launched app gets a
+    /// temporary priority boost so it opens faster. OFF by default — opt-in.
+    /// </summary>
+    public bool LaunchBoostEnabled { get; set; } = false;
+
+    /// <summary>How long (seconds) the boost lasts after an app launches. Default 20.</summary>
+    public int LaunchBoostDurationSeconds { get; set; } = 20;
+
+    /// <summary>Raise CPU priority to High during the boost window. Default on.</summary>
+    public bool LaunchBoostCpu { get; set; } = true;
+
+    /// <summary>Raise I/O priority to High during the boost window. Default on.</summary>
+    public bool LaunchBoostIo { get; set; } = true;
+
+    /// <summary>Turn off efficiency mode (EcoQoS) during the boost window. Default on.
+    /// (RAM priority is intentionally left unchanged.)</summary>
+    public bool LaunchBoostDisableEfficiency { get; set; } = true;
+
+    /// <summary>
+    /// Raise GPU scheduling priority to High during the boost window. DEFAULT OFF.
+    /// Opt-in only: this touches the GPU scheduler (D3DKMTSetProcessSchedulingPriorityClass),
+    /// which on some systems can affect VSync/frame pacing. Original GPU priority is
+    /// captured and restored when the boost ends.
+    /// </summary>
+    public bool LaunchBoostGpu { get; set; } = false;
 }

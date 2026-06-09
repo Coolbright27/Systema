@@ -154,6 +154,28 @@ public class CoreParkingService
         }
     });
 
+    /// <summary>
+    /// Re-applies the core-parking values to the live power scheme without
+    /// recreating the scheduled task. Called on every app startup (after a short
+    /// delay) when the setting is enabled, because the ONSTART scheduled task runs
+    /// as SYSTEM against SYSTEM's active scheme — which often differs from the
+    /// signed-in user's scheme, so it silently no-ops. Re-applying from the running
+    /// (user-context, elevated) app guarantees the user's active scheme is corrected
+    /// after every reboot or third-party power-plan reset.
+    /// </summary>
+    public Task ReapplyCoreParkingAsync() => Task.Run(() =>
+    {
+        try
+        {
+            int n = ApplyCoreParking(minCoresPercent: 10);
+            _log.Info("CoreParkingService", $"Core parking re-applied on startup ({n} scheme(s)).");
+        }
+        catch (Exception ex)
+        {
+            _log.Warn("CoreParkingService", $"Startup core-parking re-apply failed: {ex.Message}");
+        }
+    });
+
     // ── Registry helpers ──────────────────────────────────────────────────────
 
     /// <summary>
@@ -163,6 +185,8 @@ public class CoreParkingService
     private static int ApplyCoreParking(int minCoresPercent)
     {
         int updated = 0;
+        int skippedProtected = 0;        // TrustedInstaller-owned schemes — expected
+        int otherFailures    = 0;        // anything else — worth a single warning
 
         try
         {
@@ -188,12 +212,29 @@ public class CoreParkingService
                     settingKey.SetValue("DCSettingIndex", minCoresPercent, RegistryValueKind.DWord);
                     updated++;
                 }
+                // Hidden Windows power schemes (the long list of GUIDs under
+                // SYSTEM\…\PowerSchemes\) are owned by TrustedInstaller and can't
+                // be written even from an elevated process. Every Win11 machine
+                // has 200+ of them and the resulting log was ~350 warnings per
+                // Auto-Pilot run that drowned out actually useful messages. We
+                // count them silently and emit a single summary line at the end.
+                catch (UnauthorizedAccessException)            { skippedProtected++; }
+                catch (System.Security.SecurityException)      { skippedProtected++; }
                 catch (Exception ex)
                 {
-                    LoggerService.Instance.Warn("CoreParkingService",
-                        $"Could not update scheme '{schemeGuid}': {ex.Message}");
+                    otherFailures++;
+                    if (otherFailures <= 3)
+                        LoggerService.Instance.Warn("CoreParkingService",
+                            $"Could not update scheme '{schemeGuid}': {ex.Message}");
                 }
             }
+
+            if (skippedProtected > 0)
+                LoggerService.Instance.Info("CoreParkingService",
+                    $"Skipped {skippedProtected} TrustedInstaller-protected power scheme(s) — expected on Win11.");
+            if (otherFailures > 3)
+                LoggerService.Instance.Warn("CoreParkingService",
+                    $"+{otherFailures - 3} additional scheme-write failures suppressed.");
         }
         catch (Exception ex)
         {

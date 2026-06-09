@@ -41,6 +41,29 @@ public class ServiceControlService
         "SCPolicySvc",    // Smart Card Removal Policy — needed with smart cards
         "SysMain",        // SuperFetch — useful on systems with less RAM
         "WSearch",        // Windows Search — disabling slows File Explorer search
+        // ── Windows Update dependencies ─────────────────────────────────────
+        // Both are direct dependencies of WaaSMedicSvc (Windows Update Medic).
+        // When DPS is disabled, WaaSMedicSvc can't start, so when Windows
+        // Update's COM components drift out of sync nothing can repair them
+        // and WU starts returning E_NOINTERFACE (0x80004002) on scans.
+        // Reported in v0.7.9 — moved here in the fix.
+        "DPS",            // Diagnostic Policy Service — WaaSMedicSvc dependency
+        "WdiServiceHost", // Diagnostic Service Host — same chain as DPS
+        // ── Microsoft Store / Windows Update downloads ─────────────────────
+        // Delivery Optimization is the EXCLUSIVE download transport for
+        // Microsoft Store apps on Win10/11 and a primary transport for
+        // Windows Update. With DoSvc disabled, Store app installs/updates
+        // hang at 0% forever and some WU scans return 0x80004002 because
+        // the WU client can't negotiate a transport. Reported v0.7.9.
+        "DoSvc",          // Delivery Optimization — Store + WU downloads
+        // ── TrustedInstaller-protected on Win11 — can't be stopped or have
+        //    Start written even from an elevated process. Auto-Pilot logged
+        //    "Stop(WpcMonSvc) failed" every run and the Privacy toggle then
+        //    showed NOT APPLIED forever because this one entry pinned the
+        //    "all recommended disabled" check to false. Excluding it lets
+        //    the toggle reflect reality. Parental Controls without a child
+        //    account configured is dormant — nothing to disable in practice.
+        "WpcMonSvc",      // Parental Controls — TrustedInstaller-protected
     };
 
     public static readonly List<(string ServiceName, string DisplayName, string Description, string Tooltip)> OptimizableServices = new()
@@ -140,9 +163,12 @@ public class ServiceControlService
             "Safe to disable — only relevant in corporate environments using DirectAccess VPN."),
 
         // ── Background downloads ──────────────────────────────────────────────
-        ("DoSvc",             "Delivery Optimization",
-            "Downloads Windows updates using a P2P system — pulling from other PCs on your network and uploading your bandwidth to Microsoft's network.",
-            "Safe to disable. Updates will still download normally, just from Microsoft's servers only."),
+        // DoSvc (Delivery Optimization) is intentionally NOT listed. It's the
+        // exclusive download transport for Microsoft Store apps and a primary
+        // one for Windows Update on Win11 22H2+. Listing it — even with a
+        // warning — invited users to break their own Store + WU. To turn off
+        // P2P uploads without disabling the service, point users at
+        // Settings → Windows Update → Advanced → Delivery Optimization.
         ("BITS",              "Background Intelligent Transfer",
             "Queues and manages background file transfers for Windows Update and Microsoft apps.",
             "Set to Manual rather than Disabled. Windows Update relies on this — fully disabling it can break update downloads."),
@@ -184,21 +210,22 @@ public class ServiceControlService
             "Connects this PC to the Windows Insider Program to receive pre-release preview builds from Microsoft.",
             "Safe to disable if you're not enrolled in the Insider Program."),
 
-        // ── Parental Controls ────────────────────────────────────────────────
-        ("WpcMonSvc",         "Parental Controls",
-            "Monitors and logs all web browsing, app usage, and screen time — even when no child account is configured.",
-            "Safe to disable if you don't use Windows Family Safety / parental controls."),
+        // ── Parental Controls (WpcMonSvc) intentionally NOT listed ───────────
+        // It's TrustedInstaller-protected on Win11 — it can't be stopped and the
+        // Start-value write is rejected, so a Disable button would silently do
+        // nothing and just confuse users. Excluded from both the manual list and
+        // the auto-disable set (see _noRecommendedTag).
 
         // ── Diagnostics / privacy expansion (added v1.7.76) ──────────────────
         // These send diagnostic / personal data to Microsoft or to other apps;
         // disabling them doesn't break Windows core or networking. We do NOT
         // touch the indexer (WSearch is intentionally left non-Recommended).
-        ("DPS",               "Diagnostic Policy Service",
-            "Drives Windows' built-in troubleshooters and bundles per-component diagnostic data uploaded with telemetry.",
-            "Safe to disable. Troubleshooters still launch but skip the data-collection phase."),
-        ("WdiServiceHost",    "Diagnostic Service Host",
-            "Hosts user-mode diagnostic providers (network, power, performance) that report back to Microsoft.",
-            "Safe to disable. Companion to DPS — neither is needed for a healthy PC."),
+        //
+        // DPS and WdiServiceHost are intentionally NOT listed. They are
+        // dependencies of Windows Update Medic Service (WaaSMedicSvc) — disabling
+        // them breaks Windows Update with error 0x80004002 — so they have no
+        // business being toggleable from the UI. Excluded from both the manual
+        // list and the auto-disable set (see _noRecommendedTag).
         ("MessagingService",  "Messaging Service",
             "Legacy SMS-style messaging interop, used to relay text messages from a phone to Windows.",
             "Safe to disable. Almost no consumer apps still use it; modern messaging uses the Phone Link app instead."),
@@ -208,6 +235,38 @@ public class ServiceControlService
         ("stisvc",            "Windows Image Acquisition (Scanners)",
             "Provides scanner support for Windows. Webcams use a different service (FrameServer) and are unaffected.",
             "Safe to disable if you don't have a flatbed/document scanner. Re-enable if a scanner stops working."),
+
+        // ── Legacy junk (added v0.7.73) ──────────────────────────────────────
+        // Deprecated, niche, or off-by-default subsystems that almost no modern
+        // home PC uses. None are in _noRecommendedTag, so they carry the
+        // "Recommended" tag and are included when Privacy & Background Services
+        // is turned on — and each can also be toggled individually here. Every
+        // one is Manual/Disabled by default, so disabling is harmless and the
+        // OFF restore (set to Manual) brings them back on demand.
+        ("AJRouter",          "AllJoyn Router",
+            "Routes messages for the AllJoyn IoT protocol — an abandoned smart-home standard almost nothing uses anymore.",
+            "Safe to disable on any modern PC. Practically dead technology."),
+        ("RemoteAccess",      "Routing and Remote Access",
+            "Legacy service for hosting dial-up / VPN server and LAN routing. Disabled by default on Windows.",
+            "Safe to disable unless this PC acts as a VPN/RAS server (it almost certainly doesn't)."),
+        ("SmsRouter",         "Microsoft Windows SMS Router",
+            "Routes SMS-style messages between apps via the legacy messaging stack.",
+            "Safe to disable. Modern messaging uses the Phone Link app, not this service."),
+        ("WalletService",     "WalletService",
+            "Hosts the largely-unused Microsoft Wallet feature for storing payment/loyalty cards.",
+            "Safe to disable — the Windows Wallet feature is effectively retired."),
+        ("wercplsupport",     "Problem Reports Control Panel Support",
+            "Backs the old 'Problem Reports' control-panel page that lists past app crash reports.",
+            "Safe to disable. A legacy reporting UI, not needed for Windows to run."),
+        ("PerfHost",          "Performance Counter DLL Host",
+            "Lets remote computers query this PC's performance counters via third-party counter DLLs.",
+            "Safe to disable on home PCs — only relevant for remote/enterprise monitoring."),
+        ("NetTcpPortSharing", "Net.Tcp Port Sharing",
+            "Allows multiple legacy .NET WCF apps to share a single TCP port. Disabled by default.",
+            "Safe to disable. Practically no consumer software uses Net.Tcp port sharing."),
+        ("WFDSConMgrSvc",     "Wi-Fi Direct Services Connection Manager",
+            "Manages Wi-Fi Direct connections used by Miracast wireless displays and some legacy device pairing.",
+            "Safe to disable if you don't cast to a wireless display. Re-enable if Miracast stops working."),
     };
 
     // ── Telemetry service list (for master toggle) ──
@@ -549,7 +608,10 @@ public class ServiceControlService
                     if (svc.Status == ServiceControllerStatus.Running)
                     {
                         try { svc.Stop(); PollForStatus(svc, ServiceControllerStatus.Stopped, 5); }
-                        catch (Exception ex) { Log.Warn("ServiceControl", $"Stop({name}) failed: {ex.Message}"); }
+                        // A protected / dependent service that won't stop is fine —
+                        // the registry write below still flips Start=4 so it stays
+                        // off on next boot. Log at Info to keep diagnostic reports tidy.
+                        catch (Exception ex) { Log.Info("ServiceControl", $"Stop({name}) skipped (service likely protected): {ex.Message}"); }
                     }
 
                     // Try direct registry write first (fastest path), then fall back to
@@ -605,8 +667,21 @@ public class ServiceControlService
     /// in Pending forever.
     /// </summary>
     public bool AreAllRecommendedDisabled(bool gamesInstalled)
+        => GetRemainingRecommendedServices(gamesInstalled).Count == 0;
+
+    /// <summary>
+    /// Returns the display names of every Recommended service for this PC that is
+    /// NOT currently disabled (Start != 4). Used by both the Dashboard checklist
+    /// detail line ("still running: X, Y") AND the merged Privacy toggle's status
+    /// text so they can never disagree — earlier versions had two independent
+    /// snapshots and the toggle could show APPLIED while the dashboard still
+    /// flagged Pending because their <c>gamesInstalled</c> arguments came from
+    /// different sources and one ran a measure-tick earlier than the other.
+    /// </summary>
+    public List<string> GetRemainingRecommendedServices(bool gamesInstalled)
     {
-        foreach (var (name, _, _, _) in OptimizableServices)
+        var remaining = new List<string>();
+        foreach (var (name, display, _, _) in OptimizableServices)
         {
             if (!ComputeRecommended(name, gamesInstalled)) continue;
 
@@ -616,16 +691,16 @@ public class ServiceControlService
                     $@"SYSTEM\CurrentControlSet\Services\{name}");
                 if (key == null) continue; // service not installed — treat as done
                 int start = (int?)key.GetValue("Start") ?? 2;
-                if (start != 4) return false;
+                if (start != 4) remaining.Add(display);
             }
             catch (Exception ex)
             {
-                Log.Warn("ServiceControl", $"AreAllRecommendedDisabled({name}): {ex.Message}");
+                Log.Warn("ServiceControl", $"GetRemainingRecommendedServices({name}): {ex.Message}");
                 // Conservative: treat as not-disabled so user knows to re-run the cleanup
-                return false;
+                remaining.Add(display);
             }
         }
-        return true;
+        return remaining;
     }
 
     public async Task<TweakResult> RestoreTelemetryServicesAsync()
@@ -743,7 +818,11 @@ public class ServiceControlService
                 if (!exited)
                     Log.Warn("ServiceControl", $"schtasks.exe timed out disabling task: {task}");
                 else if (proc.ExitCode != 0)
-                    Log.Warn("ServiceControl", $"schtasks.exe exited {proc.ExitCode} disabling task: {task}");
+                    // Exit 1 from schtasks /Change /Disable usually means the task
+                    // is owned by TrustedInstaller (Compat Appraiser, ProgramDataUpdater
+                    // on Win11 25H2+). Expected — drop to Info so it doesn't show as
+                    // a warning in the diagnostic report.
+                    Log.Info("ServiceControl", $"schtasks.exe exit {proc.ExitCode} on '{task}' — likely TrustedInstaller-protected, skipping.");
             }
             catch (Exception ex) { Log.Warn("ServiceControl", $"Failed to disable telemetry task '{task}': {ex.Message}"); }
         }

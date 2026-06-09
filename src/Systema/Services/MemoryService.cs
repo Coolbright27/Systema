@@ -305,22 +305,14 @@ public class MemoryService
                     return TweakResult.Fail(
                         $"Not enough space on C:. Need {maximumMb + 2048:N0} MB free, only {freeMb:N0} MB available.");
 
-                // 1. Try to disable automatic management via WMI (best-effort)
-                try
-                {
-                    using var csSearcher = new ManagementObjectSearcher("SELECT * FROM Win32_ComputerSystem");
-                    foreach (ManagementObject cs in csSearcher.Get())
-                    {
-                        cs["AutomaticManagedPagefile"] = false;
-                        cs.Put();
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Log.Error("MemoryService", "WMI AutomaticManagedPagefile=false failed (non-fatal)", ex);
-                }
-
-                // 2. Write custom sizes directly to the registry (primary path)
+                // Registry-only path. The earlier WMI approach
+                // (Win32_ComputerSystem.AutomaticManagedPagefile = false followed
+                // by cs.Put()) regularly returned "Generic failure" on Win11 23H2+
+                // and could block the Put() call for tens of seconds while DCOM
+                // negotiated with the WMI service — long enough to look like the
+                // UI had frozen. Both the system-managed flag AND the static
+                // sizes are mirrored as plain registry values under Memory
+                // Management, so we just write those directly and skip WMI.
                 using var key = Registry.LocalMachine.OpenSubKey(
                     @"SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management",
                     writable: true);
@@ -329,6 +321,11 @@ public class MemoryService
                     return TweakResult.Fail(
                         "Cannot write to registry. Make sure Systema is running as Administrator.");
 
+                // 1. Turn off "automatically manage paging file size for all drives".
+                //    Registry-backed twin of the WMI AutomaticManagedPagefile flag.
+                key.SetValue("AutomaticManagedPagefile", 0, RegistryValueKind.DWord);
+
+                // 2. Write the static size.
                 key.SetValue(
                     "PagingFiles",
                     new[] { $@"C:\pagefile.sys {initialMb} {maximumMb}" },
@@ -353,31 +350,21 @@ public class MemoryService
         {
             try
             {
-                // 1. Re-enable automatic management via WMI (best-effort)
-                try
-                {
-                    using var csSearcher = new ManagementObjectSearcher("SELECT * FROM Win32_ComputerSystem");
-                    foreach (ManagementObject cs in csSearcher.Get())
-                    {
-                        cs["AutomaticManagedPagefile"] = true;
-                        cs.Put();
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Log.Error("MemoryService", "WMI AutomaticManagedPagefile=true failed (non-fatal)", ex);
-                }
-
-                // 2. Reset registry entry to "0 0" (system-managed marker)
+                // Registry-only path (same rationale as ConfigurePagefileAsync —
+                // skip WMI to avoid the "Generic failure" stalls).
                 using var key = Registry.LocalMachine.OpenSubKey(
                     @"SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management",
                     writable: true);
 
                 if (key != null)
+                {
+                    // Turn automatic management back on, and reset the size marker.
+                    key.SetValue("AutomaticManagedPagefile", 1, RegistryValueKind.DWord);
                     key.SetValue(
                         "PagingFiles",
-                        new[] { @"C:\pagefile.sys 0 0" },
+                        new[] { @"?:\pagefile.sys" },
                         RegistryValueKind.MultiString);
+                }
 
                 Log.Info("MemoryService", "Pagefile reverted to Windows-managed");
                 return TweakResult.Ok("Overflow memory returned to Windows default.\nA restart is required to apply the change.");

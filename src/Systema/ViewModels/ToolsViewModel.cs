@@ -38,6 +38,7 @@ public partial class ToolsViewModel : ObservableObject, IAutoRefreshable, IDispo
     private readonly DnsService                   _dnsService;
     private readonly WindowsUpdateTweaksService   _wuTweaks;
     private readonly SystemStabilityService       _stability;
+    private readonly Win11CleanupService          _cleanup;
 
     private static readonly LoggerService _log = LoggerService.Instance;
 
@@ -78,13 +79,20 @@ public partial class ToolsViewModel : ObservableObject, IAutoRefreshable, IDispo
     [ObservableProperty] private bool _blockPreviewUpdates;
     [ObservableProperty] private bool _isPreviewUpdatesLoading;
 
-    // ── Fast Startup ──────────────────────────────────────────────────────────
-    [ObservableProperty] private bool _fastStartupDisabled;
-    [ObservableProperty] private bool _isFastStartupLoading;
+    // ── Disable Suggestions / Nags (on by default, reinforced) ────────────────
+    [ObservableProperty] private bool _disableSuggestions;
+    [ObservableProperty] private bool _isSuggestionsLoading;
+
+    // ── Disable Bing/Web Search in Start (off by default) ─────────────────────
+    [ObservableProperty] private bool _disableWebSearch;
+    [ObservableProperty] private bool _isWebSearchLoading;
 
     // ── NTFS Last-Access Timestamps ───────────────────────────────────────────
     [ObservableProperty] private bool _ntfsLastAccessDisabled;
     [ObservableProperty] private bool _isNtfsLastAccessLoading;
+
+    // Responsiveness tweaks (Foreground Priority Boost + Instant App Focus) moved
+    // to the Systema Engine tab — see TaskSleepViewModel.
 
     // ── Laptop detection ──────────────────────────────────────────────────────
     /// <summary>
@@ -115,7 +123,8 @@ public partial class ToolsViewModel : ObservableObject, IAutoRefreshable, IDispo
         SettingsService              settings,
         DnsService                   dnsService,
         WindowsUpdateTweaksService   wuTweaks,
-        SystemStabilityService       stability)
+        SystemStabilityService       stability,
+        Win11CleanupService          cleanup)
     {
         _realtek     = realtek;
         _coreParking = coreParking;
@@ -124,6 +133,7 @@ public partial class ToolsViewModel : ObservableObject, IAutoRefreshable, IDispo
         _dnsService  = dnsService;
         _wuTweaks    = wuTweaks;
         _stability   = stability;
+        _cleanup     = cleanup;
 
         // Populate DNS profiles
         foreach (var p in DnsService.Profiles)
@@ -156,18 +166,37 @@ public partial class ToolsViewModel : ObservableObject, IAutoRefreshable, IDispo
             bool savedParkingPref  = _settings.CoreParkingEnabled;
             bool previewBlocked    = await Task.Run(() => _wuTweaks.IsPreviewUpdatesBlocked());
 
-            // Auto-heal: if the saved preference says "ON" but the registry policy is
-            // incomplete (e.g. AllowOptionalContent was added in a newer Systema version),
-            // silently re-apply the full block so monthly preview CUs are also suppressed.
+            // Auto-heal: if the saved preference says "ON" but the UX opt-in value
+            // got cleared by Windows (or wiped by ScrubLegacyWufbPolicyKeys on app
+            // startup), silently re-write it so the user's choice is honoured again.
             if (!previewBlocked && _settings.BlockPreviewUpdatesEnabled && !IsPreviewUpdatesLoading)
             {
-                _log.Info("ToolsViewModel", "Preview block incomplete — re-applying full policy (auto-heal)");
+                _log.Info("ToolsViewModel", "Preview block cleared by Windows — re-applying (auto-heal)");
                 var heal = await _wuTweaks.BlockPreviewUpdatesAsync();
                 previewBlocked = heal.Success;
             }
 
-            bool fastStartupOff    = await Task.Run(() => _stability.IsFastStartupDisabled());
             bool ntfsLastAccessOff = await Task.Run(() => _stability.IsNtfsLastAccessDisabled());
+
+            // Disable Suggestions (#3): on by default. Auto-heal — if the pref is ON
+            // but Windows (or a feature update) re-enabled the nags, silently re-apply
+            // so they "never come back". This mirrors the preview-block heal above.
+            bool suggestionsOff = await Task.Run(() => _cleanup.IsConsumerContentDisabled());
+            if (!suggestionsOff && _settings.DisableSuggestionsEnabled && !IsSuggestionsLoading)
+            {
+                _log.Info("ToolsViewModel", "Suggestions re-enabled by Windows — re-applying (auto-heal)");
+                var heal = await _cleanup.DisableConsumerContentAsync();
+                suggestionsOff = heal.Success;
+            }
+
+            // Disable Web Search (#4): off by default — reflect actual state, reinforce when on.
+            bool webSearchOff = await Task.Run(() => _cleanup.IsWebSearchDisabled());
+            if (!webSearchOff && _settings.DisableWebSearchEnabled && !IsWebSearchLoading)
+            {
+                var heal = await _cleanup.DisableWebSearchAsync();
+                webSearchOff = heal.Success;
+            }
+
             bool hasBattery        = await Task.Run(() => _stability.HasBattery());
             bool sleepHibernateOn  = await Task.Run(() => _stability.IsSleepToHibernateEnabled());
             int  sleepHibMinutes   = sleepHibernateOn
@@ -196,9 +225,16 @@ public partial class ToolsViewModel : ObservableObject, IAutoRefreshable, IDispo
                     if (_settings.BlockPreviewUpdatesEnabled != previewBlocked)
                         _settings.BlockPreviewUpdatesEnabled = previewBlocked;
 
-                    // Fast Startup + NTFS: reflect actual registry state.
-                    FastStartupDisabled    = fastStartupOff;
+                    // NTFS last-access: reflect actual fsutil state.
                     NtfsLastAccessDisabled = ntfsLastAccessOff;
+
+                    // Suggestions / web search: reflect actual registry state, keep prefs in sync.
+                    DisableSuggestions = suggestionsOff;
+                    if (_settings.DisableSuggestionsEnabled != suggestionsOff)
+                        _settings.DisableSuggestionsEnabled = suggestionsOff;
+                    DisableWebSearch = webSearchOff;
+                    if (_settings.DisableWebSearchEnabled != webSearchOff)
+                        _settings.DisableWebSearchEnabled = webSearchOff;
 
                     // Sleep → Hibernate (battery): reflect actual powercfg state.
                     SleepToHibernateEnabled = sleepHibernateOn;
@@ -442,46 +478,78 @@ public partial class ToolsViewModel : ObservableObject, IAutoRefreshable, IDispo
         finally { IsPreviewUpdatesLoading = false; }
     }
 
-    // ── Fast Startup callbacks ────────────────────────────────────────────────
+    // ── Disable Suggestions / Nags callbacks ──────────────────────────────────
 
-    partial void OnFastStartupDisabledChanged(bool value)
+    partial void OnDisableSuggestionsChanged(bool value)
     {
         if (_loading) return;
-        _ = ExecuteFastStartupToggleAsync(value);
+        _ = ExecuteSuggestionsToggleAsync(value);
     }
 
-    private async Task ExecuteFastStartupToggleAsync(bool disable)
+    private async Task ExecuteSuggestionsToggleAsync(bool disable)
     {
-        IsFastStartupLoading = true;
-        StatusMessage = disable ? "Disabling Fast Startup..." : "Re-enabling Fast Startup...";
+        IsSuggestionsLoading = true;
+        StatusMessage = disable
+            ? "Turning off Windows suggestions and nags..."
+            : "Restoring Windows suggestions...";
         try
         {
             TweakResult result = disable
-                ? await _stability.DisableFastStartupAsync()
-                : await _stability.EnableFastStartupAsync();
+                ? await _cleanup.DisableConsumerContentAsync()
+                : await _cleanup.RestoreConsumerContentAsync();
 
             StatusMessage = result.Message;
-
             if (result.Success)
-            {
-                _settings.FastStartupDisabled = disable;
-            }
+                _settings.DisableSuggestionsEnabled = disable;
             else
             {
-                _loading = true;
-                FastStartupDisabled = !disable;
-                _loading = false;
+                _loading = true; DisableSuggestions = !disable; _loading = false;
             }
         }
         catch (Exception ex)
         {
-            _log.Error("ToolsViewModel", $"FastStartup toggle ({disable}) failed", ex);
+            _log.Error("ToolsViewModel", $"DisableSuggestions toggle ({disable}) failed", ex);
             StatusMessage = $"Error: {ex.Message}";
-            _loading = true;
-            FastStartupDisabled = !disable;
-            _loading = false;
+            _loading = true; DisableSuggestions = !disable; _loading = false;
         }
-        finally { IsFastStartupLoading = false; }
+        finally { IsSuggestionsLoading = false; }
+    }
+
+    // ── Disable Bing/Web Search callbacks ─────────────────────────────────────
+
+    partial void OnDisableWebSearchChanged(bool value)
+    {
+        if (_loading) return;
+        _ = ExecuteWebSearchToggleAsync(value);
+    }
+
+    private async Task ExecuteWebSearchToggleAsync(bool disable)
+    {
+        IsWebSearchLoading = true;
+        StatusMessage = disable
+            ? "Removing Bing/web results from Start search..."
+            : "Restoring Start search web results...";
+        try
+        {
+            TweakResult result = disable
+                ? await _cleanup.DisableWebSearchAsync()
+                : await _cleanup.RestoreWebSearchAsync();
+
+            StatusMessage = result.Message;
+            if (result.Success)
+                _settings.DisableWebSearchEnabled = disable;
+            else
+            {
+                _loading = true; DisableWebSearch = !disable; _loading = false;
+            }
+        }
+        catch (Exception ex)
+        {
+            _log.Error("ToolsViewModel", $"DisableWebSearch toggle ({disable}) failed", ex);
+            StatusMessage = $"Error: {ex.Message}";
+            _loading = true; DisableWebSearch = !disable; _loading = false;
+        }
+        finally { IsWebSearchLoading = false; }
     }
 
     // ── NTFS Last-Access callbacks ────────────────────────────────────────────
@@ -527,6 +595,9 @@ public partial class ToolsViewModel : ObservableObject, IAutoRefreshable, IDispo
         }
         finally { IsNtfsLastAccessLoading = false; }
     }
+
+    // Responsiveness callbacks (Foreground Priority Boost + Instant App Focus)
+    // moved to the Systema Engine tab — see TaskSleepViewModel.
 
     // ── Sleep → Hibernate (battery) callbacks ────────────────────────────────
 

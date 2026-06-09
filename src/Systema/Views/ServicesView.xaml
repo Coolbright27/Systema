@@ -3,7 +3,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:conv="clr-namespace:Systema.Core.Converters"
              xmlns:models="clr-namespace:Systema.Models"
-             Background="{StaticResource BgPrimaryBrush}">
+             Background="Transparent">
 
     <UserControl.Resources>
         <conv:BoolToVisibilityConverter x:Key="BoolToVis"/>
@@ -111,9 +111,9 @@
                     </Grid.ColumnDefinitions>
                     <StackPanel Grid.Column="0" Orientation="Horizontal">
                         <TextBlock Text="Individual Services" Style="{StaticResource HeadingMedium}"/>
-                        <Border BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="3"
+                        <Border BorderBrush="{StaticResource AccentYellowBrush}" BorderThickness="1" CornerRadius="3"
                                 Padding="6,2" Margin="10,0,0,0" VerticalAlignment="Center">
-                            <TextBlock Text="MODERATE" FontSize="9" FontWeight="SemiBold" Foreground="{StaticResource TextSecondaryBrush}"/>
+                            <TextBlock Text="MODERATE" FontSize="9" FontWeight="SemiBold" Foreground="{StaticResource AccentYellowBrush}"/>
                         </Border>
                     </StackPanel>
                 </Grid>
@@ -249,14 +249,24 @@
                                             </StackPanel>
                                             <StackPanel Grid.Column="3" Orientation="Horizontal"
                                                         HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                <!-- Disable button uses the same neutral GhostButton base as
+                                                     Manual / Enable so the row looks the same regardless of which
+                                                     action is destructive. It only lights up (red outline + text)
+                                                     when the service is ALREADY in the Disabled state — matching
+                                                     how Manual goes yellow at Manual and Enable goes green at
+                                                     Running. Previously this button was a filled red DangerButton
+                                                     at all times and only dimmed when active, which made every
+                                                     row look "disabled" at a glance even when the service was
+                                                     running. -->
                                                 <Button Content="Disable" Padding="10,4" Margin="0,0,6,0" FontSize="11"
                                                         Command="{Binding DataContext.DisableServiceCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                         CommandParameter="{Binding}">
                                                     <Button.Style>
-                                                        <Style TargetType="Button" BasedOn="{StaticResource DangerButton}">
+                                                        <Style TargetType="Button" BasedOn="{StaticResource GhostButton}">
                                                             <Style.Triggers>
                                                                 <DataTrigger Binding="{Binding ColorState}" Value="{x:Static models:ServiceColorState.Red}">
-                                                                    <Setter Property="Opacity" Value="0.4"/>
+                                                                    <Setter Property="BorderBrush" Value="{StaticResource AccentRedBrush}"/>
+                                                                    <Setter Property="Foreground" Value="{StaticResource AccentRedBrush}"/>
                                                                 </DataTrigger>
                                                             </Style.Triggers>
                                                         </Style>
@@ -476,7 +486,8 @@
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
-                    <TextBlock Text="{Binding StatusMessage}" Style="{StaticResource CaptionText}" VerticalAlignment="Center"/>
+                    <TextBlock Text="{Binding StatusMessage}" Style="{StaticResource CaptionText}" VerticalAlignment="Center"
+                               TextTrimming="CharacterEllipsis" ToolTip="{Binding StatusMessage}"/>
                     <Button Grid.Column="1" Content="Refresh Services" Style="{StaticResource GhostButton}"
                             Command="{Binding RefreshCommand}"/>
                 </Grid>
