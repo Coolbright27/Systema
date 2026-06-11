@@ -90,6 +90,18 @@ public sealed class TaskSleepService : IDisposable
     // pid -> original affinity mask (saved before we pin to E-cores)
     private readonly ConcurrentDictionary<int, UIntPtr> _originalAffinities = new();
 
+    // Original D3DKMT GPU scheduling priority of a napped process, saved before we
+    // lower it to Idle so it can be restored exactly on wake. See LowerNapGpuPriority.
+    private readonly ConcurrentDictionary<int, int> _originalGpuPriority = new();
+
+    // GPU priority lowering for napped apps is gated to Windows 11+. On older builds
+    // touching D3DKMT process scheduling priority could disturb the DWM present queue
+    // (the historical VSync/tearing problem); Win11 fixed that ordering, so we only
+    // do it there. Lowering (vs. the old Launch-Boost raise) also gives the GPU to the
+    // foreground app — the safe direction — and is fully restored on wake.
+    private static readonly bool GpuNapLoweringSupported =
+        Environment.OSVersion.Version.Build >= 22000;
+
     // ── Minimize Nap state (monitor-thread only) ──────────────────────────────
 
     // PIDs currently throttled because the app was minimized (not CPU-triggered)
@@ -1993,6 +2005,7 @@ public sealed class TaskSleepService : IDisposable
             _throttledAt.Remove(pid);
             _restoredAt.Remove(pid);
             _originalAffinities.TryRemove(pid, out _);
+            _originalGpuPriority.TryRemove(pid, out _);
             _lastCpuPercent.Remove(pid);
             _processNames.Remove(pid);
             _minimizedNapPids.Remove(pid);
@@ -2058,8 +2071,9 @@ public sealed class TaskSleepService : IDisposable
             // ── Determine effective settings (per-app overrides global) ────────
             // forceMaxThrottle = true for minimize-nap and tray-nap (full throttle always)
             // forceMaxThrottle = false for CPU-triggered throttle (follows user settings)
-            // GPU priority is deliberately NOT manipulated anywhere — D3DKMT scheduling
-            // calls disrupt the shared HAGS flip queue and break VSync system-wide.
+            // GPU priority IS now lowered for napped apps (Idle) via LowerNapGpuPriority,
+            // but only on Windows 11+ where the present-queue ordering that used to cause
+            // VSync tearing was fixed. It's lower-only (never raise here) and reversible.
             bool   lowerCpu    = forceMaxThrottle || s.LowerCpuPriority;
             bool   lowerIo     = forceMaxThrottle || s.LowerIoPriority;
             bool   lowerMem    = forceMaxThrottle || s.LowerMemoryPriority;
@@ -2149,6 +2163,10 @@ public sealed class TaskSleepService : IDisposable
                     else
                         ApplyCpuCap(proc.Id, tightCap);
                 }
+
+                // Drop the napped app's GPU scheduling priority to Idle so the GPU goes
+                // to the foreground app (Win11+ only, reversible). Restored on wake.
+                LowerNapGpuPriority(handle, proc.Id);
             }
 
             return changed;
@@ -2171,6 +2189,7 @@ public sealed class TaskSleepService : IDisposable
         if (handle == IntPtr.Zero)
         {
             _originalAffinities.TryRemove(pid, out _);
+            _originalGpuPriority.TryRemove(pid, out _);
             _cpuAtThrottle.Remove(pid);
             RemoveCpuCap(pid);
             return;
@@ -2182,6 +2201,7 @@ public sealed class TaskSleepService : IDisposable
             SetEfficiencyMode(handle, false);
             SetIoPriorityLevel(handle, IO_PRIORITY_NORMAL);
             SetMemoryPriority(handle, MEMORY_PRIORITY_NORMAL);
+            RestoreNapGpuPriority(handle, pid);   // restore GPU scheduling priority
 
             if (_originalAffinities.TryRemove(pid, out UIntPtr origAffinity))
             {
@@ -2218,6 +2238,7 @@ public sealed class TaskSleepService : IDisposable
         if (handle == IntPtr.Zero)
         {
             _originalAffinities.TryRemove(pid, out _);
+            _originalGpuPriority.TryRemove(pid, out _);
             _cpuAtThrottle.Remove(pid);
             return;
         }
@@ -2238,6 +2259,7 @@ public sealed class TaskSleepService : IDisposable
             if (hardCapActive) SetEfficiencyMode(handle, false); // else keep EcoQoS on as the soft cap
             SetIoPriorityLevel(handle, IO_PRIORITY_NORMAL);
             SetMemoryPriority(handle, MEMORY_PRIORITY_NORMAL);
+            RestoreNapGpuPriority(handle, pid);   // let it render during the wake; re-lowered on re-nap
 
             if (_originalAffinities.TryRemove(pid, out UIntPtr origAffinity))
             {
@@ -2493,6 +2515,7 @@ public sealed class TaskSleepService : IDisposable
         _cpuCapJobs.Clear();
         _overThresholdSince.Clear();
         _originalAffinities.Clear();
+        _originalGpuPriority.Clear();
         _minimizedNapPids.Clear();
         _nextBriefWakeAt.Clear();
         _briefWakeEndAt.Clear();
@@ -3868,6 +3891,61 @@ public sealed class TaskSleepService : IDisposable
     private int  _gpuBoostFailureCount;
     private bool _gpuBoostDisabledForSession;
 
+    /// <summary>
+    /// Lowers a napped process's D3DKMT GPU scheduling priority to Idle so the GPU is
+    /// handed to the foreground app. Win11+ only (see <see cref="GpuNapLoweringSupported"/>);
+    /// the original is saved in <see cref="_originalGpuPriority"/> and restored on wake.
+    /// Shares the GPU auto-disable safety net with Launch Boost — if the WDDM driver keeps
+    /// erroring we stop touching GPU priority for the session (avoids TDR risk). A non-zero
+    /// return is usually just a helper process with no D3D device, which is harmless.
+    /// </summary>
+    private void LowerNapGpuPriority(IntPtr handle, int pid)
+    {
+        if (!GpuNapLoweringSupported || _gpuBoostDisabledForSession) return;
+        if (_originalGpuPriority.ContainsKey(pid)) return; // already lowered
+        try
+        {
+            int getRc = D3DKMTGetProcessSchedulingPriorityClass(handle, out int orig);
+            if (getRc != 0) return; // no D3D device / can't read — leave it alone
+            if (orig == D3DKMT_GPU_PRIORITY_IDLE) { _originalGpuPriority[pid] = orig; return; }
+
+            int setRc = D3DKMTSetProcessSchedulingPriorityClass(handle, D3DKMT_GPU_PRIORITY_IDLE);
+            if (setRc == 0)
+            {
+                _originalGpuPriority[pid] = orig;
+                _gpuBoostFailureCount = 0;
+            }
+            else
+            {
+                _gpuBoostFailureCount++;
+                if (_gpuBoostFailureCount >= GpuBoostFailureThreshold)
+                {
+                    _gpuBoostDisabledForSession = true;
+                    _log.Warn("TaskSleepService",
+                        "GPU priority control auto-DISABLED for this session — D3DKMT kept returning errors.");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _gpuBoostFailureCount++;
+            _log.Warn("TaskSleepService", $"LowerNapGpuPriority PID {pid} threw: {ex.Message}");
+            if (_gpuBoostFailureCount >= GpuBoostFailureThreshold)
+                _gpuBoostDisabledForSession = true;
+        }
+    }
+
+    /// <summary>
+    /// Restores the GPU scheduling priority we lowered at nap time. Safe no-op if the
+    /// pid was never lowered. Called from every wake/restore path.
+    /// </summary>
+    private void RestoreNapGpuPriority(IntPtr handle, int pid)
+    {
+        if (!_originalGpuPriority.TryRemove(pid, out int orig)) return;
+        try { D3DKMTSetProcessSchedulingPriorityClass(handle, orig); }
+        catch (Exception ex) { _log.Warn("TaskSleepService", $"RestoreNapGpuPriority PID {pid} failed: {ex.Message}"); }
+    }
+
     // LaunchBoostTick reentrancy guard. The 1.5s System.Threading.Timer fires
     // on a threadpool thread; if a single tick takes >1.5s (heavy boost dict,
     // slow P/Invoke, etc.) the next tick will start while the first is still
@@ -4567,6 +4645,7 @@ public sealed class TaskSleepService : IDisposable
     private static extern int D3DKMTSetProcessSchedulingPriorityClass(IntPtr hProcess, int priorityClass);
     [DllImport("gdi32.dll")]
     private static extern int D3DKMTGetProcessSchedulingPriorityClass(IntPtr hProcess, out int priorityClass);
+    private const int D3DKMT_GPU_PRIORITY_IDLE   = 0;  // lowest — used to throttle napped apps
     private const int D3DKMT_GPU_PRIORITY_NORMAL = 2;
     private const int D3DKMT_GPU_PRIORITY_HIGH   = 4;
 

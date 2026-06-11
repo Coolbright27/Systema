@@ -61,6 +61,7 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
     private readonly SettingsService            _settings;
     private readonly OptionalFeaturesService    _optFeatures;
     private readonly SystemStabilityService     _stability;
+    private readonly GraphicsTweaksService      _graphics;
     private static readonly LoggerService _log = LoggerService.Instance;
 
     // ── Header badges ───────────────────────────────────────────────────────
@@ -130,7 +131,8 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
         CoreParkingService         corePark,
         SettingsService            settings,
         OptionalFeaturesService    optFeatures,
-        SystemStabilityService     stability)
+        SystemStabilityService     stability,
+        GraphicsTweaksService      graphics)
     {
         _gameBooster    = gameBooster;
         _taskSleepVm    = taskSleepVm;
@@ -143,6 +145,7 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
         _settings       = settings;
         _optFeatures    = optFeatures;
         _stability      = stability;
+        _graphics       = graphics;
 
         // Restore persisted mode — no PropertyChanged callback fires on field-init.
         _autoPilotModeEnabled = _settings.AutoPilotModeEnabled;
@@ -432,6 +435,32 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
                     IsDone = launchBoostOk,
                     Detail = launchBoostOk ? "Apps get a priority boost when they launch" : "Off (default) — click Optimize to enable",
                 });
+
+                // 14. Disable MPO — steadier frame timing on systems with poor MPO
+                //     driver integration (fixes flicker / stutter). Restart to apply.
+                bool mpoOk = _graphics.IsMpoDisabled();
+                if (!mpoOk) pending++;
+                items.Add(new AutoPilotItem
+                {
+                    Label  = "Disable MPO",
+                    IsDone = mpoOk,
+                    Detail = mpoOk
+                        ? "Multi-Plane Overlay disabled — steadier frame timing"
+                        : "Enabled (default) — click Optimize to disable (restart to apply)",
+                });
+
+                // 15. Extend GPU recovery timeout (TdrDelay) — fewer "driver stopped
+                //     responding" black-screen GPU resets.
+                bool tdrOk = _graphics.IsTdrDelayExtended();
+                if (!tdrOk) pending++;
+                items.Add(new AutoPilotItem
+                {
+                    Label  = "Extend GPU recovery timeout",
+                    IsDone = tdrOk,
+                    Detail = tdrOk
+                        ? "Extended to 10s — fewer black-screen GPU resets"
+                        : "Default (~2s) — click Optimize to extend (restart to apply)",
+                });
             });
 
             // All registry/powercfg calls are done.
@@ -597,6 +626,22 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
             {
                 _taskSleepVm.EnableLaunchBoost();
                 _log.Info("DashboardViewModel", "Launch Boost enabled");
+            }
+
+            // 14. Disable MPO — steadier frame timing where the GPU driver integrates
+            // Multi-Plane Overlay poorly. Takes effect on the next restart.
+            if (!_graphics.IsMpoDisabled())
+            {
+                _graphics.SetMpoDisabled(true);
+                _log.Info("DashboardViewModel", "MPO disabled (Auto-Pilot)");
+            }
+
+            // 15. Extend GPU recovery timeout — gives the GPU 10s to recover from a
+            // brief stall instead of a hard reset, cutting black-screen flashes.
+            if (!_graphics.IsTdrDelayExtended())
+            {
+                _graphics.SetTdrDelayExtended(true);
+                _log.Info("DashboardViewModel", "GPU recovery timeout extended (Auto-Pilot)");
             }
 
             _log.Info("DashboardViewModel", "Auto-Pilot completed successfully");

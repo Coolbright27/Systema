@@ -53,6 +53,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
     public ToolsViewModel       ToolsVm       { get; }
     public TaskSleepViewModel   TaskSleepVm   { get; }
     public BloatwareViewModel   BloatwareVm   { get; }
+    public GraphicsViewModel    GraphicsVm    { get; }
     public IntelGpuViewModel    IntelVm       { get; }
     public DellViewModel        DellVm        { get; }
 
@@ -85,6 +86,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         ToolsViewModel       toolsVm,
         TaskSleepViewModel   taskSleepVm,
         BloatwareViewModel   bloatwareVm,
+        GraphicsViewModel    graphicsVm,
         IntelGpuViewModel    intelVm,
         DellViewModel        dellVm)
     {
@@ -97,6 +99,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         ToolsVm       = toolsVm;
         TaskSleepVm   = taskSleepVm;
         BloatwareVm   = bloatwareVm;
+        GraphicsVm    = graphicsVm;
         IntelVm       = intelVm;
         DellVm        = dellVm;
         CurrentView   = dashboardVm;
@@ -169,6 +172,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
                 "Tools"       => ToolsVm,
                 "TaskSleep"   => TaskSleepVm,
                 "Bloatware"   => BloatwareVm,
+                "Graphics"    => GraphicsVm,
                 "Intel"       => IntelVm,
                 "Dell"        => DellVm,
                 _ => LogUnknownSection(section)
@@ -224,6 +228,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         GameBoosterVm?.Dispose();
         SettingsVm?.Dispose();
         ToolsVm?.Dispose();
+        GraphicsVm?.Dispose();
         IntelVm?.Dispose();
         DellVm?.Dispose();
     }

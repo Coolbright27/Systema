@@ -192,6 +192,7 @@ public partial class App : Application
 
             var stabilityService    = new SystemStabilityService();
             var win11CleanupService = new Win11CleanupService();
+            var graphicsTweaks      = new GraphicsTweaksService();
             var bloatwareService    = new BloatwareService();
             var intelGpuService     = new IntelGpuService();
             _updateService          = new UpdateService(settingsService);
@@ -269,7 +270,8 @@ public partial class App : Application
             var dashboardVm   = new DashboardViewModel(
                 gameboosterService, taskSleepVm, serviceControl,
                 memoryService, dnsService, powerPlanService,
-                wuTweaksService, coreParkingService, settingsService, optFeatures, stabilityService);
+                wuTweaksService, coreParkingService, settingsService, optFeatures, stabilityService,
+                graphicsTweaks);
 
             var memoryVm      = new MemoryViewModel(memoryService, startupService, settingsService);
             var servicesVm    = new ServicesViewModel(serviceControl, optFeatures, restoreService, settingsService, gameboosterService);
@@ -281,11 +283,17 @@ public partial class App : Application
                 settingsService, dnsService, wuTweaksService, stabilityService,
                 win11CleanupService);
             var bloatwareVm   = new BloatwareViewModel(bloatwareService, restoreService, settingsService);
+            var graphicsVm    = new GraphicsViewModel(graphicsTweaks, settingsService);
             var intelVm       = new IntelGpuViewModel(intelGpuService, settingsService);
             var dellVm        = new DellViewModel(thermalService, settingsService, powerPlanService);
 
             _mainVm = new MainViewModel(dashboardVm, memoryVm, servicesVm,
-                                        visualVm, gameBoosterVm, settingsVm, toolsVm, taskSleepVm, bloatwareVm, intelVm, dellVm);
+                                        visualVm, gameBoosterVm, settingsVm, toolsVm, taskSleepVm, bloatwareVm, graphicsVm, intelVm, dellVm);
+
+            // NOTE: Graphics tweaks are intentionally reflect-only — Systema NEVER changes
+            // them on launch. The Graphics tab reads the live Windows state and only writes
+            // when the user flips a toggle, so it stays in sync with Windows Settings /
+            // manual registry edits in both directions.
 
             // ── Intel iGPU profile re-apply on startup (opt-in) ──
             // Intel driver updates sometimes wipe the display-adapter registry values. When

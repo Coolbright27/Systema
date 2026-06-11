@@ -1,0 +1,185 @@
+<UserControl x:Class="Systema.Views.GraphicsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:conv="clr-namespace:Systema.Core.Converters"
+             Background="Transparent">
+
+    <UserControl.Resources>
+        <conv:BoolToVisibilityConverter x:Key="BoolToVis"/>
+
+        <!-- Auto-Pilot-managed toggle: grays out + locks while Auto-Pilot Mode is on. -->
+        <Style x:Key="AutoPilotManagedToggle" TargetType="CheckBox" BasedOn="{StaticResource ToggleSwitch}">
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsAutoPilotActive}" Value="True">
+                    <Setter Property="IsEnabled" Value="False"/>
+                    <Setter Property="Opacity"   Value="0.4"/>
+                    <Setter Property="ToolTip"   Value="Managed by Auto-Pilot — turn off Auto-Pilot Mode to change"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+    </UserControl.Resources>
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="32,28,32,28">
+
+            <!-- ===== HEADER ===== -->
+            <StackPanel Margin="0,0,0,16">
+                <TextBlock Text="Graphics" Style="{StaticResource HeadingLarge}"/>
+                <TextBlock Text="Windows graphics settings that affect frame timing and stability. Each shows your current system state and changes nothing until you flip it."
+                           Style="{StaticResource CaptionText}" Margin="0,4,0,0" TextWrapping="Wrap" MaxWidth="720"/>
+            </StackPanel>
+
+            <!-- ===== CARD: Disable MPO ===== -->
+            <Border Style="{StaticResource Card}" Margin="0,0,0,16">
+                <StackPanel>
+                    <Grid Margin="0,0,0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" Margin="0,0,16,0">
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                <TextBlock Text="Disable Multi-Plane Overlay (MPO)" Style="{StaticResource HeadingMedium}"/>
+                                <Border CornerRadius="4" Padding="5,2" Margin="8,0,0,0" VerticalAlignment="Center"
+                                        Background="#1A5C9C7C" BorderBrush="{StaticResource AccentGreenBrush}" BorderThickness="1">
+                                    <TextBlock Text="RECOMMENDED" FontSize="8" FontWeight="Bold"
+                                               Foreground="{StaticResource AccentGreenBrush}"/>
+                                </Border>
+                            </StackPanel>
+                            <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" MaxWidth="620">
+                                MPO lets the GPU composite layers directly, but several drivers integrate it poorly —
+                                causing flickering, stutter, and uneven frame timing. Disabling it is Microsoft's own
+                                workaround and often makes frame pacing more consistent.
+                            </TextBlock>
+                            <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" MaxWidth="620"
+                                       Foreground="{StaticResource AccentYellowBrush}" Margin="0,6,0,0">
+                                Tradeoff: NVIDIA's VSync / Independent Flip relies on MPO. On NVIDIA GPUs, disabling MPO
+                                can fix stutter on some systems but cause screen tearing on others — test it and revert
+                                if you see tearing.
+                            </TextBlock>
+                        </StackPanel>
+                        <CheckBox Grid.Column="1" VerticalAlignment="Center"
+                                  Style="{StaticResource AutoPilotManagedToggle}"
+                                  ToolTipService.ShowOnDisabled="True"
+                                  IsChecked="{Binding DisableMpo, Mode=TwoWay}"/>
+                    </Grid>
+                    <TextBlock Text="⟳  Restart your PC to apply."
+                               Style="{StaticResource CaptionText}" Foreground="{StaticResource AccentYellowBrush}"/>
+                </StackPanel>
+            </Border>
+
+            <!-- ===== CARD: Hardware-accelerated GPU Scheduling ===== -->
+            <Border Style="{StaticResource Card}" Margin="0,0,0,16">
+                <StackPanel>
+                    <Grid Margin="0,0,0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" Margin="0,0,16,0">
+                            <TextBlock Text="Hardware-accelerated GPU Scheduling" Style="{StaticResource HeadingMedium}" Margin="0,0,0,4"/>
+                            <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" MaxWidth="620">
+                                Lets the GPU manage its own memory scheduling. On capable GPUs it can lower latency and
+                                smooth frame delivery; on some setups turning it off is more stable. Same toggle as
+                                Windows Settings → Display → Graphics.
+                            </TextBlock>
+                            <TextBlock Text="Not supported on this GPU/driver."
+                                       Style="{StaticResource CaptionText}" Foreground="{StaticResource TextSecondaryBrush}"
+                                       Margin="0,4,0,0"
+                                       Visibility="{Binding HagsSupported, Converter={StaticResource BoolToVis}, ConverterParameter=Invert}"/>
+                        </StackPanel>
+                        <CheckBox Grid.Column="1" VerticalAlignment="Center"
+                                  Style="{StaticResource ToggleSwitch}"
+                                  IsEnabled="{Binding HagsSupported}"
+                                  IsChecked="{Binding HardwareGpuScheduling, Mode=TwoWay}"/>
+                    </Grid>
+                    <TextBlock Text="⟳  Restart your PC to apply."
+                               Style="{StaticResource CaptionText}" Foreground="{StaticResource AccentYellowBrush}"/>
+                </StackPanel>
+            </Border>
+
+            <!-- ===== CARD: Optimizations for windowed games ===== -->
+            <Border Style="{StaticResource Card}" Margin="0,0,0,16">
+                <StackPanel>
+                    <Grid Margin="0,0,0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" Margin="0,0,16,0">
+                            <TextBlock Text="Optimizations for windowed games" Style="{StaticResource HeadingMedium}" Margin="0,0,0,4"/>
+                            <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" MaxWidth="620">
+                                Upgrades the presentation path for games running in windowed / borderless mode, giving them
+                                lower latency and tearing control closer to true fullscreen. Same toggle as Windows Settings
+                                → Display → Graphics.
+                            </TextBlock>
+                        </StackPanel>
+                        <CheckBox Grid.Column="1" VerticalAlignment="Center"
+                                  Style="{StaticResource ToggleSwitch}"
+                                  IsChecked="{Binding WindowedOptimizations, Mode=TwoWay}"/>
+                    </Grid>
+                    <TextBlock Text="⟳  Restart any open games to apply."
+                               Style="{StaticResource CaptionText}" Foreground="{StaticResource AccentYellowBrush}"/>
+                </StackPanel>
+            </Border>
+
+            <!-- ===== CARD: Extend GPU recovery timeout (TdrDelay) ===== -->
+            <Border Style="{StaticResource Card}" Margin="0,0,0,16">
+                <StackPanel>
+                    <Grid Margin="0,0,0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" Margin="0,0,16,0">
+                            <TextBlock Text="Extend GPU recovery timeout" Style="{StaticResource HeadingMedium}" Margin="0,0,0,4"/>
+                            <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" MaxWidth="620">
+                                Windows hard-resets the GPU after only ~2 seconds when it briefly stalls — the
+                                "display driver stopped responding and has recovered" black-screen flash. This raises
+                                the timeout to 10 seconds so the GPU can recover from a short hiccup instead of
+                                resetting, cutting down on those black screens.
+                            </TextBlock>
+                        </StackPanel>
+                        <CheckBox Grid.Column="1" VerticalAlignment="Center"
+                                  Style="{StaticResource AutoPilotManagedToggle}"
+                                  ToolTipService.ShowOnDisabled="True"
+                                  IsChecked="{Binding ExtendGpuRecoveryTimeout, Mode=TwoWay}"/>
+                    </Grid>
+                    <TextBlock Text="⟳  Restart your PC to apply."
+                               Style="{StaticResource CaptionText}" Foreground="{StaticResource AccentYellowBrush}"/>
+                </StackPanel>
+            </Border>
+
+            <!-- status -->
+            <TextBlock Text="{Binding StatusMessage}" Style="{StaticResource CaptionText}"
+                       Margin="0,4,0,0" TextWrapping="Wrap"/>
+
+            <!-- ===== Intel Graphics link (only when an Intel iGPU is present) ===== -->
+            <Border Style="{StaticResource Card}" Margin="0,16,0,0"
+                    Visibility="{Binding DataContext.IsIntelGpuPresent, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToVis}}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0" Margin="0,0,16,0" VerticalAlignment="Center">
+                        <TextBlock Text="Intel integrated graphics detected" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
+                        <TextBlock Text="Per-GPU power, display, and performance tweaks live on the Intel Graphics page."
+                                   Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,2,0,0"/>
+                    </StackPanel>
+                    <Button Grid.Column="1" VerticalAlignment="Center"
+                            Content="Open Intel Graphics  →"
+                            Padding="14,8"
+                            Foreground="{StaticResource AccentBlueBrush}"
+                            Background="Transparent"
+                            BorderBrush="{StaticResource AccentBlueBrush}"
+                            BorderThickness="1"
+                            Cursor="Hand"
+                            Command="{Binding DataContext.NavigateCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                            CommandParameter="Intel"/>
+                </Grid>
+            </Border>
+
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

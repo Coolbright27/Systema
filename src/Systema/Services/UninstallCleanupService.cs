@@ -76,6 +76,10 @@ public static class UninstallCleanupService
         TryStep("Remove Windows Update preview build block", () =>
             new WindowsUpdateTweaksService().AllowPreviewUpdatesAsync().GetAwaiter().GetResult());
 
+        // Graphics tweaks (MPO / HAGS / windowed optimizations) are intentionally NOT
+        // restored on uninstall — they're reflect-only mirrors of Windows' own settings,
+        // so whatever the user has set is theirs to keep, not Systema's to undo.
+
         // 7b. Windows 11 cleanup — restore suggestions/nags and Start web search
         TryStep("Restore Windows suggestions and nags", () =>
             new Win11CleanupService().RestoreConsumerContentAsync().GetAwaiter().GetResult());
