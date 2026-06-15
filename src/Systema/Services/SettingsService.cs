@@ -439,6 +439,19 @@ public class SettingsService
         set => WriteBool(nameof(NtfsLastAccessDisabled), value);
     }
 
+    /// <summary>
+    /// Whether the user has opted into maximum system responsiveness
+    /// (MMCSS SystemResponsiveness = 0) via System Tweaks. Off by default. When ON,
+    /// GameBooster's legacy VSync self-heal stops forcing SystemResponsiveness back to
+    /// 20 — the user's 0 is honoured instead. Kept in sync with the live registry value
+    /// by ToolsViewModel (and adopted at startup by GameBooster if a 0 already exists).
+    /// </summary>
+    public bool MaxResponsivenessEnabled
+    {
+        get => ReadBool(nameof(MaxResponsivenessEnabled), defaultValue: false);
+        set => WriteBool(nameof(MaxResponsivenessEnabled), value);
+    }
+
     /// <summary>Foreground priority boost (Win32PrioritySeparation=38). Off by default.</summary>
     public bool ForegroundBoostEnabled
     {

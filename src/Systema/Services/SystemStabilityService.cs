@@ -211,6 +211,74 @@ public class SystemStabilityService
         }
     });
 
+    // ── Maximum System Responsiveness (MMCSS SystemResponsiveness) ─────────────
+    // HKLM\...\Multimedia\SystemProfile\SystemResponsiveness sets the percentage of
+    // CPU the MMCSS scheduler reserves for low-priority / background work. The Windows
+    // desktop default is 20. Lowering it to 0 hands that reserve to multimedia and
+    // foreground work, which can steady frame pacing under load. Requires a restart.
+    //
+    // HISTORICAL NOTE: Systema previously refused this value and actively healed any
+    // 0 back to 20, because on older Windows builds 0 starved MMCSS's DWM presentation
+    // boost and broke VSync / NVIDIA MPO. Per the user (2026-06-11) newer Windows
+    // builds no longer regress, so it is offered here as an explicit, reversible,
+    // opt-in System Tweak. GameBooster's old auto-heal now ADOPTS an existing 0 as the
+    // user's choice instead of overwriting it (see GameBoosterService) — honouring the
+    // "reflect current Windows state, never change it on launch" requirement.
+    private const string MmSystemProfileKey =
+        @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile";
+    private const int SystemResponsivenessDefault = 20; // Windows desktop default
+    private const int SystemResponsivenessMax     = 0;  // 0 = give multimedia 100% of the quanta
+
+    /// <summary>True when SystemResponsiveness is 0 (maximum responsiveness applied).</summary>
+    public bool IsMaxResponsivenessEnabled()
+    {
+        try
+        {
+            using var key = Registry.LocalMachine.OpenSubKey(MmSystemProfileKey);
+            return key?.GetValue("SystemResponsiveness") is int v && v == SystemResponsivenessMax;
+        }
+        catch (Exception ex)
+        {
+            Log.Warn("SystemStability", $"IsMaxResponsivenessEnabled read failed: {ex.Message}");
+            return false;
+        }
+    }
+
+    public Task<TweakResult> EnableMaxResponsivenessAsync() => Task.Run(() =>
+    {
+        try
+        {
+            using var key = Registry.LocalMachine.OpenSubKey(MmSystemProfileKey, writable: true);
+            if (key == null)
+                return TweakResult.Fail("Could not open Multimedia\\SystemProfile key. Run Systema as Administrator.");
+            key.SetValue("SystemResponsiveness", SystemResponsivenessMax, RegistryValueKind.DWord);
+            Log.Info("SystemStability", "Maximum system responsiveness enabled (SystemResponsiveness=0)");
+            return TweakResult.Ok("Maximum responsiveness enabled (SystemResponsiveness = 0). Restart your PC to apply.");
+        }
+        catch (Exception ex)
+        {
+            Log.Error("SystemStability", "EnableMaxResponsiveness failed", ex);
+            return TweakResult.FromException(ex);
+        }
+    });
+
+    /// <summary>Restores the Windows default (SystemResponsiveness = 20).</summary>
+    public Task<TweakResult> DisableMaxResponsivenessAsync() => Task.Run(() =>
+    {
+        try
+        {
+            using var key = Registry.LocalMachine.OpenSubKey(MmSystemProfileKey, writable: true);
+            key?.SetValue("SystemResponsiveness", SystemResponsivenessDefault, RegistryValueKind.DWord);
+            Log.Info("SystemStability", $"Maximum system responsiveness disabled (SystemResponsiveness={SystemResponsivenessDefault} — Windows default)");
+            return TweakResult.Ok($"Restored Windows default (SystemResponsiveness = {SystemResponsivenessDefault}). Restart your PC to apply.");
+        }
+        catch (Exception ex)
+        {
+            Log.Error("SystemStability", "DisableMaxResponsiveness failed", ex);
+            return TweakResult.FromException(ex);
+        }
+    });
+
     // ── Instant App Focus (ForegroundLockTimeout) ─────────────────────────────
     // Windows makes a freshly-launched app "wait its turn" before it can take the
     // foreground (ForegroundLockTimeout — default 200000 ms). Setting it to 0 lets

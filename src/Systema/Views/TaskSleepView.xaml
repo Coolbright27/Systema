@@ -194,9 +194,10 @@
             </Border>
 
             <!-- ===== RESPONSIVENESS CARD ===== -->
-            <!-- Foreground Priority Boost + Instant App Focus + Instant Startup Apps.
-                 All part of the engine: the whole card grays out and the toggles force
-                 off when the engine is off, and default on when it is. -->
+            <!-- Foreground Priority Boost + Instant App Focus + Instant Startup Apps +
+                 Maximum System Responsiveness are all part of the engine: this group grays
+                 out and the toggles force off when the engine is off, and default on when
+                 it's on. -->
             <Border Style="{StaticResource Card}" Margin="0,0,0,16">
                 <StackPanel>
                     <StackPanel.Style>
@@ -227,6 +228,9 @@
                             <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" MaxWidth="600">
                                 Gives the app you're using a bigger share of CPU time so the active window stays
                                 snappy while background apps keep running.
+                                <LineBreak/><Run FontWeight="SemiBold">Recommended on with Systema Engine:</Run> as the
+                                engine quiets background apps, this steers that freed-up CPU to the app you're actually
+                                using — so the two work together.
                             </TextBlock>
                         </StackPanel>
                         <CheckBox Grid.Column="1" VerticalAlignment="Center"
@@ -253,6 +257,9 @@
                             <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" MaxWidth="600">
                                 Removes Windows' delay before a launching or clicked app jumps to the front, so
                                 apps come to focus immediately instead of flashing in the taskbar.
+                                <LineBreak/><Run FontWeight="SemiBold">Recommended on with Systema Engine:</Run> when the
+                                engine wakes a napped app, this lets it snap to the front instantly instead of feeling
+                                sluggish for a moment.
                             </TextBlock>
                         </StackPanel>
                         <CheckBox Grid.Column="1" VerticalAlignment="Center"
@@ -280,11 +287,47 @@
                                 Removes the waiting period Windows imposes on your startup apps after a reboot or
                                 shutdown, so they launch immediately instead of trickling in ~10 seconds late.
                                 Takes effect on the next boot.
+                                <LineBreak/><Run FontWeight="SemiBold">Recommended on with Systema Engine:</Run> your apps
+                                start at full speed, and the engine then keeps the idle ones quiet — fast startup without
+                                the lingering background bloat.
                             </TextBlock>
                         </StackPanel>
                         <CheckBox Grid.Column="1" VerticalAlignment="Center"
                                   Style="{StaticResource ToggleSwitch}"
                                   IsChecked="{Binding InstantStartupApps, Mode=TwoWay}"/>
+                    </Grid>
+
+                    <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,16,0,16"/>
+
+                    <!-- Maximum System Responsiveness — engine-gated with the boosts above. -->
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" Margin="0,0,16,0">
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                <TextBlock Text="Maximum System Responsiveness" Style="{StaticResource HeadingMedium}"/>
+                                <Border BorderBrush="{StaticResource AccentYellowBrush}" BorderThickness="1" CornerRadius="3"
+                                        Padding="6,2" Margin="10,0,0,0" VerticalAlignment="Center">
+                                    <TextBlock Text="ADVANCED" FontSize="9" FontWeight="SemiBold" Foreground="{StaticResource AccentYellowBrush}"/>
+                                </Border>
+                            </StackPanel>
+                            <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" MaxWidth="600">
+                                Sets the MMCSS SystemResponsiveness reserve to 0, handing the CPU quanta Windows normally
+                                holds back for background work to multimedia and foreground apps — steadier frame pacing
+                                under load. OFF restores the Windows default (20).
+                                <LineBreak/><Run FontWeight="SemiBold">Recommended on with Systema Engine:</Run> it
+                                reinforces what the engine is already doing — less CPU reserved for background work, more
+                                for the app in front.
+                            </TextBlock>
+                            <TextBlock Text="⟳ Requires a restart to take effect."
+                                       Style="{StaticResource CaptionText}" TextWrapping="Wrap"
+                                       Foreground="{StaticResource AccentYellowBrush}" Margin="0,4,0,0"/>
+                        </StackPanel>
+                        <CheckBox Grid.Column="1" VerticalAlignment="Center"
+                                  Style="{StaticResource ToggleSwitch}"
+                                  IsChecked="{Binding MaxResponsivenessEnabled, Mode=TwoWay}"/>
                     </Grid>
                 </StackPanel>
             </Border>

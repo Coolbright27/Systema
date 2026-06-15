@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.IO;
+using Systema.Core;
 
 namespace Systema.Services;
 
@@ -62,6 +63,13 @@ public sealed class HeartbeatService : IDisposable
 
     private static void Touch()
     {
+        // Only keep the liveness file fresh while the UI thread is actually responsive.
+        // If the UI wedges (the "ghost process" hang — alive but no window/tray), we stop
+        // touching the file so it goes stale: a duplicate launch then correctly treats this
+        // instance as hung and kills + replaces it, instead of seeing a misleading
+        // background-thread heartbeat and bailing out. (8s tolerates brief GC pauses;
+        // before the UI ever beats, IsUiResponsive returns true so startup isn't penalised.)
+        if (!CrashGuard.IsUiResponsive(8)) return;
         try
         {
             if (!File.Exists(HeartbeatPath))
@@ -111,7 +119,22 @@ public sealed class HeartbeatService : IDisposable
                 try
                 {
                     if (p.Id == self) continue;
-                    p.Kill(entireProcessTree: true);
+                    try
+                    {
+                        p.Kill(entireProcessTree: true);
+                    }
+                    catch (InvalidOperationException)
+                    {
+                        // entireProcessTree refuses when the target's tree contains THIS
+                        // process — i.e. the hung instance is our PARENT. This is exactly
+                        // the ghost-process auto-restart case: CrashGuard.TrySelfRestart
+                        // launches the replacement as a child of the wedged process, so the
+                        // replacement can't tree-kill its own ancestor. A plain single Kill
+                        // of an ancestor is allowed (we just get orphaned), so fall back to
+                        // it — this terminates the ghost and lets us reclaim the mutex,
+                        // instead of giving up and leaving a zombie (the bug seen in the logs).
+                        p.Kill();
+                    }
                     p.WaitForExit(2000);
                     killed++;
                 }

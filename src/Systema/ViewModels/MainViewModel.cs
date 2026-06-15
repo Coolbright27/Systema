@@ -144,7 +144,14 @@ public partial class MainViewModel : ObservableObject, IDisposable
         try
         {
             if (CurrentView is IAutoRefreshable refreshable)
-                await refreshable.RefreshAsync();
+            {
+                // Lightweight in-memory breadcrumb (no disk I/O) so a UI-thread wedge
+                // INSIDE a periodic refresh names the culprit view in the ghost-hang
+                // report instead of showing "(idle)".
+                CrashGuard.NoteRefresh($"{ActiveSection} periodic refresh");
+                try { await refreshable.RefreshAsync(); }
+                finally { CrashGuard.NoteRefresh(null); }
+            }
         }
         catch (Exception ex)
         {

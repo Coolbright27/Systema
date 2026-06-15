@@ -51,6 +51,12 @@ public sealed class GameBoosterService : IDisposable
     private readonly List<string> _killedServices  = new();
     private readonly object _lock = new();
     private string? _boostedProcessName;
+    // pid → the process's CPU priority class BEFORE we boosted it, so RestoreGameProcess
+    // hands back the real original instead of blindly forcing Normal. A game launched at
+    // (say) High by its launcher, or already adjusted by another tool, would otherwise be
+    // demoted to Normal when the boost ends — the same "lost original priority" bug the
+    // Task Sleep / Launch Boost path had.
+    private readonly Dictionary<int, ProcessPriorityClass> _gameOriginalPriority = new();
 
     // ── P/Invoke: Sleep prevention (kernel32) ─────────────────────────────────
     // SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED) — same call video
@@ -989,6 +995,11 @@ public sealed class GameBoosterService : IDisposable
             {
                 try
                 {
+                    // Capture the real original priority ONCE (first boost wins), so a
+                    // re-boost of an already-High process can't record High as the value
+                    // to restore later.
+                    if (!_gameOriginalPriority.ContainsKey(proc.Id))
+                        _gameOriginalPriority[proc.Id] = proc.PriorityClass;
                     proc.PriorityClass = ProcessPriorityClass.High;
                     int ioPriority = IoPriorityHigh;
                     NtSetInformationProcess(proc.Handle, ProcessIoPriority, ref ioPriority, sizeof(int));
@@ -1019,12 +1030,15 @@ public sealed class GameBoosterService : IDisposable
             {
                 try
                 {
-                    proc.PriorityClass = ProcessPriorityClass.Normal;
+                    // Restore the captured original priority; fall back to Normal only if we
+                    // never recorded one (e.g. the process started mid-boost).
+                    proc.PriorityClass = _gameOriginalPriority.TryGetValue(proc.Id, out var orig)
+                        ? orig : ProcessPriorityClass.Normal;
                     int ioPriority = IoPriorityNormal;
                     NtSetInformationProcess(proc.Handle, ProcessIoPriority, ref ioPriority, sizeof(int));
                 }
                 catch { }
-                finally { proc.Dispose(); }
+                finally { _gameOriginalPriority.Remove(proc.Id); proc.Dispose(); }
             }
         }
         catch { }
@@ -1749,26 +1763,32 @@ public sealed class GameBoosterService : IDisposable
     // ·· GPU / Multimedia System Profile ·······································
 
     /// <summary>
-    /// One-way repair for upgrade scenarios: older Systema builds wrote
-    /// SystemResponsiveness=0 as a "gamer tweak" which starves MMCSS priority boost
-    /// for DWM and breaks NVIDIA MPO / Independent Flip for the whole desktop. If the
-    /// current value is 0 we normalize it back to the Windows default (20). Safe to
-    /// call on every startup — no-op unless the value is actually 0.
+    /// Legacy startup check for SystemResponsiveness. Older Systema builds wrote
+    /// SystemResponsiveness=0 as a "gamer tweak" which, on older Windows builds, starved
+    /// MMCSS priority boost for DWM and broke NVIDIA MPO / Independent Flip.
+    /// <para>
+    /// This NO LONGER force-heals the value. Per the user (2026-06-11) newer Windows
+    /// builds no longer regress, and 0 is now an explicit, opt-in System Tweak
+    /// (System Tweaks → Maximum System Responsiveness). So when we find an existing 0 we
+    /// ADOPT it as the user's preference instead of overwriting it — honouring the
+    /// "reflect the current Windows value, never change it on launch" requirement. The
+    /// user restores the Windows default (20) any time from that toggle.
+    /// </para>
     /// </summary>
     private void RepairVSyncCriticalRegistryValues()
     {
         try
         {
-            using var profKey = Registry.LocalMachine.OpenSubKey(MmProfileKey, writable: true);
-            if (profKey != null)
+            using var profKey = Registry.LocalMachine.OpenSubKey(MmProfileKey, writable: false);
+            if (profKey == null) return;
+
+            var cur = profKey.GetValue("SystemResponsiveness");
+            if (cur is int i && i == 0 && !_settings.MaxResponsivenessEnabled)
             {
-                var cur = profKey.GetValue("SystemResponsiveness");
-                if (cur is int i && i == 0)
-                {
-                    profKey.SetValue("SystemResponsiveness", 20, RegistryValueKind.DWord);
-                    _log.Info("GameBoosterService",
-                        "VSync repair: SystemResponsiveness was 0 — normalized to 20 so MMCSS can boost DWM presentation threads");
-                }
+                // Adopt the existing 0 as the user's choice; stop auto-healing it.
+                _settings.MaxResponsivenessEnabled = true;
+                _log.Info("GameBoosterService",
+                    "SystemResponsiveness=0 detected — adopted as user preference; System Tweaks now owns this value (no longer auto-healed to 20)");
             }
         }
         catch (Exception ex)
@@ -1820,27 +1840,29 @@ public sealed class GameBoosterService : IDisposable
     {
         try
         {
-            // Upgrade-path repair: older Systema builds set SystemResponsiveness=0
-            // (which starves MMCSS priority boost for DWM — see ApplyMultimediaProfile).
-            // If we find a lingering 0, normalize to the Windows default of 20 so VSync
-            // recovers even if the user never calls Apply again. This is a one-way
-            // safety repair; current builds NEVER write SystemResponsiveness, so any
-            // 0 we see is either a stale value from an old install or a manual gamer
-            // tweak — either way, 0 breaks VSync and we clamp it.
-            try
+            // Legacy VSync heal: older builds set SystemResponsiveness=0 (which starved
+            // MMCSS priority boost for DWM on older Windows — see ApplyMultimediaProfile).
+            // We only normalize a stray 0 back to the Windows default (20) when the user
+            // has NOT opted into Maximum System Responsiveness via System Tweaks. If they
+            // have, their deliberate 0 is preserved — it's now a supported, user-owned
+            // tweak, not something to clamp on every game-boost exit.
+            if (!_settings.MaxResponsivenessEnabled)
             {
-                using var profKey = Registry.LocalMachine.OpenSubKey(MmProfileKey, writable: true);
-                if (profKey != null)
+                try
                 {
-                    var cur = profKey.GetValue("SystemResponsiveness");
-                    if (cur is int i && i == 0)
+                    using var profKey = Registry.LocalMachine.OpenSubKey(MmProfileKey, writable: true);
+                    if (profKey != null)
                     {
-                        profKey.SetValue("SystemResponsiveness", 20, RegistryValueKind.DWord);
-                        _log.Info("GameBoosterService", "SystemResponsiveness was 0 — normalized to 20 to restore MMCSS/DWM boost (VSync repair)");
+                        var cur = profKey.GetValue("SystemResponsiveness");
+                        if (cur is int i && i == 0)
+                        {
+                            profKey.SetValue("SystemResponsiveness", 20, RegistryValueKind.DWord);
+                            _log.Info("GameBoosterService", "SystemResponsiveness was 0 — normalized to 20 to restore MMCSS/DWM boost (VSync repair)");
+                        }
                     }
                 }
+                catch { /* best-effort — never fail restore over this */ }
             }
-            catch { /* best-effort — never fail restore over this */ }
             _savedSystemResponsiveness = null; // current code never sets this; kept for back-compat
 
             if (_savedMmPriority.HasValue)

@@ -57,6 +57,11 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
     // App.xaml.cs constructs it the same way.
     private readonly SystemStabilityService _stability = new();
 
+    // Settings store — used only to persist the Maximum System Responsiveness opt-in
+    // (SystemResponsiveness=0) so GameBooster's VSync self-heal honours the user's
+    // choice. Registry-backed, safe to instantiate alongside the shared instance.
+    private readonly SettingsService _settings = new();
+
     // ── Observable properties ─────────────────────────────────────────────────
 
     // ── Core Controls ────────────────────────────────────────────────────────
@@ -143,6 +148,12 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
     [ObservableProperty] private bool _foregroundBoostEnabled = true;
     [ObservableProperty] private bool _instantAppFocusEnabled = true;
     [ObservableProperty] private bool _instantStartupApps     = true;
+
+    // ── Maximum System Responsiveness (MMCSS SystemResponsiveness = 0) ──────────
+    // Engine-gated like the boosts above: on when the engine is on (default), forced
+    // off and grayed when the engine is off. Sets the registry value; takes effect on
+    // the next restart. See OnMaxResponsivenessEnabledChanged.
+    [ObservableProperty] private bool _maxResponsivenessEnabled = true;
 
     // ── Game Mode interaction ────────────────────────────────────────────────
     [ObservableProperty] private bool _suppressBriefWakesDuringGameMode = true;
@@ -231,18 +242,23 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
         // on subsequent launches without this explicit call.
         if (IsEnabled) _service.Start();
 
-        // Responsiveness boosts follow the engine: default on when the engine is on,
-        // off when it's off. Field defaults are true, so when the engine is on we
-        // apply enable explicitly (the setters skip OnChanged for an unchanged value);
-        // when off, setting false cascades to DisableX through the OnChanged handlers.
-        ForegroundBoostEnabled = IsEnabled;
-        InstantAppFocusEnabled = IsEnabled;
-        InstantStartupApps     = IsEnabled;
+        // Responsiveness boosts are persisted per-toggle (default on). When the engine is
+        // on, HONOUR the saved choice — a boost the user turned off stays off across
+        // restarts. When the engine is off, show them off/grayed WITHOUT overwriting the
+        // saved prefs. (LoadSettings already loaded the prefs into the properties.)
         if (IsEnabled)
         {
-            _ = _stability.EnableForegroundBoostAsync();
-            _ = _stability.EnableInstantAppFocusAsync();
-            _ = _stability.EnableInstantStartupAppsAsync();
+            if (ForegroundBoostEnabled)   _ = _stability.EnableForegroundBoostAsync();   else _ = _stability.DisableForegroundBoostAsync();
+            if (InstantAppFocusEnabled)   _ = _stability.EnableInstantAppFocusAsync();   else _ = _stability.DisableInstantAppFocusAsync();
+            if (InstantStartupApps)       _ = _stability.EnableInstantStartupAppsAsync(); else _ = _stability.DisableInstantStartupAppsAsync();
+            if (MaxResponsivenessEnabled) { _ = _stability.EnableMaxResponsivenessAsync();  _settings.MaxResponsivenessEnabled = true; }
+            else                          { _ = _stability.DisableMaxResponsivenessAsync(); _settings.MaxResponsivenessEnabled = false; }
+        }
+        else
+        {
+            _loadingSettings = true;
+            ForegroundBoostEnabled = InstantAppFocusEnabled = InstantStartupApps = MaxResponsivenessEnabled = false;
+            _loadingSettings = false;
         }
 
         // StartupDelayInMSec lives in Explorer's Serialize key, which Explorer itself
@@ -299,13 +315,34 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
         if (!value && LaunchBoostEnabled)
             LaunchBoostEnabled = false;   // cascades through OnLaunchBoostEnabledChanged → PushSettings
 
-        // Responsiveness boosts (Foreground Priority Boost + Instant App Focus +
-        // Instant Startup Apps) are part of the engine: on when the engine is on
-        // (default), off when it's off. Setting these cascades to the registry
-        // through their OnChanged handlers.
-        ForegroundBoostEnabled = value;
-        InstantAppFocusEnabled = value;
-        InstantStartupApps     = value;
+        // Responsiveness boosts (Foreground Priority Boost + Instant App Focus + Instant
+        // Startup Apps + Maximum System Responsiveness) are engine-gated.
+        if (value)
+        {
+            // Engine turned ON → RESET all boosts back on by design (the off→on cycle
+            // re-enables them). Their OnChanged handlers apply the tweak and persist.
+            ForegroundBoostEnabled   = true;
+            InstantAppFocusEnabled   = true;
+            InstantStartupApps       = true;
+            MaxResponsivenessEnabled = true;
+        }
+        else
+        {
+            // Engine turned OFF → gray the toggles off and revert the tweaks, but DON'T
+            // route through the OnChanged handlers (suppressed via _loadingSettings) so
+            // the grayed-off state isn't mistaken for the user's saved preference.
+            _loadingSettings = true;
+            ForegroundBoostEnabled   = false;
+            InstantAppFocusEnabled   = false;
+            InstantStartupApps       = false;
+            MaxResponsivenessEnabled = false;
+            _loadingSettings = false;
+            _ = _stability.DisableForegroundBoostAsync();
+            _ = _stability.DisableInstantAppFocusAsync();
+            _ = _stability.DisableInstantStartupAppsAsync();
+            _ = _stability.DisableMaxResponsivenessAsync();
+            _settings.MaxResponsivenessEnabled = false;
+        }
 
         OnPropertyChanged(nameof(CanUseLaunchBoost));
         OnPropertyChanged(nameof(CanUseResponsiveness));
@@ -346,11 +383,14 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
     public bool CanUseLaunchBoost => IsEnabled;
 
     // ── Responsiveness (Foreground Priority Boost + Instant App Focus) ─────────
+    // Each persists the user's choice via SaveSettings() so a boost turned off while the
+    // engine is on stays off across restarts (until the engine is cycled off→on).
     partial void OnForegroundBoostEnabledChanged(bool value)
     {
         if (_loadingSettings) return;
         if (value) _ = _stability.EnableForegroundBoostAsync();
         else       _ = _stability.DisableForegroundBoostAsync();
+        SaveSettings();
     }
 
     partial void OnInstantAppFocusEnabledChanged(bool value)
@@ -358,6 +398,7 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
         if (_loadingSettings) return;
         if (value) _ = _stability.EnableInstantAppFocusAsync();
         else       _ = _stability.DisableInstantAppFocusAsync();
+        SaveSettings();
     }
 
     partial void OnInstantStartupAppsChanged(bool value)
@@ -365,6 +406,20 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
         if (_loadingSettings) return;
         if (value) _ = _stability.EnableInstantStartupAppsAsync();
         else       _ = _stability.DisableInstantStartupAppsAsync();
+        SaveSettings();
+    }
+
+    // ── Maximum System Responsiveness (engine-gated) ───────────────────────────
+    // Part of the engine like the boosts above. Writes MMCSS SystemResponsiveness
+    // (0 = on, 20 = Windows default; takes effect on the next restart) and keeps the
+    // opt-in flag in sync so GameBooster's VSync self-heal honours the choice.
+    partial void OnMaxResponsivenessEnabledChanged(bool value)
+    {
+        if (_loadingSettings) return;
+        if (value) _ = _stability.EnableMaxResponsivenessAsync();
+        else       _ = _stability.DisableMaxResponsivenessAsync();
+        _settings.MaxResponsivenessEnabled = value;
+        SaveSettings();
     }
 
     /// <summary>The responsiveness boosts can only be used while the engine is on.
@@ -819,6 +874,13 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
             LaunchBoostIo                      = ReadBool(key, "LaunchBoostIo",                       true);
             LaunchBoostDisableEfficiency       = ReadBool(key, "LaunchBoostDisableEfficiency",       true);
             LaunchBoostGpu                     = ReadBool(key, "LaunchBoostGpu",                      false);
+            // Responsiveness boosts — persisted per-toggle preference (default ON). When
+            // the engine is on these are honoured (a user-turned-off boost stays off);
+            // an engine off→on cycle resets them all back on (see OnIsEnabledChanged).
+            ForegroundBoostEnabled             = ReadBool(key, "ForegroundBoostEnabled",             true);
+            InstantAppFocusEnabled             = ReadBool(key, "InstantAppFocusEnabled",             true);
+            InstantStartupApps                 = ReadBool(key, "InstantStartupApps",                 true);
+            MaxResponsivenessEnabled           = ReadBool(key, "MaxResponsivenessEnabled",           true);
         }
         catch (Exception ex)
         {
@@ -891,6 +953,11 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
             key.SetValue("LaunchBoostIo",                      LaunchBoostIo                      ? 1 : 0, RegistryValueKind.DWord);
             key.SetValue("LaunchBoostDisableEfficiency",       LaunchBoostDisableEfficiency       ? 1 : 0, RegistryValueKind.DWord);
             key.SetValue("LaunchBoostGpu",                     LaunchBoostGpu                     ? 1 : 0, RegistryValueKind.DWord);
+            // Responsiveness boosts — per-toggle preference (default on; reset on engine off→on).
+            key.SetValue("ForegroundBoostEnabled",   ForegroundBoostEnabled   ? 1 : 0, RegistryValueKind.DWord);
+            key.SetValue("InstantAppFocusEnabled",   InstantAppFocusEnabled   ? 1 : 0, RegistryValueKind.DWord);
+            key.SetValue("InstantStartupApps",       InstantStartupApps       ? 1 : 0, RegistryValueKind.DWord);
+            key.SetValue("MaxResponsivenessEnabled", MaxResponsivenessEnabled ? 1 : 0, RegistryValueKind.DWord);
             _log.Info("TaskSleepViewModel", $"SaveSettings completed successfully — NappedCpuCapPercent={NappedCpuCapPercent}");
         }
         catch (Exception ex)

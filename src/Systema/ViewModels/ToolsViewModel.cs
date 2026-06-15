@@ -596,8 +596,8 @@ public partial class ToolsViewModel : ObservableObject, IAutoRefreshable, IDispo
         finally { IsNtfsLastAccessLoading = false; }
     }
 
-    // Responsiveness callbacks (Foreground Priority Boost + Instant App Focus)
-    // moved to the Systema Engine tab — see TaskSleepViewModel.
+    // Responsiveness callbacks (Foreground Priority Boost + Instant App Focus +
+    // Maximum System Responsiveness) live on the Systema Engine tab — see TaskSleepViewModel.
 
     // ── Sleep → Hibernate (battery) callbacks ────────────────────────────────
 

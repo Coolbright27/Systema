@@ -70,6 +70,43 @@ public partial class App : Application
     // launches until the user reinstalls).
     private bool _startupCompleted;
 
+    /// <summary>
+    /// Installs the running exe into Program Files\Systema and launches the installed
+    /// copy. Backs the <c>--install</c> flag and the first-run install prompt. The app
+    /// already auto-elevates (manifest requireAdministrator), so this runs as admin.
+    /// </summary>
+    private void RunSelfInstall(bool silent)
+    {
+        string version = UpdateService.GetCurrentVersionString();
+        Log.Info("App", $"=== --install: self-installing v{version} (silent={silent}) ===");
+
+        string? installed = SelfInstallService.Install(silent, version);
+        if (installed != null)
+        {
+            try
+            {
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName        = installed,
+                    Arguments       = silent ? "--silent" : string.Empty,
+                    UseShellExecute = true,
+                });
+            }
+            catch (Exception ex) { Log.Warn("App", $"Post-install launch failed: {ex.Message}"); }
+
+            if (!silent)
+                MessageBox.Show(
+                    "Systema has been installed.\n\nYou'll find it in your Start Menu and on your Desktop.",
+                    "Systema", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        else if (!silent)
+        {
+            MessageBox.Show(
+                "Install failed. Please run Systema as administrator and try again.",
+                "Systema", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
     protected override void OnStartup(StartupEventArgs e)
     {
         // ── Wire all global exception handlers before anything else ──
@@ -95,6 +132,61 @@ public partial class App : Application
                 Log.Warn("App", "Cleanup skipped — not running as administrator");
             Shutdown(0);
             return;
+        }
+
+        // ── Self-install / uninstall (SAC-safe install path) ────────────────────
+        // Systema.exe can install itself, so machines with Smart App Control enforced
+        // — where the Inno installer's temp-extracted engine is blocked (Error 4551:
+        // "Application Control policy has blocked this file") — can still install. The
+        // Inno installer and the auto-updater are UNCHANGED, so existing users are
+        // unaffected: they're already at the canonical Program Files\Systema path and
+        // IsRunningInstalled() short-circuits all of this for them.
+        if (e.Args.Contains("--uninstall"))
+        {
+            Log.Info("App", "=== --uninstall: removing Systema ===");
+            SelfInstallService.Uninstall();
+            Shutdown(0);
+            return;
+        }
+        // Inno-style silent flags — the EXISTING (already-shipped) auto-updater
+        // downloads the release's .exe asset and runs it with
+        // "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-". If that asset happens to be
+        // this self-installer (instead of the Inno setup), honour those flags as a
+        // silent self-install. This makes auto-update from OLDER versions work no
+        // matter which .exe asset their updater picks.
+        bool innoSilent = e.Args.Any(a =>
+            a.Equals("/VERYSILENT", StringComparison.OrdinalIgnoreCase) ||
+            a.Equals("/SILENT",     StringComparison.OrdinalIgnoreCase));
+
+        if (e.Args.Contains("--install") || innoSilent)
+        {
+            RunSelfInstall(silent: innoSilent || e.Args.Contains("--silent"));
+            Shutdown(0);
+            return;
+        }
+        // Double-click of a not-yet-installed copy (e.g. the downloaded exe on the
+        // Desktop) → offer to install. Declining runs it portably. Skipped for the
+        // installed copy and for silent / tray / --portable starts.
+        if (!SelfInstallService.IsRunningInstalled()
+            && !e.Args.Contains("--portable")
+            && !e.Args.Contains("--silent")
+            && !e.Args.Contains("--autostart"))
+        {
+            var choice = MessageBox.Show(
+                "Install Systema on this PC?\n\n" +
+                "This copies Systema into Program Files and adds Start Menu and Desktop " +
+                "shortcuts so it works like a normally-installed app.\n\n" +
+                "Click No to just run Systema this once without installing.",
+                "Systema Setup", MessageBoxButton.YesNoCancel, MessageBoxImage.Question);
+
+            if (choice == MessageBoxResult.Cancel) { Shutdown(0); return; }
+            if (choice == MessageBoxResult.Yes)
+            {
+                RunSelfInstall(silent: false);
+                Shutdown(0);
+                return;
+            }
+            // No → fall through and run portably.
         }
 
         Log.Info("App", "Starting Systema...");
@@ -141,8 +233,17 @@ public partial class App : Application
         var previousCrash = CrashGuard.CheckPreviousCrash();
         if (previousCrash != null)
         {
-            Log.Warn("App", "Previous session crash detected — showing report");
-            CrashReportWindow.ShowPreviousCrash(previousCrash);
+            // The report is always archived to disk by CheckPreviousCrash(). Only pop the
+            // modal on a normal (visible) launch — a --silent / --autostart start (incl. the
+            // ghost-hang AUTO-RESTART) recovers quietly to the tray without stealing focus.
+            bool silentStart = e.Args.Contains("--silent") || e.Args.Contains("--autostart");
+            if (silentStart)
+                Log.Warn("App", "Previous session crash detected — report archived (silent start, dialog suppressed)");
+            else
+            {
+                Log.Warn("App", "Previous session crash detected — showing report");
+                CrashReportWindow.ShowPreviousCrash(previousCrash);
+            }
         }
 
         // ── Start CrashGuard watchdog ──

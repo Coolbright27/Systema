@@ -46,12 +46,34 @@ public static class CrashGuard
     private static readonly string SentinelPath  = Path.Combine(DataDir, "crash_sentinel.txt");
     private static readonly string CrashFilePath = Path.Combine(DataDir, "last_crash_report.txt");
 
+    private static readonly string AutoRestartStampPath = Path.Combine(DataDir, "last_autorestart.txt");
+
     private static Thread?  _watchdog;
     private static volatile bool _uiAlive;
     private static volatile bool _running;
     private static volatile string? _activeBreadcrumb;
     private static int _reportInProgress;   // prevents reentrant crash reports (0 = idle, 1 = in progress)
     private static readonly object _writeLock = new();
+
+    // UI-liveness timestamp (UTC ticks) — refreshed every UI tick by Heartbeat().
+    // Drives the "ghost process" auto-restart: a wedged UI thread shows no window
+    // and no working tray icon while the process stays alive at ~0% CPU. We detect
+    // the sustained heartbeat gap and relaunch a fresh instance.
+    private static long _lastUiBeatTicks;
+    private static long _processStartTicks;
+    private static int  _selfRestartDone;   // 0 = not yet, 1 = already restarted this process
+
+    // Lightweight, in-memory-only breadcrumb for the periodic UI-thread refresh. Unlike
+    // Mark(), it does NO disk I/O (so it's cheap enough to set every 1-5 s tick) and is
+    // SEPARATE from _activeBreadcrumb (so it never triggers a false "abnormal exit"
+    // report on a clean shutdown). Surfaced in the ghost-hang report so a wedge inside a
+    // view's RefreshAsync names the culprit view instead of just "(idle)".
+    private static volatile string? _lastRefreshContext;
+
+    // How long the UI may be unresponsive before we treat it as a hang and restart.
+    private const int UiHangRestartSeconds  = 40;   // UI beat at least once, then stopped
+    private const int StartupHangSeconds    = 90;   // UI never beat (startup wedged)
+    private const int RestartLoopGuardSeconds = 120; // don't auto-restart more than once / 2 min
 
     // ── Startup check ───────────────────────────────────────────────────────
 
@@ -148,6 +170,7 @@ public static class CrashGuard
     public static void Start()
     {
         _running = true;
+        _processStartTicks = DateTime.UtcNow.Ticks;
         EnsureDirectory();
 
         // Register ProcessExit — fires on normal exit AND some abnormal exits.
@@ -193,12 +216,35 @@ public static class CrashGuard
         try { if (File.Exists(SentinelPath)) File.Delete(SentinelPath); } catch { }
     }
 
+    /// <summary>
+    /// Records (in memory only, no disk I/O) which periodic UI refresh is running, so a
+    /// ghost-hang report can name the culprit view. Pass <c>null</c> when the refresh
+    /// finishes. Does NOT touch the on-disk sentinel or <see cref="_activeBreadcrumb"/>.
+    /// </summary>
+    public static void NoteRefresh(string? context) => _lastRefreshContext = context;
+
     // ── Heartbeat ───────────────────────────────────────────────────────────
 
     /// <summary>
     /// Call this from the UI thread's DispatcherTimer to prove it's alive.
     /// </summary>
-    public static void Heartbeat() => _uiAlive = true;
+    public static void Heartbeat()
+    {
+        _uiAlive = true;
+        Volatile.Write(ref _lastUiBeatTicks, DateTime.UtcNow.Ticks);
+    }
+
+    /// <summary>
+    /// True when the UI thread has beaten within the last <paramref name="withinSeconds"/>
+    /// seconds. Before the UI ever beats (startup), returns true so startup is never
+    /// mistaken for a hang. Read by HeartbeatService to gate its liveness-file touch.
+    /// </summary>
+    public static bool IsUiResponsive(int withinSeconds)
+    {
+        long beat = Volatile.Read(ref _lastUiBeatTicks);
+        if (beat == 0) return true; // UI not up yet — don't penalise startup
+        return (DateTime.UtcNow - new DateTime(beat, DateTimeKind.Utc)).TotalSeconds <= withinSeconds;
+    }
 
     // ── Watchdog loop (runs on its own thread) ──────────────────────────────
 
@@ -228,6 +274,15 @@ public static class CrashGuard
                             "or caused a StackOverflowException that .NET cannot catch.");
                     }
                 }
+
+                // ── Ghost-process auto-restart ──────────────────────────────────
+                // Detect a SUSTAINED UI hang regardless of whether a breadcrumb is
+                // active. A wedged UI thread leaves the process alive (~0% CPU) with no
+                // window and no working tray icon — and the scheduled-task watchdog
+                // never helps because the process is still "running". When that happens
+                // we relaunch a fresh instance (which reclaims via the now-stale
+                // heartbeat) so the app heals itself.
+                CheckForGhostHangAndRestart();
             }
             catch
             {
@@ -235,6 +290,85 @@ public static class CrashGuard
                 Thread.Sleep(1_000);
             }
         }
+    }
+
+    // ── Ghost-process auto-restart ──────────────────────────────────────────
+
+    private static void CheckForGhostHangAndRestart()
+    {
+        if (Volatile.Read(ref _selfRestartDone) != 0) return; // only restart once per process
+
+        long beat = Volatile.Read(ref _lastUiBeatTicks);
+        DateTime now = DateTime.UtcNow;
+
+        bool hung;
+        string kind;
+        if (beat != 0)
+        {
+            // UI beat at least once, then stopped → runtime hang.
+            hung = (now - new DateTime(beat, DateTimeKind.Utc)).TotalSeconds > UiHangRestartSeconds;
+            kind = "runtime UI hang";
+        }
+        else
+        {
+            // UI never beat → startup wedged (window never came up).
+            long start = _processStartTicks != 0 ? _processStartTicks : now.Ticks;
+            hung = (now - new DateTime(start, DateTimeKind.Utc)).TotalSeconds > StartupHangSeconds;
+            kind = "startup hang (UI never came up)";
+        }
+        if (!hung) return;
+
+        // Loop guard: if we auto-restarted very recently, don't do it again — a fresh
+        // instance that wedges the same way would otherwise spin in a respawn loop.
+        if (RecentlyAutoRestarted()) return;
+
+        if (Interlocked.CompareExchange(ref _selfRestartDone, 1, 0) != 0) return;
+
+        WriteCrashReport(
+            "GHOST PROCESS — AUTO-RESTART",
+            _activeBreadcrumb
+                ?? (_lastRefreshContext != null ? $"(idle) last UI refresh: {_lastRefreshContext}" : null)
+                ?? "(idle — no active operation)",
+            $"The UI thread was unresponsive for too long ({kind}). The window and tray icon\n" +
+            "were unreachable while the process stayed alive. Systema relaunched itself to recover.");
+        TrySelfRestart();
+    }
+
+    private static bool RecentlyAutoRestarted()
+    {
+        try
+        {
+            if (!File.Exists(AutoRestartStampPath)) return false;
+            if (long.TryParse(File.ReadAllText(AutoRestartStampPath).Trim(), out long ticks))
+                return (DateTime.UtcNow - new DateTime(ticks, DateTimeKind.Utc)).TotalSeconds < RestartLoopGuardSeconds;
+        }
+        catch { }
+        return false;
+    }
+
+    private static void TrySelfRestart()
+    {
+        try
+        {
+            EnsureDirectory();
+            File.WriteAllText(AutoRestartStampPath, DateTime.UtcNow.Ticks.ToString());
+
+            string exe = System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName ?? "";
+            if (string.IsNullOrEmpty(exe)) return;
+
+            // Clear the liveness file so the fresh instance immediately sees this one
+            // as stale and reclaims the single-instance mutex (killing this ghost).
+            try { Systema.Services.HeartbeatService.Clear(); } catch { }
+
+            // Relaunch tray-only (--silent) so the tray icon returns without stealing focus.
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName        = exe,
+                Arguments       = "--silent",
+                UseShellExecute = false,
+            });
+        }
+        catch { /* best-effort recovery */ }
     }
 
     // ── ProcessExit handler ─────────────────────────────────────────────────

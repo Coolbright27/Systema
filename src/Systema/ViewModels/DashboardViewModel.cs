@@ -461,6 +461,20 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
                         ? "Extended to 10s — fewer black-screen GPU resets"
                         : "Default (~2s) — click Optimize to extend (restart to apply)",
                 });
+
+                // 16. Maximum system responsiveness (MMCSS SystemResponsiveness = 0) —
+                //     hands the CPU quanta Windows reserves for background work to
+                //     multimedia/foreground apps for steadier frame pacing. Restart to apply.
+                bool maxRespOk = _stability.IsMaxResponsivenessEnabled();
+                if (!maxRespOk) pending++;
+                items.Add(new AutoPilotItem
+                {
+                    Label  = "Maximum system responsiveness",
+                    IsDone = maxRespOk,
+                    Detail = maxRespOk
+                        ? "SystemResponsiveness = 0 — more CPU for foreground/multimedia"
+                        : "Default (20) — click Optimize to maximize (restart to apply)",
+                });
             });
 
             // All registry/powercfg calls are done.
@@ -642,6 +656,16 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
             {
                 _graphics.SetTdrDelayExtended(true);
                 _log.Info("DashboardViewModel", "GPU recovery timeout extended (Auto-Pilot)");
+            }
+
+            // 16. Maximum system responsiveness — set MMCSS SystemResponsiveness to 0.
+            // Persist the opt-in so GameBooster's VSync self-heal keeps the 0 instead of
+            // reverting it to 20. Takes effect on the next restart.
+            if (!_stability.IsMaxResponsivenessEnabled())
+            {
+                await _stability.EnableMaxResponsivenessAsync();
+                _settings.MaxResponsivenessEnabled = true;
+                _log.Info("DashboardViewModel", "Maximum system responsiveness enabled (Auto-Pilot)");
             }
 
             _log.Info("DashboardViewModel", "Auto-Pilot completed successfully");
