@@ -34,7 +34,6 @@ public partial class ServicesViewModel : ObservableObject, IAutoRefreshable, IDi
     private readonly GameBoosterService      _gameBooster;
     private static readonly LoggerService    _log = LoggerService.Instance;
     private int _isRefreshing;
-    private volatile bool _hasLoadedFeaturesOnce;
 
     [ObservableProperty] private ObservableCollection<ServiceInfo> _services = new();
     [ObservableProperty] private ObservableCollection<OptionalFeatureInfo> _optionalFeatures = new();
@@ -69,6 +68,76 @@ public partial class ServicesViewModel : ObservableObject, IAutoRefreshable, IDi
 
     /// <summary>True when Auto-Pilot Mode is on — Data Collection button is grayed out.</summary>
     public bool IsAutoPilotActive => _settings.AutoPilotModeEnabled;
+
+    // ── Dashboard (Design C) ────────────────────────────────────────────────────
+    // Status tiles + recommended-cleanup summary. These are computed over the live
+    // Services / OptionalFeatures collections, which are replaced via Clear()+Add()
+    // (same instance) so they don't raise CollectionChanged for the counts — we
+    // re-raise them manually through RaiseDashboardStats() after every refresh.
+    public int TotalBackgroundTasks => Services.Count;
+    public int RecommendedOffCount  => Services.Count(s => s.IsRecommended && !s.IsOptimized);
+    public int AlreadyOptimizedCount => Services.Count(s => s.IsOptimized);
+
+    // Recommended cleanup = the privacy/telemetry bundle (DisablePrivacyAndRecommendedAsync):
+    // stop Microsoft telemetry services + tasks, and optimize the Recommended background
+    // services for this PC. It deliberately does NOT touch advertising ID or Delivery
+    // Optimization, so the copy here describes only what actually happens.
+    public int RecommendedServiceCount => Services.Count(s => s.IsRecommended);
+
+    public string RecommendedSummaryText =>
+        $"Stops Microsoft data collection (telemetry) and optimizes the {RecommendedServiceCount} background " +
+        $"service{(RecommendedServiceCount == 1 ? "" : "s")} recommended for your PC. Internet, Windows Update, " +
+        "security, and search are never touched.";
+
+    public string RecommendedStatusText =>
+        PrivacyCleanupApplied
+            ? "On — data collection is stopped and recommended services are optimized."
+            : "Off — telemetry and recommended services are running normally.";
+
+    public string PerformanceCategorySubtitle => $"{Services.Count} background service{(Services.Count == 1 ? "" : "s")}";
+    public string ExtrasCategorySubtitle =>
+        OptionalFeatures.Count > 0 ? $"{OptionalFeatures.Count} optional feature{(OptionalFeatures.Count == 1 ? "" : "s")}"
+                                   : (IsFeatureLoading ? "Loading…" : "Scanning Windows…");
+
+    private void RaiseDashboardStats()
+    {
+        OnPropertyChanged(nameof(TotalBackgroundTasks));
+        OnPropertyChanged(nameof(RecommendedOffCount));
+        OnPropertyChanged(nameof(AlreadyOptimizedCount));
+        OnPropertyChanged(nameof(RecommendedServiceCount));
+        OnPropertyChanged(nameof(RecommendedSummaryText));
+        OnPropertyChanged(nameof(RecommendedStatusText));
+        OnPropertyChanged(nameof(PerformanceCategorySubtitle));
+        OnPropertyChanged(nameof(ExtrasCategorySubtitle));
+    }
+
+    // ── Category drill-down ─────────────────────────────────────────────────────
+    // "" = dashboard overview; "privacy" / "performance" / "extras" = detail view.
+    [ObservableProperty] private string _selectedCategory = string.Empty;
+
+    public bool   IsOverview            => string.IsNullOrEmpty(SelectedCategory);
+    public bool   IsPrivacyCategory     => SelectedCategory == "privacy";
+    public bool   IsPerformanceCategory => SelectedCategory == "performance";
+    public bool   IsExtrasCategory      => SelectedCategory == "extras";
+    public string SelectedCategoryTitle => SelectedCategory switch
+    {
+        "privacy"     => "Privacy & data",
+        "performance" => "Performance",
+        "extras"      => "Windows extras",
+        _             => string.Empty
+    };
+
+    partial void OnSelectedCategoryChanged(string value)
+    {
+        OnPropertyChanged(nameof(IsOverview));
+        OnPropertyChanged(nameof(IsPrivacyCategory));
+        OnPropertyChanged(nameof(IsPerformanceCategory));
+        OnPropertyChanged(nameof(IsExtrasCategory));
+        OnPropertyChanged(nameof(SelectedCategoryTitle));
+    }
+
+    [RelayCommand] private void OpenCategory(string category) => SelectedCategory = category ?? string.Empty;
+    [RelayCommand] private void BackToOverview() => SelectedCategory = string.Empty;
 
     public ServicesViewModel(
         ServiceControlService   serviceControl,
@@ -172,14 +241,12 @@ public partial class ServicesViewModel : ObservableObject, IAutoRefreshable, IDi
                 && _serviceControl.AreAllRecommendedDisabled(_gameBooster.GamesInstalled);
             _suppressPrivacyToggleSideEffect = false;
 
-            // Load feature states only on first load (DISM is extremely slow — 30-60s)
-            if (!_hasLoadedFeaturesOnce)
-            {
-                _hasLoadedFeaturesOnce = true;
-                await LoadFeaturesAsync();
-            }
+            // Optional Windows features are no longer listed in-app — the "Windows extras"
+            // card opens Windows' own panel (optionalfeatures.exe) directly — so we skip the
+            // slow DISM enumeration entirely.
 
             StatusMessage = $"{list.Count} services loaded.";
+            RaiseDashboardStats();
         }
         catch (Exception ex)
         {
@@ -202,6 +269,7 @@ public partial class ServicesViewModel : ObservableObject, IAutoRefreshable, IDi
             {
                 OptionalFeatures.Clear();
                 foreach (var f in features) OptionalFeatures.Add(f);
+                RaiseDashboardStats();
             });
         }
         catch (Exception ex)
@@ -320,6 +388,29 @@ public partial class ServicesViewModel : ObservableObject, IAutoRefreshable, IDi
         finally { IsLoading = false; }
     }
 
+    /// <summary>Single on/off toggle for a service (redesigned tab): off = optimize, on = restore.
+    /// Reuses the safe Disable path (which auto-redirects BITS to Manual) and Enable path; both
+    /// refresh the list afterward, so the switch reflects the real result (and reverts on failure).</summary>
+    [RelayCommand]
+    private async Task ToggleServiceAsync(ServiceInfo svc)
+    {
+        if (svc.IsOptimized) await EnableServiceAsync(svc);
+        else                 await DisableServiceAsync(svc);
+    }
+
+    /// <summary>Single button for a Windows feature: removes it if present, restores it if removed.
+    /// The Disable path creates a restore point first.</summary>
+    [RelayCommand]
+    private async Task ToggleFeatureAsync(OptionalFeatureInfo f)
+    {
+        if (f.IsEnabled) await DisableOptionalFeatureAsync(f.Name);
+        else             await EnableOptionalFeatureAsync(f.Name);
+    }
+
+    /// <summary>Banner "Apply all" / "Undo" — drive the existing one-click privacy bundle.</summary>
+    [RelayCommand] private void ApplyAllRecommended() => PrivacyCleanupApplied = true;
+    [RelayCommand] private void UndoAllRecommended()  => PrivacyCleanupApplied = false;
+
     /// <summary>
     /// Toggle handler for the merged "Privacy &amp; Background Services" switch.
     /// Generated by CommunityToolkit MVVM from the <c>_privacyCleanupApplied</c>
@@ -335,9 +426,13 @@ public partial class ServicesViewModel : ObservableObject, IAutoRefreshable, IDi
     /// </summary>
     partial void OnPrivacyCleanupAppliedChanged(bool value)
     {
+        OnPropertyChanged(nameof(RecommendedStatusText));
         if (_suppressPrivacyToggleSideEffect) return;
         _ = RunPrivacyToggleAsync(value);
     }
+
+    partial void OnIsFeatureLoadingChanged(bool value)
+        => OnPropertyChanged(nameof(ExtrasCategorySubtitle));
 
     private async Task RunPrivacyToggleAsync(bool turnOn)
     {
@@ -460,6 +555,24 @@ public partial class ServicesViewModel : ObservableObject, IAutoRefreshable, IDi
         }
     }
 
+    /// <summary>Opens Windows' built-in "Turn Windows features on or off" panel
+    /// (optionalfeatures.exe) — the native place to add/remove the optional features
+    /// Systema lists here. Windows performs the change and handles any restart, so
+    /// Systema doesn't run DISM itself.</summary>
+    [RelayCommand]
+    private void OpenWindowsFeatures()
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo("optionalfeatures.exe") { UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            _log.Error("ServicesViewModel", "Failed to open Windows Features panel", ex);
+            StatusMessage = $"Couldn't open Windows Features: {ex.Message}";
+        }
+    }
+
     [RelayCommand]
     private async Task DisableOptionalFeatureAsync(string featureName)
     {
@@ -491,13 +604,13 @@ public partial class ServicesViewModel : ObservableObject, IAutoRefreshable, IDi
     private async Task EnableOptionalFeatureAsync(string featureName)
     {
         IsFeatureLoading = true;
-        StatusMessage = $"Restoring {featureName}... (this may take a few minutes)";
+        StatusMessage = $"Adding {featureName}... (this may take a few minutes)";
         try
         {
             StatusMessage = $"Running DISM to enable {featureName}...";
             var result = await _optFeatures.EnableFeatureAsync(featureName);
             StatusMessage = result.Success
-                ? $"Restored: {featureName}. {(result.Message.Contains("3010") || result.Message.Contains("reboot") ? "Restart required." : "")}"
+                ? $"Added: {featureName}. {(result.Message.Contains("3010") || result.Message.Contains("reboot") ? "Restart required." : "")}"
                 : result.Message;
 
             // Refresh the features list (don't reset the flag — just reload directly)

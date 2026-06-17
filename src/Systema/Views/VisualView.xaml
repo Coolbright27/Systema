@@ -6,404 +6,321 @@
 
     <UserControl.Resources>
         <conv:BoolToVisibilityConverter x:Key="BoolToVis"/>
+
+        <!-- Dims a section while Auto-Pilot manages it. -->
+        <Style x:Key="ManagedSection" TargetType="StackPanel">
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsAutoPilotActive}" Value="True">
+                    <Setter Property="IsEnabled" Value="False"/>
+                    <Setter Property="Opacity"   Value="0.4"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- Selectable "visual style" card. Selected state = accent border (driven per-card
+             by an ActivePreset DataTrigger). -->
+        <Style x:Key="StyleCard" TargetType="Button">
+            <Setter Property="Cursor"                     Value="Hand"/>
+            <Setter Property="BorderBrush"                Value="{StaticResource BorderBrush}"/>
+            <Setter Property="BorderThickness"            Value="1"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="VerticalContentAlignment"   Value="Top"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="bd" Background="{StaticResource BgCardBrush}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="12" Padding="16">
+                            <ContentPresenter/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="bd" Property="BorderBrush" Value="{StaticResource AccentBlueBrush}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- One segment of the Off · Balanced · Max battery control. Active state applied
+             per-button via an ActiveBatteryMode DataTrigger. -->
+        <Style x:Key="BatterySegment" TargetType="Button">
+            <Setter Property="Cursor"     Value="Hand"/>
+            <Setter Property="FontSize"   Value="13"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Padding"    Value="16,7"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="bd" Background="{TemplateBinding Background}"
+                                CornerRadius="8" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="bd" Property="Background" Value="#22FFFFFF"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </UserControl.Resources>
 
     <ScrollViewer VerticalScrollBarVisibility="Auto">
-        <Grid Margin="32,28,32,28">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto"/>  <!-- 0: Header -->
-                <RowDefinition Height="20"/>    <!-- 1: spacer -->
-                <RowDefinition Height="Auto"/>  <!-- 2: Power Plan card -->
-                <RowDefinition Height="Auto"/>  <!-- 3: Battery card (collapses if no battery) -->
-                <RowDefinition Height="Auto"/>  <!-- 4: Dell Thermal card (collapses if unsupported) -->
-                <RowDefinition Height="20"/>    <!-- 5: spacer -->
-                <RowDefinition Height="Auto"/>  <!-- 6: Animation Presets card -->
-                <RowDefinition Height="20"/>    <!-- 7: spacer -->
-                <RowDefinition Height="Auto"/>  <!-- 8: Individual Controls card -->
-                <RowDefinition Height="Auto"/>  <!-- 9: Status bar -->
-            </Grid.RowDefinitions>
+        <StackPanel Margin="32,28,32,28">
 
             <!-- Header -->
-            <StackPanel Grid.Row="0">
-                <TextBlock Text="Visual &amp; Power" Style="{StaticResource HeadingLarge}"/>
-                <TextBlock Text="Adjust visual animations and your PC's power settings."
-                           Style="{StaticResource CaptionText}" Margin="0,4,0,0"/>
-            </StackPanel>
+            <TextBlock Text="Visual &amp; Power" Style="{StaticResource HeadingLarge}"/>
+            <TextBlock Text="Pick how snappy Windows feels, and how it uses power."
+                       Style="{StaticResource CaptionText}" Margin="0,4,0,20"/>
 
-            <!-- ══════════════════════════════════════════════════════ Power Plan Card -->
-            <Border Grid.Row="2" Style="{StaticResource Card}">
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
-                    </Grid.ColumnDefinitions>
+            <!-- ══════════════════════════════ Visual style picker ══════════════════════════════ -->
+            <TextBlock Text="Visual style" Style="{StaticResource SectionLabel}" Margin="2,0,0,10"/>
+            <Grid Margin="0,0,0,24">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="12"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="12"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
 
-                    <!-- Left: title + description + status -->
-                    <StackPanel Grid.Column="0" Margin="0,0,24,0">
-                        <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-                            <TextBlock Text="Performance Mode" Style="{StaticResource HeadingMedium}"/>
-                        </StackPanel>
-                        <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,0,0,10">
-                            Keeps your CPU at full speed — no throttling during gaming or heavy work.
-                            Automatically restores every time you plug back in after running on battery.
-                        </TextBlock>
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="Active plan: " Style="{StaticResource CaptionText}"/>
-                            <TextBlock Text="{Binding ActivePowerPlan}" Style="{StaticResource CaptionText}"
-                                       Foreground="{StaticResource AccentBlueBrush}" FontWeight="SemiBold"/>
-                        </StackPanel>
-                    </StackPanel>
-
-                    <!-- Right: single toggle -->
-                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                        <TextBlock VerticalAlignment="Center" Margin="0,0,10,0" FontSize="13">
-                            <TextBlock.Style>
-                                <Style TargetType="TextBlock">
-                                    <Setter Property="Text"       Value="Off"/>
-                                    <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding PerformanceModeEnabled}" Value="True">
-                                            <Setter Property="Text"       Value="On"/>
-                                            <Setter Property="Foreground" Value="{StaticResource AccentGreenBrush}"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </TextBlock.Style>
-                        </TextBlock>
-                        <CheckBox IsChecked="{Binding PerformanceModeEnabled, Mode=TwoWay}"
-                                  VerticalAlignment="Center"
-                                  ToolTipService.ShowOnDisabled="True">
-                            <CheckBox.Style>
-                                <Style TargetType="CheckBox" BasedOn="{StaticResource ToggleSwitch}">
-                                    <Setter Property="ToolTip" Value="When on: High Performance plan stays active and restores automatically after charging"/>
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding IsAutoPilotActive}" Value="True">
-                                            <Setter Property="IsEnabled" Value="False"/>
-                                            <Setter Property="Opacity"   Value="0.4"/>
-                                            <Setter Property="ToolTip"   Value="Controlled by Auto-Pilot — turn off Auto-Pilot Mode to change"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </CheckBox.Style>
-                        </CheckBox>
-                    </StackPanel>
-                </Grid>
-            </Border>
-
-            <!-- ══════════════════════════════════════════════════ Battery Mode Card
-                 Hidden on desktops — collapses cleanly when no battery is detected. -->
-            <StackPanel Grid.Row="3"
-                        Visibility="{Binding HasBattery, Converter={StaticResource BoolToVis}}">
-                <Border Height="16"/>
-                <Border Style="{StaticResource Card}">
+                <!-- Maximum speed = "none" preset -->
+                <Button Grid.Column="0" Command="{Binding ApplyNoAnimationsCommand}"
+                        ToolTip="Turn off ALL animations for maximum speed">
+                    <Button.Style>
+                        <Style TargetType="Button" BasedOn="{StaticResource StyleCard}">
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding ActivePreset}" Value="none">
+                                    <Setter Property="BorderBrush"     Value="{StaticResource AccentBlueBrush}"/>
+                                    <Setter Property="BorderThickness" Value="2"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Button.Style>
                     <StackPanel>
-
-                        <!-- Header -->
-                        <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-                            <TextBlock Text="Battery Mode" Style="{StaticResource HeadingMedium}"/>
-                            <Border BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="3"
-                                    Padding="6,2" Margin="10,0,0,0" VerticalAlignment="Center">
-                                <TextBlock Text="LAPTOP" FontSize="9" FontWeight="SemiBold" Foreground="{StaticResource TextSecondaryBrush}"/>
-                            </Border>
-                        </StackPanel>
-                        <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,0,0,16">
-                            Limits CPU speed on battery only — plugged-in performance is always unchanged.
-                        </TextBlock>
-
-                        <!-- ── Mode rows — tap a row to select ── -->
-
-                        <!-- Off -->
-                        <Button Command="{Binding SetBatteryModeCommand}" CommandParameter=""
-                                Padding="0,10,0,10" BorderThickness="0"
-                                HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
-                                ToolTipService.ShowOnDisabled="True">
-                            <Button.Style>
-                                <Style TargetType="Button" BasedOn="{StaticResource GhostButton}">
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding IsAutoPilotActive}" Value="True">
-                                            <Setter Property="IsEnabled" Value="False"/>
-                                            <Setter Property="Opacity"   Value="0.4"/>
-                                            <Setter Property="ToolTip"   Value="Controlled by Auto-Pilot — turn off Auto-Pilot Mode to change"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </Button.Style>
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="20"/>
-                                </Grid.ColumnDefinitions>
-                                <StackPanel Grid.Column="0" Margin="0,0,16,0">
-                                    <TextBlock Text="Off" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                                    <TextBlock Text="No limits — full performance all the time."
-                                               Style="{StaticResource CaptionText}" Margin="0,2,0,0"/>
-                                </StackPanel>
-                                <!-- Radio dot -->
-                                <Border Grid.Column="1" Width="18" Height="18" CornerRadius="9"
-                                        BorderThickness="2" VerticalAlignment="Center" HorizontalAlignment="Center">
-                                    <Border.Style>
-                                        <Style TargetType="Border">
-                                            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
-                                            <Setter Property="Background"  Value="Transparent"/>
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding ActiveBatteryMode}" Value="">
-                                                    <Setter Property="BorderBrush" Value="{StaticResource AccentBlueBrush}"/>
-                                                    <Setter Property="Background"  Value="{StaticResource AccentBlueBrush}"/>
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </Border.Style>
-                                    <Ellipse Width="8" Height="8" Fill="white" HorizontalAlignment="Center" VerticalAlignment="Center">
-                                        <Ellipse.Style>
-                                            <Style TargetType="Ellipse">
-                                                <Setter Property="Visibility" Value="Collapsed"/>
-                                                <Style.Triggers>
-                                                    <DataTrigger Binding="{Binding ActiveBatteryMode}" Value="">
-                                                        <Setter Property="Visibility" Value="Visible"/>
-                                                    </DataTrigger>
-                                                </Style.Triggers>
-                                            </Style>
-                                        </Ellipse.Style>
-                                    </Ellipse>
-                                </Border>
-                            </Grid>
-                        </Button>
-
-                        <Border Height="1" Background="{StaticResource BorderBrush}"/>
-
-                        <!-- Balanced No Turbo -->
-                        <Button Command="{Binding SetBatteryModeCommand}" CommandParameter="balanced"
-                                Padding="0,10,0,10" BorderThickness="0"
-                                HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
-                                ToolTipService.ShowOnDisabled="True">
-                            <Button.Style>
-                                <Style TargetType="Button" BasedOn="{StaticResource GhostButton}">
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding IsAutoPilotActive}" Value="True">
-                                            <Setter Property="IsEnabled" Value="False"/>
-                                            <Setter Property="Opacity"   Value="0.4"/>
-                                            <Setter Property="ToolTip"   Value="Controlled by Auto-Pilot — turn off Auto-Pilot Mode to change"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </Button.Style>
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="20"/>
-                                </Grid.ColumnDefinitions>
-                                <StackPanel Grid.Column="0" Margin="0,0,16,0">
-                                    <TextBlock Text="Balanced No Turbo" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                                    <TextBlock Text="Stops turbo-boost on battery. Plugged-in performance unchanged."
-                                               Style="{StaticResource CaptionText}" Margin="0,2,0,0"/>
-                                </StackPanel>
-                                <Border Grid.Column="1" Width="18" Height="18" CornerRadius="9"
-                                        BorderThickness="2" VerticalAlignment="Center" HorizontalAlignment="Center">
-                                    <Border.Style>
-                                        <Style TargetType="Border">
-                                            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
-                                            <Setter Property="Background"  Value="Transparent"/>
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding ActiveBatteryMode}" Value="balanced">
-                                                    <Setter Property="BorderBrush" Value="{StaticResource AccentBlueBrush}"/>
-                                                    <Setter Property="Background"  Value="{StaticResource AccentBlueBrush}"/>
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </Border.Style>
-                                    <Ellipse Width="8" Height="8" Fill="white" HorizontalAlignment="Center" VerticalAlignment="Center">
-                                        <Ellipse.Style>
-                                            <Style TargetType="Ellipse">
-                                                <Setter Property="Visibility" Value="Collapsed"/>
-                                                <Style.Triggers>
-                                                    <DataTrigger Binding="{Binding ActiveBatteryMode}" Value="balanced">
-                                                        <Setter Property="Visibility" Value="Visible"/>
-                                                    </DataTrigger>
-                                                </Style.Triggers>
-                                            </Style>
-                                        </Ellipse.Style>
-                                    </Ellipse>
-                                </Border>
-                            </Grid>
-                        </Button>
-
-                        <Border Height="1" Background="{StaticResource BorderBrush}"/>
-
-                        <!-- Max Life -->
-                        <Button Command="{Binding SetBatteryModeCommand}" CommandParameter="max"
-                                Padding="0,10,0,10" BorderThickness="0"
-                                HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
-                                ToolTipService.ShowOnDisabled="True">
-                            <Button.Style>
-                                <Style TargetType="Button" BasedOn="{StaticResource GhostButton}">
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding IsAutoPilotActive}" Value="True">
-                                            <Setter Property="IsEnabled" Value="False"/>
-                                            <Setter Property="Opacity"   Value="0.4"/>
-                                            <Setter Property="ToolTip"   Value="Controlled by Auto-Pilot — turn off Auto-Pilot Mode to change"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </Button.Style>
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="20"/>
-                                </Grid.ColumnDefinitions>
-                                <StackPanel Grid.Column="0" Margin="0,0,16,0">
-                                    <TextBlock Text="Max Life" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                                    <TextBlock Text="Caps CPU to 80% on battery for maximum runtime. Plugged-in performance unchanged."
-                                               Style="{StaticResource CaptionText}" Margin="0,2,0,0"/>
-                                </StackPanel>
-                                <Border Grid.Column="1" Width="18" Height="18" CornerRadius="9"
-                                        BorderThickness="2" VerticalAlignment="Center" HorizontalAlignment="Center">
-                                    <Border.Style>
-                                        <Style TargetType="Border">
-                                            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
-                                            <Setter Property="Background"  Value="Transparent"/>
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding ActiveBatteryMode}" Value="max">
-                                                    <Setter Property="BorderBrush" Value="{StaticResource AccentBlueBrush}"/>
-                                                    <Setter Property="Background"  Value="{StaticResource AccentBlueBrush}"/>
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </Border.Style>
-                                    <Ellipse Width="8" Height="8" Fill="white" HorizontalAlignment="Center" VerticalAlignment="Center">
-                                        <Ellipse.Style>
-                                            <Style TargetType="Ellipse">
-                                                <Setter Property="Visibility" Value="Collapsed"/>
-                                                <Style.Triggers>
-                                                    <DataTrigger Binding="{Binding ActiveBatteryMode}" Value="max">
-                                                        <Setter Property="Visibility" Value="Visible"/>
-                                                    </DataTrigger>
-                                                </Style.Triggers>
-                                            </Style>
-                                        </Ellipse.Style>
-                                    </Ellipse>
-                                </Border>
-                            </Grid>
-                        </Button>
-
-                        <!-- AC-power notice — only shown when a mode is selected but the cap is dormant -->
-                        <StackPanel Visibility="{Binding IsOnAcWithBatteryPlanActive, Converter={StaticResource BoolToVis}}">
-                            <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,4,0,0"/>
-                            <Border Background="#1AC8A654" BorderBrush="{StaticResource AccentYellowBrush}"
-                                    BorderThickness="1" CornerRadius="6" Padding="12,8" Margin="0,12,0,0">
-                                <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="&#x26A1;" FontSize="14" Margin="0,0,8,0"
-                                               FontFamily="Segoe UI, Segoe UI Symbol"
-                                               VerticalAlignment="Center"/>
-                                    <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap"
-                                               Foreground="{StaticResource AccentYellowBrush}">
-                                        <Run FontWeight="SemiBold" Text="On AC — "/>
-                                        <Run Text="the CPU cap is configured but dormant. It activates automatically the next time you unplug."/>
-                                    </TextBlock>
-                                </StackPanel>
-                            </Border>
-                        </StackPanel>
-
+                        <TextBlock Text="Maximum speed" Style="{StaticResource HeadingSmall}"/>
+                        <TextBlock Text="All animations off." Style="{StaticResource CaptionText}"
+                                   TextWrapping="Wrap" Margin="0,3,0,0"/>
                     </StackPanel>
-                </Border>
-            </StackPanel>
+                </Button>
 
-            <!-- Dell Thermal Profile moved to the Dell sidebar section (DellView). -->
+                <!-- Balanced = "speed" preset -->
+                <Button Grid.Column="2" Command="{Binding ApplyOptimizeForSpeedCommand}"
+                        ToolTip="Drop heavy window/menu animations but keep controls, font smoothing, and drag content">
+                    <Button.Style>
+                        <Style TargetType="Button" BasedOn="{StaticResource StyleCard}">
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding ActivePreset}" Value="speed">
+                                    <Setter Property="BorderBrush"     Value="{StaticResource AccentBlueBrush}"/>
+                                    <Setter Property="BorderThickness" Value="2"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Button.Style>
+                    <StackPanel>
+                        <TextBlock Text="Balanced" Style="{StaticResource HeadingSmall}"/>
+                        <TextBlock Text="Snappy — keeps the key effects." Style="{StaticResource CaptionText}"
+                                   TextWrapping="Wrap" Margin="0,3,0,0"/>
+                    </StackPanel>
+                </Button>
 
-            <!-- ══════════════════════════════════════════════════ Animation Presets Card -->
-            <Border Grid.Row="6" Style="{StaticResource Card}">
+                <!-- Full Windows look = "default" preset -->
+                <Button Grid.Column="4" Command="{Binding ApplyWindowsDefaultCommand}"
+                        ToolTip="Restore all Windows animation defaults">
+                    <Button.Style>
+                        <Style TargetType="Button" BasedOn="{StaticResource StyleCard}">
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding ActivePreset}" Value="default">
+                                    <Setter Property="BorderBrush"     Value="{StaticResource AccentBlueBrush}"/>
+                                    <Setter Property="BorderThickness" Value="2"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Button.Style>
+                    <StackPanel>
+                        <TextBlock Text="Full Windows look" Style="{StaticResource HeadingSmall}"/>
+                        <TextBlock Text="All default animations." Style="{StaticResource CaptionText}"
+                                   TextWrapping="Wrap" Margin="0,3,0,0"/>
+                    </StackPanel>
+                </Button>
+            </Grid>
+
+            <!-- ══════════════════════════════ Performance Mode ══════════════════════════════ -->
+            <Border Style="{StaticResource Card}" Margin="0,0,0,12">
                 <StackPanel>
-                    <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
-                        <TextBlock Text="Animation Presets" Style="{StaticResource HeadingMedium}"/>
-                        <Border BorderBrush="{StaticResource AccentGreenBrush}" BorderThickness="1" CornerRadius="3"
-                                Padding="6,2" Margin="10,0,0,0" VerticalAlignment="Center">
-                            <TextBlock Text="SAFE" FontSize="9" FontWeight="SemiBold" Foreground="{StaticResource AccentGreenBrush}"/>
-                        </Border>
-                    </StackPanel>
-                    <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,0,0,16">
-                        One-click animation presets. The active preset is highlighted blue. Changes apply immediately — no restart needed.
-                        Not sure which to pick? Start with "Optimize For Speed" for a good balance between looks and performance.
-                    </TextBlock>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" Margin="0,0,24,0">
+                            <TextBlock Text="Performance mode" Style="{StaticResource HeadingMedium}" Margin="0,0,0,4"/>
+                            <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap">
+                                Keeps your CPU at full speed — no throttling during gaming or heavy work.
+                                Automatically restores every time you plug back in after running on battery.
+                            </TextBlock>
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock VerticalAlignment="Center" Margin="0,0,10,0" FontSize="13">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Text"       Value="Off"/>
+                                        <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding PerformanceModeEnabled}" Value="True">
+                                                <Setter Property="Text"       Value="On"/>
+                                                <Setter Property="Foreground" Value="{StaticResource AccentGreenBrush}"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                            <CheckBox IsChecked="{Binding PerformanceModeEnabled, Mode=TwoWay}"
+                                      VerticalAlignment="Center" ToolTipService.ShowOnDisabled="True">
+                                <CheckBox.Style>
+                                    <Style TargetType="CheckBox" BasedOn="{StaticResource ToggleSwitch}">
+                                        <Setter Property="ToolTip" Value="When on: High Performance plan stays active and restores automatically after charging"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsAutoPilotActive}" Value="True">
+                                                <Setter Property="IsEnabled" Value="False"/>
+                                                <Setter Property="Opacity"   Value="0.4"/>
+                                                <Setter Property="ToolTip"   Value="Controlled by Auto-Pilot — turn off Auto-Pilot Mode to change"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </CheckBox.Style>
+                            </CheckBox>
+                        </StackPanel>
+                    </Grid>
+                    <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,14,0,10"/>
                     <StackPanel Orientation="Horizontal">
-                        <!-- No Animations preset -->
-                        <Button Padding="16,8" Margin="0,0,10,0"
-                                Command="{Binding ApplyNoAnimationsCommand}"
-                                ToolTip="Disable ALL animations for absolute maximum speed">
-                            <Button.Style>
-                                <Style TargetType="Button" BasedOn="{StaticResource GhostButton}">
-                                    <Setter Property="Content" Value="No Animations"/>
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding ActivePreset}" Value="none">
-                                            <Setter Property="Background" Value="{StaticResource AccentBlueBrush}"/>
-                                            <Setter Property="Foreground" Value="#0D0F14"/>
-                                            <Setter Property="BorderBrush" Value="{StaticResource AccentBlueBrush}"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </Button.Style>
-                        </Button>
-                        <!-- Optimize For Speed preset -->
-                        <Button Padding="16,8" Margin="0,0,10,0"
-                                Command="{Binding ApplyOptimizeForSpeedCommand}"
-                                ToolTip="Disable window/menu animations but keep Animate Controls, font smoothing, and drag content">
-                            <Button.Style>
-                                <Style TargetType="Button" BasedOn="{StaticResource GhostButton}">
-                                    <Setter Property="Content" Value="Optimize For Speed"/>
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding ActivePreset}" Value="speed">
-                                            <Setter Property="Background" Value="{StaticResource AccentBlueBrush}"/>
-                                            <Setter Property="Foreground" Value="#0D0F14"/>
-                                            <Setter Property="BorderBrush" Value="{StaticResource AccentBlueBrush}"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </Button.Style>
-                        </Button>
-                        <!-- Windows Default preset -->
-                        <Button Padding="16,8"
-                                Command="{Binding ApplyWindowsDefaultCommand}"
-                                ToolTip="Restore all Windows animation defaults">
-                            <Button.Style>
-                                <Style TargetType="Button" BasedOn="{StaticResource GhostButton}">
-                                    <Setter Property="Content" Value="Windows Default"/>
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding ActivePreset}" Value="default">
-                                            <Setter Property="Background" Value="{StaticResource AccentBlueBrush}"/>
-                                            <Setter Property="Foreground" Value="#0D0F14"/>
-                                            <Setter Property="BorderBrush" Value="{StaticResource AccentBlueBrush}"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </Button.Style>
-                        </Button>
+                        <TextBlock Text="Active plan: " Style="{StaticResource CaptionText}"/>
+                        <TextBlock Text="{Binding ActivePowerPlan}" Style="{StaticResource CaptionText}"
+                                   Foreground="{StaticResource AccentBlueBrush}" FontWeight="SemiBold"/>
                     </StackPanel>
                 </StackPanel>
             </Border>
 
-            <!-- ══════════════════════════════════════════════ Individual Animation Controls -->
-            <Border Grid.Row="8" Style="{StaticResource Card}">
+            <!-- ══════════════════════════════ Battery Mode (laptops only) ══════════════════════════════
+                 Collapses cleanly on desktops with no battery. -->
+            <Border Style="{StaticResource Card}" Margin="0,0,0,12"
+                    Visibility="{Binding HasBattery, Converter={StaticResource BoolToVis}}">
+                <StackPanel Style="{StaticResource ManagedSection}">
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                        <TextBlock Text="Battery mode" Style="{StaticResource HeadingMedium}"/>
+                        <Border BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="4"
+                                Padding="6,2" Margin="10,0,0,0" VerticalAlignment="Center">
+                            <TextBlock Text="Laptop" FontSize="9" FontWeight="SemiBold" Foreground="{StaticResource TextSecondaryBrush}"/>
+                        </Border>
+                    </StackPanel>
+                    <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,0,0,14">
+                        Limits CPU speed on battery only — plugged-in performance is always unchanged.
+                    </TextBlock>
+
+                    <!-- Off · Balanced no turbo · Max life segmented control -->
+                    <Border CornerRadius="10" Padding="3" HorizontalAlignment="Left"
+                            Background="{StaticResource BgSurfaceBrush}"
+                            BorderBrush="{StaticResource BorderBrush}" BorderThickness="1">
+                        <StackPanel Orientation="Horizontal">
+                            <Button Command="{Binding SetBatteryModeCommand}" CommandParameter="" Content="Off">
+                                <Button.Style>
+                                    <Style TargetType="Button" BasedOn="{StaticResource BatterySegment}">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding ActiveBatteryMode}" Value="">
+                                                <Setter Property="Background" Value="#33378ADD"/>
+                                                <Setter Property="Foreground" Value="{StaticResource AccentBlueBrush}"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Button.Style>
+                            </Button>
+                            <Button Command="{Binding SetBatteryModeCommand}" CommandParameter="balanced" Content="Balanced no turbo">
+                                <Button.Style>
+                                    <Style TargetType="Button" BasedOn="{StaticResource BatterySegment}">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding ActiveBatteryMode}" Value="balanced">
+                                                <Setter Property="Background" Value="#33378ADD"/>
+                                                <Setter Property="Foreground" Value="{StaticResource AccentBlueBrush}"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Button.Style>
+                            </Button>
+                            <Button Command="{Binding SetBatteryModeCommand}" CommandParameter="max" Content="Max life">
+                                <Button.Style>
+                                    <Style TargetType="Button" BasedOn="{StaticResource BatterySegment}">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding ActiveBatteryMode}" Value="max">
+                                                <Setter Property="Background" Value="#33378ADD"/>
+                                                <Setter Property="Foreground" Value="{StaticResource AccentBlueBrush}"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Button.Style>
+                            </Button>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Active-mode descriptions -->
+                    <TextBlock TextWrapping="Wrap" Margin="2,12,0,0">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionText}">
+                                <Setter Property="Text" Value="No limits — full performance all the time."/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding ActiveBatteryMode}" Value="balanced">
+                                        <Setter Property="Text" Value="Stops turbo-boost while on battery. Plugged-in performance unchanged."/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding ActiveBatteryMode}" Value="max">
+                                        <Setter Property="Text" Value="Caps CPU to 80% on battery for maximum runtime. Plugged-in performance unchanged."/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+
+                    <!-- AC-power notice — only when a mode is set but the cap is dormant -->
+                    <Border Background="#1AC8A654" BorderBrush="{StaticResource AccentYellowBrush}"
+                            BorderThickness="1" CornerRadius="6" Padding="12,8" Margin="0,12,0,0"
+                            Visibility="{Binding IsOnAcWithBatteryPlanActive, Converter={StaticResource BoolToVis}}">
+                        <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap"
+                                   Foreground="{StaticResource AccentYellowBrush}">
+                            <Run FontWeight="SemiBold" Text="On AC — "/>
+                            <Run Text="the CPU cap is set but dormant. It activates automatically the next time you unplug."/>
+                        </TextBlock>
+                    </Border>
+                </StackPanel>
+            </Border>
+
+            <!-- ══════════════════════════════ Customize individual effects ══════════════════════════════ -->
+            <Border Style="{StaticResource Card}">
                 <StackPanel>
-                    <!-- Clickable header / expander -->
                     <Button Command="{Binding ToggleIndividualControlsCommand}"
-                            Style="{StaticResource ExpanderButton}" Margin="0,0,0,0">
+                            Style="{StaticResource ExpanderButton}">
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
                             <StackPanel Grid.Column="0">
-                                <TextBlock Text="Individual Animation Controls" Style="{StaticResource HeadingMedium}"/>
+                                <TextBlock Text="Customize individual effects" Style="{StaticResource HeadingMedium}"/>
                                 <TextBlock Style="{StaticResource CaptionText}" Margin="0,4,0,0">
-                                    Fine-tune individual Windows animation effects. Use presets above for the easiest experience.
+                                    Fine-tune each of the 15 Windows animation effects. The style picker above covers most people.
                                 </TextBlock>
                             </StackPanel>
                             <TextBlock Grid.Column="1" VerticalAlignment="Center" Margin="12,0,0,0"
                                        Foreground="{StaticResource TextSecondaryBrush}" FontSize="13">
                                 <TextBlock.Style>
                                     <Style TargetType="TextBlock">
-                                        <Setter Property="Text" Value="▼"/>
+                                        <Setter Property="Text" Value="&#x25BC;"/>
                                         <Style.Triggers>
                                             <DataTrigger Binding="{Binding ShowIndividualControls}" Value="True">
-                                                <Setter Property="Text" Value="▲"/>
+                                                <Setter Property="Text" Value="&#x25B2;"/>
                                             </DataTrigger>
                                         </Style.Triggers>
                                     </Style>
@@ -412,260 +329,255 @@
                         </Grid>
                     </Button>
 
-                    <!-- Collapsible content -->
                     <StackPanel Visibility="{Binding ShowIndividualControls, Converter={StaticResource BoolToVis}}"
                                 Margin="0,16,0,0">
-                    <TextBlock Style="{StaticResource CaptionText}" Margin="0,0,0,12"
-                               Foreground="{StaticResource AccentBlueBrush}">
-                        Not sure where to start? Use the Animation Presets above for a one-click setup.
-                    </TextBlock>
 
-                    <!-- Apply / Cancel — shown at top when changes are pending -->
-                    <StackPanel Orientation="Horizontal" Margin="0,0,0,12"
-                                Visibility="{Binding HasPendingChanges, Converter={StaticResource BoolToVis}}">
-                        <Button Content="Apply Changes" Style="{StaticResource PrimaryButton}"
-                                Margin="0,0,10,0" Command="{Binding ApplyChangesCommand}"/>
-                        <Button Content="Cancel" Style="{StaticResource GhostButton}"
-                                Command="{Binding CancelChangesCommand}"/>
-                        <TextBlock Text="You have unsaved changes." Style="{StaticResource CaptionText}"
-                                   Foreground="{StaticResource AccentYellowBrush}"
-                                   VerticalAlignment="Center" Margin="12,0,0,0"/>
-                    </StackPanel>
-
-                    <!-- Animate controls/elements inside windows -->
-                    <Grid Margin="0,0,0,12">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,20,0">
-                            <TextBlock Text="Animate buttons and UI elements"
-                                       Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                            <TextBlock Text="Fade-in effects for list items and menus inside windows."
-                                       Style="{StaticResource CaptionText}" Margin="0,2,0,0"/>
+                        <!-- Apply / Cancel — shown when changes are pending -->
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,12"
+                                    Visibility="{Binding HasPendingChanges, Converter={StaticResource BoolToVis}}">
+                            <Button Content="Apply changes" Style="{StaticResource PrimaryButton}"
+                                    Margin="0,0,10,0" Command="{Binding ApplyChangesCommand}"/>
+                            <Button Content="Cancel" Style="{StaticResource GhostButton}"
+                                    Command="{Binding CancelChangesCommand}"/>
+                            <TextBlock Text="You have unsaved changes." Style="{StaticResource CaptionText}"
+                                       Foreground="{StaticResource AccentYellowBrush}"
+                                       VerticalAlignment="Center" Margin="12,0,0,0"/>
                         </StackPanel>
-                        <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}"
-                                  IsChecked="{Binding AnimateControlsEnabled, Mode=TwoWay}"
-                                  VerticalAlignment="Center"/>
-                    </Grid>
-                    <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,0,0,12"/>
 
-                    <!-- Animate windows when minimizing/maximizing -->
-                    <Grid Margin="0,0,0,12">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,20,0">
-                            <TextBlock Text="Animate windows when minimizing and maximizing"
-                                       Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                            <TextBlock Text="The window zoom-in/out effect when opening or minimizing. Disabling this gives the biggest visible speed improvement."
-                                       Style="{StaticResource CaptionText}" Margin="0,2,0,0"/>
-                        </StackPanel>
-                        <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}"
-                                  IsChecked="{Binding AnimateWindowsEnabled, Mode=TwoWay}"
-                                  VerticalAlignment="Center"/>
-                    </Grid>
-                    <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,0,0,12"/>
+                        <!-- Animate controls/elements inside windows -->
+                        <Grid Margin="0,0,0,12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,20,0">
+                                <TextBlock Text="Animate buttons and UI elements"
+                                           Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
+                                <TextBlock Text="Fade-in effects for list items and menus inside windows."
+                                           Style="{StaticResource CaptionText}" Margin="0,2,0,0"/>
+                            </StackPanel>
+                            <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}"
+                                      IsChecked="{Binding AnimateControlsEnabled, Mode=TwoWay}"
+                                      VerticalAlignment="Center"/>
+                        </Grid>
+                        <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,0,0,12"/>
 
-                    <!-- Fade/slide menus -->
-                    <Grid Margin="0,0,0,12">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,20,0">
-                            <TextBlock Text="Fade or slide menus into view"
-                                       Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                            <TextBlock Text="Context menus appear instantly when this is disabled."
-                                       Style="{StaticResource CaptionText}" Margin="0,2,0,0"/>
-                        </StackPanel>
-                        <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}"
-                                  IsChecked="{Binding FadeMenusEnabled, Mode=TwoWay}"
-                                  VerticalAlignment="Center"/>
-                    </Grid>
-                    <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,0,0,12"/>
+                        <!-- Animate windows when minimizing/maximizing -->
+                        <Grid Margin="0,0,0,12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,20,0">
+                                <TextBlock Text="Animate windows when minimizing and maximizing"
+                                           Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
+                                <TextBlock Text="The window zoom-in/out effect when opening or minimizing. Disabling this gives the biggest visible speed improvement."
+                                           Style="{StaticResource CaptionText}" Margin="0,2,0,0"/>
+                            </StackPanel>
+                            <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}"
+                                      IsChecked="{Binding AnimateWindowsEnabled, Mode=TwoWay}"
+                                      VerticalAlignment="Center"/>
+                        </Grid>
+                        <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,0,0,12"/>
 
-                    <!-- Show window contents while dragging -->
-                    <Grid Margin="0,0,0,12">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,20,0">
-                            <TextBlock Text="Show content while moving windows"
-                                       Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                            <TextBlock Text="Shows the full window content while you drag it. Recommended to keep on — turning it off shows only an outline."
-                                       Style="{StaticResource CaptionText}" Margin="0,2,0,0"/>
-                        </StackPanel>
-                        <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}"
-                                  IsChecked="{Binding ShowDragContentsEnabled, Mode=TwoWay}"
-                                  VerticalAlignment="Center"/>
-                    </Grid>
-                    <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,0,0,12"/>
+                        <!-- Fade/slide menus -->
+                        <Grid Margin="0,0,0,12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,20,0">
+                                <TextBlock Text="Fade or slide menus into view"
+                                           Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
+                                <TextBlock Text="Context menus appear instantly when this is disabled."
+                                           Style="{StaticResource CaptionText}" Margin="0,2,0,0"/>
+                            </StackPanel>
+                            <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}"
+                                      IsChecked="{Binding FadeMenusEnabled, Mode=TwoWay}"
+                                      VerticalAlignment="Center"/>
+                        </Grid>
+                        <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,0,0,12"/>
 
-                    <!-- Smooth font edges -->
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <Grid.Style>
-                            <Style TargetType="Grid">
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding ActivePreset}" Value="none">
-                                        <Setter Property="Opacity" Value="0.4"/>
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </Grid.Style>
-                        <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,20,0">
-                            <TextBlock Text="Smooth text rendering (ClearType)"
-                                       Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                            <TextBlock Text="Makes text sharper and easier to read on screen. Strongly recommended to keep on."
-                                       Style="{StaticResource CaptionText}" Margin="0,2,0,0"/>
-                        </StackPanel>
-                        <CheckBox Grid.Column="1"
-                                  IsChecked="{Binding SmoothFontsEnabled, Mode=TwoWay}"
-                                  VerticalAlignment="Center">
-                            <CheckBox.Style>
-                                <Style TargetType="CheckBox" BasedOn="{StaticResource ToggleSwitch}">
+                        <!-- Show window contents while dragging -->
+                        <Grid Margin="0,0,0,12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,20,0">
+                                <TextBlock Text="Show content while moving windows"
+                                           Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
+                                <TextBlock Text="Shows the full window content while you drag it. Recommended to keep on — turning it off shows only an outline."
+                                           Style="{StaticResource CaptionText}" Margin="0,2,0,0"/>
+                            </StackPanel>
+                            <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}"
+                                      IsChecked="{Binding ShowDragContentsEnabled, Mode=TwoWay}"
+                                      VerticalAlignment="Center"/>
+                        </Grid>
+                        <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,0,0,12"/>
+
+                        <!-- Smooth font edges -->
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid.Style>
+                                <Style TargetType="Grid">
                                     <Style.Triggers>
                                         <DataTrigger Binding="{Binding ActivePreset}" Value="none">
-                                            <Setter Property="IsEnabled" Value="False"/>
+                                            <Setter Property="Opacity" Value="0.4"/>
                                         </DataTrigger>
                                     </Style.Triggers>
                                 </Style>
-                            </CheckBox.Style>
-                        </CheckBox>
-                    </Grid>
+                            </Grid.Style>
+                            <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,20,0">
+                                <TextBlock Text="Smooth text rendering (ClearType)"
+                                           Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
+                                <TextBlock Text="Makes text sharper and easier to read on screen. Strongly recommended to keep on."
+                                           Style="{StaticResource CaptionText}" Margin="0,2,0,0"/>
+                            </StackPanel>
+                            <CheckBox Grid.Column="1"
+                                      IsChecked="{Binding SmoothFontsEnabled, Mode=TwoWay}"
+                                      VerticalAlignment="Center">
+                                <CheckBox.Style>
+                                    <Style TargetType="CheckBox" BasedOn="{StaticResource ToggleSwitch}">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding ActivePreset}" Value="none">
+                                                <Setter Property="IsEnabled" Value="False"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </CheckBox.Style>
+                            </CheckBox>
+                        </Grid>
 
-                    <!-- Tooltip animation -->
-                    <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,0,0,12"/>
-                    <Grid Margin="0,0,0,12">
-                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,20,0">
-                            <TextBlock Text="Fade or slide tooltips into view" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                            <TextBlock Text="Tooltips appear instantly when disabled." Style="{StaticResource CaptionText}" Margin="0,2,0,0"/>
-                        </StackPanel>
-                        <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}"
-                                  IsChecked="{Binding TooltipAnimationEnabled, Mode=TwoWay}" VerticalAlignment="Center"/>
-                    </Grid>
+                        <!-- Tooltip animation -->
+                        <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,12,0,12"/>
+                        <Grid Margin="0,0,0,12">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,20,0">
+                                <TextBlock Text="Fade or slide tooltips into view" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
+                                <TextBlock Text="Tooltips appear instantly when disabled." Style="{StaticResource CaptionText}" Margin="0,2,0,0"/>
+                            </StackPanel>
+                            <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}"
+                                      IsChecked="{Binding TooltipAnimationEnabled, Mode=TwoWay}" VerticalAlignment="Center"/>
+                        </Grid>
 
-                    <!-- Fade out menu items -->
-                    <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,0,0,12"/>
-                    <Grid Margin="0,0,0,12">
-                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,20,0">
-                            <TextBlock Text="Fade out menu items after clicking" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                            <TextBlock Text="Selection fade effect for menus." Style="{StaticResource CaptionText}" Margin="0,2,0,0"/>
-                        </StackPanel>
-                        <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}"
-                                  IsChecked="{Binding FadeOutMenuItemsEnabled, Mode=TwoWay}" VerticalAlignment="Center"/>
-                    </Grid>
+                        <!-- Fade out menu items -->
+                        <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,0,0,12"/>
+                        <Grid Margin="0,0,0,12">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,20,0">
+                                <TextBlock Text="Fade out menu items after clicking" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
+                                <TextBlock Text="Selection fade effect for menus." Style="{StaticResource CaptionText}" Margin="0,2,0,0"/>
+                            </StackPanel>
+                            <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}"
+                                      IsChecked="{Binding FadeOutMenuItemsEnabled, Mode=TwoWay}" VerticalAlignment="Center"/>
+                        </Grid>
 
-                    <!-- Cursor shadow -->
-                    <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,0,0,12"/>
-                    <Grid Margin="0,0,0,12">
-                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,20,0">
-                            <TextBlock Text="Show shadow under mouse cursor" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                            <TextBlock Text="Adds a small drop shadow beneath the pointer." Style="{StaticResource CaptionText}" Margin="0,2,0,0"/>
-                        </StackPanel>
-                        <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}"
-                                  IsChecked="{Binding CursorShadowEnabled, Mode=TwoWay}" VerticalAlignment="Center"/>
-                    </Grid>
+                        <!-- Cursor shadow -->
+                        <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,0,0,12"/>
+                        <Grid Margin="0,0,0,12">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,20,0">
+                                <TextBlock Text="Show shadow under mouse cursor" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
+                                <TextBlock Text="Adds a small drop shadow beneath the pointer." Style="{StaticResource CaptionText}" Margin="0,2,0,0"/>
+                            </StackPanel>
+                            <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}"
+                                      IsChecked="{Binding CursorShadowEnabled, Mode=TwoWay}" VerticalAlignment="Center"/>
+                        </Grid>
 
-                    <!-- Window shadow -->
-                    <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,0,0,12"/>
-                    <Grid Margin="0,0,0,12">
-                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,20,0">
-                            <TextBlock Text="Show shadows under windows" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                            <TextBlock Text="Drop shadows around window borders." Style="{StaticResource CaptionText}" Margin="0,2,0,0"/>
-                        </StackPanel>
-                        <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}"
-                                  IsChecked="{Binding WindowShadowEnabled, Mode=TwoWay}" VerticalAlignment="Center"/>
-                    </Grid>
+                        <!-- Window shadow -->
+                        <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,0,0,12"/>
+                        <Grid Margin="0,0,0,12">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,20,0">
+                                <TextBlock Text="Show shadows under windows" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
+                                <TextBlock Text="Drop shadows around window borders." Style="{StaticResource CaptionText}" Margin="0,2,0,0"/>
+                            </StackPanel>
+                            <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}"
+                                      IsChecked="{Binding WindowShadowEnabled, Mode=TwoWay}" VerticalAlignment="Center"/>
+                        </Grid>
 
-                    <!-- ComboBox animation -->
-                    <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,0,0,12"/>
-                    <Grid Margin="0,0,0,12">
-                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,20,0">
-                            <TextBlock Text="Slide open combo boxes" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                            <TextBlock Text="Combo box dropdowns animate open instead of appearing instantly." Style="{StaticResource CaptionText}" Margin="0,2,0,0"/>
-                        </StackPanel>
-                        <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}"
-                                  IsChecked="{Binding ComboBoxAnimationEnabled, Mode=TwoWay}" VerticalAlignment="Center"/>
-                    </Grid>
+                        <!-- ComboBox animation -->
+                        <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,0,0,12"/>
+                        <Grid Margin="0,0,0,12">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,20,0">
+                                <TextBlock Text="Slide open combo boxes" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
+                                <TextBlock Text="Combo box dropdowns animate open instead of appearing instantly." Style="{StaticResource CaptionText}" Margin="0,2,0,0"/>
+                            </StackPanel>
+                            <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}"
+                                      IsChecked="{Binding ComboBoxAnimationEnabled, Mode=TwoWay}" VerticalAlignment="Center"/>
+                        </Grid>
 
-                    <!-- Listbox smooth scrolling -->
-                    <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,0,0,12"/>
-                    <Grid Margin="0,0,0,12">
-                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,20,0">
-                            <TextBlock Text="Smooth-scroll list boxes" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                            <TextBlock Text="Lists scroll smoothly instead of jumping by line." Style="{StaticResource CaptionText}" Margin="0,2,0,0"/>
-                        </StackPanel>
-                        <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}"
-                                  IsChecked="{Binding ListboxSmoothScrollingEnabled, Mode=TwoWay}" VerticalAlignment="Center"/>
-                    </Grid>
+                        <!-- Listbox smooth scrolling -->
+                        <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,0,0,12"/>
+                        <Grid Margin="0,0,0,12">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,20,0">
+                                <TextBlock Text="Smooth-scroll list boxes" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
+                                <TextBlock Text="Lists scroll smoothly instead of jumping by line." Style="{StaticResource CaptionText}" Margin="0,2,0,0"/>
+                            </StackPanel>
+                            <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}"
+                                      IsChecked="{Binding ListboxSmoothScrollingEnabled, Mode=TwoWay}" VerticalAlignment="Center"/>
+                        </Grid>
 
-                    <!-- Listview watermark -->
-                    <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,0,0,12"/>
-                    <Grid Margin="0,0,0,12">
-                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,20,0">
-                            <TextBlock Text="Show folder type watermarks" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                            <TextBlock Text="Folder-type watermark images in Explorer windows." Style="{StaticResource CaptionText}" Margin="0,2,0,0"/>
-                        </StackPanel>
-                        <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}"
-                                  IsChecked="{Binding ListviewWatermarkEnabled, Mode=TwoWay}" VerticalAlignment="Center"/>
-                    </Grid>
+                        <!-- Listview watermark -->
+                        <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,0,0,12"/>
+                        <Grid Margin="0,0,0,12">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,20,0">
+                                <TextBlock Text="Show folder type watermarks" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
+                                <TextBlock Text="Folder-type watermark images in Explorer windows." Style="{StaticResource CaptionText}" Margin="0,2,0,0"/>
+                            </StackPanel>
+                            <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}"
+                                      IsChecked="{Binding ListviewWatermarkEnabled, Mode=TwoWay}" VerticalAlignment="Center"/>
+                        </Grid>
 
-                    <!-- Icon label shadow -->
-                    <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,0,0,12"/>
-                    <Grid Margin="0,0,0,12">
-                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,20,0">
-                            <TextBlock Text="Drop shadows on desktop icon text" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                            <TextBlock Text="Text shadows under icon names on the desktop." Style="{StaticResource CaptionText}" Margin="0,2,0,0"/>
-                        </StackPanel>
-                        <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}"
-                                  IsChecked="{Binding IconLabelShadowEnabled, Mode=TwoWay}" VerticalAlignment="Center"/>
-                    </Grid>
+                        <!-- Icon label shadow -->
+                        <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,0,0,12"/>
+                        <Grid Margin="0,0,0,12">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,20,0">
+                                <TextBlock Text="Drop shadows on desktop icon text" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
+                                <TextBlock Text="Text shadows under icon names on the desktop." Style="{StaticResource CaptionText}" Margin="0,2,0,0"/>
+                            </StackPanel>
+                            <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}"
+                                      IsChecked="{Binding IconLabelShadowEnabled, Mode=TwoWay}" VerticalAlignment="Center"/>
+                        </Grid>
 
-                    <!-- Aero Peek -->
-                    <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,0,0,12"/>
-                    <Grid Margin="0,0,0,12">
-                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,20,0">
-                            <TextBlock Text="Desktop peek preview" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                            <TextBlock Text="Hover over the Show Desktop button (far right of taskbar) to preview the desktop." Style="{StaticResource CaptionText}" Margin="0,2,0,0"/>
-                        </StackPanel>
-                        <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}"
-                                  IsChecked="{Binding AeroPeekEnabled, Mode=TwoWay}" VerticalAlignment="Center"/>
-                    </Grid>
+                        <!-- Aero Peek -->
+                        <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,0,0,12"/>
+                        <Grid Margin="0,0,0,12">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,20,0">
+                                <TextBlock Text="Desktop peek preview" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
+                                <TextBlock Text="Hover over the Show Desktop button (far right of taskbar) to preview the desktop." Style="{StaticResource CaptionText}" Margin="0,2,0,0"/>
+                            </StackPanel>
+                            <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}"
+                                      IsChecked="{Binding AeroPeekEnabled, Mode=TwoWay}" VerticalAlignment="Center"/>
+                        </Grid>
 
-                    <!-- Taskbar thumbnail previews -->
-                    <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,0,0,12"/>
-                    <Grid Margin="0,0,0,12">
-                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,20,0">
-                            <TextBlock Text="Taskbar hover previews" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                            <TextBlock Text="Show window thumbnail when hovering taskbar buttons." Style="{StaticResource CaptionText}" Margin="0,2,0,0"/>
-                        </StackPanel>
-                        <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}"
-                                  IsChecked="{Binding TaskbarThumbnailPreviewsEnabled, Mode=TwoWay}" VerticalAlignment="Center"/>
-                    </Grid>
+                        <!-- Taskbar thumbnail previews -->
+                        <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,0,0,12"/>
+                        <Grid>
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,20,0">
+                                <TextBlock Text="Taskbar hover previews" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
+                                <TextBlock Text="Show window thumbnail when hovering taskbar buttons." Style="{StaticResource CaptionText}" Margin="0,2,0,0"/>
+                            </StackPanel>
+                            <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}"
+                                      IsChecked="{Binding TaskbarThumbnailPreviewsEnabled, Mode=TwoWay}" VerticalAlignment="Center"/>
+                        </Grid>
 
-                    </StackPanel><!-- end collapsible content -->
+                    </StackPanel>
                 </StackPanel>
             </Border>
 
             <!-- Status bar -->
-            <Grid Grid.Row="9" Margin="0,16,0,0">
+            <Grid Margin="0,16,0,0">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
@@ -675,6 +587,6 @@
                 <Button Grid.Column="1" Content="Refresh" Style="{StaticResource GhostButton}"
                         Command="{Binding RefreshCommand}"/>
             </Grid>
-        </Grid>
+        </StackPanel>
     </ScrollViewer>
 </UserControl>

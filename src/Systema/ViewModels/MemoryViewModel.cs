@@ -15,6 +15,7 @@
 // ════════════════════════════════════════════════════════════════════════════
 
 using System.Collections.ObjectModel;
+using System.Linq;
 using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -50,6 +51,36 @@ public partial class MemoryViewModel : ObservableObject, IAutoRefreshable, IDisp
 
     public long UsedRamMb => TotalRamMb - AvailableRamMb;
     public double RamUsagePercent => TotalRamMb > 0 ? (double)UsedRamMb / TotalRamMb * 100 : 0;
+
+    // ── Friendly GB-formatted stats for the redesigned tiles ──
+    public string UsedRamGb => (UsedRamMb / 1024.0).ToString("0.0");
+    public string FreeRamGb => (AvailableRamMb / 1024.0).ToString("0.0");
+
+    // ── "Speed up your startup" recommendation — currently-enabled High-impact apps ──
+    private System.Collections.Generic.IEnumerable<StartupItem> HeavyEnabled =>
+        StartupItems.Where(i => i.IsEnabled && i.ImpactLabel == "High");
+    public int    HighImpactCount          => HeavyEnabled.Count();
+    public bool   HasStartupRecommendation => HighImpactCount > 0;
+    public string HighImpactNames          => string.Join(", ", HeavyEnabled.Select(i => i.Name));
+    public string StartupRecommendationText => HighImpactCount == 1
+        ? "1 app is slowing down your startup"
+        : $"{HighImpactCount} apps are slowing down your startup";
+
+    private void RaiseStartupRecommendation()
+    {
+        OnPropertyChanged(nameof(HighImpactCount));
+        OnPropertyChanged(nameof(HasStartupRecommendation));
+        OnPropertyChanged(nameof(HighImpactNames));
+        OnPropertyChanged(nameof(StartupRecommendationText));
+    }
+
+    private void RaiseRamStats()
+    {
+        OnPropertyChanged(nameof(UsedRamMb));
+        OnPropertyChanged(nameof(RamUsagePercent));
+        OnPropertyChanged(nameof(UsedRamGb));
+        OnPropertyChanged(nameof(FreeRamGb));
+    }
 
     /// <summary>
     /// True when Auto-Pilot Mode is active — XAML binds this to IsEnabled (inverted)
@@ -100,8 +131,7 @@ public partial class MemoryViewModel : ObservableObject, IAutoRefreshable, IDisp
             var (total, avail) = await Task.Run(() => _memoryService.GetRamStats());
             TotalRamMb     = total;
             AvailableRamMb = avail;
-            OnPropertyChanged(nameof(UsedRamMb));
-            OnPropertyChanged(nameof(RamUsagePercent));
+            RaiseRamStats();
 
             // Update recommended text based on detected RAM
             int rec = _memoryService.GetRecommendedPagefileMb();
@@ -132,6 +162,7 @@ public partial class MemoryViewModel : ObservableObject, IAutoRefreshable, IDisp
                 var items = await RunOnLargeStackAsync(() => _startupService.GetStartupItems());
                 StartupItems.Clear();
                 foreach (var item in items) StartupItems.Add(item);
+                RaiseStartupRecommendation();
             }
 
             StatusMessage = $"RAM: {TotalRamMb:N0} MB total, {AvailableRamMb:N0} MB free";
@@ -212,18 +243,28 @@ public partial class MemoryViewModel : ObservableObject, IAutoRefreshable, IDisp
         {
             var result = await Task.Run(() => _startupService.SetStartupItemEnabled(item, !item.IsEnabled));
             StatusMessage = result.Message;
-            if (result.Success)
-            {
-                item.IsEnabled = !item.IsEnabled;
-                var idx = StartupItems.IndexOf(item);
-                if (idx >= 0) { StartupItems.RemoveAt(idx); StartupItems.Insert(idx, item); }
-            }
+            if (result.Success) item.IsEnabled = !item.IsEnabled;
+            // Always re-insert so the toggle switch re-binds to the TRUE IsEnabled — commits the
+            // change on success, and reverts the switch visually if it failed (e.g. needs admin).
+            var idx = StartupItems.IndexOf(item);
+            if (idx >= 0) { StartupItems.RemoveAt(idx); StartupItems.Insert(idx, item); }
+            RaiseStartupRecommendation();
         }
         catch (Exception ex)
         {
             _log.Error("MemoryViewModel", "Toggle startup item failed", ex);
             StatusMessage = $"Error: {ex.Message}";
         }
+    }
+
+    /// <summary>One-tap "speed up startup": disables every currently-enabled High-impact item.</summary>
+    [RelayCommand]
+    private async Task DisableHeavyStartupAsync()
+    {
+        // Snapshot first — ToggleStartupItemAsync mutates the collection as it goes.
+        foreach (var item in StartupItems.Where(i => i.IsEnabled && i.ImpactLabel == "High").ToList())
+            await ToggleStartupItemAsync(item);
+        RaiseStartupRecommendation();
     }
 
     [RelayCommand]
@@ -241,8 +282,7 @@ public partial class MemoryViewModel : ObservableObject, IAutoRefreshable, IDisp
             var (total, avail) = await Task.Run(() => _memoryService.GetRamStats());
             TotalRamMb     = total;
             AvailableRamMb = avail;
-            OnPropertyChanged(nameof(UsedRamMb));
-            OnPropertyChanged(nameof(RamUsagePercent));
+            RaiseRamStats();
 
             // Clear status after 8 seconds so stale messages don't linger
             _ = Task.Delay(8000).ContinueWith(_ =>

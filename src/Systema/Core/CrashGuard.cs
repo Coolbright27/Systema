@@ -74,6 +74,11 @@ public static class CrashGuard
     private const int UiHangRestartSeconds  = 40;   // UI beat at least once, then stopped
     private const int StartupHangSeconds    = 90;   // UI never beat (startup wedged)
     private const int RestartLoopGuardSeconds = 120; // don't auto-restart more than once / 2 min
+    // A watchdog iteration normally takes ~3-5 s. If one suddenly took far longer, the wall clock
+    // jumped — the system slept / hibernated / entered modern standby and froze the WHOLE process.
+    // That gap must NOT be counted as a UI hang; doing so is what relaunched Systema after every
+    // sleep (and orphaned its naps). On detection we give the just-resumed UI a fresh beat window.
+    private const int SuspendDetectSeconds  = 30;
 
     // ── Startup check ───────────────────────────────────────────────────────
 
@@ -250,6 +255,7 @@ public static class CrashGuard
 
     private static void WatchdogLoop()
     {
+        long lastLoopTicks = DateTime.UtcNow.Ticks;
         while (_running)
         {
             try
@@ -258,6 +264,22 @@ public static class CrashGuard
                 Thread.Sleep(3_000); // give UI thread 3 seconds to heartbeat
 
                 if (!_running) return;
+
+                // ── Sleep / resume detection ──
+                // If the wall clock jumped far past our 3s sleep, the system was suspended and the
+                // whole process (UI thread + this watchdog) was frozen. That gap is NOT a UI hang.
+                // Reset the heartbeat baselines so the freshly-resumed UI gets a clean window to beat,
+                // and skip this round's hang checks. Without this, every sleep > ~40s makes Systema
+                // relaunch itself and hard-kill the old instance, orphaning whatever it had napped.
+                long nowTicks = DateTime.UtcNow.Ticks;
+                double loopSeconds = (nowTicks - lastLoopTicks) / (double)TimeSpan.TicksPerSecond;
+                lastLoopTicks = nowTicks;
+                if (loopSeconds > SuspendDetectSeconds)
+                {
+                    Volatile.Write(ref _lastUiBeatTicks,   nowTicks); // treat as "UI just beat"
+                    Volatile.Write(ref _processStartTicks, nowTicks); // and reset the startup-hang clock
+                    continue;
+                }
 
                 // If UI thread didn't heartbeat AND we're in a marked operation → freeze detected
                 if (!_uiAlive && _activeBreadcrumb != null)

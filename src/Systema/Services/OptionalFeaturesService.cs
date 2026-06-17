@@ -41,6 +41,7 @@ public class OptionalFeaturesService
         // ── Virtualization ────────────────────────────────────────────────────
         ["Microsoft-Hyper-V"]                          = "Microsoft's built-in hypervisor for running virtual machines. Required for WSL 2, Docker Desktop, and Android Subsystem. Disable only if you use another hypervisor like VMware.",
         ["Microsoft-Hyper-V-All"]                      = "Full Hyper-V stack including management tools and the hypervisor platform.",
+        ["Microsoft-Hyper-V-Management-Clients"]       = "Hyper-V Manager and the GUI tools for creating and controlling virtual machines.",
         ["Microsoft-Hyper-V-Management-PowerShell"]    = "PowerShell cmdlets for managing Hyper-V virtual machines from the command line.",
         ["Microsoft-Hyper-V-Hypervisor"]               = "Core Hyper-V hypervisor component. Required for WSL 2, Windows Sandbox, and Docker Desktop.",
         ["Microsoft-Hyper-V-Services"]                 = "Hyper-V background services for VM management and guest communication.",
@@ -109,6 +110,104 @@ public class OptionalFeaturesService
 
         // ── Games ─────────────────────────────────────────────────────────────
         ["Games"]                                      = "Classic Windows Games package (Solitaire, Minesweeper, etc.) included in older Windows versions.",
+
+        // ── .NET Framework 4.x advanced (WCF) ─────────────────────────────────
+        ["NetFx4Extended-ASPNET45"]                    = "ASP.NET 4.x web components for the .NET Framework. Only needed if you host .NET web apps locally.",
+        ["WCF-Services45"]                             = "Windows Communication Foundation — the .NET system for networked services. Required by some desktop business apps.",
+        ["WCF-HTTP-Activation45"]                      = "Lets WCF apps start automatically over HTTP. Needed by some enterprise/server software.",
+        ["WCF-TCP-Activation45"]                       = "Lets WCF apps start automatically over TCP. Needed by some enterprise/server software.",
+        ["WCF-Pipe-Activation45"]                      = "Lets WCF apps start automatically over named pipes (local app-to-app messaging).",
+        ["WCF-MSMQ-Activation45"]                      = "Lets WCF apps start automatically via Microsoft Message Queue. Enterprise messaging only.",
+        ["WCF-TCP-PortSharing45"]                      = "Allows several WCF services to share one TCP port. Used by some server apps.",
+        ["WCF-HTTP-Activation"]                        = "Classic HTTP activation for WCF services. Legacy server feature.",
+        ["WCF-NonHTTP-Activation"]                     = "Classic non-HTTP activation for WCF services. Legacy server feature.",
+
+        // ── Windows Process Activation Service ────────────────────────────────
+        ["WAS-WindowsActivationService"]               = "Hosts and starts web/WCF apps without a full web server. Used by IIS and some business apps.",
+        ["WAS-ProcessModel"]                           = "Process model for the Windows Activation Service. Part of the IIS/WAS hosting stack.",
+        ["WAS-NetFxEnvironment"]                       = "The .NET environment for the Windows Activation Service. Part of the IIS/WAS hosting stack.",
+        ["WAS-ConfigurationAPI"]                       = "Configuration API for the Windows Activation Service. Part of the IIS/WAS hosting stack.",
+
+        // ── Internet Information Services (web server) ────────────────────────
+        ["IIS-CommonHttpFeatures"]                     = "Core web-server features (static files, default pages, errors). Part of IIS — web developers only.",
+        ["IIS-HttpErrors"]                             = "Custom error pages for the IIS web server.",
+        ["IIS-HttpRedirect"]                           = "URL redirection for the IIS web server.",
+        ["IIS-ApplicationDevelopment"]                 = "Web-app development components for IIS (ASP.NET, CGI, etc.). Web developers only.",
+        ["IIS-Security"]                               = "Security and sign-in components for the IIS web server.",
+        ["IIS-RequestFiltering"]                       = "Filters and blocks unwanted web requests in IIS.",
+        ["IIS-HealthAndDiagnostics"]                   = "Logging and monitoring components for the IIS web server.",
+        ["IIS-HttpLogging"]                            = "Records web-request logs for the IIS server.",
+        ["IIS-Performance"]                            = "Compression and caching to speed up the IIS web server.",
+        ["IIS-WebServerManagementTools"]               = "Console and tools for configuring IIS.",
+        ["IIS-ManagementConsole"]                      = "The IIS Manager app for configuring the web server.",
+        ["IIS-ManagementScriptingTools"]               = "Command-line and script management for IIS.",
+        ["IIS-ManagementService"]                      = "Remote management of IIS from another PC.",
+        ["IIS-StaticContent"]                          = "Serves static files (HTML, images, CSS) from the IIS web server.",
+        ["IIS-DefaultDocument"]                        = "Serves a default page (like index.html) for IIS websites.",
+        ["IIS-DirectoryBrowsing"]                      = "Lets IIS list a folder's contents when there's no default page.",
+        ["IIS-ASPNET45"]                               = "ASP.NET 4.x support for hosting .NET web apps in IIS.",
+        ["IIS-ASPNET"]                                 = "ASP.NET support for hosting .NET web apps in IIS.",
+        ["IIS-ASP"]                                    = "Classic ASP support in IIS (older web tech).",
+        ["IIS-NetFxExtensibility45"]                   = "Lets .NET modules extend the IIS web server (v4.5).",
+        ["IIS-NetFxExtensibility"]                     = "Lets .NET modules extend the IIS web server.",
+        ["IIS-ISAPIExtensions"]                        = "Runs ISAPI web extensions in IIS (older web tech).",
+        ["IIS-ISAPIFilter"]                            = "Runs ISAPI filters in IIS (older web tech).",
+        ["IIS-CGI"]                                    = "Runs CGI programs (e.g. PHP) in the IIS web server.",
+        ["IIS-WebSockets"]                             = "WebSocket support for real-time web apps in IIS.",
+        ["IIS-ApplicationInit"]                        = "Pre-loads IIS web apps so the first visit is faster.",
+        ["IIS-WebDAV"]                                 = "WebDAV publishing — edit files on the IIS server over HTTP.",
+        ["IIS-BasicAuthentication"]                    = "Username/password sign-in for IIS sites (plain text — use with HTTPS).",
+        ["IIS-WindowsAuthentication"]                  = "Windows-account sign-in for IIS sites (intranet use).",
+        ["IIS-DigestAuthentication"]                   = "Digest sign-in for IIS websites.",
+        ["IIS-HttpCompressionStatic"]                  = "Compresses static files to speed up IIS websites.",
+        ["IIS-HttpCompressionDynamic"]                 = "Compresses dynamic responses to speed up IIS websites.",
+        ["IIS-IIS6ManagementCompatibility"]            = "Lets old IIS 6 tools and scripts manage modern IIS.",
+        ["IIS-Metabase"]                               = "Legacy IIS 6 configuration store, kept for backward compatibility.",
+        ["IIS-FTPServer"]                              = "FTP file-transfer server hosted by IIS.",
+        ["IIS-FTPSvc"]                                 = "The FTP service for the IIS web server.",
+        ["IIS-FTPExtensibility"]                       = "Extensibility components for the IIS FTP server.",
+
+        // ── Printing (extra) ──────────────────────────────────────────────────
+        ["Printing-Foundation-InternetPrinting-Client"] = "Lets this PC print to printers shared over the internet (IPP). Safe to remove if you only use local/network printers.",
+        ["Printing-Foundation-LPDPrintService"]        = "LPD print server — lets Unix/Linux devices print to printers shared by this PC. Enterprise/legacy only.",
+        ["Printing-Foundation-LPRPortMonitor"]         = "LPR printing — lets this PC print to Unix/Linux print servers. Enterprise/legacy only.",
+
+        // ── Microsoft Message Queuing ─────────────────────────────────────────
+        ["MSMQ-Container"]                             = "Microsoft Message Queuing — store-and-forward messaging used by some business apps. Remove if nothing needs it.",
+        ["MSMQ-Server"]                                = "Core Microsoft Message Queuing service. Enterprise messaging only.",
+        ["MSMQ-Triggers"]                              = "Runs actions automatically when MSMQ messages arrive. Enterprise messaging only.",
+        ["MSMQ-HTTP"]                                  = "Sends Microsoft Message Queue messages over HTTP. Enterprise only.",
+        ["MSMQ-Multicast"]                             = "Multicast support for MSMQ messaging. Enterprise only.",
+        ["MSMQ-DCOMProxy"]                             = "DCOM proxy for MSMQ messaging. Enterprise only.",
+        ["MSMQ-ADIntegration"]                         = "Active Directory integration for MSMQ. Enterprise only.",
+
+        // ── Network File System (Unix/Linux shares) ──────────────────────────
+        ["ServicesForNFS-ClientOnly"]                  = "Network File System (NFS) client — connect to Unix/Linux file shares. Remove if you don't use NFS.",
+        ["ClientForNFS-Infrastructure"]                = "Core components for connecting to NFS (Unix/Linux) file shares.",
+        ["NFS-Administration"]                         = "Tools for managing NFS file-share connections.",
+
+        // ── Containers (extra) ────────────────────────────────────────────────
+        ["Containers-HNS"]                             = "Host Network Service for Windows/Docker containers. Part of the container stack.",
+        ["Containers-SDN"]                             = "Software-defined networking for Windows containers. Container/enterprise use.",
+
+        // ── Virtual file systems / directory ──────────────────────────────────
+        ["Client-ProjFS"]                              = "Windows Projected File System — used by Git VFS and similar virtual-folder tools. Safe to remove if you don't use them.",
+        ["DirectoryServices-ADAM-Client"]              = "Active Directory Lightweight Directory Services (AD LDS) client. Enterprise directory tooling only.",
+
+        // ── Legacy / niche ────────────────────────────────────────────────────
+        ["LegacyComponents"]                           = "Holder for very old Windows components like DirectPlay. Only needed for some classic games and apps.",
+        ["TIFFIFilter"]                                = "Lets Windows Search read text inside scanned TIFF images (OCR). Safe to remove if you don't search scanned documents.",
+        ["WMI-SNMP-Provider"]                          = "Lets management tools read SNMP data through Windows WMI. Enterprise monitoring only.",
+        ["RasCMAK"]                                    = "Connection Manager Administration Kit — builds custom VPN/dial-up profiles. Admin/enterprise only.",
+        ["RasRip"]                                     = "RIP listener for receiving network routes over dial-up/VPN. Legacy networking only.",
+        ["SmbDirect"]                                  = "SMB Direct (RDMA) — high-speed file sharing on enterprise networks. Harmless on home PCs.",
+        ["SMB1Protocol-Deprecation"]                   = "Automatically removes the insecure SMB 1.0 protocol once it goes unused. Leave this on.",
+        ["MultiPointConnector"]                        = "MultiPoint Services connector for shared classroom/lab PCs. Remove on a personal PC.",
+        ["MultiPointConnector-Services"]               = "Background services for MultiPoint shared-PC management. Remove on a personal PC.",
+        ["MultiPointConnector-Tools"]                  = "Management tools for MultiPoint shared PCs. Remove on a personal PC.",
+        ["HostGuardian"]                               = "Host Guardian support for running shielded VMs in enterprise data centers. Not needed on home PCs.",
+        ["Windows-Defender-ApplicationGuard"]          = "Microsoft Defender Application Guard — opens risky sites/files in an isolated container. Safe to remove if you don't use it.",
+        ["Windows-Identity-Foundation"]                = "Windows Identity Foundation — an older .NET single-sign-on framework. Needed only by some legacy business apps.",
     };
 
     public async Task<List<OptionalFeatureInfo>> GetAllFeaturesAsync()

@@ -1,309 +1,246 @@
 <UserControl x:Class="Systema.Views.MemoryView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:conv="clr-namespace:Systema.Core.Converters"
              Background="Transparent">
 
+    <UserControl.Resources>
+        <conv:BoolToVisibilityConverter x:Key="BoolToVis"/>
+    </UserControl.Resources>
+
     <ScrollViewer VerticalScrollBarVisibility="Auto">
-        <Grid Margin="32,28,32,28">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="20"/>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="20"/>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="20"/>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="Auto"/>
-            </Grid.RowDefinitions>
+        <StackPanel Margin="32,28,32,28">
 
             <!-- Header -->
-            <StackPanel Grid.Row="0">
-                <TextBlock Text="Memory &amp; Startup" Style="{StaticResource HeadingLarge}"/>
-                <TextBlock Text="See how much memory your PC is using and manage programs that run at startup."
-                           Style="{StaticResource CaptionText}" Margin="0,4,0,0"/>
-            </StackPanel>
+            <TextBlock Text="Memory &amp; Startup" Style="{StaticResource HeadingLarge}"/>
+            <TextBlock Text="See how your memory is doing and manage the apps that open when your PC starts."
+                       Style="{StaticResource CaptionText}" Margin="0,4,0,20"/>
 
-            <!-- RAM Stats + Pagefile -->
-            <Grid Grid.Row="2">
+            <!-- Metric tiles -->
+            <Grid Margin="0,0,0,16">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="16"/>
+                    <ColumnDefinition Width="12"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="12"/>
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
 
-                <!-- Quick Free RAM Card -->
-                <Border Grid.Column="0" Style="{StaticResource Card}">
+                <Border Grid.Column="0" Background="{StaticResource BgSurfaceBrush}" CornerRadius="12" Padding="16,14">
                     <StackPanel>
-                        <TextBlock Text="Quick Free RAM" Style="{StaticResource HeadingMedium}" Margin="0,0,0,6"/>
-
-                        <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,0,0,10">
-                            Releases unused memory from background processes and purges the Windows standby list.
-                            Useful before launching a memory-heavy app or when free RAM is low.
-                        </TextBlock>
-
-                        <!-- Live free RAM stat -->
-                        <TextBlock Style="{StaticResource CaptionText}" Margin="0,0,0,12">
-                            <Run Text="{Binding AvailableRamMb, Mode=OneWay, StringFormat='{}{0:N0}'}"/>
-                            <Run Text=" MB free  ·  "/>
-                            <Run Text="{Binding TotalRamMb, Mode=OneWay, StringFormat='{}{0:N0}'}"/>
-                            <Run Text=" MB total"/>
-                        </TextBlock>
-
-                        <!-- Free RAM button — label + enabled state driven by IsFreeing -->
-                        <Button Command="{Binding FreeRamCommand}" HorizontalAlignment="Left">
-                            <Button.Style>
-                                <Style TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
-                                    <Setter Property="Content"    Value="Free RAM Now"/>
-                                    <Setter Property="IsEnabled"  Value="True"/>
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding IsFreeing}" Value="True">
-                                            <Setter Property="Content"   Value="Flushing…"/>
-                                            <Setter Property="IsEnabled" Value="False"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </Button.Style>
-                        </Button>
-
-                        <!-- Status / result text -->
-                        <TextBlock Text="{Binding FreeRamStatus}"
-                                   Foreground="{StaticResource AccentGreenBrush}"
-                                   TextWrapping="Wrap" Margin="0,8,0,0">
-                            <TextBlock.Style>
-                                <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionText}">
-                                    <Setter Property="Visibility" Value="Visible"/>
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding FreeRamStatus}" Value="">
-                                            <Setter Property="Visibility" Value="Collapsed"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </TextBlock.Style>
-                        </TextBlock>
+                        <TextBlock Text="In use" Style="{StaticResource CaptionText}"/>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="{Binding UsedRamGb}" FontSize="26" FontWeight="SemiBold"
+                                       Foreground="{StaticResource TextPrimaryBrush}"/>
+                            <TextBlock Text=" GB" FontSize="13" VerticalAlignment="Bottom" Margin="3,0,0,5"
+                                       Foreground="{StaticResource TextSecondaryBrush}"/>
+                        </StackPanel>
                     </StackPanel>
                 </Border>
 
-                <!-- Pagefile Card -->
-                <Border Grid.Column="2" Style="{StaticResource Card}">
+                <Border Grid.Column="2" Background="{StaticResource BgSurfaceBrush}" CornerRadius="12" Padding="16,14">
                     <StackPanel>
-                        <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-                            <TextBlock Text="Virtual Memory (Page File)" Style="{StaticResource HeadingMedium}"/>
+                        <TextBlock Text="Free" Style="{StaticResource CaptionText}"/>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="{Binding FreeRamGb}" FontSize="26" FontWeight="SemiBold"
+                                       Foreground="{StaticResource AccentGreenBrush}"/>
+                            <TextBlock Text=" GB" FontSize="13" VerticalAlignment="Bottom" Margin="3,0,0,5"
+                                       Foreground="{StaticResource TextSecondaryBrush}"/>
                         </StackPanel>
+                    </StackPanel>
+                </Border>
 
-                        <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,0,0,4">
-                            Windows uses a file on disk as extra memory when RAM is full.
-                            A fixed size prevents stutter from on-the-fly resizing. Requires a restart.
-                        </TextBlock>
-                        <TextBlock Text="{Binding CurrentPagefileText}"
-                                   Style="{StaticResource CaptionText}"
-                                   Foreground="{StaticResource AccentGreenBrush}"
-                                   Margin="0,0,0,4"/>
-                        <TextBlock Text="{Binding RecommendedPagefileText}"
-                                   Style="{StaticResource CaptionText}"
-                                   Foreground="{StaticResource AccentBlueBrush}"
-                                   Margin="0,0,0,12"/>
-
-                        <!-- Single static size input + buttons — grayed out under Auto-Pilot -->
-                        <StackPanel>
-                            <StackPanel.Style>
-                                <Style TargetType="StackPanel">
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding IsAutoPilotActive}" Value="True">
-                                            <Setter Property="IsEnabled" Value="False"/>
-                                            <Setter Property="Opacity"   Value="0.4"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </StackPanel.Style>
-
-                            <StackPanel Margin="0,0,0,8" Width="160" HorizontalAlignment="Left">
-                                <TextBlock Text="Static Page File Size (MB)"
-                                           Style="{StaticResource CaptionText}" Margin="0,0,0,4"/>
-                                <TextBox Text="{Binding PagefileInitialMb, UpdateSourceTrigger=PropertyChanged}"
-                                         Style="{StaticResource DarkTextBox}"/>
-                            </StackPanel>
-
-                            <StackPanel Orientation="Horizontal">
-                                <Button Content="Apply"
-                                        Command="{Binding ConfigurePagefileCommand}"
-                                        Style="{StaticResource PrimaryButton}"
-                                        Margin="0,0,10,0"/>
-                                <Button Content="Reset to Default"
-                                        Command="{Binding RevertPagefileCommand}"
-                                        Style="{StaticResource GhostButton}"/>
-                            </StackPanel>
-                        </StackPanel>
+                <Border Grid.Column="4" Background="{StaticResource BgSurfaceBrush}" CornerRadius="12" Padding="16,14">
+                    <StackPanel>
+                        <TextBlock Text="Startup apps" Style="{StaticResource CaptionText}"/>
+                        <TextBlock Text="{Binding StartupItems.Count, Mode=OneWay}" FontSize="26" FontWeight="SemiBold"
+                                   Foreground="{StaticResource TextPrimaryBrush}"/>
                     </StackPanel>
                 </Border>
             </Grid>
 
-            <!-- Startup Manager Header -->
-            <StackPanel Grid.Row="4">
-                <TextBlock Text="Startup Programs" Style="{StaticResource HeadingMedium}"/>
-                <TextBlock Style="{StaticResource CaptionText}" Margin="0,4,0,0" TextWrapping="Wrap">
-                    <Run Text="{Binding StartupItems.Count, Mode=OneWay}"/>
-                    <Run Text=" programs start automatically with Windows. Disabling ones you don't need speeds up boot time."/>
-                    <Run Text=" The Impact column shows roughly how much each one slows down your startup."/>
-                </TextBlock>
-            </StackPanel>
+            <!-- Actions -->
+            <Grid Margin="0,0,0,4">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="10"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
 
-            <!-- Startup List -->
-            <Border Grid.Row="6" Style="{StaticResource Card}" Padding="0">
-                <Grid>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="*"/>
-                    </Grid.RowDefinitions>
+                <Button Grid.Column="0" Command="{Binding FreeRamCommand}" HorizontalAlignment="Stretch">
+                    <Button.Style>
+                        <Style TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
+                            <Setter Property="Content"   Value="Free up memory"/>
+                            <Setter Property="IsEnabled" Value="True"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsFreeing}" Value="True">
+                                    <Setter Property="Content"   Value="Freeing up…"/>
+                                    <Setter Property="IsEnabled" Value="False"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Button.Style>
+                </Button>
 
-                    <!-- Column headers -->
-                    <Border Grid.Row="0" Background="{StaticResource BgSurfaceBrush}"
-                            BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1"
-                            Padding="16,10" CornerRadius="10,10,0,0">
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="80"/>   <!-- IMPACT -->
-                                <ColumnDefinition Width="110"/>  <!-- STATUS -->
-                                <ColumnDefinition Width="80"/>   <!-- ACTION -->
-                            </Grid.ColumnDefinitions>
-                            <TextBlock Text="NAME" Style="{StaticResource CaptionText}"/>
-                            <TextBlock Text="IMPACT" Style="{StaticResource CaptionText}"
-                                       Grid.Column="1" HorizontalAlignment="Center"
-                                       ToolTip="How much this program slows down your PC startup"/>
-                            <TextBlock Text="STATUS" Style="{StaticResource CaptionText}"
-                                       Grid.Column="2" HorizontalAlignment="Center"/>
-                            <TextBlock Text="ACTION" Style="{StaticResource CaptionText}"
-                                       Grid.Column="3" HorizontalAlignment="Center"/>
-                        </Grid>
-                    </Border>
+                <Button Grid.Column="2" Content="Refresh" Command="{Binding RefreshCommand}"
+                        Style="{StaticResource GhostButton}" HorizontalAlignment="Stretch"/>
+            </Grid>
 
-                    <!-- Rows — scrollable; no MaxHeight so every item is reachable -->
-                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto"
-                                  MaxHeight="520" CanContentScroll="False">
-                    <ItemsControl ItemsSource="{Binding StartupItems}">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate>
-                                <Border Padding="16,8" BorderBrush="{StaticResource BorderBrush}"
-                                        BorderThickness="0,0,0,1">
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="80"/>
-                                            <ColumnDefinition Width="110"/>
-                                            <ColumnDefinition Width="80"/>
-                                        </Grid.ColumnDefinitions>
+            <!-- Free-RAM result text -->
+            <TextBlock Text="{Binding FreeRamStatus}" Foreground="{StaticResource AccentGreenBrush}"
+                       TextWrapping="Wrap" Margin="2,8,0,0">
+                <TextBlock.Style>
+                    <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionText}">
+                        <Setter Property="Visibility" Value="Visible"/>
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding FreeRamStatus}" Value="">
+                                <Setter Property="Visibility" Value="Collapsed"/>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </TextBlock.Style>
+            </TextBlock>
 
-                                        <!-- Name + command path (tooltip) -->
-                                        <StackPanel Grid.Column="0" VerticalAlignment="Center"
-                                                    ToolTip="{Binding Command}">
-                                            <TextBlock Text="{Binding Name}" Style="{StaticResource BodyText}"/>
-                                            <TextBlock Text="{Binding Command}"
-                                                       Style="{StaticResource CaptionText}"
-                                                       TextTrimming="CharacterEllipsis" MaxWidth="320"
-                                                       Opacity="0.6"/>
-                                        </StackPanel>
-
-                                        <!-- Impact badge -->
-                                        <Border Grid.Column="1" HorizontalAlignment="Center"
-                                                VerticalAlignment="Center" CornerRadius="4" Padding="7,3">
-                                            <Border.Style>
-                                                <Style TargetType="Border">
-                                                    <Setter Property="Background" Value="#145E81AC"/>
-                                                    <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding ImpactLabel}" Value="High">
-                                                            <Setter Property="Background" Value="#22C7556B"/>
-                                                        </DataTrigger>
-                                                        <DataTrigger Binding="{Binding ImpactLabel}" Value="Medium">
-                                                            <Setter Property="Background" Value="#22C8A654"/>
-                                                        </DataTrigger>
-                                                        <DataTrigger Binding="{Binding ImpactLabel}" Value="Low">
-                                                            <Setter Property="Background" Value="#225C9C7C"/>
-                                                        </DataTrigger>
-                                                    </Style.Triggers>
-                                                </Style>
-                                            </Border.Style>
-                                            <TextBlock Text="{Binding ImpactLabel}" FontSize="10"
-                                                       FontWeight="SemiBold">
-                                                <TextBlock.Style>
-                                                    <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionText}">
-                                                        <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
-                                                        <Style.Triggers>
-                                                            <DataTrigger Binding="{Binding ImpactLabel}" Value="High">
-                                                                <Setter Property="Foreground" Value="{StaticResource AccentRedBrush}"/>
-                                                            </DataTrigger>
-                                                            <DataTrigger Binding="{Binding ImpactLabel}" Value="Medium">
-                                                                <Setter Property="Foreground" Value="{StaticResource AccentYellowBrush}"/>
-                                                            </DataTrigger>
-                                                            <DataTrigger Binding="{Binding ImpactLabel}" Value="Low">
-                                                                <Setter Property="Foreground" Value="{StaticResource AccentGreenBrush}"/>
-                                                            </DataTrigger>
-                                                        </Style.Triggers>
-                                                    </Style>
-                                                </TextBlock.Style>
-                                            </TextBlock>
-                                        </Border>
-
-                                        <!-- Status badge -->
-                                        <Border Grid.Column="2" HorizontalAlignment="Center"
-                                                VerticalAlignment="Center">
-                                            <TextBlock>
-                                                <TextBlock.Style>
-                                                    <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionText}">
-                                                        <Style.Triggers>
-                                                            <DataTrigger Binding="{Binding IsEnabled}" Value="True">
-                                                                <Setter Property="Text" Value="Enabled"/>
-                                                                <Setter Property="Foreground" Value="{StaticResource AccentGreenBrush}"/>
-                                                            </DataTrigger>
-                                                            <DataTrigger Binding="{Binding IsEnabled}" Value="False">
-                                                                <Setter Property="Text" Value="Disabled"/>
-                                                                <Setter Property="Foreground" Value="{StaticResource AccentRedBrush}"/>
-                                                            </DataTrigger>
-                                                        </Style.Triggers>
-                                                    </Style>
-                                                </TextBlock.Style>
-                                            </TextBlock>
-                                        </Border>
-
-                                        <!-- Enable / Disable toggle button -->
-                                        <Button Grid.Column="3" Style="{StaticResource GhostButton}"
-                                                Padding="8,4" HorizontalAlignment="Center"
-                                                Command="{Binding DataContext.ToggleStartupItemCommand,
-                                                    RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                CommandParameter="{Binding}">
-                                            <TextBlock>
-                                                <TextBlock.Style>
-                                                    <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionText}">
-                                                        <Style.Triggers>
-                                                            <DataTrigger Binding="{Binding IsEnabled}" Value="True">
-                                                                <Setter Property="Text" Value="Disable"/>
-                                                            </DataTrigger>
-                                                            <DataTrigger Binding="{Binding IsEnabled}" Value="False">
-                                                                <Setter Property="Text" Value="Enable"/>
-                                                            </DataTrigger>
-                                                        </Style.Triggers>
-                                                    </Style>
-                                                </TextBlock.Style>
-                                            </TextBlock>
-                                        </Button>
-                                    </Grid>
-                                </Border>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                    </ScrollViewer>
-                </Grid>
+            <!-- Speed-up recommendation -->
+            <Border CornerRadius="12" Padding="18,16" Margin="0,20,0,0"
+                    Background="{StaticResource BgCardBrush}"
+                    BorderBrush="{StaticResource AccentBlueBrush}" BorderThickness="2"
+                    Visibility="{Binding HasStartupRecommendation, Converter={StaticResource BoolToVis}}">
+                <StackPanel>
+                    <TextBlock Text="Speed up your startup" Style="{StaticResource HeadingSmall}" Margin="0,0,0,4"/>
+                    <TextBlock Text="{Binding StartupRecommendationText}"
+                               Foreground="{StaticResource AccentBlueBrush}" FontWeight="SemiBold" Margin="0,0,0,6"/>
+                    <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,0,0,12">
+                        <Run Text="These apps make your PC slower to get ready after you turn it on: "/>
+                        <Run Text="{Binding HighImpactNames, Mode=OneWay}" Foreground="{StaticResource TextPrimaryBrush}"/>
+                        <Run Text=". You can still open them anytime."/>
+                    </TextBlock>
+                    <Button Content="Turn them all off" Command="{Binding DisableHeavyStartupCommand}"
+                            Style="{StaticResource PrimaryButton}" HorizontalAlignment="Left"/>
+                </StackPanel>
             </Border>
 
-            <!-- Status + Refresh -->
-            <Grid Grid.Row="7" Margin="0,12,0,0">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
-                <TextBlock Text="{Binding StatusMessage}" Style="{StaticResource CaptionText}" VerticalAlignment="Center"/>
-                <Button Grid.Column="1" Content="Refresh" Style="{StaticResource GhostButton}"
-                        Command="{Binding RefreshCommand}"/>
-            </Grid>
-        </Grid>
+            <!-- All startup apps -->
+            <TextBlock Text="All startup apps" Style="{StaticResource HeadingMedium}" Margin="0,24,0,2"/>
+            <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,0,0,12">
+                <Run Text="These open automatically with Windows. Turning off the heavy ones makes your PC ready faster. The colored tag shows how much each one slows you down."/>
+            </TextBlock>
+
+            <ItemsControl ItemsSource="{Binding StartupItems}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <WrapPanel/>
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Border Width="232" Margin="0,0,12,12" Padding="16,14"
+                                Background="{StaticResource BgCardBrush}"
+                                BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
+                                CornerRadius="12" ToolTip="{Binding Command}">
+                            <StackPanel>
+                                <!-- Name + toggle -->
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="{Binding Name}" Style="{StaticResource BodyText}"
+                                               FontWeight="SemiBold" TextTrimming="CharacterEllipsis"
+                                               VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                    <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}"
+                                              VerticalAlignment="Center"
+                                              IsChecked="{Binding IsEnabled, Mode=OneWay}"
+                                              Command="{Binding DataContext.ToggleStartupItemCommand,
+                                                  RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                              CommandParameter="{Binding}"/>
+                                </Grid>
+
+                                <!-- Publisher -->
+                                <TextBlock Text="{Binding Publisher}" Style="{StaticResource CaptionText}"
+                                           TextTrimming="CharacterEllipsis" Opacity="0.7" Margin="0,2,0,10"/>
+
+                                <!-- Impact badge -->
+                                <Border HorizontalAlignment="Left" CornerRadius="6" Padding="8,3">
+                                    <Border.Style>
+                                        <Style TargetType="Border">
+                                            <Setter Property="Background" Value="#225C9C7C"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding ImpactLabel}" Value="High">
+                                                    <Setter Property="Background" Value="#22C7556B"/>
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding ImpactLabel}" Value="Medium">
+                                                    <Setter Property="Background" Value="#22C8A654"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
+                                    <TextBlock FontSize="11" FontWeight="SemiBold">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionText}">
+                                                <Setter Property="Text"       Value="Low impact"/>
+                                                <Setter Property="Foreground" Value="{StaticResource AccentGreenBrush}"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding ImpactLabel}" Value="High">
+                                                        <Setter Property="Text"       Value="High impact"/>
+                                                        <Setter Property="Foreground" Value="{StaticResource AccentRedBrush}"/>
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding ImpactLabel}" Value="Medium">
+                                                        <Setter Property="Text"       Value="Medium impact"/>
+                                                        <Setter Property="Foreground" Value="{StaticResource AccentYellowBrush}"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                </Border>
+                            </StackPanel>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <!-- Advanced (demoted) — Virtual memory / page file -->
+            <Border Style="{StaticResource Card}" Margin="0,8,0,0">
+                <StackPanel>
+                    <StackPanel.Style>
+                        <Style TargetType="StackPanel">
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsAutoPilotActive}" Value="True">
+                                    <Setter Property="IsEnabled" Value="False"/>
+                                    <Setter Property="Opacity"   Value="0.4"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </StackPanel.Style>
+
+                    <TextBlock Text="Advanced · Virtual memory (page file)" Style="{StaticResource HeadingSmall}"/>
+                    <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,4,0,4">
+                        Windows uses a file on disk as backup memory when RAM fills up. A fixed size avoids
+                        stutter from resizing on the fly. Most people can leave this alone. Requires a restart.
+                    </TextBlock>
+                    <TextBlock Text="{Binding CurrentPagefileText}" Style="{StaticResource CaptionText}"
+                               Foreground="{StaticResource AccentGreenBrush}" Margin="0,0,0,2"/>
+                    <TextBlock Text="{Binding RecommendedPagefileText}" Style="{StaticResource CaptionText}"
+                               Foreground="{StaticResource AccentBlueBrush}" Margin="0,0,0,12"/>
+
+                    <StackPanel Width="180" HorizontalAlignment="Left" Margin="0,0,0,8">
+                        <TextBlock Text="Fixed size (MB)" Style="{StaticResource CaptionText}" Margin="0,0,0,4"/>
+                        <TextBox Text="{Binding PagefileInitialMb, UpdateSourceTrigger=PropertyChanged}"
+                                 Style="{StaticResource DarkTextBox}"/>
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal">
+                        <Button Content="Apply" Command="{Binding ConfigurePagefileCommand}"
+                                Style="{StaticResource PrimaryButton}" Margin="0,0,10,0"/>
+                        <Button Content="Reset to default" Command="{Binding RevertPagefileCommand}"
+                                Style="{StaticResource GhostButton}"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- Status line -->
+            <TextBlock Text="{Binding StatusMessage}" Style="{StaticResource CaptionText}" Margin="2,14,0,0"/>
+
+        </StackPanel>
     </ScrollViewer>
 </UserControl>

@@ -577,8 +577,9 @@ public class LoggerService
             sb.AppendLine($"  TaskSleep.IgnoreForeground:       {tsKey?.GetValue("IgnoreForeground",        "not set") ?? "not set"}");
             sb.AppendLine($"  TaskSleep.ActOnFgChildren:        {tsKey?.GetValue("ActOnForegroundChildren", "not set") ?? "not set"}");
             sb.AppendLine($"  TaskSleep.ExcludeSystemServices:  {tsKey?.GetValue("ExcludeSystemServices",   "not set") ?? "not set"}");
+            sb.AppendLine($"  TaskSleep.SkipBusyMinimized:      {tsKey?.GetValue("SkipBusyMinimizedApps",   "not set") ?? "not set"}");
+            sb.AppendLine($"  TaskSleep.BusyMinimizedCpu%:      {tsKey?.GetValue("BusyMinimizedCpuThresholdPercent", "not set") ?? "not set"}");
             sb.AppendLine($"  TaskSleep.SystemCpuTrigger%:      {tsKey?.GetValue("SystemCpuTriggerPercent", "not set") ?? "not set"}");
-            sb.AppendLine($"  TaskSleep.ProcessCpuStart%:       {tsKey?.GetValue("ProcessCpuStartPercent",  "not set") ?? "not set"}");
             sb.AppendLine($"  TaskSleep.ProcessCpuStop%:        {tsKey?.GetValue("ProcessCpuStopPercent",   "not set") ?? "not set"}");
             sb.AppendLine($"  TaskSleep.TimeOverQuotaMs:        {tsKey?.GetValue("TimeOverQuotaMs",         "not set") ?? "not set"}");
             sb.AppendLine($"  TaskSleep.MinAdjustmentMs:        {tsKey?.GetValue("MinAdjustmentDurationMs", "not set") ?? "not set"}");

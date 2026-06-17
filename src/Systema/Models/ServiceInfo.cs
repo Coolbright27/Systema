@@ -24,6 +24,10 @@ public class ServiceInfo
     public string Tooltip      { get; set; } = string.Empty;
     public bool   IsOptimized  { get; set; }
 
+    /// <summary>True when the service is running normally (not optimized). The redesigned
+    /// Cleanup tab binds a single on/off toggle to this: on = active, off = optimized.</summary>
+    public bool IsActive => !IsOptimized;
+
     /// <summary>
     /// Whether this service carries the "Recommended to disable" label.
     /// False for Print Spooler and Xbox Services unless gaming is detected.

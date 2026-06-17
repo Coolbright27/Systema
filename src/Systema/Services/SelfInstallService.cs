@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using Microsoft.Win32;
 
@@ -73,6 +74,8 @@ public static class SelfInstallService
             var self = Environment.ProcessPath;
             if (self == null) { Log.Warn("SelfInstall", "Cannot resolve own exe path"); return null; }
 
+            bool wasInstalled = IsInstalled();   // already on disk → this is an update, not a first install
+
             if (!IsRunningInstalled())
             {
                 Directory.CreateDirectory(InstallDir);
@@ -85,7 +88,12 @@ public static class SelfInstallService
             }
 
             CreateShortcut(StartMenuShortcut);
-            CreateShortcut(DesktopShortcut);
+            // Desktop shortcut ONLY on a fresh, interactive install. An auto-update (silent) or a
+            // re-install must NOT drop a new icon on the desktop — the Inno installer leaves the
+            // desktop icon unchecked by default, so a self-install update appearing as a new
+            // desktop "installer" was the reported bug.
+            if (!silent && !wasInstalled)
+                CreateShortcut(DesktopShortcut);
             WriteUninstallEntry(version);
 
             Log.Info("SelfInstall", $"Installed to {InstalledExe} (v{version})");
@@ -178,19 +186,52 @@ public static class SelfInstallService
         catch (Exception ex) { Log.Warn("SelfInstall", $"ARP entry failed: {ex.Message}"); }
     }
 
+    /// <summary>
+    /// Frees the installed Systema.exe so it can be overwritten, by getting any OTHER running
+    /// Systema instances to exit. Prefers a graceful exit and never tree-kills:
+    /// <list type="bullet">
+    /// <item>When invoked as an AUTO-UPDATE, the old instance's own updater shuts it down a
+    /// moment after launching us, so we WAIT for that — hard-killing a windowed app instead
+    /// leaves a frozen "Not Responding" ghost window behind (the freeze users reported).</item>
+    /// <item>Anything still alive after the wait gets a SINGLE <c>Kill()</c>, never
+    /// <c>entireProcessTree</c>: the updater may have launched this installer as a CHILD of the
+    /// old instance, and a tree-kill would terminate us (and our just-spawned replacement).</item>
+    /// </list>
+    /// </summary>
     private static void KillOtherInstances()
     {
         try
         {
             int self = Environment.ProcessId;
-            foreach (var p in Process.GetProcessesByName("Systema"))
+            var others = Process.GetProcessesByName("Systema")
+                                .Where(p => p.Id != self)
+                                .ToList();
+            if (others.Count == 0) return;
+
+            // Wait up to ~3s for a graceful self-shutdown (auto-update path).
+            var deadline = DateTime.UtcNow.AddSeconds(3);
+            while (DateTime.UtcNow < deadline && others.Any(p => !HasExitedSafe(p)))
+                System.Threading.Thread.Sleep(250);
+
+            // Force-close whatever is still alive — single Kill only.
+            foreach (var p in others)
             {
-                try { if (p.Id != self) { p.Kill(entireProcessTree: true); p.WaitForExit(3000); } }
-                catch { /* best-effort */ }
+                try { if (!HasExitedSafe(p)) { p.Kill(); p.WaitForExit(2000); } }
+                catch (Exception ex) { Log.Warn("SelfInstall", $"kill PID {p.Id}: {ex.Message}"); }
                 finally { p.Dispose(); }
             }
+
+            // A killed instance never ran its clean Dispose, so its heartbeat file is still
+            // fresh. Clear it so the relaunched copy can't misread a ghost-beat and bail out in
+            // a single-instance race.
+            HeartbeatService.Clear();
         }
-        catch { }
+        catch (Exception ex) { Log.Warn("SelfInstall", $"KillOtherInstances: {ex.Message}"); }
+    }
+
+    private static bool HasExitedSafe(Process p)
+    {
+        try { return p.HasExited; } catch { return true; }
     }
 
     private static void CopyWithRetry(string src, string dst)

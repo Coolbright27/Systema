@@ -948,6 +948,28 @@
 
                     <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,0,0,16"/>
 
+                    <!-- Keep busy apps awake (on by default) -->
+                    <Grid Margin="0,0,0,16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" Margin="0,0,24,0">
+                            <TextBlock Text="Keep busy apps awake"
+                                       Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
+                            <TextBlock Text="Don't sleep a minimized or tray app while its whole process tree is using more than 30% CPU — it's probably still doing work (an export, a render, a build). The entire app stays awake, and naps normally once it settles down."
+                                       Style="{StaticResource CaptionText}"
+                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                       TextWrapping="Wrap" Margin="0,3,0,0"/>
+                        </StackPanel>
+                        <CheckBox Grid.Column="1"
+                                  IsChecked="{Binding SkipBusyMinimizedApps, Mode=TwoWay}"
+                                  Style="{StaticResource ToggleSwitch}"
+                                  VerticalAlignment="Top"/>
+                    </Grid>
+
+                    <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,0,0,16"/>
+
                     <!-- Compress memory in deep sleep — closest Windows equivalent to macOS App Nap + Compressed Memory -->
                     <Grid Margin="0,0,0,16">
                         <Grid.ColumnDefinitions>
@@ -1307,141 +1329,6 @@
 
                 </StackPanel>
             </Border>
-
-            <!-- ===== BETA FEATURES ===== -->
-            <Border Style="{StaticResource Card}" Margin="0,0,0,16">
-                <StackPanel>
-
-                    <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                        <TextBlock Text="Beta Features" Style="{StaticResource HeadingMedium}"/>
-                        <Border Background="#3A2A18" CornerRadius="4" Padding="6,2" Margin="10,0,0,0" VerticalAlignment="Center">
-                            <TextBlock Text="BETA" FontSize="10" FontWeight="Bold" Foreground="White"/>
-                        </Border>
-                    </StackPanel>
-                    <TextBlock Text="Experimental features in testing"
-                               Style="{StaticResource CaptionText}"
-                               Foreground="{StaticResource TextSecondaryBrush}"
-                               Margin="0,0,0,16"/>
-
-                    <!-- Network activity guard -->
-                    <Grid Margin="0,0,0,16">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" Margin="0,0,24,0">
-                            <TextBlock Text="Network activity guard"
-                                       Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                            <TextBlock Text="Apps actively downloading, uploading, or streaming won't be put to sleep."
-                                       Style="{StaticResource CaptionText}"
-                                       Foreground="{StaticResource TextSecondaryBrush}"
-                                       TextWrapping="Wrap" Margin="0,3,0,0"/>
-                        </StackPanel>
-                        <CheckBox Grid.Column="1"
-                                  IsChecked="{Binding NetworkActivityGuardEnabled, Mode=TwoWay}"
-                                  Style="{StaticResource ToggleSwitch}"
-                                  VerticalAlignment="Top"/>
-                    </Grid>
-
-                    <Grid Margin="16,0,0,16"
-                          Visibility="{Binding NetworkActivityGuardEnabled, Converter={StaticResource BoolToVis}}">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Text="Network threshold" Style="{StaticResource CaptionText}" VerticalAlignment="Center"/>
-                        <TextBox Grid.Column="1"
-                                 Text="{Binding NetworkActivityThresholdKBps, UpdateSourceTrigger=PropertyChanged}"
-                                 Style="{StaticResource ThresholdInput}"/>
-                        <TextBlock Grid.Column="2" Text="KB/s" VerticalAlignment="Center"
-                                   Margin="6,0,0,0" Style="{StaticResource BodyText}"
-                                   Foreground="{StaticResource TextSecondaryBrush}"/>
-                    </Grid>
-
-                    <!-- Disk I/O guard -->
-                    <Grid Margin="0,0,0,16">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" Margin="0,0,24,0">
-                            <TextBlock Text="Disk I/O guard"
-                                       Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                            <TextBlock Text="Apps actively reading or writing files (saving, compiling, installing) won't be put to sleep."
-                                       Style="{StaticResource CaptionText}"
-                                       Foreground="{StaticResource TextSecondaryBrush}"
-                                       TextWrapping="Wrap" Margin="0,3,0,0"/>
-                        </StackPanel>
-                        <CheckBox Grid.Column="1"
-                                  IsChecked="{Binding DiskIoGuardEnabled, Mode=TwoWay}"
-                                  Style="{StaticResource ToggleSwitch}"
-                                  VerticalAlignment="Top"/>
-                    </Grid>
-
-                    <Grid Margin="16,0,0,16"
-                          Visibility="{Binding DiskIoGuardEnabled, Converter={StaticResource BoolToVis}}">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Text="Disk threshold" Style="{StaticResource CaptionText}" VerticalAlignment="Center"/>
-                        <TextBox Grid.Column="1"
-                                 Text="{Binding DiskIoThresholdKBps, UpdateSourceTrigger=PropertyChanged}"
-                                 Style="{StaticResource ThresholdInput}"/>
-                        <TextBlock Grid.Column="2" Text="KB/s" VerticalAlignment="Center"
-                                   Margin="6,0,0,0" Style="{StaticResource BodyText}"
-                                   Foreground="{StaticResource TextSecondaryBrush}"/>
-                    </Grid>
-
-                    <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,0,0,16"/>
-
-                    <!-- Smart aggressive nap -->
-                    <Grid Margin="0,0,0,16">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" Margin="0,0,24,0">
-                            <TextBlock Text="Smart aggressive nap"
-                                       Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                            <TextBlock Text="Finds background apps doing nothing and puts them to sleep, even if they aren't on the known resource wasters list."
-                                       Style="{StaticResource CaptionText}"
-                                       Foreground="{StaticResource TextSecondaryBrush}"
-                                       TextWrapping="Wrap" Margin="0,3,0,0"/>
-                        </StackPanel>
-                        <CheckBox Grid.Column="1"
-                                  IsChecked="{Binding SmartAggressiveNapEnabled, Mode=TwoWay}"
-                                  Style="{StaticResource ToggleSwitch}"
-                                  VerticalAlignment="Top"/>
-                    </Grid>
-
-                    <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,0,0,16"/>
-
-                    <!-- Notification grace period -->
-                    <Grid Margin="0,0,0,4">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" Margin="0,0,24,0">
-                            <TextBlock Text="Notification grace period"
-                                       Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                            <TextBlock Text="When an app gets a notification, it gets extra time before being put to sleep."
-                                       Style="{StaticResource CaptionText}"
-                                       Foreground="{StaticResource TextSecondaryBrush}"
-                                       TextWrapping="Wrap" Margin="0,3,0,0"/>
-                        </StackPanel>
-                        <CheckBox Grid.Column="1"
-                                  IsChecked="{Binding NotificationGracePeriodEnabled, Mode=TwoWay}"
-                                  Style="{StaticResource ToggleSwitch}"
-                                  VerticalAlignment="Top"/>
-                    </Grid>
-
-                </StackPanel>
-            </Border>
-
 
             <!-- ===== WHITELIST CARD ===== -->
             <Border Style="{StaticResource Card}" Margin="0,0,0,16">

@@ -60,6 +60,10 @@ public partial class App : Application
     private MainViewModel?   _mainVm;
     private UpdateService?   _updateService;
     private HeartbeatService? _heartbeat;
+    // Held so the crash / process-exit handlers can restore napped processes (incl. lifting CPU caps)
+    // before Systema's handles close — preventing orphaned throttles on every exit path we can run on.
+    private TaskSleepViewModel? _taskSleepVm;
+    private int _napsRestoredOnShutdown;   // Interlocked guard so the restore runs at most once
 
     // Single-instance guard — prevents the watchdog task from spawning duplicates
     private static Mutex? _singleInstanceMutex;
@@ -113,6 +117,11 @@ public partial class App : Application
         DispatcherUnhandledException += OnDispatcherUnhandledException;
         AppDomain.CurrentDomain.UnhandledException += OnDomainUnhandledException;
         TaskScheduler.UnobservedTaskException += OnUnobservedTaskException;
+        // Last-resort cleanup: fires on graceful exit, Environment.Exit, and most managed
+        // terminations — restores napped processes (and lifts their CPU caps) before our handles
+        // close, so they aren't left orphaned. A hard TerminateProcess / power loss skips this; the
+        // startup nap-recovery in TaskSleepService covers what it can in that case.
+        AppDomain.CurrentDomain.ProcessExit += (_, _) => RestoreNapsOnShutdown();
 
         base.OnStartup(e);
 
@@ -367,6 +376,7 @@ public partial class App : Application
 
             // TaskSleepViewModel must be created before DashboardViewModel (dashboard reads its live process list)
             var taskSleepVm   = new TaskSleepViewModel();
+            _taskSleepVm = taskSleepVm;   // so crash / process-exit handlers can restore naps before exit
 
             var dashboardVm   = new DashboardViewModel(
                 gameboosterService, taskSleepVm, serviceControl,
@@ -480,15 +490,27 @@ public partial class App : Application
             // ── Auto-updater ──
             // Starts the background loop: checks on startup (20 s delay), re-checks
             // every 2 days, and installs silently when CPU has been idle for 5 minutes.
-            // PreShutdownAsync fires first (deactivates Game Boost if active so the system
-            // is cleanly restored before the installer replaces Systema.exe on disk).
-            // ShutdownRequested fires just before the installer launches.
+            // PreShutdownAsync fires first so the system is cleanly restored before the
+            // installer replaces Systema.exe on disk: it deactivates Game Boost (if active)
+            // and pauses Task Sleep (restoring every napped process). ShutdownRequested then
+            // fires just before the installer launches.
             _updateService.PreShutdownAsync = async () =>
             {
-                if (!gameboosterService.BoostActive) return;
-                Log.Info("App", "Pre-update: Game Boost is active — deactivating before installer launches");
-                await gameboosterService.DeactivateForUpdateAsync();
-                Log.Info("App", "Pre-update: Game Boost deactivated — proceeding with update install");
+                if (gameboosterService.BoostActive)
+                {
+                    Log.Info("App", "Pre-update: Game Boost is active — deactivating before installer launches");
+                    await gameboosterService.DeactivateForUpdateAsync();
+                    Log.Info("App", "Pre-update: Game Boost deactivated");
+                }
+
+                // Restore every napped process (priority / RAM / EcoQoS / CPU-cap) before this
+                // process dies. Those throttles persist on the target processes after Systema
+                // exits, and the freshly-installed version has no record of what was napped — so
+                // without this they'd stay stuck at Idle / lowest-RAM. PauseForUpdate keeps the
+                // IsEnabled setting intact, so the new version re-enables Task Sleep on startup.
+                try { taskSleepVm.PauseForUpdate(); }
+                catch (Exception ex) { Log.Warn("App", $"Pre-update: Task Sleep restore failed: {ex.Message}"); }
+                Log.Info("App", "Pre-update: Task Sleep restored — proceeding with update install");
             };
             _updateService.ShutdownRequested += () =>
                 Dispatcher.Invoke(() =>
@@ -689,10 +711,26 @@ public partial class App : Application
         // Write to disk before trying to show UI (UI might not work if process is terminating)
         CrashGuard.Mark($"DOMAIN EXCEPTION: {ex?.GetType().Name}: {ex?.Message}");
 
+        // The process is about to die — restore napped processes (and lift their CPU caps) NOW, while
+        // we still can. ProcessExit isn't guaranteed to run on a fatal unhandled exception.
+        if (e.IsTerminating) RestoreNapsOnShutdown();
+
         if (Dispatcher != null && !Dispatcher.CheckAccess())
             Dispatcher.Invoke(() => ShowCrashOnUIThread(ex, "Background Thread Exception"));
         else
             ShowCrashOnUIThread(ex, "Background Thread Exception");
+    }
+
+    /// <summary>
+    /// Restores every napped process (priority / memory / EcoQoS / GPU / affinity) and lifts their
+    /// kernel CPU caps before Systema's handles close, so a crash or process exit doesn't leave them
+    /// orphaned. Runs at most once (Interlocked guard) since several exit paths may call it.
+    /// </summary>
+    private void RestoreNapsOnShutdown()
+    {
+        if (System.Threading.Interlocked.Exchange(ref _napsRestoredOnShutdown, 1) != 0) return;
+        try { _taskSleepVm?.RestoreAllNaps(); }
+        catch (Exception ex) { Log.Warn("App", $"Restore-on-shutdown failed: {ex.Message}"); }
     }
 
     // ── Unobserved Task exceptions ──

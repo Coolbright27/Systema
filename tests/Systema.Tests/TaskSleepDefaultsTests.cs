@@ -23,10 +23,10 @@ public class TaskSleepDefaultsTests
     // If any default changes intentionally, update both the class AND this test.
 
     [Fact]
-    public void TaskSleepSettings_NappedCpuCapPercent_DefaultIs2()
+    public void TaskSleepSettings_NappedCpuCapPercent_DefaultIs1()
     {
         var s = new TaskSleepSettings();
-        Assert.Equal(2, s.NappedCpuCapPercent);
+        Assert.Equal(1, s.NappedCpuCapPercent);
     }
 
     [Fact]
@@ -86,10 +86,18 @@ public class TaskSleepDefaultsTests
     }
 
     [Fact]
-    public void TaskSleepSettings_ProcessCpuStartPercent_DefaultIs7()
+    public void TaskSleepSettings_SkipBusyMinimizedApps_DefaultsOn()
+    {
+        // The "keep busy apps awake" feature ships ON by default.
+        var s = new TaskSleepSettings();
+        Assert.True(s.SkipBusyMinimizedApps);
+    }
+
+    [Fact]
+    public void TaskSleepSettings_BusyMinimizedCpuThreshold_DefaultIs30()
     {
         var s = new TaskSleepSettings();
-        Assert.Equal(7, s.ProcessCpuStartPercent);
+        Assert.Equal(30, s.BusyMinimizedCpuThresholdPercent);
     }
 
     [Fact]
@@ -107,8 +115,8 @@ public class TaskSleepDefaultsTests
     }
 
     // ── Cross-check: ViewModel LoadSettings fallback must match model default ─
-    // The VM's ReadInt(key, "NappedCpuCapPercent", 2) fallback and the field
-    // default must both be 2. This test encodes that expectation explicitly so
+    // The VM's ReadInt(key, "NappedCpuCapPercent", 1) fallback and the field
+    // default must both be 1. This test encodes that expectation explicitly so
     // a future change to either value triggers a visible failure.
 
     [Fact]
@@ -120,7 +128,7 @@ public class TaskSleepDefaultsTests
         // LoadSettings fallback (the second arg to ReadInt) — must stay in sync.
         // If someone changes TaskSleepSettings default, they must also update
         // the ReadInt fallback in LoadSettings, and vice versa.
-        const int loadSettingsFallback = 2; // matches ReadInt(key, "NappedCpuCapPercent", 2)
+        const int loadSettingsFallback = 1; // matches ReadInt(key, "NappedCpuCapPercent", 1)
 
         Assert.Equal(loadSettingsFallback, modelDefault);
     }
@@ -146,10 +154,10 @@ public class TaskSleepDefaultsTests
     }
 
     [Fact]
-    public void NappedCpuCapPercent_DefaultOf2_SurvivesClamping()
+    public void NappedCpuCapPercent_DefaultOf1_SurvivesClamping()
     {
-        // The default 2 must not be modified by the clamp.
-        int clamped = Math.Clamp(2, 1, 100);
-        Assert.Equal(2, clamped);
+        // The default 1 must not be modified by the clamp.
+        int clamped = Math.Clamp(1, 1, 100);
+        Assert.Equal(1, clamped);
     }
 }
