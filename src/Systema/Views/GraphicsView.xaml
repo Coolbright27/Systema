@@ -180,6 +180,32 @@
                 </Grid>
             </Border>
 
+            <!-- ===== Nvidia Graphics link (only when an NVIDIA GPU is present) ===== -->
+            <Border Style="{StaticResource Card}" Margin="0,16,0,0"
+                    Visibility="{Binding DataContext.IsNvidiaGpuPresent, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToVis}}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0" Margin="0,0,16,0" VerticalAlignment="Center">
+                        <TextBlock Text="NVIDIA graphics detected" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
+                        <TextBlock Text="Per-GPU power management and driver tweaks live on the Nvidia Graphics page."
+                                   Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,2,0,0"/>
+                    </StackPanel>
+                    <Button Grid.Column="1" VerticalAlignment="Center"
+                            Content="Open Nvidia Graphics  →"
+                            Padding="14,8"
+                            Foreground="{StaticResource AccentBlueBrush}"
+                            Background="Transparent"
+                            BorderBrush="{StaticResource AccentBlueBrush}"
+                            BorderThickness="1"
+                            Cursor="Hand"
+                            Command="{Binding DataContext.NavigateCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                            CommandParameter="Nvidia"/>
+                </Grid>
+            </Border>
+
         </StackPanel>
     </ScrollViewer>
 </UserControl>

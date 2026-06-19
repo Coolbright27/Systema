@@ -839,34 +839,12 @@ public sealed class GameBoosterService : IDisposable
 
         _log.Info("GameBoosterService", $"Boost activated for: {gameName}");
 
-        CrashGuard.Mark($"Game Boost activating for: {gameName} — killing services...");
-
-        var killList = GetKillList();
-        foreach (var svcName in killList)
-        {
-            try
-            {
-                using var svc = new ServiceController(svcName);
-                // Refresh status before reading to avoid stale state
-                svc.Refresh();
-                if (svc.Status == ServiceControllerStatus.Running)
-                {
-                    svc.Stop();
-                    // Poll instead of WaitForStatus to avoid deep native stack
-                    PollForStatus(svc, ServiceControllerStatus.Stopped, timeoutSeconds: 5);
-                    _killedServices.Add(svcName);
-                    _log.Info("GameBoosterService", $"Killed service: {svcName}");
-                }
-            }
-            catch (Exception ex)
-            {
-                // Service not installed — skip silently; only warn for actual errors
-                if (!ex.Message.Contains("was not found"))
-                    _log.Warn("GameBoosterService", $"Could not stop {svcName}: {ex.Message}");
-            }
-        }
-
-        CrashGuard.Mark($"Game Boost active — {_killedServices.Count} services paused for {gameName}: {string.Join(", ", _killedServices)}");
+        // Service pausing removed (2026-06): modern Windows handles game prioritisation
+        // (Game Mode + the scheduler), so stopping background services during boost is
+        // unnecessary and disruptive. The boost now only adjusts priority, GPU, and power.
+        // _killedServices stays empty; the restore/recovery paths below are kept so any
+        // services paused by an OLDER Systema build still get restored on upgrade.
+        CrashGuard.Mark($"Game Boost active for {gameName} (background services are no longer paused)");
 
         // Boost game process priority (skip anti-cheat/unknown placeholders)
         bool isRealGame = !gameName.Contains("Anti-Cheat", StringComparison.OrdinalIgnoreCase)
@@ -1203,33 +1181,10 @@ public sealed class GameBoosterService : IDisposable
             catch (Exception ex) { _log.Warn("GameBoosterService", $"SuppressNotifications failed: {ex.Message}"); }
         }
 
-        // 4. Disable Windows Search Indexing — suspend, stop, and disable the service
-        if (_settings.GameBoosterDisableSearchIndexing)
-        {
-            try
-            {
-                using var svc = new ServiceController("WSearch");
-                bool wasRunning = svc.Status == ServiceControllerStatus.Running ||
-                                  svc.Status == ServiceControllerStatus.StartPending;
-                if (wasRunning)
-                {
-                    _searchIndexingWasRunning = true;
-                    svc.Stop();
-                    try { svc.WaitForStatus(ServiceControllerStatus.Stopped, TimeSpan.FromSeconds(8)); } catch { }
-                    // Also set to Disabled so it doesn't restart mid-game
-                    using var key = Registry.LocalMachine.OpenSubKey(
-                        @"SYSTEM\CurrentControlSet\Services\WSearch", true);
-                    key?.SetValue("Start", 4, RegistryValueKind.DWord);
-                    _log.Info("GameBoosterService", "Search indexing disabled for game boost");
-                }
-                else
-                {
-                    _searchIndexingWasRunning = false;
-                    _log.Info("GameBoosterService", "Search indexing already stopped — skipping");
-                }
-            }
-            catch (Exception ex) { _log.Warn("GameBoosterService", $"DisableSearchIndexing failed: {ex.Message}"); }
-        }
+        // 4. Search-indexing pause removed (2026-06): Systema no longer stops the WSearch
+        // service during boost — not needed on modern Windows. The restore path below is
+        // kept so a session paused by an older build still gets WSearch back.
+        _searchIndexingWasRunning = false;
 
         // 5. Switch to High Performance power plan
         if (_settings.GameBoosterHighPerfPowerPlan)
@@ -1479,18 +1434,10 @@ public sealed class GameBoosterService : IDisposable
             catch { }
         }
 
-        // ── Windows Search service status ─────────────────────────────────────
-        if (_settings.GameBoosterDisableSearchIndexing)
-        {
-            try
-            {
-                using var svc = new ServiceController("WSearch");
-                svc.Refresh();
-                _searchIndexingWasRunning = svc.Status == ServiceControllerStatus.Running
-                                         || svc.Status == ServiceControllerStatus.StartPending;
-            }
-            catch { }
-        }
+        // ── Windows Search service ────────────────────────────────────────────
+        // No longer tracked — Systema doesn't stop WSearch during boost, so there's
+        // nothing to restore. (Recovery from an older build's snapshot still works.)
+        _searchIndexingWasRunning = false;
 
         // ── Active power plan GUID ────────────────────────────────────────────
         if (_settings.GameBoosterHighPerfPowerPlan)

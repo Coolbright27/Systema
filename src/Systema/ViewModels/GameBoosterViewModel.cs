@@ -107,6 +107,12 @@ public partial class GameBoosterViewModel : ObservableObject, IAutoRefreshable, 
     [ObservableProperty] private bool _showServiceSettings;
     [RelayCommand] private void ToggleServiceSettings() => ShowServiceSettings = !ShowServiceSettings;
 
+    // ── Accordion sections (Design C) — collapsed by default ──
+    [ObservableProperty] private bool _showBoostOptions;
+    [ObservableProperty] private bool _showDetection;
+    [RelayCommand] private void ToggleBoostOptions() => ShowBoostOptions = !ShowBoostOptions;
+    [RelayCommand] private void ToggleDetection()    => ShowDetection    = !ShowDetection;
+
     // ── Well-known service descriptions ──────────────────────────────────────
     private static readonly Dictionary<string, string> KnownDescriptions =
         new(StringComparer.OrdinalIgnoreCase)

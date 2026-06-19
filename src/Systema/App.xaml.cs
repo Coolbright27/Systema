@@ -305,6 +305,7 @@ public partial class App : Application
             var graphicsTweaks      = new GraphicsTweaksService();
             var bloatwareService    = new BloatwareService();
             var intelGpuService     = new IntelGpuService();
+            var nvidiaGpuService    = new NvidiaGpuService();
             _updateService          = new UpdateService(settingsService);
             var watchdogService     = new WatchdogService();
             var healthService       = new HealthScoreService(
@@ -396,10 +397,11 @@ public partial class App : Application
             var bloatwareVm   = new BloatwareViewModel(bloatwareService, restoreService, settingsService);
             var graphicsVm    = new GraphicsViewModel(graphicsTweaks, settingsService);
             var intelVm       = new IntelGpuViewModel(intelGpuService, settingsService);
+            var nvidiaVm      = new NvidiaGpuViewModel(nvidiaGpuService, settingsService);
             var dellVm        = new DellViewModel(thermalService, settingsService, powerPlanService);
 
             _mainVm = new MainViewModel(dashboardVm, memoryVm, servicesVm,
-                                        visualVm, gameBoosterVm, settingsVm, toolsVm, taskSleepVm, bloatwareVm, graphicsVm, intelVm, dellVm);
+                                        visualVm, gameBoosterVm, settingsVm, toolsVm, taskSleepVm, bloatwareVm, graphicsVm, intelVm, nvidiaVm, dellVm);
 
             // NOTE: Graphics tweaks are intentionally reflect-only — Systema NEVER changes
             // them on launch. The Graphics tab reads the live Windows state and only writes
@@ -427,6 +429,26 @@ public partial class App : Application
                         }
                     }
                     catch (Exception ex) { Log.Warn("App", $"Startup Intel iGPU re-apply failed: {ex.Message}"); }
+                });
+            }
+
+            // ── NVIDIA power-management re-apply on startup (opt-in) ──
+            // NVIDIA driver updates can wipe the PowerMizer values. When the user opted in
+            // and chose "prefer maximum performance", re-write it ~20 s after launch to the
+            // PRESENT adapter only (NvidiaGpuService targets present adapters).
+            if (settingsService.NvidiaGpuReapplyEnabled && nvidiaVm.IsNvidiaPresent
+                && settingsService.NvidiaGpuPreferMaxPerformance)
+            {
+                _ = System.Threading.Tasks.Task.Run(async () =>
+                {
+                    try
+                    {
+                        await System.Threading.Tasks.Task.Delay(20_000);
+                        var adapters = nvidiaGpuService.DetectNvidiaAdapters();
+                        nvidiaGpuService.SetPowerSaving(adapters, on: false);
+                        Log.Info("App", "Re-applied NVIDIA 'prefer maximum performance' after startup.");
+                    }
+                    catch (Exception ex) { Log.Warn("App", $"Startup NVIDIA re-apply failed: {ex.Message}"); }
                 });
             }
 

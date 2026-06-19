@@ -156,6 +156,21 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
     // the next restart. See OnMaxResponsivenessEnabledChanged.
     [ObservableProperty] private bool _maxResponsivenessEnabled = true;
 
+    // ── Reinforcements (engine-gated, default on) ──────────────────────────────
+    // Network Throttling off pairs with Maximum System Responsiveness; Power Throttling
+    // off pairs with Foreground Priority Boost (AC-gated so battery is never hurt — see
+    // OnPowerModeChangedForThrottling); Fast App Close trims the shutdown/sign-out wait.
+    [ObservableProperty] private bool _networkThrottlingOffEnabled = true;
+    [ObservableProperty] private bool _powerThrottlingOffEnabled   = true;
+    [ObservableProperty] private bool _fastAppCloseEnabled         = true;
+
+    // Keep Kernel in RAM defaults ON only on machines with >= 14 GB installed (it's
+    // only recommended at 16 GB+). Computed once from physically-installed RAM.
+    private static readonly bool _ramSupportsKeepKernel = SystemStabilityService.InstalledRamGb() >= 14;
+    [ObservableProperty] private bool _keepKernelInRamEnabled = _ramSupportsKeepKernel;
+    [ObservableProperty] private bool _fasterShutdownEnabled  = true;
+    [ObservableProperty] private bool _inputHookTimeoutEnabled = true;
+
     // ── Game Mode interaction ────────────────────────────────────────────────
     [ObservableProperty] private bool _suppressBriefWakesDuringGameMode = true;
 
@@ -182,6 +197,24 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
 
     // ── UI State ──────────────────────────────────────────────────────────────
     [ObservableProperty] private bool _isAdvancedExpanded = false;
+
+    // ── Accordion sections (Design A) — collapsed by default for a clean page ──
+    [ObservableProperty] private bool _showLaunchBoost;
+    [ObservableProperty] private bool _showResponsiveness;
+    [ObservableProperty] private bool _showLiveMonitor;
+    [ObservableProperty] private bool _showSleepRules;
+    [ObservableProperty] private bool _showAdvancedSection;
+    [ObservableProperty] private bool _showNeverNap;
+    [RelayCommand] private void ToggleLaunchBoostSection()    => ShowLaunchBoost     = !ShowLaunchBoost;
+    [RelayCommand] private void ToggleResponsivenessSection() => ShowResponsiveness  = !ShowResponsiveness;
+    [RelayCommand] private void ToggleLiveMonitorSection()    => ShowLiveMonitor     = !ShowLiveMonitor;
+    [RelayCommand] private void ToggleSleepRulesSection()     => ShowSleepRules      = !ShowSleepRules;
+    [RelayCommand] private void ToggleAdvancedSection()       => ShowAdvancedSection = !ShowAdvancedSection;
+    [RelayCommand] private void ToggleNeverNapSection()       => ShowNeverNap        = !ShowNeverNap;
+
+    // Hero status tiles: live counts of napping vs. awake apps.
+    [ObservableProperty] private int _appsNappingCount;
+    [ObservableProperty] private int _activeAppsCount;
 
     public ObservableCollection<ProcessSnapshot> LiveProcesses { get; } = new();
     public ObservableCollection<MonitorEvent>    RecentEvents  { get; } = new();
@@ -243,13 +276,26 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
             if (InstantStartupApps)       _ = _stability.EnableInstantStartupAppsAsync(); else _ = _stability.DisableInstantStartupAppsAsync();
             if (MaxResponsivenessEnabled) { _ = _stability.EnableMaxResponsivenessAsync();  _settings.MaxResponsivenessEnabled = true; }
             else                          { _ = _stability.DisableMaxResponsivenessAsync(); _settings.MaxResponsivenessEnabled = false; }
+            if (NetworkThrottlingOffEnabled) _ = _stability.EnableNetworkThrottlingOffAsync(); else _ = _stability.DisableNetworkThrottlingOffAsync();
+            if (PowerThrottlingOffEnabled)   _ = _stability.EnablePowerThrottlingOffAsync();   else _ = _stability.DisablePowerThrottlingOffAsync();
+            if (FastAppCloseEnabled)         _ = _stability.EnableFastAppCloseAsync();          else _ = _stability.DisableFastAppCloseAsync();
+            if (KeepKernelInRamEnabled)      _ = _stability.EnableKeepKernelInRamAsync();       else _ = _stability.DisableKeepKernelInRamAsync();
+            if (FasterShutdownEnabled)       _ = _stability.EnableFasterShutdownAsync();        else _ = _stability.DisableFasterShutdownAsync();
+            if (InputHookTimeoutEnabled)     _ = _stability.EnableInputHookTimeoutAsync();      else _ = _stability.DisableInputHookTimeoutAsync();
         }
         else
         {
             _loadingSettings = true;
-            ForegroundBoostEnabled = InstantAppFocusEnabled = InstantStartupApps = MaxResponsivenessEnabled = false;
+            ForegroundBoostEnabled = InstantAppFocusEnabled = InstantStartupApps = MaxResponsivenessEnabled =
+                NetworkThrottlingOffEnabled = PowerThrottlingOffEnabled = FastAppCloseEnabled =
+                KeepKernelInRamEnabled = FasterShutdownEnabled = InputHookTimeoutEnabled = false;
             _loadingSettings = false;
         }
+
+        // Power Throttling off is AC-gated — re-apply it when the user plugs in / unplugs
+        // so battery runtime is never sacrificed. The handler no-ops unless both the engine
+        // and the toggle are on.
+        SystemEvents.PowerModeChanged += OnPowerModeChangedForThrottling;
 
         // StartupDelayInMSec lives in Explorer's Serialize key, which Explorer itself
         // actively rewrites during the logon sequence. When Systema auto-launches
@@ -336,24 +382,44 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
 
     // ── Property change callbacks ─────────────────────────────────────────────
 
+    // Remembers whether Launch Boost was on before the engine was last switched off,
+    // so flipping the engine off→on restores Launch Boost instead of losing it.
+    private bool _launchBoostBeforeEngineOff;
+
     partial void OnIsEnabledChanged(bool value)
     {
         if (_loadingSettings) return;   // load path syncs the service explicitly
-        // Launch Boost depends on Task Sleep running. If Task Sleep is turned off,
-        // force Launch Boost off too (and gray it) so it can't run on its own.
-        if (!value && LaunchBoostEnabled)
-            LaunchBoostEnabled = false;   // cascades through OnLaunchBoostEnabledChanged → PushSettings
+        // Launch Boost depends on Task Sleep running. When the engine is turned off we
+        // force Launch Boost off (it can't run on its own) but REMEMBER whether it was on,
+        // so toggling the engine back on brings Launch Boost back with it.
+        if (!value)
+        {
+            _launchBoostBeforeEngineOff = LaunchBoostEnabled;
+            if (LaunchBoostEnabled)
+                LaunchBoostEnabled = false;   // cascades through OnLaunchBoostEnabledChanged → PushSettings
+        }
 
         // Responsiveness boosts (Foreground Priority Boost + Instant App Focus + Instant
         // Startup Apps + Maximum System Responsiveness) are engine-gated.
         if (value)
         {
+            // Engine back ON → bring Launch Boost back to the state it had before the
+            // engine was last turned off, so an off/on cycle doesn't silently lose it.
+            if (_launchBoostBeforeEngineOff && !LaunchBoostEnabled)
+                LaunchBoostEnabled = true;   // cascades → re-arms Launch Boost + persists
+
             // Engine turned ON → RESET all boosts back on by design (the off→on cycle
             // re-enables them). Their OnChanged handlers apply the tweak and persist.
-            ForegroundBoostEnabled   = true;
-            InstantAppFocusEnabled   = true;
-            InstantStartupApps       = true;
-            MaxResponsivenessEnabled = true;
+            ForegroundBoostEnabled      = true;
+            InstantAppFocusEnabled      = true;
+            InstantStartupApps          = true;
+            MaxResponsivenessEnabled    = true;
+            NetworkThrottlingOffEnabled = true;
+            PowerThrottlingOffEnabled   = true;
+            FastAppCloseEnabled         = true;
+            KeepKernelInRamEnabled      = _ramSupportsKeepKernel;   // default on only at >= 14 GB
+            FasterShutdownEnabled       = true;
+            InputHookTimeoutEnabled     = true;
         }
         else
         {
@@ -361,15 +427,27 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
             // route through the OnChanged handlers (suppressed via _loadingSettings) so
             // the grayed-off state isn't mistaken for the user's saved preference.
             _loadingSettings = true;
-            ForegroundBoostEnabled   = false;
-            InstantAppFocusEnabled   = false;
-            InstantStartupApps       = false;
-            MaxResponsivenessEnabled = false;
+            ForegroundBoostEnabled      = false;
+            InstantAppFocusEnabled      = false;
+            InstantStartupApps          = false;
+            MaxResponsivenessEnabled    = false;
+            NetworkThrottlingOffEnabled = false;
+            PowerThrottlingOffEnabled   = false;
+            FastAppCloseEnabled         = false;
+            KeepKernelInRamEnabled      = false;
+            FasterShutdownEnabled       = false;
+            InputHookTimeoutEnabled     = false;
             _loadingSettings = false;
             _ = _stability.DisableForegroundBoostAsync();
             _ = _stability.DisableInstantAppFocusAsync();
             _ = _stability.DisableInstantStartupAppsAsync();
             _ = _stability.DisableMaxResponsivenessAsync();
+            _ = _stability.DisableNetworkThrottlingOffAsync();
+            _ = _stability.DisablePowerThrottlingOffAsync();
+            _ = _stability.DisableFastAppCloseAsync();
+            _ = _stability.DisableKeepKernelInRamAsync();
+            _ = _stability.DisableFasterShutdownAsync();
+            _ = _stability.DisableInputHookTimeoutAsync();
             _settings.MaxResponsivenessEnabled = false;
         }
 
@@ -449,6 +527,63 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
         else       _ = _stability.DisableMaxResponsivenessAsync();
         _settings.MaxResponsivenessEnabled = value;
         SaveSettings();
+    }
+
+    partial void OnNetworkThrottlingOffEnabledChanged(bool value)
+    {
+        if (_loadingSettings) return;
+        if (value) _ = _stability.EnableNetworkThrottlingOffAsync();
+        else       _ = _stability.DisableNetworkThrottlingOffAsync();
+        SaveSettings();
+    }
+
+    partial void OnPowerThrottlingOffEnabledChanged(bool value)
+    {
+        if (_loadingSettings) return;
+        if (value) _ = _stability.EnablePowerThrottlingOffAsync();
+        else       _ = _stability.DisablePowerThrottlingOffAsync();
+        SaveSettings();
+    }
+
+    partial void OnFastAppCloseEnabledChanged(bool value)
+    {
+        if (_loadingSettings) return;
+        if (value) _ = _stability.EnableFastAppCloseAsync();
+        else       _ = _stability.DisableFastAppCloseAsync();
+        SaveSettings();
+    }
+
+    partial void OnKeepKernelInRamEnabledChanged(bool value)
+    {
+        if (_loadingSettings) return;
+        if (value) _ = _stability.EnableKeepKernelInRamAsync();
+        else       _ = _stability.DisableKeepKernelInRamAsync();
+        SaveSettings();
+    }
+
+    partial void OnFasterShutdownEnabledChanged(bool value)
+    {
+        if (_loadingSettings) return;
+        if (value) _ = _stability.EnableFasterShutdownAsync();
+        else       _ = _stability.DisableFasterShutdownAsync();
+        SaveSettings();
+    }
+
+    partial void OnInputHookTimeoutEnabledChanged(bool value)
+    {
+        if (_loadingSettings) return;
+        if (value) _ = _stability.EnableInputHookTimeoutAsync();
+        else       _ = _stability.DisableInputHookTimeoutAsync();
+        SaveSettings();
+    }
+
+    /// <summary>Re-applies the AC-gated Power Throttling state on plug-in / unplug so it
+    /// only suppresses throttling on AC and never costs battery runtime.</summary>
+    private void OnPowerModeChangedForThrottling(object sender, PowerModeChangedEventArgs e)
+    {
+        if (e.Mode != PowerModes.StatusChange) return;
+        if (PowerThrottlingOffEnabled && IsEnabled)
+            _ = _stability.EnablePowerThrottlingOffAsync();
     }
 
     /// <summary>The responsiveness boosts can only be used while the engine is on.
@@ -614,6 +749,8 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
         SystemCpuDisplay = snapshot != null ? $"System CPU: {snapshot.SystemCpuPercent:F0}%" : "System CPU: —";
         int nSleeping = snapshot?.TotalThrottled ?? 0;
         int nPending  = snapshot?.Processes.Count(p => p.IsPendingNap) ?? 0;
+        AppsNappingCount = nSleeping;
+        ActiveAppsCount  = snapshot?.Processes.Count(p => !p.IsThrottled) ?? 0;
         ThrottledCountDisplay = nSleeping > 0
             ? (nPending > 0 ? $"{nSleeping} napping, {nPending} pending" : $"{nSleeping} napping")
             : (nPending > 0 ? $"{nPending} pending nap" : "all awake");
@@ -859,6 +996,12 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
             // the engine is on these are honoured (a user-turned-off boost stays off);
             // an engine off→on cycle resets them all back on (see OnIsEnabledChanged).
             ForegroundBoostEnabled             = ReadBool(key, "ForegroundBoostEnabled",             true);
+            NetworkThrottlingOffEnabled        = ReadBool(key, "NetworkThrottlingOffEnabled",        true);
+            PowerThrottlingOffEnabled          = ReadBool(key, "PowerThrottlingOffEnabled",          true);
+            FastAppCloseEnabled                = ReadBool(key, "FastAppCloseEnabled",                true);
+            KeepKernelInRamEnabled             = ReadBool(key, "KeepKernelInRamEnabled",             _ramSupportsKeepKernel);
+            FasterShutdownEnabled              = ReadBool(key, "FasterShutdownEnabled",              true);
+            InputHookTimeoutEnabled            = ReadBool(key, "InputHookTimeoutEnabled",            true);
             InstantAppFocusEnabled             = ReadBool(key, "InstantAppFocusEnabled",             true);
             InstantStartupApps                 = ReadBool(key, "InstantStartupApps",                 true);
             MaxResponsivenessEnabled           = ReadBool(key, "MaxResponsivenessEnabled",           true);
@@ -928,6 +1071,12 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
             key.SetValue("LaunchBoostGpu",                     LaunchBoostGpu                     ? 1 : 0, RegistryValueKind.DWord);
             // Responsiveness boosts — per-toggle preference (default on; reset on engine off→on).
             key.SetValue("ForegroundBoostEnabled",   ForegroundBoostEnabled   ? 1 : 0, RegistryValueKind.DWord);
+            key.SetValue("NetworkThrottlingOffEnabled", NetworkThrottlingOffEnabled ? 1 : 0, RegistryValueKind.DWord);
+            key.SetValue("PowerThrottlingOffEnabled",   PowerThrottlingOffEnabled   ? 1 : 0, RegistryValueKind.DWord);
+            key.SetValue("FastAppCloseEnabled",         FastAppCloseEnabled         ? 1 : 0, RegistryValueKind.DWord);
+            key.SetValue("KeepKernelInRamEnabled",      KeepKernelInRamEnabled      ? 1 : 0, RegistryValueKind.DWord);
+            key.SetValue("FasterShutdownEnabled",       FasterShutdownEnabled       ? 1 : 0, RegistryValueKind.DWord);
+            key.SetValue("InputHookTimeoutEnabled",     InputHookTimeoutEnabled     ? 1 : 0, RegistryValueKind.DWord);
             key.SetValue("InstantAppFocusEnabled",   InstantAppFocusEnabled   ? 1 : 0, RegistryValueKind.DWord);
             key.SetValue("InstantStartupApps",       InstantStartupApps       ? 1 : 0, RegistryValueKind.DWord);
             key.SetValue("MaxResponsivenessEnabled", MaxResponsivenessEnabled ? 1 : 0, RegistryValueKind.DWord);

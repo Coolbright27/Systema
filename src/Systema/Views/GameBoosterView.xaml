@@ -10,80 +10,23 @@
     </UserControl.Resources>
 
     <ScrollViewer VerticalScrollBarVisibility="Auto">
-        <Grid Margin="32,28,32,28">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto"/>  <!-- 0: header -->
-                <RowDefinition Height="20"/>    <!-- 1: spacer -->
-                <RowDefinition Height="Auto"/>  <!-- 2: Boost Status card -->
-                <RowDefinition Height="20"/>    <!-- 3: spacer -->
-                <RowDefinition Height="Auto"/>  <!-- 4: Manual Boost card -->
-                <RowDefinition Height="20"/>    <!-- 5: spacer -->
-                <RowDefinition Height="Auto"/>  <!-- 6: Booster Settings card -->
-                <RowDefinition Height="20"/>    <!-- 7: spacer -->
-                <RowDefinition Height="Auto"/>  <!-- 8: Boost Actions card -->
-                <RowDefinition Height="20"/>    <!-- 9: spacer -->
-                <RowDefinition Height="Auto"/>  <!-- 10: Detection Info card -->
-                <RowDefinition Height="Auto"/>  <!-- 11: status bar -->
-            </Grid.RowDefinitions>
+        <StackPanel Margin="32,28,32,28">
 
             <!-- Header -->
-            <Grid Grid.Row="0">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
-                <StackPanel Grid.Column="0">
-                    <TextBlock Text="Game Booster" Style="{StaticResource HeadingLarge}"/>
-                    <TextBlock Text="Auto-detects games and suspends non-essential services while you play."
-                               Style="{StaticResource CaptionText}" Margin="0,4,0,0"/>
-                </StackPanel>
-                <!-- Master enable/disable toggle -->
-                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="16,0,0,0">
-                    <TextBlock VerticalAlignment="Center" Margin="0,0,10,0" FontSize="13"
-                               Foreground="{StaticResource TextSecondaryBrush}">
-                        <TextBlock.Style>
-                            <Style TargetType="TextBlock">
-                                <Setter Property="Text" Value="Disabled"/>
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding GameBoosterEnabled}" Value="True">
-                                        <Setter Property="Text" Value="Enabled"/>
-                                        <Setter Property="Foreground" Value="{StaticResource AccentGreenBrush}"/>
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </TextBlock.Style>
-                    </TextBlock>
-                    <CheckBox IsChecked="{Binding GameBoosterEnabled, Mode=TwoWay}"
-                              VerticalAlignment="Center"
-                              ToolTipService.ShowOnDisabled="True">
-                        <CheckBox.Style>
-                            <Style TargetType="CheckBox" BasedOn="{StaticResource ToggleSwitch}">
-                                <Setter Property="ToolTip" Value="Master switch — turn off to disable all game detection and boosting"/>
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding IsAutoPilotActive}" Value="True">
-                                        <Setter Property="IsEnabled" Value="False"/>
-                                        <Setter Property="Opacity"   Value="0.4"/>
-                                        <Setter Property="ToolTip"   Value="Controlled by Auto-Pilot — turn off Auto-Pilot Mode to change"/>
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </CheckBox.Style>
-                    </CheckBox>
-                </StackPanel>
-            </Grid>
+            <TextBlock Text="Game Booster" Style="{StaticResource HeadingLarge}"/>
+            <TextBlock Text="Auto-detects games and boosts priority, GPU, and power while you play."
+                       Style="{StaticResource CaptionText}" Margin="0,4,0,16"/>
 
-            <!-- ── Boost Status Card ─────────────────────────────────────────── -->
-            <Border Grid.Row="2" Style="{StaticResource Card}">
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="200"/>
-                    </Grid.ColumnDefinitions>
-
-                    <StackPanel Grid.Column="0" Margin="0,0,24,0">
-                        <!-- Active indicator -->
-                        <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
-                            <Ellipse Width="14" Height="14" Margin="0,0,10,0" VerticalAlignment="Center">
+            <!-- ════════════════ STATUS HERO ════════════════ -->
+            <Border Style="{StaticResource Card}" Margin="0,0,0,12">
+                <StackPanel>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,16,0">
+                            <Ellipse Width="12" Height="12" VerticalAlignment="Center" Margin="0,0,10,0">
                                 <Ellipse.Style>
                                     <Style TargetType="Ellipse">
                                         <Setter Property="Fill" Value="{StaticResource TextSecondaryBrush}"/>
@@ -95,166 +38,119 @@
                                     </Style>
                                 </Ellipse.Style>
                             </Ellipse>
-                            <TextBlock>
-                                <TextBlock.Style>
-                                    <Style TargetType="TextBlock" BasedOn="{StaticResource HeadingMedium}">
-                                        <Setter Property="Text" Value="Game Boost Idle"/>
-                                        <Style.Triggers>
-                                            <DataTrigger Binding="{Binding BoostActive}" Value="True">
-                                                <Setter Property="Text" Value="Game Boosting Active!"/>
-                                                <Setter Property="Foreground" Value="{StaticResource AccentGreenBrush}"/>
-                                            </DataTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </TextBlock.Style>
-                            </TextBlock>
+                            <StackPanel VerticalAlignment="Center">
+                                <!-- Idle / Boosting headline -->
+                                <TextBlock Style="{StaticResource HeadingMedium}" Text="Game Boost idle"
+                                           Visibility="{Binding BoostActive, Converter={StaticResource BoolToVis}, ConverterParameter=Invert}"/>
+                                <TextBlock Visibility="{Binding BoostActive, Converter={StaticResource BoolToVis}}">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock" BasedOn="{StaticResource HeadingMedium}">
+                                            <Setter Property="Foreground" Value="{StaticResource AccentGreenBrush}"/>
+                                        </Style>
+                                    </TextBlock.Style>
+                                    <Run Text="Boosting — "/><Run Text="{Binding ActiveGameName, Mode=OneWay}"/>
+                                </TextBlock>
+                                <!-- Sub-line: games detected · check interval -->
+                                <StackPanel Orientation="Horizontal" Margin="0,3,0,0">
+                                    <TextBlock>
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionText}">
+                                                <Setter Property="Text" Value="No games detected"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding GamesInstalled}" Value="True">
+                                                        <Setter Property="Text"       Value="Games detected"/>
+                                                        <Setter Property="Foreground" Value="{StaticResource AccentGreenBrush}"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                    <TextBlock Style="{StaticResource CaptionText}" Text="  ·  checks every "/>
+                                    <TextBlock Style="{StaticResource CaptionText}" Text="{Binding CheckIntervalMinutes, Mode=OneWay}"/>
+                                    <TextBlock Style="{StaticResource CaptionText}" Text=" min"/>
+                                </StackPanel>
+                            </StackPanel>
                         </StackPanel>
 
-                        <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-                            <TextBlock Text="Active Game: " Style="{StaticResource CaptionText}"/>
-                            <TextBlock Text="{Binding ActiveGameName}" Style="{StaticResource CaptionText}"
-                                       Foreground="{StaticResource AccentBlueBrush}" FontWeight="SemiBold"/>
-                        </StackPanel>
-                        <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-                            <TextBlock Text="Games Installed: " Style="{StaticResource CaptionText}"/>
-                            <TextBlock>
-                                <TextBlock.Style>
-                                    <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionText}">
-                                        <Setter Property="FontWeight" Value="SemiBold"/>
-                                        <Setter Property="Text" Value="None detected"/>
-                                        <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
-                                        <Style.Triggers>
-                                            <DataTrigger Binding="{Binding GamesInstalled}" Value="True">
-                                                <Setter Property="Text" Value="Yes — monitoring active"/>
-                                                <Setter Property="Foreground" Value="{StaticResource AccentGreenBrush}"/>
-                                            </DataTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </TextBlock.Style>
-                            </TextBlock>
-                        </StackPanel>
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="Check Interval: " Style="{StaticResource CaptionText}"/>
-                            <TextBlock Style="{StaticResource CaptionText}"
-                                       Foreground="{StaticResource AccentBlueBrush}" FontWeight="SemiBold">
-                                <Run Text="{Binding CheckIntervalMinutes, Mode=OneWay}"/>
-                                <Run Text=" minutes"/>
-                            </TextBlock>
-                        </StackPanel>
-                    </StackPanel>
-
-                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                        <Button Content="Scan Now" Style="{StaticResource PrimaryButton}"
-                                Margin="0,0,0,10" Command="{Binding ScanNowCommand}"/>
-                        <TextBlock Text="Systema auto-detects game launches and applies boost automatically."
-                                   Style="{StaticResource CaptionText}" TextWrapping="Wrap"
-                                   Foreground="{StaticResource TextSecondaryBrush}"/>
-                    </StackPanel>
-                </Grid>
-            </Border>
-
-            <!-- ── Manual Boost Toggle ───────────────────────────────────────── -->
-            <Border Grid.Row="4" Style="{StaticResource Card}">
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
-                    </Grid.ColumnDefinitions>
-
-                    <StackPanel Grid.Column="0" Margin="0,0,24,0">
-                        <TextBlock Text="Manual Boost" Style="{StaticResource HeadingMedium}" Margin="0,0,0,6"/>
-                        <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,0,0,8">
-                            Force game mode on without needing an auto-detected game. Useful for games Systema doesn't recognise yet.
-                        </TextBlock>
-                        <!-- Countdown timer — only shown when manual boost is active -->
-                        <TextBlock Margin="0,0,0,4"
-                                   Visibility="{Binding ManualBoostEnabled, Converter={StaticResource BoolToVis}}">
-                            <TextBlock.Style>
-                                <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionText}">
-                                    <Setter Property="Foreground" Value="{StaticResource AccentBlueBrush}"/>
+                        <!-- Master auto-detect toggle -->
+                        <CheckBox Grid.Column="1" IsChecked="{Binding GameBoosterEnabled, Mode=TwoWay}"
+                                  VerticalAlignment="Center" ToolTipService.ShowOnDisabled="True">
+                            <CheckBox.Style>
+                                <Style TargetType="CheckBox" BasedOn="{StaticResource ToggleSwitch}">
+                                    <Setter Property="ToolTip" Value="Master switch — turn off to disable all game detection and boosting"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsAutoPilotActive}" Value="True">
+                                            <Setter Property="IsEnabled" Value="False"/>
+                                            <Setter Property="Opacity"   Value="0.4"/>
+                                            <Setter Property="ToolTip"   Value="Controlled by Auto-Pilot — turn off Auto-Pilot Mode to change"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
                                 </Style>
-                            </TextBlock.Style>
-                            <Run Text="Auto-off in: "/>
-                            <Run Text="{Binding ManualBoostTimeRemaining}" FontWeight="SemiBold"/>
-                        </TextBlock>
-                        <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap"
-                                   Foreground="{StaticResource AccentYellowBrush}">
-                            Auto-disables after 6 hours to restore services.
-                        </TextBlock>
-                    </StackPanel>
+                            </CheckBox.Style>
+                        </CheckBox>
+                    </Grid>
 
-                    <CheckBox Grid.Column="1"
-                              Style="{StaticResource ToggleSwitch}"
-                              IsChecked="{Binding ManualBoostEnabled, Mode=TwoWay}"
-                              VerticalAlignment="Center"/>
-                </Grid>
+                    <!-- Actions -->
+                    <Border BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,1,0,0" Margin="0,14,0,0" Padding="0,14,0,0">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <Button Grid.Column="0" Content="Scan now" Style="{StaticResource PrimaryButton}"
+                                    HorizontalAlignment="Left" Command="{Binding ScanNowCommand}"/>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                <StackPanel Margin="0,0,10,0" HorizontalAlignment="Right">
+                                    <TextBlock Text="Manual boost" Style="{StaticResource BodyText}" FontWeight="SemiBold"
+                                               HorizontalAlignment="Right"/>
+                                    <TextBlock HorizontalAlignment="Right">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionText}">
+                                                <Setter Property="Text" Value="Force on · auto-off after 6 h"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding ManualBoostEnabled}" Value="True">
+                                                        <Setter Property="Foreground" Value="{StaticResource AccentBlueBrush}"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                    <TextBlock Style="{StaticResource CaptionText}" HorizontalAlignment="Right"
+                                               Foreground="{StaticResource AccentBlueBrush}"
+                                               Visibility="{Binding ManualBoostEnabled, Converter={StaticResource BoolToVis}}">
+                                        <Run Text="Auto-off in: "/><Run Text="{Binding ManualBoostTimeRemaining, Mode=OneWay}" FontWeight="SemiBold"/>
+                                    </TextBlock>
+                                </StackPanel>
+                                <CheckBox Style="{StaticResource ToggleSwitch}" VerticalAlignment="Center"
+                                          IsChecked="{Binding ManualBoostEnabled, Mode=TwoWay}"/>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+                </StackPanel>
             </Border>
 
-            <!-- ── Game Booster Settings ─────────────────────────────────────── -->
-            <Border Grid.Row="6" Style="{StaticResource Card}">
+            <!-- ════════════════ BOOST OPTIONS (accordion) ════════════════ -->
+            <Border Style="{StaticResource Card}" Margin="0,0,0,12">
                 <StackPanel>
-                    <TextBlock Text="Booster Settings" Style="{StaticResource HeadingMedium}" Margin="0,0,0,16"/>
-
-                    <!-- Check Interval -->
-                    <Grid Margin="0,0,0,16">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="140"/>
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" Margin="0,0,20,0" VerticalAlignment="Center">
-                            <TextBlock Text="Game Detection Frequency" Style="{StaticResource BodyText}"
-                                       FontWeight="SemiBold"/>
-                            <TextBlock Text="How often Systema checks for running game processes. Lower = faster detection, more CPU."
-                                       Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,2,0,0"/>
-                        </StackPanel>
-                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                            <TextBox Text="{Binding CheckIntervalMinutes, UpdateSourceTrigger=PropertyChanged}"
-                                     Style="{StaticResource DarkTextBox}" Width="60" Margin="0,0,8,0"
-                                     core:NumericTextBox.IsNumericOnly="True"/>
-                            <TextBlock Text="minutes" Style="{StaticResource CaptionText}" VerticalAlignment="Center"/>
-                        </StackPanel>
-                    </Grid>
-
-                    <!-- Xbox Override -->
-                    <Grid Margin="0,0,0,16">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" Margin="0,0,20,0" VerticalAlignment="Center">
-                            <TextBlock Text="Lock Xbox Services (User Override)" Style="{StaticResource BodyText}"
-                                       FontWeight="SemiBold"/>
-                            <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,2,0,0">
-                                When enabled, Systema will never automatically disable Xbox services
-                                (even when no games are detected).
-                            </TextBlock>
-                        </StackPanel>
-                        <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}"
-                                  IsChecked="{Binding XboxOverride, Mode=TwoWay}" VerticalAlignment="Center"/>
-                    </Grid>
-
-                    <!-- Services to Pause — collapsible section -->
-                    <Button Command="{Binding ToggleServiceSettingsCommand}"
-                            Style="{StaticResource ExpanderButton}" Margin="0,4,0,0">
+                    <Button Command="{Binding ToggleBoostOptionsCommand}" Style="{StaticResource ExpanderButton}">
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
                             <StackPanel Grid.Column="0">
-                                <TextBlock Text="Services to Pause" Style="{StaticResource BodyText}"
-                                           FontWeight="SemiBold"/>
-                                <TextBlock Text="Expand to view and edit which services pause during gaming."
-                                           Style="{StaticResource CaptionText}" Margin="0,2,0,0"/>
+                                <TextBlock Text="Boost options" Style="{StaticResource HeadingMedium}"/>
+                                <TextBlock Text="What gets applied while a game runs — memory, power, GPU, sleep, and battery."
+                                           Style="{StaticResource CaptionText}" Margin="0,3,0,0"/>
                             </StackPanel>
                             <TextBlock Grid.Column="1" VerticalAlignment="Center" Margin="12,0,0,0"
                                        Foreground="{StaticResource TextSecondaryBrush}" FontSize="13">
                                 <TextBlock.Style>
                                     <Style TargetType="TextBlock">
-                                        <Setter Property="Text" Value="▼"/>
+                                        <Setter Property="Text" Value="&#x25BC;"/>
                                         <Style.Triggers>
-                                            <DataTrigger Binding="{Binding ShowServiceSettings}" Value="True">
-                                                <Setter Property="Text" Value="▲"/>
+                                            <DataTrigger Binding="{Binding ShowBoostOptions}" Value="True">
+                                                <Setter Property="Text" Value="&#x25B2;"/>
                                             </DataTrigger>
                                         </Style.Triggers>
                                     </Style>
@@ -263,356 +159,197 @@
                         </Grid>
                     </Button>
 
-                    <StackPanel Visibility="{Binding ShowServiceSettings, Converter={StaticResource BoolToVis}}"
-                                Margin="0,12,0,0">
-                    <TextBlock Text="These services are paused when a game launches and restored when it closes. Remove any that you want to keep running during gaming."
-                               Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,0,0,8"/>
+                    <StackPanel Visibility="{Binding ShowBoostOptions, Converter={StaticResource BoolToVis}}" Margin="0,16,0,0">
 
-                    <!-- Header row -->
-                    <Border Background="{StaticResource BgSurfaceBrush}"
-                            BorderBrush="{StaticResource BorderBrush}" BorderThickness="1,1,1,0"
-                            CornerRadius="6,6,0,0" Padding="10,6">
+                        <!-- PERFORMANCE -->
+                        <TextBlock Text="PERFORMANCE" Style="{StaticResource SectionLabel}" Margin="0,0,0,12"/>
+
+                        <Grid Margin="0,0,0,12">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" Margin="0,0,24,0" VerticalAlignment="Center">
+                                <TextBlock Text="Free memory on game start" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
+                                <TextBlock Text="Releases idle background memory at game launch so more RAM is available immediately."
+                                           Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,2,0,0"/>
+                            </StackPanel>
+                            <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}"
+                                      IsChecked="{Binding FreeMemoryOnBoost, Mode=TwoWay}" VerticalAlignment="Center"/>
+                        </Grid>
+
+                        <Grid Margin="0,0,0,12">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" Margin="0,0,24,0" VerticalAlignment="Center">
+                                <TextBlock Text="High Performance power plan" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
+                                <TextBlock Text="Switches to High Performance for maximum CPU throughput while gaming. Restored on exit."
+                                           Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,2,0,0"/>
+                                <TextBlock Visibility="{Binding IsHighPerfConflictActive, Converter={StaticResource BoolToVis}}"
+                                           Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,4,0,0"
+                                           Foreground="{StaticResource AccentYellowBrush}">
+                                    Battery Optimization is also active (Visual &amp; Power tab). During gaming the
+                                    High Performance plan will override it, which may cause unexpected power or thermal
+                                    behaviour. Consider disabling one of the two settings.
+                                </TextBlock>
+                            </StackPanel>
+                            <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}"
+                                      IsChecked="{Binding HighPerfPowerPlan, Mode=TwoWay}" VerticalAlignment="Center"/>
+                        </Grid>
+
+                        <Grid Margin="0,0,0,16">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" Margin="0,0,24,0" VerticalAlignment="Center">
+                                <TextBlock Text="GPU &amp; multimedia system profile" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
+                                <TextBlock Text="Raises the MMCSS Games profile priority for faster CPU scheduling. VSync-safe. Restored on exit."
+                                           Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,2,0,0"/>
+                            </StackPanel>
+                            <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}"
+                                      IsChecked="{Binding GpuProfileOnBoost, Mode=TwoWay}" VerticalAlignment="Center"/>
+                        </Grid>
+
+                        <!-- SYSTEM -->
+                        <TextBlock Text="SYSTEM" Style="{StaticResource SectionLabel}" Margin="0,0,0,12"/>
+
+                        <Grid Margin="0,0,0,12">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" Margin="0,0,24,0" VerticalAlignment="Center">
+                                <TextBlock Text="Prevent sleep while gaming" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
+                                <TextBlock Text="Stops the PC from sleeping or locking during a game session or manual boost. Restored the instant the game exits."
+                                           Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,2,0,0"/>
+                            </StackPanel>
+                            <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}"
+                                      IsChecked="{Binding PreventSleepOnBoost, Mode=TwoWay}" VerticalAlignment="Center"/>
+                        </Grid>
+
+                        <Grid Margin="0,0,0,16"
+                              Visibility="{Binding IsBatteryPresent, Converter={StaticResource BoolToVis}}">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" Margin="0,0,24,0" VerticalAlignment="Center">
+                                <TextBlock Text="Battery pause (laptops)" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
+                                <TextBlock Text="Pauses battery charging while gaming so the AC adapter feeds CPU and GPU directly. Reduces heat and power-budget throttling. Resumes when boost ends."
+                                           Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,2,0,0"/>
+                                <TextBlock Text="{Binding BatteryPauseStatus}" Style="{StaticResource CaptionText}"
+                                           Foreground="{StaticResource AccentBlueBrush}" TextWrapping="Wrap"
+                                           FontStyle="Italic" Margin="0,4,0,0"/>
+                            </StackPanel>
+                            <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}"
+                                      IsChecked="{Binding PauseChargingOnBoost, Mode=TwoWay}"
+                                      IsEnabled="{Binding BatteryPauseAvailable}" VerticalAlignment="Center"
+                                      ToolTip="Disabled on desktops and unsupported laptop brands."/>
+                        </Grid>
+
+                        <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,0,0,16"/>
+                        <Button Content="Save boost options" Style="{StaticResource PrimaryButton}"
+                                HorizontalAlignment="Left" Command="{Binding SaveSettingsCommand}"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- ════════════════ DETECTION & ADVANCED (accordion) ════════════════ -->
+            <Border Style="{StaticResource Card}" Margin="0,0,0,12">
+                <StackPanel>
+                    <Button Command="{Binding ToggleDetectionCommand}" Style="{StaticResource ExpanderButton}">
                         <Grid>
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="160"/>
                                 <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="30"/>
+                                <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
-                            <TextBlock Text="SERVICE" Style="{StaticResource CaptionText}" FontWeight="Bold"/>
-                            <TextBlock Text="DESCRIPTION" Style="{StaticResource CaptionText}" FontWeight="Bold" Grid.Column="1"/>
-                        </Grid>
-                    </Border>
-
-                    <!-- Kill list items -->
-                    <Border BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
-                            CornerRadius="0,0,6,6" MaxHeight="200">
-                        <ScrollViewer VerticalScrollBarVisibility="Auto">
-                            <ItemsControl ItemsSource="{Binding KillListItems}">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate>
-                                        <Border BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1"
-                                                Padding="10,6">
-                                            <Grid>
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="160"/>
-                                                    <ColumnDefinition Width="*"/>
-                                                    <ColumnDefinition Width="30"/>
-                                                </Grid.ColumnDefinitions>
-                                                <TextBlock Text="{Binding ServiceName}" Style="{StaticResource BodyText}"
-                                                           FontSize="12" FontFamily="Cascadia Mono, Consolas, Courier New"
-                                                           VerticalAlignment="Center"/>
-                                                <TextBlock Text="{Binding Description}" Style="{StaticResource CaptionText}"
-                                                           Grid.Column="1" VerticalAlignment="Center" TextWrapping="Wrap"/>
-                                                <Button Grid.Column="2" Content="x" FontSize="14"
-                                                        Background="Transparent" BorderThickness="0"
-                                                        Foreground="{StaticResource AccentRedBrush}"
-                                                        Padding="0" Margin="0" Cursor="Hand"
-                                                        VerticalAlignment="Center" HorizontalAlignment="Center"
-                                                        Command="{Binding DataContext.RemoveKillServiceCommand,
-                                                            RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                        CommandParameter="{Binding}"/>
-                                            </Grid>
-                                        </Border>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                        </ScrollViewer>
-                    </Border>
-
-                    <!-- Add service via dialog -->
-                    <Button Margin="0,8,0,0" Content="Add a Service"
-                            Style="{StaticResource GhostButton}" Padding="12,6"
-                            HorizontalAlignment="Left"
-                            Command="{Binding OpenServicePickerCommand}"/>
-
-                    <!-- Actions -->
-                    <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
-                        <Button Content="Save Settings" Style="{StaticResource PrimaryButton}"
-                                Margin="0,0,10,0" Command="{Binding SaveSettingsCommand}"/>
-                        <Button Content="Reset to Defaults" Style="{StaticResource GhostButton}"
-                                Command="{Binding ResetKillListCommand}"/>
-                    </StackPanel>
-                    </StackPanel><!-- end collapsible service settings -->
-
-
-                </StackPanel>
-            </Border>
-
-            <!-- ── Boost Actions ─────────────────────────────────────────────── -->
-            <Border Grid.Row="8" Style="{StaticResource Card}">
-                <StackPanel>
-                    <TextBlock Text="Boost Actions" Style="{StaticResource HeadingMedium}" Margin="0,0,0,4"/>
-                    <TextBlock Text="Extra actions applied when a game launches. All changes are fully restored when the game exits."
-                               Style="{StaticResource CaptionText}" Foreground="{StaticResource TextSecondaryBrush}"
-                               TextWrapping="Wrap" Margin="0,0,0,20"/>
-
-                    <!-- ── PERFORMANCE ── -->
-                    <TextBlock Text="PERFORMANCE" Style="{StaticResource SectionLabel}" Margin="0,0,0,12"/>
-
-                    <Grid Margin="0,0,0,12">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" Margin="0,0,24,0" VerticalAlignment="Center">
-                            <TextBlock Text="Free memory on game start" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                            <TextBlock Text="Releases idle background memory at game launch so more RAM is available immediately."
-                                       Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,2,0,0"/>
-                        </StackPanel>
-                        <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}"
-                                  IsChecked="{Binding FreeMemoryOnBoost, Mode=TwoWay}" VerticalAlignment="Center"/>
-                    </Grid>
-
-                    <Grid Margin="0,0,0,12">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" Margin="0,0,24,0" VerticalAlignment="Center">
-                            <TextBlock Text="High Performance power plan" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                            <TextBlock Text="Switches to High Performance for maximum CPU throughput while gaming. Restored on exit."
-                                       Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,2,0,0"/>
-                            <!-- Conflict warning — shown only when Battery Optimization (Visual & Power tab) is also active -->
-                            <TextBlock Visibility="{Binding IsHighPerfConflictActive, Converter={StaticResource BoolToVis}}"
-                                       Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,4,0,0"
-                                       Foreground="{StaticResource AccentYellowBrush}">
-                                Battery Optimization is also active (Visual &amp; Power tab). During gaming the
-                                High Performance plan will override it, which may cause unexpected power or thermal
-                                behaviour. Consider disabling one of the two settings.
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="Detection &amp; advanced" Style="{StaticResource HeadingMedium}"/>
+                                <TextBlock Text="Check frequency, Xbox services, and what Systema recognizes."
+                                           Style="{StaticResource CaptionText}" Margin="0,3,0,0"/>
+                            </StackPanel>
+                            <TextBlock Grid.Column="1" VerticalAlignment="Center" Margin="12,0,0,0"
+                                       Foreground="{StaticResource TextSecondaryBrush}" FontSize="13">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Text" Value="&#x25BC;"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding ShowDetection}" Value="True">
+                                                <Setter Property="Text" Value="&#x25B2;"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
                             </TextBlock>
-                        </StackPanel>
-                        <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}"
-                                  IsChecked="{Binding HighPerfPowerPlan, Mode=TwoWay}" VerticalAlignment="Center"/>
-                    </Grid>
+                        </Grid>
+                    </Button>
 
-                    <Grid Margin="0,0,0,12">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" Margin="0,0,24,0" VerticalAlignment="Center">
-                            <TextBlock Text="GPU &amp; multimedia system profile" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                            <TextBlock Text="Raises the MMCSS Games profile priority for faster CPU scheduling. VSync-safe. Restored on exit."
-                                       Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,2,0,0"/>
-                        </StackPanel>
-                        <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}"
-                                  IsChecked="{Binding GpuProfileOnBoost, Mode=TwoWay}" VerticalAlignment="Center"/>
-                    </Grid>
+                    <StackPanel Visibility="{Binding ShowDetection, Converter={StaticResource BoolToVis}}" Margin="0,16,0,0">
 
-                    <Grid Margin="0,0,0,12">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" Margin="0,0,24,0" VerticalAlignment="Center">
-                            <TextBlock Text="Pause search indexing" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                            <TextBlock Text="Pauses Windows Search Indexing during gameplay to free disk I/O and CPU. Restored on exit."
-                                       Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,2,0,0"/>
-                        </StackPanel>
-                        <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}"
-                                  IsChecked="{Binding DisableSearchIndexingOnBoost, Mode=TwoWay}" VerticalAlignment="Center"/>
-                    </Grid>
-
-                    <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,4,0,16"/>
-
-                    <!-- ── DISPLAY & AUDIO ── -->
-                    <TextBlock Text="DISPLAY &amp; AUDIO" Style="{StaticResource SectionLabel}" Margin="0,0,0,12"/>
-
-                    <Grid Margin="0,0,0,12">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" Margin="0,0,24,0" VerticalAlignment="Center">
-                            <TextBlock Text="Suppress notifications" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                            <TextBlock Text="Silences Windows toast pop-ups while you're gaming. Restored to normal when the game exits."
-                                       Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,2,0,0"/>
-                        </StackPanel>
-                        <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}"
-                                  IsChecked="{Binding SuppressNotifications, Mode=TwoWay}" VerticalAlignment="Center"/>
-                    </Grid>
-
-                    <Grid Margin="0,0,0,12">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" Margin="0,0,24,0" VerticalAlignment="Center">
-                            <TextBlock Text="Disable Game Bar &amp; DVR" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                            <TextBlock Text="Turns off background game capture and Xbox Game Bar overlays. Frees GPU encoder bandwidth. Restored on game exit."
-                                       Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,2,0,0"/>
-                        </StackPanel>
-                        <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}"
-                                  IsChecked="{Binding DisableGameBar, Mode=TwoWay}" VerticalAlignment="Center"/>
-                    </Grid>
-
-                    <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,4,0,16"/>
-
-                    <!-- ── NETWORK ── -->
-                    <TextBlock Text="NETWORK" Style="{StaticResource SectionLabel}" Margin="0,0,0,12"/>
-
-                    <Grid Margin="0,0,0,12">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" Margin="0,0,24,0" VerticalAlignment="Center">
-                            <TextBlock Text="Disable Nagle's algorithm" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                            <TextBlock Text="Reduces TCP latency in online games by disabling packet batching on all adapters. Restored on exit."
-                                       Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,2,0,0"/>
-                        </StackPanel>
-                        <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}"
-                                  IsChecked="{Binding DisableNagleOnBoost, Mode=TwoWay}" VerticalAlignment="Center"/>
-                    </Grid>
-
-                    <Grid Margin="0,0,0,12">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" Margin="0,0,24,0" VerticalAlignment="Center">
-                            <TextBlock Text="Flush DNS cache on game start" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                            <TextBlock Text="Clears stale DNS entries so the first connection to game servers resolves fresh. No restore needed — DNS repopulates automatically."
-                                       Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,2,0,0"/>
-                        </StackPanel>
-                        <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}"
-                                  IsChecked="{Binding FlushDnsOnBoost, Mode=TwoWay}" VerticalAlignment="Center"/>
-                    </Grid>
-
-                    <Grid Margin="0,0,0,12">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" Margin="0,0,24,0" VerticalAlignment="Center">
-                            <TextBlock Text="Disable network adapter power saving" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                            <TextBlock Text="Prevents Windows from throttling your NIC to save power mid-game. Restored to original setting when the game exits."
-                                       Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,2,0,0"/>
-                        </StackPanel>
-                        <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}"
-                                  IsChecked="{Binding NicPowerSavingOnBoost, Mode=TwoWay}" VerticalAlignment="Center"/>
-                    </Grid>
-
-                    <Grid Margin="0,0,0,12">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" Margin="0,0,24,0" VerticalAlignment="Center">
-                            <TextBlock Text="Disable Wi-Fi when ethernet is connected" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                            <TextBlock Text="Turns off Wi-Fi at game start if a wired connection is active. Eliminates background wireless scanning that can cause micro-stutters. Re-enabled automatically on game exit — only if it was on beforehand."
-                                       Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,2,0,0"/>
-                        </StackPanel>
-                        <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}"
-                                  IsChecked="{Binding DisableWifiOnEthernet, Mode=TwoWay}" VerticalAlignment="Center"/>
-                    </Grid>
-
-                    <Grid Margin="0,0,0,12">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" Margin="0,0,24,0" VerticalAlignment="Center">
-                            <TextBlock Text="Disable Bluetooth while gaming" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                            <TextBlock Text="Turns off the Bluetooth radio at game start to reduce wireless interrupt overhead. Re-enabled automatically on exit — only if it was on before. Disable this if you use a Bluetooth controller or headset."
-                                       Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,2,0,0"/>
-                        </StackPanel>
-                        <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}"
-                                  IsChecked="{Binding DisableBluetoothOnBoost, Mode=TwoWay}" VerticalAlignment="Center"/>
-                    </Grid>
-
-                    <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,4,0,16"/>
-
-                    <!-- ── SYSTEM ── -->
-                    <TextBlock Text="SYSTEM" Style="{StaticResource SectionLabel}" Margin="0,0,0,12"/>
-
-                    <Grid Margin="0,0,0,12">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" Margin="0,0,24,0" VerticalAlignment="Center">
-                            <TextBlock Text="Prevent sleep while gaming" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                            <TextBlock Text="Stops the PC from sleeping or locking during a game session or manual boost. Sleep settings are restored the instant the game exits."
-                                       Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,2,0,0"/>
-                        </StackPanel>
-                        <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}"
-                                  IsChecked="{Binding PreventSleepOnBoost, Mode=TwoWay}" VerticalAlignment="Center"/>
-                    </Grid>
-
-                    <!-- Battery Pause — hidden on desktops -->
-                    <Grid Margin="0,0,0,12"
-                          Visibility="{Binding IsBatteryPresent, Converter={StaticResource BoolToVis}}">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" Margin="0,0,24,0" VerticalAlignment="Center">
-                            <TextBlock Text="Battery Pause (laptops)" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                            <TextBlock Text="Pauses battery charging while gaming so the AC adapter feeds CPU and GPU directly. Reduces heat and power-budget throttling. Resumes automatically when boost ends."
-                                       Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,2,0,0"/>
-                            <TextBlock Text="{Binding BatteryPauseStatus}" Style="{StaticResource CaptionText}"
-                                       Foreground="{StaticResource AccentBlueBrush}" TextWrapping="Wrap"
-                                       FontStyle="Italic" Margin="0,4,0,0"/>
-                        </StackPanel>
-                        <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}"
-                                  IsChecked="{Binding PauseChargingOnBoost, Mode=TwoWay}"
-                                  IsEnabled="{Binding BatteryPauseAvailable}"
-                                  VerticalAlignment="Center"
-                                  ToolTip="Disabled on desktops and unsupported laptop brands."/>
-                    </Grid>
-
-                    <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,4,0,16"/>
-
-                    <Button Content="Save Boost Actions" Style="{StaticResource PrimaryButton}"
-                            Padding="16,8" HorizontalAlignment="Left"
-                            Command="{Binding SaveSettingsCommand}"/>
-                </StackPanel>
-            </Border>
-
-            <!-- ── Detection Info ────────────────────────────────────────────── -->
-            <Border Grid.Row="10" Style="{StaticResource Card}">
-                <StackPanel>
-                    <TextBlock Text="What Systema Detects" Style="{StaticResource HeadingMedium}" Margin="0,0,0,12"/>
-                    <WrapPanel>
-                        <Border Background="{StaticResource BgSurfaceBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
-                                CornerRadius="6" Padding="10,6" Margin="0,0,8,8">
-                            <StackPanel>
-                                <TextBlock Text="Games" Style="{StaticResource CaptionText}" FontWeight="Bold"
-                                           Foreground="{StaticResource AccentBlueBrush}" Margin="0,0,0,4"/>
-                                <TextBlock Text="Roblox, Fortnite, Minecraft" Style="{StaticResource CaptionText}"/>
-                                <TextBlock Text="CS2, GTA V, Valorant, LoL" Style="{StaticResource CaptionText}"/>
-                                <TextBlock Text="Elden Ring, Cyberpunk, more" Style="{StaticResource CaptionText}"/>
+                        <!-- Game detection frequency -->
+                        <Grid Margin="0,0,0,16">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="140"/></Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" Margin="0,0,20,0" VerticalAlignment="Center">
+                                <TextBlock Text="Game detection frequency" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
+                                <TextBlock Text="How often Systema checks for running game processes. Lower = faster detection, more CPU."
+                                           Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,2,0,0"/>
                             </StackPanel>
-                        </Border>
-                        <Border Background="{StaticResource BgSurfaceBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
-                                CornerRadius="6" Padding="10,6" Margin="0,0,8,8">
-                            <StackPanel>
-                                <TextBlock Text="Anti-Cheats" Style="{StaticResource CaptionText}" FontWeight="Bold"
-                                           Foreground="{StaticResource AccentYellowBrush}" Margin="0,0,0,4"/>
-                                <TextBlock Text="Vanguard (vgc)" Style="{StaticResource CaptionText}"/>
-                                <TextBlock Text="Easy Anti-Cheat" Style="{StaticResource CaptionText}"/>
-                                <TextBlock Text="BattlEye (BEService)" Style="{StaticResource CaptionText}"/>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                <TextBox Text="{Binding CheckIntervalMinutes, UpdateSourceTrigger=PropertyChanged}"
+                                         Style="{StaticResource DarkTextBox}" Width="60" Margin="0,0,8,0"
+                                         core:NumericTextBox.IsNumericOnly="True"/>
+                                <TextBlock Text="minutes" Style="{StaticResource CaptionText}" VerticalAlignment="Center"/>
                             </StackPanel>
-                        </Border>
-                        <Border Background="{StaticResource BgSurfaceBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
-                                CornerRadius="6" Padding="10,6" Margin="0,0,8,8">
-                            <StackPanel>
-                                <TextBlock Text="Launchers &amp; Platforms" Style="{StaticResource CaptionText}" FontWeight="Bold"
-                                           Foreground="{StaticResource AccentGreenBrush}" Margin="0,0,0,4"/>
-                                <TextBlock Text="Steam, Epic Games" Style="{StaticResource CaptionText}"/>
-                                <TextBlock Text="Battle.net, Xbox App" Style="{StaticResource CaptionText}"/>
-                                <TextBlock Text="Riot Client" Style="{StaticResource CaptionText}"/>
+                        </Grid>
+
+                        <!-- Lock Xbox services -->
+                        <Grid Margin="0,0,0,16">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" Margin="0,0,20,0" VerticalAlignment="Center">
+                                <TextBlock Text="Lock Xbox services" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
+                                <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,2,0,0">
+                                    When on, Systema will never automatically disable Xbox services
+                                    (even when no games are detected).
+                                </TextBlock>
                             </StackPanel>
-                        </Border>
-                    </WrapPanel>
+                            <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}"
+                                      IsChecked="{Binding XboxOverride, Mode=TwoWay}" VerticalAlignment="Center"/>
+                        </Grid>
+
+                        <!-- What Systema detects -->
+                        <TextBlock Text="What Systema detects" Style="{StaticResource BodyText}" FontWeight="SemiBold" Margin="0,0,0,8"/>
+                        <WrapPanel Margin="0,0,0,16">
+                            <Border Background="{StaticResource BgSurfaceBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
+                                    CornerRadius="6" Padding="10,6" Margin="0,0,8,8">
+                                <StackPanel>
+                                    <TextBlock Text="Games" Style="{StaticResource CaptionText}" FontWeight="Bold"
+                                               Foreground="{StaticResource AccentBlueBrush}" Margin="0,0,0,4"/>
+                                    <TextBlock Text="Roblox, Fortnite, Minecraft" Style="{StaticResource CaptionText}"/>
+                                    <TextBlock Text="CS2, GTA V, Valorant, LoL" Style="{StaticResource CaptionText}"/>
+                                    <TextBlock Text="Elden Ring, Cyberpunk, more" Style="{StaticResource CaptionText}"/>
+                                </StackPanel>
+                            </Border>
+                            <Border Background="{StaticResource BgSurfaceBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
+                                    CornerRadius="6" Padding="10,6" Margin="0,0,8,8">
+                                <StackPanel>
+                                    <TextBlock Text="Anti-cheats" Style="{StaticResource CaptionText}" FontWeight="Bold"
+                                               Foreground="{StaticResource AccentYellowBrush}" Margin="0,0,0,4"/>
+                                    <TextBlock Text="Vanguard (vgc)" Style="{StaticResource CaptionText}"/>
+                                    <TextBlock Text="Easy Anti-Cheat" Style="{StaticResource CaptionText}"/>
+                                    <TextBlock Text="BattlEye (BEService)" Style="{StaticResource CaptionText}"/>
+                                </StackPanel>
+                            </Border>
+                            <Border Background="{StaticResource BgSurfaceBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
+                                    CornerRadius="6" Padding="10,6" Margin="0,0,8,8">
+                                <StackPanel>
+                                    <TextBlock Text="Launchers &amp; platforms" Style="{StaticResource CaptionText}" FontWeight="Bold"
+                                               Foreground="{StaticResource AccentGreenBrush}" Margin="0,0,0,4"/>
+                                    <TextBlock Text="Steam, Epic Games" Style="{StaticResource CaptionText}"/>
+                                    <TextBlock Text="Battle.net, Xbox App" Style="{StaticResource CaptionText}"/>
+                                    <TextBlock Text="Riot Client" Style="{StaticResource CaptionText}"/>
+                                </StackPanel>
+                            </Border>
+                        </WrapPanel>
+
+                        <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,0,0,16"/>
+                        <Button Content="Save settings" Style="{StaticResource PrimaryButton}"
+                                HorizontalAlignment="Left" Command="{Binding SaveSettingsCommand}"/>
+                    </StackPanel>
                 </StackPanel>
             </Border>
 
             <!-- Status bar -->
-            <TextBlock Grid.Row="11" Text="{Binding StatusMessage}"
-                       Style="{StaticResource CaptionText}" Margin="0,12,0,0"
+            <TextBlock Text="{Binding StatusMessage}" Style="{StaticResource CaptionText}" Margin="2,8,0,0"
                        TextTrimming="CharacterEllipsis" ToolTip="{Binding StatusMessage}"/>
-        </Grid>
+
+        </StackPanel>
     </ScrollViewer>
 </UserControl>

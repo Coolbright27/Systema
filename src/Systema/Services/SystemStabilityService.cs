@@ -406,6 +406,398 @@ public class SystemStabilityService
         }
     });
 
+    // ── Network Throttling off (reinforces Maximum System Responsiveness) ──────
+    // Windows throttles networking to ~10 packets/ms while any multimedia is playing
+    // (NetworkThrottlingIndex, default 10) to keep audio smooth. Disabling it
+    // (0xFFFFFFFF) hands full network throughput to the foreground app. Lives in the
+    // SAME MMCSS SystemProfile key as SystemResponsiveness. Network-only — it does NOT
+    // touch the GPU/DWM presentation path, so it is VSync-safe. Restart to apply.
+    private const int NetworkThrottlingDisabled = unchecked((int)0xFFFFFFFF);
+    private const int NetworkThrottlingDefault  = 10;
+
+    /// <summary>True when network throttling is disabled (NetworkThrottlingIndex = 0xFFFFFFFF).</summary>
+    public bool IsNetworkThrottlingDisabled()
+    {
+        try
+        {
+            using var key = Registry.LocalMachine.OpenSubKey(MmSystemProfileKey);
+            return key?.GetValue("NetworkThrottlingIndex") is int v && v == NetworkThrottlingDisabled;
+        }
+        catch (Exception ex)
+        {
+            Log.Warn("SystemStability", $"IsNetworkThrottlingDisabled read failed: {ex.Message}");
+            return false;
+        }
+    }
+
+    public Task<TweakResult> EnableNetworkThrottlingOffAsync() => Task.Run(() =>
+    {
+        try
+        {
+            using var key = Registry.LocalMachine.OpenSubKey(MmSystemProfileKey, writable: true);
+            if (key == null)
+                return TweakResult.Fail("Could not open Multimedia\\SystemProfile key. Run Systema as Administrator.");
+            key.SetValue("NetworkThrottlingIndex", NetworkThrottlingDisabled, RegistryValueKind.DWord);
+            Log.Info("SystemStability", "Network throttling disabled (NetworkThrottlingIndex=0xFFFFFFFF)");
+            return TweakResult.Ok("Network throttling off — full network throughput for the foreground app. Restart to apply.");
+        }
+        catch (Exception ex)
+        {
+            Log.Error("SystemStability", "EnableNetworkThrottlingOff failed", ex);
+            return TweakResult.FromException(ex);
+        }
+    });
+
+    /// <summary>Restores the Windows default (NetworkThrottlingIndex = 10).</summary>
+    public Task<TweakResult> DisableNetworkThrottlingOffAsync() => Task.Run(() =>
+    {
+        try
+        {
+            using var key = Registry.LocalMachine.OpenSubKey(MmSystemProfileKey, writable: true);
+            key?.SetValue("NetworkThrottlingIndex", NetworkThrottlingDefault, RegistryValueKind.DWord);
+            Log.Info("SystemStability", $"Network throttling restored (NetworkThrottlingIndex={NetworkThrottlingDefault} — Windows default)");
+            return TweakResult.Ok($"Network throttling restored to the Windows default ({NetworkThrottlingDefault}). Restart to apply.");
+        }
+        catch (Exception ex)
+        {
+            Log.Error("SystemStability", "DisableNetworkThrottlingOff failed", ex);
+            return TweakResult.FromException(ex);
+        }
+    });
+
+    // ── Power Throttling off (reinforces Foreground Priority Boost) ────────────
+    // Windows quietly down-clocks threads it deems background to save power. Disabling
+    // Power Throttling (PowerThrottlingOff=1) keeps the foreground app at full clocks.
+    // AC-GATED: on battery we leave throttling ON (value 0) so runtime isn't hurt; the
+    // engine re-applies on power-state changes. Reversible (value removed on disable).
+    private const string PowerThrottlingKey = @"SYSTEM\CurrentControlSet\Control\Power\PowerThrottling";
+
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+    private struct SYSTEM_POWER_STATUS
+    {
+        public byte ACLineStatus; public byte BatteryFlag; public byte BatteryLifePercent;
+        public byte SystemStatusFlag; public int BatteryLifeTime; public int BatteryFullLifeTime;
+    }
+    [System.Runtime.InteropServices.DllImport("kernel32.dll")]
+    private static extern bool GetSystemPowerStatus(out SYSTEM_POWER_STATUS sps);
+
+    /// <summary>True when running on battery (AC offline). Used to AC-gate Power Throttling off.</summary>
+    public static bool IsOnBatteryPower()
+    {
+        try { if (GetSystemPowerStatus(out var s)) return s.ACLineStatus == 0; }
+        catch { /* default to AC on failure */ }
+        return false;
+    }
+
+    /// <summary>True when Power Throttling is disabled (PowerThrottlingOff = 1).</summary>
+    public bool IsPowerThrottlingDisabled()
+    {
+        try
+        {
+            using var key = Registry.LocalMachine.OpenSubKey(PowerThrottlingKey);
+            return key?.GetValue("PowerThrottlingOff") is int v && v == 1;
+        }
+        catch (Exception ex)
+        {
+            Log.Warn("SystemStability", $"IsPowerThrottlingDisabled read failed: {ex.Message}");
+            return false;
+        }
+    }
+
+    /// <summary>Applies the AC-gated Power Throttling state: off (1) on AC, on (0) on battery.</summary>
+    public Task<TweakResult> EnablePowerThrottlingOffAsync() => Task.Run(() =>
+    {
+        try
+        {
+            bool onBattery = IsOnBatteryPower();
+            using var key = Registry.LocalMachine.CreateSubKey(PowerThrottlingKey, writable: true);
+            if (key == null)
+                return TweakResult.Fail("Could not open the PowerThrottling key. Run Systema as Administrator.");
+            key.SetValue("PowerThrottlingOff", onBattery ? 0 : 1, RegistryValueKind.DWord);
+            Log.Info("SystemStability", $"Power Throttling off applied (PowerThrottlingOff={(onBattery ? 0 : 1)}; onBattery={onBattery})");
+            return TweakResult.Ok(onBattery
+                ? "Power Throttling stays on while on battery (saves runtime) — turns off automatically on AC."
+                : "Power Throttling off — the foreground app runs at full clock speed.");
+        }
+        catch (Exception ex)
+        {
+            Log.Error("SystemStability", "EnablePowerThrottlingOff failed", ex);
+            return TweakResult.FromException(ex);
+        }
+    });
+
+    /// <summary>Restores Windows-managed Power Throttling (removes PowerThrottlingOff).</summary>
+    public Task<TweakResult> DisablePowerThrottlingOffAsync() => Task.Run(() =>
+    {
+        try
+        {
+            using var key = Registry.LocalMachine.OpenSubKey(PowerThrottlingKey, writable: true);
+            key?.DeleteValue("PowerThrottlingOff", throwOnMissingValue: false);
+            Log.Info("SystemStability", "Power Throttling restored to Windows-managed (PowerThrottlingOff removed)");
+            return TweakResult.Ok("Power Throttling restored to the Windows default.");
+        }
+        catch (Exception ex)
+        {
+            Log.Error("SystemStability", "DisablePowerThrottlingOff failed", ex);
+            return TweakResult.FromException(ex);
+        }
+    });
+
+    // ── Fast app close (reinforces the "instant" feel) ────────────────────────
+    // Windows waits WaitToKillAppTimeout (default 20000 ms) for an app to close on
+    // shutdown / sign-out before nudging it. Trimming to 4000 ms makes those feel
+    // immediate while still giving apps a few seconds to save. HKCU REG_SZ, reversible.
+    private const string WaitToKillAppFast    = "2000";
+    private const string WaitToKillAppDefault = "20000";
+
+    /// <summary>True when the app-close wait is trimmed (WaitToKillAppTimeout = 4000).</summary>
+    public bool IsFastAppCloseEnabled()
+    {
+        try
+        {
+            using var key = Registry.CurrentUser.OpenSubKey(DesktopKey);
+            return key?.GetValue("WaitToKillAppTimeout") is string s && s == WaitToKillAppFast;
+        }
+        catch (Exception ex)
+        {
+            Log.Warn("SystemStability", $"IsFastAppCloseEnabled read failed: {ex.Message}");
+            return false;
+        }
+    }
+
+    public Task<TweakResult> EnableFastAppCloseAsync() => Task.Run(() =>
+    {
+        try
+        {
+            using var key = Registry.CurrentUser.CreateSubKey(DesktopKey, writable: true);
+            key?.SetValue("WaitToKillAppTimeout", WaitToKillAppFast, RegistryValueKind.String);
+            Log.Info("SystemStability", $"Fast app close enabled (WaitToKillAppTimeout={WaitToKillAppFast})");
+            return TweakResult.Ok("Fast app close enabled — apps close immediately on shutdown / sign-out.");
+        }
+        catch (Exception ex)
+        {
+            Log.Error("SystemStability", "EnableFastAppClose failed", ex);
+            return TweakResult.FromException(ex);
+        }
+    });
+
+    /// <summary>Restores the Windows default (WaitToKillAppTimeout = 20000 ms).</summary>
+    public Task<TweakResult> DisableFastAppCloseAsync() => Task.Run(() =>
+    {
+        try
+        {
+            using var key = Registry.CurrentUser.CreateSubKey(DesktopKey, writable: true);
+            key?.SetValue("WaitToKillAppTimeout", WaitToKillAppDefault, RegistryValueKind.String);
+            Log.Info("SystemStability", $"Fast app close disabled (WaitToKillAppTimeout={WaitToKillAppDefault} — Windows default)");
+            return TweakResult.Ok("App-close wait restored to the Windows default.");
+        }
+        catch (Exception ex)
+        {
+            Log.Error("SystemStability", "DisableFastAppClose failed", ex);
+            return TweakResult.FromException(ex);
+        }
+    });
+
+    // ── Keep Kernel in RAM (DisablePagingExecutive) ───────────────────────────
+    // Stops Windows paging kernel-mode code and drivers out to disk, so the system
+    // stays responsive under memory pressure instead of hitching. Only worthwhile on
+    // machines with plenty of RAM — Systema defaults it ON at >= 14 GB and recommends
+    // it at 16 GB+. HKLM, reversible, restart to apply.
+    private const string MemoryManagementKey =
+        @"SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management";
+
+    [System.Runtime.InteropServices.DllImport("kernel32.dll")]
+    private static extern bool GetPhysicallyInstalledSystemMemory(out long totalMemoryInKilobytes);
+
+    /// <summary>Installed physical RAM in GB (marketed amount, e.g. 16.0), or 0 if unknown.</summary>
+    public static double InstalledRamGb()
+    {
+        try { if (GetPhysicallyInstalledSystemMemory(out long kb)) return kb / 1024.0 / 1024.0; }
+        catch { /* fall through */ }
+        return 0;
+    }
+
+    /// <summary>True when the kernel is kept resident (DisablePagingExecutive = 1).</summary>
+    public bool IsKeepKernelInRamEnabled()
+    {
+        try
+        {
+            using var key = Registry.LocalMachine.OpenSubKey(MemoryManagementKey);
+            return key?.GetValue("DisablePagingExecutive") is int v && v == 1;
+        }
+        catch (Exception ex)
+        {
+            Log.Warn("SystemStability", $"IsKeepKernelInRamEnabled read failed: {ex.Message}");
+            return false;
+        }
+    }
+
+    public Task<TweakResult> EnableKeepKernelInRamAsync() => Task.Run(() =>
+    {
+        try
+        {
+            using var key = Registry.LocalMachine.OpenSubKey(MemoryManagementKey, writable: true);
+            if (key == null)
+                return TweakResult.Fail("Could not open Memory Management key. Run Systema as Administrator.");
+            key.SetValue("DisablePagingExecutive", 1, RegistryValueKind.DWord);
+            Log.Info("SystemStability", "Keep Kernel in RAM enabled (DisablePagingExecutive=1)");
+            return TweakResult.Ok("Kernel kept in RAM — snappier under memory load. Restart to apply.");
+        }
+        catch (Exception ex)
+        {
+            Log.Error("SystemStability", "EnableKeepKernelInRam failed", ex);
+            return TweakResult.FromException(ex);
+        }
+    });
+
+    /// <summary>Restores the Windows default (DisablePagingExecutive = 0).</summary>
+    public Task<TweakResult> DisableKeepKernelInRamAsync() => Task.Run(() =>
+    {
+        try
+        {
+            using var key = Registry.LocalMachine.OpenSubKey(MemoryManagementKey, writable: true);
+            key?.SetValue("DisablePagingExecutive", 0, RegistryValueKind.DWord);
+            Log.Info("SystemStability", "Keep Kernel in RAM disabled (DisablePagingExecutive=0 — Windows default)");
+            return TweakResult.Ok("Kernel paging restored to the Windows default. Restart to apply.");
+        }
+        catch (Exception ex)
+        {
+            Log.Error("SystemStability", "DisableKeepKernelInRam failed", ex);
+            return TweakResult.FromException(ex);
+        }
+    });
+
+    // ── Faster Shutdown (AutoEndTasks + HungAppTimeout) ───────────────────────
+    // Auto-ends apps that don't respond at shutdown / sign-out instead of showing the
+    // "this app is preventing shutdown" prompt (AutoEndTasks=1). Reinforced by trimming
+    // HungAppTimeout (how long Windows waits before deciding an app is hung) from 5000
+    // to 4000 ms — kept conservative so apps don't flicker "Not responding" in normal
+    // use. Pairs with Fast App Close (WaitToKillAppTimeout). HKCU REG_SZ, reversible.
+    private const string HungAppTimeoutFast    = "1000";
+    private const string HungAppTimeoutDefault = "5000";
+
+    /// <summary>True when frozen apps auto-close at shutdown (AutoEndTasks = "1").</summary>
+    public bool IsFasterShutdownEnabled()
+    {
+        try
+        {
+            using var key = Registry.CurrentUser.OpenSubKey(DesktopKey);
+            return key?.GetValue("AutoEndTasks") is string s && s == "1";
+        }
+        catch (Exception ex)
+        {
+            Log.Warn("SystemStability", $"IsFasterShutdownEnabled read failed: {ex.Message}");
+            return false;
+        }
+    }
+
+    public Task<TweakResult> EnableFasterShutdownAsync() => Task.Run(() =>
+    {
+        try
+        {
+            using var key = Registry.CurrentUser.CreateSubKey(DesktopKey, writable: true);
+            if (key == null) return TweakResult.Fail("Could not open the Desktop key.");
+            key.SetValue("AutoEndTasks",   "1",                RegistryValueKind.String);
+            key.SetValue("HungAppTimeout", HungAppTimeoutFast, RegistryValueKind.String);
+            Log.Info("SystemStability", $"Faster shutdown enabled (AutoEndTasks=1, HungAppTimeout={HungAppTimeoutFast})");
+            return TweakResult.Ok("Faster shutdown enabled — frozen apps close automatically instead of blocking it.");
+        }
+        catch (Exception ex)
+        {
+            Log.Error("SystemStability", "EnableFasterShutdown failed", ex);
+            return TweakResult.FromException(ex);
+        }
+    });
+
+    /// <summary>Restores the Windows defaults (AutoEndTasks = "0", HungAppTimeout = 5000 ms).</summary>
+    public Task<TweakResult> DisableFasterShutdownAsync() => Task.Run(() =>
+    {
+        try
+        {
+            using var key = Registry.CurrentUser.CreateSubKey(DesktopKey, writable: true);
+            key?.SetValue("AutoEndTasks",   "0",                   RegistryValueKind.String);
+            key?.SetValue("HungAppTimeout", HungAppTimeoutDefault, RegistryValueKind.String);
+            Log.Info("SystemStability", "Faster shutdown disabled (AutoEndTasks=0, HungAppTimeout=5000 — Windows defaults)");
+            return TweakResult.Ok("Shutdown behavior restored to the Windows default.");
+        }
+        catch (Exception ex)
+        {
+            Log.Error("SystemStability", "DisableFasterShutdown failed", ex);
+            return TweakResult.FromException(ex);
+        }
+    });
+
+    // ── Input Hook Timeout (LowLevelHooksTimeout) ─────────────────────────────
+    // When a misbehaving app installs a low-level keyboard/mouse hook and stalls,
+    // Windows freezes input until LowLevelHooksTimeout elapses (default ~5000 ms).
+    // Trimming it to 1000 ms means input recovers in 1 s instead of 5. To ENFORCE it
+    // beyond just the current user, we also write it to the .DEFAULT hive (the profile
+    // the logon/SYSTEM context uses) — a safe, reversible second location. HKCU + HKU.
+    private const int LowLevelHooksFast = 1000;
+    private const string DefaultUserDesktopKey = @".DEFAULT\Control Panel\Desktop";
+
+    /// <summary>True when the input-hook timeout is trimmed (LowLevelHooksTimeout = 1000).</summary>
+    public bool IsInputHookTimeoutEnabled()
+    {
+        try
+        {
+            using var key = Registry.CurrentUser.OpenSubKey(DesktopKey);
+            return key?.GetValue("LowLevelHooksTimeout") is int v && v == LowLevelHooksFast;
+        }
+        catch (Exception ex)
+        {
+            Log.Warn("SystemStability", $"IsInputHookTimeoutEnabled read failed: {ex.Message}");
+            return false;
+        }
+    }
+
+    public Task<TweakResult> EnableInputHookTimeoutAsync() => Task.Run(() =>
+    {
+        try
+        {
+            using (var key = Registry.CurrentUser.CreateSubKey(DesktopKey, writable: true))
+                key?.SetValue("LowLevelHooksTimeout", LowLevelHooksFast, RegistryValueKind.DWord);
+            // Enforce in the .DEFAULT hive too (logon / SYSTEM context). Best-effort — a
+            // failure here must not fail the whole tweak.
+            try
+            {
+                using var def = Registry.Users.CreateSubKey(DefaultUserDesktopKey, writable: true);
+                def?.SetValue("LowLevelHooksTimeout", LowLevelHooksFast, RegistryValueKind.DWord);
+            }
+            catch (Exception ex) { Log.Warn("SystemStability", $"Input-hook .DEFAULT enforce skipped: {ex.Message}"); }
+            Log.Info("SystemStability", $"Input hook timeout trimmed (LowLevelHooksTimeout={LowLevelHooksFast}, +.DEFAULT)");
+            return TweakResult.Ok("Input recovers fast from a misbehaving app (low-level hook timeout = 1 s).");
+        }
+        catch (Exception ex)
+        {
+            Log.Error("SystemStability", "EnableInputHookTimeout failed", ex);
+            return TweakResult.FromException(ex);
+        }
+    });
+
+    /// <summary>Restores the Windows default (removes LowLevelHooksTimeout from both hives).</summary>
+    public Task<TweakResult> DisableInputHookTimeoutAsync() => Task.Run(() =>
+    {
+        try
+        {
+            using (var key = Registry.CurrentUser.OpenSubKey(DesktopKey, writable: true))
+                key?.DeleteValue("LowLevelHooksTimeout", throwOnMissingValue: false);
+            try
+            {
+                using var def = Registry.Users.OpenSubKey(DefaultUserDesktopKey, writable: true);
+                def?.DeleteValue("LowLevelHooksTimeout", throwOnMissingValue: false);
+            }
+            catch (Exception ex) { Log.Warn("SystemStability", $"Input-hook .DEFAULT restore skipped: {ex.Message}"); }
+            Log.Info("SystemStability", "Input hook timeout restored to the Windows default (LowLevelHooksTimeout removed)");
+            return TweakResult.Ok("Input-hook timeout restored to the Windows default.");
+        }
+        catch (Exception ex)
+        {
+            Log.Error("SystemStability", "DisableInputHookTimeout failed", ex);
+            return TweakResult.FromException(ex);
+        }
+    });
+
     // ── NTFS Last-Access Timestamps ───────────────────────────────────────────
     //
     // Modern Windows manages NtfsDisableLastAccessUpdate via fsutil, not the

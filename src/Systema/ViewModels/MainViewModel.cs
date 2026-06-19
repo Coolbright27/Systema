@@ -55,20 +55,25 @@ public partial class MainViewModel : ObservableObject, IDisposable
     public BloatwareViewModel   BloatwareVm   { get; }
     public GraphicsViewModel    GraphicsVm    { get; }
     public IntelGpuViewModel    IntelVm       { get; }
+    public NvidiaGpuViewModel   NvidiaVm      { get; }
     public DellViewModel        DellVm        { get; }
 
     /// <summary>True only when an Intel iGPU is present — drives the Intel sidebar
     /// section's visibility so it stays hidden on non-Intel systems.</summary>
     public bool IsIntelGpuPresent => IntelVm.IsIntelPresent;
 
+    /// <summary>True only when an NVIDIA GPU is present — drives the Nvidia sidebar
+    /// section's visibility so it stays hidden on non-NVIDIA systems.</summary>
+    public bool IsNvidiaGpuPresent => NvidiaVm.IsNvidiaPresent;
+
     /// <summary>True only on Dell systems — drives the Dell sidebar section's visibility.</summary>
     public bool IsDellPresent => DellVm.IsDellPresent;
 
     /// <summary>
-    /// True when ANY on-device / hardware-specific section is present (Intel, Dell). Drives
-    /// the dedicated sidebar separator so it only appears when the group is non-empty.
+    /// True when ANY on-device / hardware-specific section is present (Intel, NVIDIA, Dell).
+    /// Drives the dedicated sidebar separator so it only appears when the group is non-empty.
     /// </summary>
-    public bool HasOnDeviceSections => IsIntelGpuPresent || IsDellPresent;
+    public bool HasOnDeviceSections => IsIntelGpuPresent || IsNvidiaGpuPresent || IsDellPresent;
 
     private readonly DispatcherTimer _refreshTimer;
     private readonly DispatcherTimer _heartbeatTimer;   // dedicated 1-second CrashGuard heartbeat
@@ -88,6 +93,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         BloatwareViewModel   bloatwareVm,
         GraphicsViewModel    graphicsVm,
         IntelGpuViewModel    intelVm,
+        NvidiaGpuViewModel   nvidiaVm,
         DellViewModel        dellVm)
     {
         DashboardVm   = dashboardVm;
@@ -101,6 +107,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         BloatwareVm   = bloatwareVm;
         GraphicsVm    = graphicsVm;
         IntelVm       = intelVm;
+        NvidiaVm      = nvidiaVm;
         DellVm        = dellVm;
         CurrentView   = dashboardVm;
 
@@ -181,6 +188,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
                 "Bloatware"   => BloatwareVm,
                 "Graphics"    => GraphicsVm,
                 "Intel"       => IntelVm,
+                "Nvidia"      => NvidiaVm,
                 "Dell"        => DellVm,
                 _ => LogUnknownSection(section)
             };
@@ -237,6 +245,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         ToolsVm?.Dispose();
         GraphicsVm?.Dispose();
         IntelVm?.Dispose();
+        NvidiaVm?.Dispose();
         DellVm?.Dispose();
     }
 }

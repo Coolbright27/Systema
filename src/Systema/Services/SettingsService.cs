@@ -423,6 +423,22 @@ public class SettingsService
         }
     }
 
+    /// <summary>Opt-in: re-apply the NVIDIA power-management choice after driver updates
+    /// (which wipe the display-adapter values). Off by default.</summary>
+    public bool NvidiaGpuReapplyEnabled
+    {
+        get => ReadBool(nameof(NvidiaGpuReapplyEnabled), defaultValue: false);
+        set => WriteBool(nameof(NvidiaGpuReapplyEnabled), value);
+    }
+
+    /// <summary>True when the user last chose "prefer maximum performance" for the NVIDIA GPU.
+    /// Re-applied on startup when <see cref="NvidiaGpuReapplyEnabled"/> is on.</summary>
+    public bool NvidiaGpuPreferMaxPerformance
+    {
+        get => ReadBool(nameof(NvidiaGpuPreferMaxPerformance), defaultValue: false);
+        set => WriteBool(nameof(NvidiaGpuPreferMaxPerformance), value);
+    }
+
     // ── System Stability tweaks ───────────────────────────────────────────────
 
     /// <summary>Whether the user has disabled Windows Fast Startup (off by default).</summary>

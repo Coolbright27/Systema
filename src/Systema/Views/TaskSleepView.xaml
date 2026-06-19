@@ -52,24 +52,70 @@
         <StackPanel Margin="32,28,32,32">
 
             <!-- ===== HEADER ===== -->
-            <Grid Margin="0,0,0,20">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
+            <TextBlock Text="Systema Engine" Style="{StaticResource HeadingLarge}"/>
+            <TextBlock Text="Sleeps idle apps, speeds up launches, and keeps the app you're using responsive — automatically."
+                       Style="{StaticResource CaptionText}" Margin="0,4,0,16"/>
 
-                <StackPanel Grid.Column="0">
-                    <TextBlock Text="Systema Engine" Style="{StaticResource HeadingLarge}"/>
-                    <TextBlock Text="Sleeps idle apps, speeds up launches, and keeps the app you're using responsive — automatically."
-                               Style="{StaticResource CaptionText}" Margin="0,4,0,0"/>
+            <!-- ===== STATUS HERO ===== -->
+            <Border Style="{StaticResource Card}" Margin="0,0,0,12">
+                <StackPanel>
+                    <Grid Margin="0,0,0,14">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                            <Ellipse Width="9" Height="9" VerticalAlignment="Center" Margin="0,0,9,0">
+                                <Ellipse.Style>
+                                    <Style TargetType="Ellipse">
+                                        <Setter Property="Fill" Value="{StaticResource TextSecondaryBrush}"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsEnabled}" Value="True">
+                                                <Setter Property="Fill" Value="{StaticResource AccentGreenBrush}"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Ellipse.Style>
+                            </Ellipse>
+                            <TextBlock VerticalAlignment="Center">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock" BasedOn="{StaticResource HeadingMedium}">
+                                        <Setter Property="Text" Value="Engine is off"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsEnabled}" Value="True">
+                                                <Setter Property="Text" Value="Engine is on"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </StackPanel>
+                        <CheckBox Grid.Column="1" IsChecked="{Binding IsEnabled, Mode=TwoWay}"
+                                  Style="{StaticResource ToggleSwitch}" VerticalAlignment="Center"/>
+                    </Grid>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="12"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" Background="{StaticResource BgSurfaceBrush}" CornerRadius="10" Padding="14,12">
+                            <StackPanel>
+                                <TextBlock Text="Apps napping" Style="{StaticResource CaptionText}"/>
+                                <TextBlock Text="{Binding AppsNappingCount}" FontSize="24" FontWeight="SemiBold"
+                                           Foreground="{StaticResource AccentBlueBrush}"/>
+                            </StackPanel>
+                        </Border>
+                        <Border Grid.Column="2" Background="{StaticResource BgSurfaceBrush}" CornerRadius="10" Padding="14,12">
+                            <StackPanel>
+                                <TextBlock Text="Active apps" Style="{StaticResource CaptionText}"/>
+                                <TextBlock Text="{Binding ActiveAppsCount}" FontSize="24" FontWeight="SemiBold"
+                                           Foreground="{StaticResource AccentGreenBrush}"/>
+                            </StackPanel>
+                        </Border>
+                    </Grid>
                 </StackPanel>
-
-                <CheckBox Grid.Column="1"
-                          IsChecked="{Binding IsEnabled, Mode=TwoWay}"
-                          Style="{StaticResource ToggleSwitch}"
-                          VerticalAlignment="Center"
-                          Margin="24,0,0,0"/>
-            </Grid>
+            </Border>
 
             <!-- ===== LAUNCH BOOST CARD ===== -->
             <Border Style="{StaticResource Card}" Margin="0,0,0,16">
@@ -87,6 +133,37 @@
                         </Style>
                     </StackPanel.Style>
 
+                    <Button Command="{Binding ToggleLaunchBoostSectionCommand}" Style="{StaticResource ExpanderButton}">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                                <TextBlock Text="Launch Boost" Style="{StaticResource HeadingMedium}"/>
+                                <Border BorderBrush="{StaticResource AccentGreenBrush}" BorderThickness="1" CornerRadius="3"
+                                        Padding="6,2" Margin="10,0,0,0" VerticalAlignment="Center">
+                                    <TextBlock Text="SAFE" FontSize="9" FontWeight="SemiBold" Foreground="{StaticResource AccentGreenBrush}"/>
+                                </Border>
+                            </StackPanel>
+                            <TextBlock Grid.Column="1" VerticalAlignment="Center" Margin="12,0,0,0"
+                                       Foreground="{StaticResource TextSecondaryBrush}" FontSize="13">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Text" Value="&#x25BC;"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding ShowLaunchBoost}" Value="True">
+                                                <Setter Property="Text" Value="&#x25B2;"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </Grid>
+                    </Button>
+
+                    <StackPanel Visibility="{Binding ShowLaunchBoost, Converter={StaticResource BoolToVis}}" Margin="0,16,0,0">
+
                     <!-- Header row with master toggle -->
                     <Grid Margin="0,0,0,4">
                         <Grid.ColumnDefinitions>
@@ -94,13 +171,6 @@
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <StackPanel Grid.Column="0">
-                            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                                <TextBlock Text="Launch Boost" Style="{StaticResource HeadingMedium}"/>
-                                <Border BorderBrush="{StaticResource AccentGreenBrush}" BorderThickness="1" CornerRadius="3"
-                                        Padding="6,2" Margin="10,0,0,0" VerticalAlignment="Center">
-                                    <TextBlock Text="SAFE" FontSize="9" FontWeight="SemiBold" Foreground="{StaticResource AccentGreenBrush}"/>
-                                </Border>
-                            </StackPanel>
                             <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" MaxWidth="600">
                                 Gives apps a temporary priority boost the moment they launch so they open faster,
                                 then hands control back to Windows. Off by default.
@@ -190,6 +260,7 @@
                                       IsChecked="{Binding LaunchBoostGpu, Mode=TwoWay}" VerticalAlignment="Center"/>
                         </Grid>
                     </StackPanel>
+                    </StackPanel>
                 </StackPanel>
             </Border>
 
@@ -210,6 +281,35 @@
                             </Style.Triggers>
                         </Style>
                     </StackPanel.Style>
+
+                    <Button Command="{Binding ToggleResponsivenessSectionCommand}" Style="{StaticResource ExpanderButton}">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="Responsiveness boosts" Style="{StaticResource HeadingMedium}"/>
+                                <TextBlock Text="Eleven tweaks that keep the active app fast — priority, focus, throttling, startup, shutdown."
+                                           Style="{StaticResource CaptionText}" Margin="0,3,0,0"/>
+                            </StackPanel>
+                            <TextBlock Grid.Column="1" VerticalAlignment="Center" Margin="12,0,0,0"
+                                       Foreground="{StaticResource TextSecondaryBrush}" FontSize="13">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Text" Value="&#x25BC;"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding ShowResponsiveness}" Value="True">
+                                                <Setter Property="Text" Value="&#x25B2;"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </Grid>
+                    </Button>
+
+                    <StackPanel Visibility="{Binding ShowResponsiveness, Converter={StaticResource BoolToVis}}" Margin="0,16,0,0">
 
                     <!-- Foreground Priority Boost -->
                     <Grid>
@@ -329,12 +429,223 @@
                                   Style="{StaticResource ToggleSwitch}"
                                   IsChecked="{Binding MaxResponsivenessEnabled, Mode=TwoWay}"/>
                     </Grid>
+
+                    <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,16,0,16"/>
+
+                    <!-- Network Throttling Off — pairs with Maximum System Responsiveness. -->
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" Margin="0,0,16,0">
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                <TextBlock Text="Network Throttling Off" Style="{StaticResource HeadingMedium}"/>
+                                <Border BorderBrush="{StaticResource AccentGreenBrush}" BorderThickness="1" CornerRadius="3"
+                                        Padding="6,2" Margin="10,0,0,0" VerticalAlignment="Center">
+                                    <TextBlock Text="SAFE" FontSize="9" FontWeight="SemiBold" Foreground="{StaticResource AccentGreenBrush}"/>
+                                </Border>
+                            </StackPanel>
+                            <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" MaxWidth="600">
+                                Windows throttles your network to ~10 packets/ms whenever audio or video is playing, to keep
+                                sound smooth. Turning that off hands the full network pipe to the app you're using — snappier
+                                downloads, streaming, and online games. OFF restores the Windows default.
+                                <LineBreak/><Run FontWeight="SemiBold">Recommended on with Systema Engine:</Run> it pairs with
+                                Maximum System Responsiveness — same multimedia profile, now without the network brake.
+                            </TextBlock>
+                            <TextBlock Text="⟳ Requires a restart to take effect."
+                                       Style="{StaticResource CaptionText}" TextWrapping="Wrap"
+                                       Foreground="{StaticResource AccentYellowBrush}" Margin="0,4,0,0"/>
+                        </StackPanel>
+                        <CheckBox Grid.Column="1" VerticalAlignment="Center"
+                                  Style="{StaticResource ToggleSwitch}"
+                                  IsChecked="{Binding NetworkThrottlingOffEnabled, Mode=TwoWay}"/>
+                    </Grid>
+
+                    <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,16,0,16"/>
+
+                    <!-- Power Throttling Off — pairs with Foreground Priority Boost. AC-gated. -->
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" Margin="0,0,16,0">
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                <TextBlock Text="Power Throttling Off" Style="{StaticResource HeadingMedium}"/>
+                                <Border BorderBrush="{StaticResource AccentGreenBrush}" BorderThickness="1" CornerRadius="3"
+                                        Padding="6,2" Margin="10,0,0,0" VerticalAlignment="Center">
+                                    <TextBlock Text="SAFE" FontSize="9" FontWeight="SemiBold" Foreground="{StaticResource AccentGreenBrush}"/>
+                                </Border>
+                            </StackPanel>
+                            <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" MaxWidth="600">
+                                Windows quietly lowers the clock speed of apps it decides are in the background to save power.
+                                Turning Power Throttling off keeps the app you're using at full speed. On battery it's left on
+                                automatically so your runtime isn't affected — it only kicks in on AC power.
+                                <LineBreak/><Run FontWeight="SemiBold">Recommended on with Systema Engine:</Run> it backs up
+                                Foreground Priority Boost — the active app gets both more CPU time and full clock speed.
+                            </TextBlock>
+                        </StackPanel>
+                        <CheckBox Grid.Column="1" VerticalAlignment="Center"
+                                  Style="{StaticResource ToggleSwitch}"
+                                  IsChecked="{Binding PowerThrottlingOffEnabled, Mode=TwoWay}"/>
+                    </Grid>
+
+                    <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,16,0,16"/>
+
+                    <!-- Fast App Close — snappier shutdown / sign-out. -->
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" Margin="0,0,16,0">
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                <TextBlock Text="Fast App Close" Style="{StaticResource HeadingMedium}"/>
+                                <Border BorderBrush="{StaticResource AccentGreenBrush}" BorderThickness="1" CornerRadius="3"
+                                        Padding="6,2" Margin="10,0,0,0" VerticalAlignment="Center">
+                                    <TextBlock Text="SAFE" FontSize="9" FontWeight="SemiBold" Foreground="{StaticResource AccentGreenBrush}"/>
+                                </Border>
+                            </StackPanel>
+                            <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" MaxWidth="600">
+                                Windows waits up to 20 seconds for an app to close when you shut down or sign out before
+                                nudging it. This trims that wait so shutdown and restart feel immediate — apps still get a
+                                few seconds to save. OFF restores the Windows default.
+                                <LineBreak/><Run FontWeight="SemiBold">Recommended on with Systema Engine:</Run> less waiting
+                                when you close things, matching the engine's snappy feel.
+                            </TextBlock>
+                        </StackPanel>
+                        <CheckBox Grid.Column="1" VerticalAlignment="Center"
+                                  Style="{StaticResource ToggleSwitch}"
+                                  IsChecked="{Binding FastAppCloseEnabled, Mode=TwoWay}"/>
+                    </Grid>
+
+                    <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,16,0,16"/>
+
+                    <!-- Keep Kernel in RAM — RAM-gated (default on at >= 14 GB, recommended 16 GB+). -->
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" Margin="0,0,16,0">
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                <TextBlock Text="Keep Kernel in RAM" Style="{StaticResource HeadingMedium}"/>
+                                <Border BorderBrush="{StaticResource AccentGreenBrush}" BorderThickness="1" CornerRadius="3"
+                                        Padding="6,2" Margin="10,0,0,0" VerticalAlignment="Center">
+                                    <TextBlock Text="SAFE" FontSize="9" FontWeight="SemiBold" Foreground="{StaticResource AccentGreenBrush}"/>
+                                </Border>
+                            </StackPanel>
+                            <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" MaxWidth="600">
+                                Stops Windows from paging the kernel and drivers out to disk (DisablePagingExecutive), so the
+                                system stays responsive under memory load instead of hitching. OFF restores the Windows default.
+                                <LineBreak/><Run FontWeight="SemiBold">Only recommended if your PC has 16 GB or more of RAM</Run> —
+                                Systema leaves this off by default on machines with less than 14 GB.
+                            </TextBlock>
+                            <TextBlock Text="⟳ Requires a restart to take effect."
+                                       Style="{StaticResource CaptionText}" TextWrapping="Wrap"
+                                       Foreground="{StaticResource AccentYellowBrush}" Margin="0,4,0,0"/>
+                        </StackPanel>
+                        <CheckBox Grid.Column="1" VerticalAlignment="Center"
+                                  Style="{StaticResource ToggleSwitch}"
+                                  IsChecked="{Binding KeepKernelInRamEnabled, Mode=TwoWay}"/>
+                    </Grid>
+
+                    <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,16,0,16"/>
+
+                    <!-- Faster Shutdown — AutoEndTasks + HungAppTimeout reinforcement. -->
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" Margin="0,0,16,0">
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                <TextBlock Text="Faster Shutdown" Style="{StaticResource HeadingMedium}"/>
+                                <Border BorderBrush="{StaticResource AccentGreenBrush}" BorderThickness="1" CornerRadius="3"
+                                        Padding="6,2" Margin="10,0,0,0" VerticalAlignment="Center">
+                                    <TextBlock Text="SAFE" FontSize="9" FontWeight="SemiBold" Foreground="{StaticResource AccentGreenBrush}"/>
+                                </Border>
+                            </StackPanel>
+                            <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" MaxWidth="600">
+                                Closes frozen apps automatically when you shut down or sign out (AutoEndTasks), instead of the
+                                "this app is preventing shutdown" prompt. Reinforced by shortening how long Windows waits before
+                                deciding an app is hung (HungAppTimeout → 1000 ms) so a slow app like Discord is force-closed
+                                before the prompt appears. Pairs with Fast App Close (2 s). OFF restores the Windows defaults.
+                                <LineBreak/><Run FontWeight="SemiBold">Recommended on with Systema Engine:</Run> shutdown and
+                                restart feel immediate, with no stuck-app prompts.
+                            </TextBlock>
+                        </StackPanel>
+                        <CheckBox Grid.Column="1" VerticalAlignment="Center"
+                                  Style="{StaticResource ToggleSwitch}"
+                                  IsChecked="{Binding FasterShutdownEnabled, Mode=TwoWay}"/>
+                    </Grid>
+
+                    <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,16,0,16"/>
+
+                    <!-- Input Hook Timeout — LowLevelHooksTimeout, enforced in the .DEFAULT hive too. -->
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" Margin="0,0,16,0">
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                <TextBlock Text="Input Hook Timeout" Style="{StaticResource HeadingMedium}"/>
+                                <Border BorderBrush="{StaticResource AccentGreenBrush}" BorderThickness="1" CornerRadius="3"
+                                        Padding="6,2" Margin="10,0,0,0" VerticalAlignment="Center">
+                                    <TextBlock Text="SAFE" FontSize="9" FontWeight="SemiBold" Foreground="{StaticResource AccentGreenBrush}"/>
+                                </Border>
+                            </StackPanel>
+                            <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" MaxWidth="600">
+                                When a misbehaving app installs a keyboard/mouse hook and stalls, Windows freezes your input
+                                until it gives up (LowLevelHooksTimeout, ~5000 ms). This trims it to 1000 ms so input recovers
+                                in a second instead of five. To enforce it everywhere it also writes the same value to the
+                                system's .DEFAULT profile (used at the logon screen) — safe and reversible. OFF restores the default.
+                                <LineBreak/><Run FontWeight="SemiBold">Recommended on with Systema Engine:</Run> the mouse and
+                                keyboard stay responsive even when an app misbehaves.
+                            </TextBlock>
+                        </StackPanel>
+                        <CheckBox Grid.Column="1" VerticalAlignment="Center"
+                                  Style="{StaticResource ToggleSwitch}"
+                                  IsChecked="{Binding InputHookTimeoutEnabled, Mode=TwoWay}"/>
+                    </Grid>
+                    </StackPanel>
                 </StackPanel>
             </Border>
 
             <!-- ===== LIVE MONITOR CARD ===== -->
-            <Border Style="{StaticResource Card}" Margin="0,0,0,16">
+            <Border Style="{StaticResource Card}" Margin="0,0,0,12">
                 <StackPanel>
+
+                    <Button Command="{Binding ToggleLiveMonitorSectionCommand}" Style="{StaticResource ExpanderButton}">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="Live monitor" Style="{StaticResource HeadingMedium}"/>
+                                <TextBlock Text="Watch what the engine is doing in real time, and protect any app on the spot."
+                                           Style="{StaticResource CaptionText}" Margin="0,3,0,0"/>
+                            </StackPanel>
+                            <TextBlock Grid.Column="1" VerticalAlignment="Center" Margin="12,0,0,0"
+                                       Foreground="{StaticResource TextSecondaryBrush}" FontSize="13">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Text" Value="&#x25BC;"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding ShowLiveMonitor}" Value="True">
+                                                <Setter Property="Text" Value="&#x25B2;"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </Grid>
+                    </Button>
+
+                    <StackPanel Visibility="{Binding ShowLiveMonitor, Converter={StaticResource BoolToVis}}" Margin="0,16,0,0">
 
                     <!-- Card header: stats + Show All -->
                     <Grid Margin="0,0,0,14">
@@ -834,15 +1145,41 @@
                                Foreground="{StaticResource TextSecondaryBrush}"
                                Margin="0,10,0,0"/>
 
+                    </StackPanel>
                 </StackPanel>
             </Border>
 
             <!-- ===== SLEEP BEHAVIOR CARD ===== -->
-            <Border Style="{StaticResource Card}" Margin="0,0,0,16">
+            <Border Style="{StaticResource Card}" Margin="0,0,0,12">
                 <StackPanel>
-                    <TextBlock Text="SLEEP BEHAVIOR"
-                               Style="{StaticResource SectionLabel}"
-                               Margin="0,0,0,16"/>
+                    <Button Command="{Binding ToggleSleepRulesSectionCommand}" Style="{StaticResource ExpanderButton}">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="Sleep rules" Style="{StaticResource HeadingMedium}"/>
+                                <TextBlock Text="Which apps get put to sleep — minimized, tray, unused, and idle — plus how aggressively."
+                                           Style="{StaticResource CaptionText}" Margin="0,3,0,0"/>
+                            </StackPanel>
+                            <TextBlock Grid.Column="1" VerticalAlignment="Center" Margin="12,0,0,0"
+                                       Foreground="{StaticResource TextSecondaryBrush}" FontSize="13">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Text" Value="&#x25BC;"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding ShowSleepRules}" Value="True">
+                                                <Setter Property="Text" Value="&#x25B2;"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </Grid>
+                    </Button>
+
+                    <StackPanel Visibility="{Binding ShowSleepRules, Converter={StaticResource BoolToVis}}" Margin="0,16,0,0">
 
                     <!-- Sleep minimized apps -->
                     <Grid Margin="0,0,0,16">
@@ -990,17 +1327,41 @@
                                   VerticalAlignment="Top"/>
                     </Grid>
 
+                    </StackPanel>
                 </StackPanel>
             </Border>
 
             <!-- ===== ADVANCED SETTINGS CARD ===== -->
-            <Border Style="{StaticResource Card}" Margin="0,0,0,16">
+            <Border Style="{StaticResource Card}" Margin="0,0,0,12">
                 <StackPanel>
-                    <TextBlock Text="ADVANCED" Style="{StaticResource SectionLabel}" Margin="0,0,0,4"/>
-                    <TextBlock Text="Protection guards and timing controls for power users"
-                               Style="{StaticResource CaptionText}"
-                               Foreground="{StaticResource TextSecondaryBrush}"
-                               Margin="0,0,0,16"/>
+                    <Button Command="{Binding ToggleAdvancedSectionCommand}" Style="{StaticResource ExpanderButton}">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="Advanced timing &amp; caps" Style="{StaticResource HeadingMedium}"/>
+                                <TextBlock Text="Protection guards, the hard CPU cap, and wake-timing controls for power users."
+                                           Style="{StaticResource CaptionText}" Margin="0,3,0,0"/>
+                            </StackPanel>
+                            <TextBlock Grid.Column="1" VerticalAlignment="Center" Margin="12,0,0,0"
+                                       Foreground="{StaticResource TextSecondaryBrush}" FontSize="13">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Text" Value="&#x25BC;"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding ShowAdvancedSection}" Value="True">
+                                                <Setter Property="Text" Value="&#x25B2;"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </Grid>
+                    </Button>
+
+                    <StackPanel Visibility="{Binding ShowAdvancedSection, Converter={StaticResource BoolToVis}}" Margin="0,16,0,0">
 
                     <!-- ── PROTECTION GUARDS ── -->
                     <TextBlock Text="PROTECTION" Style="{StaticResource SectionLabel}" Margin="0,0,0,8"/>
@@ -1327,13 +1688,41 @@
                                    Foreground="{StaticResource TextSecondaryBrush}"/>
                     </Grid>
 
+                    </StackPanel>
                 </StackPanel>
             </Border>
 
             <!-- ===== WHITELIST CARD ===== -->
             <Border Style="{StaticResource Card}" Margin="0,0,0,16">
                 <StackPanel>
-                    <TextBlock Text="NEVER NAP LIST" Style="{StaticResource SectionLabel}" Margin="0,0,0,4"/>
+                    <Button Command="{Binding ToggleNeverNapSectionCommand}" Style="{StaticResource ExpanderButton}">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="Never-nap list" Style="{StaticResource HeadingMedium}"/>
+                                <TextBlock Text="Apps that are never put to sleep, no matter what."
+                                           Style="{StaticResource CaptionText}" Margin="0,3,0,0"/>
+                            </StackPanel>
+                            <TextBlock Grid.Column="1" VerticalAlignment="Center" Margin="12,0,0,0"
+                                       Foreground="{StaticResource TextSecondaryBrush}" FontSize="13">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Text" Value="&#x25BC;"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding ShowNeverNap}" Value="True">
+                                                <Setter Property="Text" Value="&#x25B2;"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </Grid>
+                    </Button>
+
+                    <StackPanel Visibility="{Binding ShowNeverNap, Converter={StaticResource BoolToVis}}" Margin="0,16,0,0">
                     <TextBlock Text="Apps on this list will never be put to sleep. You can also add apps directly from the live monitor using the ··· button next to any napping process."
                                Style="{StaticResource CaptionText}"
                                Foreground="{StaticResource TextSecondaryBrush}"
@@ -1430,6 +1819,7 @@
                                Style="{StaticResource CaptionText}"
                                Foreground="{StaticResource TextSecondaryBrush}"
                                Margin="0,6,0,0"/>
+                    </StackPanel>
                 </StackPanel>
             </Border>
 
