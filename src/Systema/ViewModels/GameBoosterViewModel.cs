@@ -48,7 +48,6 @@ public partial class GameBoosterViewModel : ObservableObject, IAutoRefreshable, 
     [ObservableProperty] private string _activeGameName  = "—";
     [ObservableProperty] private bool   _gamesInstalled;
     [ObservableProperty] private int    _checkIntervalMinutes = 2;
-    [ObservableProperty] private bool   _xboxOverride;
 
     // Kill list as structured items
     [ObservableProperty] private ObservableCollection<KillListEntry>    _killListItems     = new();
@@ -62,6 +61,7 @@ public partial class GameBoosterViewModel : ObservableObject, IAutoRefreshable, 
     [ObservableProperty] private bool _highPerfPowerPlan;
     [ObservableProperty] private bool _disableGameBar;
     [ObservableProperty] private bool _gpuProfileOnBoost;
+    [ObservableProperty] private bool _pauseIndexing = true;
     [ObservableProperty] private bool _disableNagleOnBoost;
     [ObservableProperty] private bool _flushDnsOnBoost;
     [ObservableProperty] private bool _nicPowerSavingOnBoost;
@@ -347,14 +347,13 @@ public partial class GameBoosterViewModel : ObservableObject, IAutoRefreshable, 
 
         _settings.GameBoosterKillList = lines.Count > 0 ? lines : null;
 
-        _settings.XboxServicesUserOverride = XboxOverride;
-
         // Boost options
         _settings.GameBoosterFreeMemory            = FreeMemoryOnBoost;
         _settings.GameBoosterSuppressNotifications = SuppressNotifications;
         _settings.GameBoosterHighPerfPowerPlan     = HighPerfPowerPlan;
         _settings.GameBoosterDisableGameBar        = DisableGameBar;
         _settings.GameBoosterGpuProfile            = GpuProfileOnBoost;
+        _settings.GameBoosterPauseIndexing         = PauseIndexing;
         _settings.GameBoosterDisableNagle          = DisableNagleOnBoost;
         _settings.GameBoosterFlushDns              = FlushDnsOnBoost;
         _settings.GameBoosterNicPowerSaving        = NicPowerSavingOnBoost;
@@ -419,7 +418,6 @@ public partial class GameBoosterViewModel : ObservableObject, IAutoRefreshable, 
     {
         // Load all values via the public property setters first.
         CheckIntervalMinutes    = _settings.GameCheckIntervalMinutes;
-        XboxOverride            = _settings.XboxServicesUserOverride;
         GamesInstalled          = _gameBooster.GamesInstalled;
         BoostActive             = _gameBooster.BoostActive;
         ActiveGameName          = _gameBooster.ActiveGameName ?? "—";
@@ -428,6 +426,7 @@ public partial class GameBoosterViewModel : ObservableObject, IAutoRefreshable, 
         HighPerfPowerPlan       = _settings.GameBoosterHighPerfPowerPlan;
         DisableGameBar          = _settings.GameBoosterDisableGameBar;
         GpuProfileOnBoost       = _settings.GameBoosterGpuProfile;
+        PauseIndexing           = _settings.GameBoosterPauseIndexing;
         DisableNagleOnBoost     = _settings.GameBoosterDisableNagle;
         FlushDnsOnBoost         = _settings.GameBoosterFlushDns;
         NicPowerSavingOnBoost   = _settings.GameBoosterNicPowerSaving;
@@ -445,7 +444,6 @@ public partial class GameBoosterViewModel : ObservableObject, IAutoRefreshable, 
         // default (e.g. both false), no notification is sent and the visual state can be
         // wrong. Raising here guarantees the toggle always renders the persisted state.
         OnPropertyChanged(nameof(CheckIntervalMinutes));
-        OnPropertyChanged(nameof(XboxOverride));
         OnPropertyChanged(nameof(GamesInstalled));
         OnPropertyChanged(nameof(BoostActive));
         OnPropertyChanged(nameof(ActiveGameName));
@@ -454,6 +452,7 @@ public partial class GameBoosterViewModel : ObservableObject, IAutoRefreshable, 
         OnPropertyChanged(nameof(HighPerfPowerPlan));
         OnPropertyChanged(nameof(DisableGameBar));
         OnPropertyChanged(nameof(GpuProfileOnBoost));
+        OnPropertyChanged(nameof(PauseIndexing));
         OnPropertyChanged(nameof(DisableNagleOnBoost));
         OnPropertyChanged(nameof(FlushDnsOnBoost));
         OnPropertyChanged(nameof(NicPowerSavingOnBoost));

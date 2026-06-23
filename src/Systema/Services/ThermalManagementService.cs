@@ -281,7 +281,7 @@ public sealed class ThermalManagementService
     {
         "ultraperformance"  => "Uses more power",
         "ultra performance" => "Uses more power",
-        "quiet"             => "Quieter fans",
+        "quiet"             => "Quieter fans, may cause heat issues on older Dell BIOS",
         "cool"              => "Cooler surface",
         _ => "",
     };

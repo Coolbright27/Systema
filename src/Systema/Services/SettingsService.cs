@@ -316,6 +316,37 @@ public class SettingsService
         set => WriteBool(nameof(GameBoosterGpuProfile), value);
     }
 
+    // ── GPU/multimedia-profile saved originals (crash-safe restore) ──────────────
+    // Persisted so the MMCSS "Games" profile is restored even if Systema is killed while a
+    // boost is active. -1 / "" mean the value did NOT exist before boost (→ delete on restore).
+    public bool MmProfileSavedActive
+    {
+        get => ReadBool(nameof(MmProfileSavedActive), defaultValue: false);
+        set => WriteBool(nameof(MmProfileSavedActive), value);
+    }
+    public int MmProfileSavedPriority
+    {
+        get => ReadInt(nameof(MmProfileSavedPriority), defaultValue: -1);
+        set => WriteInt(nameof(MmProfileSavedPriority), value);
+    }
+    public string MmProfileSavedSchedCategory
+    {
+        get => ReadString(nameof(MmProfileSavedSchedCategory), defaultValue: "") ?? "";
+        set => WriteString(nameof(MmProfileSavedSchedCategory), value);
+    }
+    public string MmProfileSavedSfioPriority
+    {
+        get => ReadString(nameof(MmProfileSavedSfioPriority), defaultValue: "") ?? "";
+        set => WriteString(nameof(MmProfileSavedSfioPriority), value);
+    }
+
+    /// <summary>Pause the Windows Search indexer while a game is boosting (resume after). Default on.</summary>
+    public bool GameBoosterPauseIndexing
+    {
+        get => ReadBool(nameof(GameBoosterPauseIndexing), defaultValue: true);
+        set => WriteBool(nameof(GameBoosterPauseIndexing), value);
+    }
+
     /// <summary>Disable Nagle's algorithm (TcpAckFrequency + TCPNoDelay) for lower online-game latency.</summary>
     public bool GameBoosterDisableNagle
     {

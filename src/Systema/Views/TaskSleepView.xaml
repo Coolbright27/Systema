@@ -610,6 +610,98 @@
                                   Style="{StaticResource ToggleSwitch}"
                                   IsChecked="{Binding InputHookTimeoutEnabled, Mode=TwoWay}"/>
                     </Grid>
+
+                    <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,16,0,16"/>
+
+                    <!-- Faster Service Shutdown — WaitToKillServiceTimeout trim (service counterpart of Fast App Close). -->
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" Margin="0,0,16,0">
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                <TextBlock Text="Faster Service Shutdown" Style="{StaticResource HeadingMedium}"/>
+                                <Border BorderBrush="{StaticResource AccentGreenBrush}" BorderThickness="1" CornerRadius="3"
+                                        Padding="6,2" Margin="10,0,0,0" VerticalAlignment="Center">
+                                    <TextBlock Text="SAFE" FontSize="9" FontWeight="SemiBold" Foreground="{StaticResource AccentGreenBrush}"/>
+                                </Border>
+                            </StackPanel>
+                            <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" MaxWidth="600">
+                                On shutdown or restart Windows waits up to 5 seconds for each background service to stop before
+                                forcing it (WaitToKillServiceTimeout). This trims that to 2 seconds so reboots and shutdowns finish
+                                noticeably quicker, while still giving services a couple of seconds to flush. The service counterpart
+                                of Fast App Close. OFF restores the Windows default.
+                                <LineBreak/><Run FontWeight="SemiBold">Recommended on with Systema Engine:</Run> quicker, cleaner
+                                shutdowns and restarts.
+                            </TextBlock>
+                        </StackPanel>
+                        <CheckBox Grid.Column="1" VerticalAlignment="Center"
+                                  Style="{StaticResource ToggleSwitch}"
+                                  IsChecked="{Binding ServiceShutdownFastEnabled, Mode=TwoWay}"/>
+                    </Grid>
+
+                    <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,16,0,16"/>
+
+                    <!-- Disable Fast Startup — HiberbootEnabled=0 + powercfg /hibernate off. -->
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" Margin="0,0,16,0">
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                <TextBlock Text="Disable Fast Startup" Style="{StaticResource HeadingMedium}"/>
+                                <Border BorderBrush="{StaticResource AccentGreenBrush}" BorderThickness="1" CornerRadius="3"
+                                        Padding="6,2" Margin="10,0,0,0" VerticalAlignment="Center">
+                                    <TextBlock Text="SAFE" FontSize="9" FontWeight="SemiBold" Foreground="{StaticResource AccentGreenBrush}"/>
+                                </Border>
+                            </StackPanel>
+                            <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" MaxWidth="600">
+                                Fast Startup makes "Shut down" a hybrid hibernate — it reloads the old kernel/driver state on the
+                                next boot, so glitches that build up survive a shutdown and only a full Restart clears them. Turning
+                                it off makes every shutdown a clean cold boot, which fixes a whole class of "a restart fixes it"
+                                instability and lets driver/firmware updates apply correctly. It also turns off hibernation (Fast
+                                Startup requires it); sleep is unaffected. OFF restores both.
+                                <LineBreak/><Run FontWeight="SemiBold">Recommended on with Systema Engine:</Run> cleaner, more
+                                stable shutdowns.
+                            </TextBlock>
+                        </StackPanel>
+                        <CheckBox Grid.Column="1" VerticalAlignment="Center"
+                                  Style="{StaticResource ToggleSwitch}"
+                                  IsChecked="{Binding FastStartupOffEnabled, Mode=TwoWay}"/>
+                    </Grid>
+
+                    <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,16,0,16"/>
+
+                    <!-- Disable background Store/UWP apps — BackgroundAccessApplications\GlobalUserDisabled. -->
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" Margin="0,0,16,0">
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                <TextBlock Text="Disable background Store apps" Style="{StaticResource HeadingMedium}"/>
+                                <Border BorderBrush="{StaticResource AccentGreenBrush}" BorderThickness="1" CornerRadius="3"
+                                        Padding="6,2" Margin="10,0,0,0" VerticalAlignment="Center">
+                                    <TextBlock Text="SAFE" FontSize="9" FontWeight="SemiBold" Foreground="{StaticResource AccentGreenBrush}"/>
+                                </Border>
+                            </StackPanel>
+                            <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" MaxWidth="600">
+                                Stops packaged Store / UWP apps (Xbox, Phone Link, Mail, Weather, etc.) from running tasks in the
+                                background at all — a preventive complement to the engine, which only quiets apps once they're already
+                                running. Windows 11 hid the global switch for this, so this is the clean way to control it. Trade-off:
+                                those apps won't update live tiles or push background notifications until you open them. OFF restores
+                                the Windows default.
+                                <LineBreak/><Run FontWeight="SemiBold">Recommended on with Systema Engine:</Run> less background churn,
+                                snappier foreground.
+                            </TextBlock>
+                        </StackPanel>
+                        <CheckBox Grid.Column="1" VerticalAlignment="Center"
+                                  Style="{StaticResource ToggleSwitch}"
+                                  IsChecked="{Binding BackgroundAppsOffEnabled, Mode=TwoWay}"/>
+                    </Grid>
                     </StackPanel>
                 </StackPanel>
             </Border>

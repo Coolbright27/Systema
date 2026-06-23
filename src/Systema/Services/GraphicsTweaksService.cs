@@ -25,6 +25,7 @@
 // to expose exactly what Windows already exposes.
 // ════════════════════════════════════════════════════════════════════════════
 
+using System.Runtime.InteropServices;
 using Microsoft.Win32;
 using Systema.Core;
 
@@ -176,6 +177,161 @@ public class GraphicsTweaksService
             return TweakResult.Ok($"Optimizations for windowed games {(enable ? "enabled" : "disabled")}. Restart any open games to apply.");
         }
         catch (Exception ex) { Log.Error("GraphicsTweaks", "SetWindowedOptimizations failed", ex); return TweakResult.FromException(ex); }
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    //  5 — Stable timer resolution (0.5 ms)
+    // ════════════════════════════════════════════════════════════════════════
+    // The Windows system timer idles around 15.6 ms and only rises when an app asks for
+    // finer granularity. Pinning it to 0.5 ms makes the scheduler tick more often, which
+    // can tighten frame pacing / input latency and steady out FPS in some games — at the
+    // cost of the CPU waking more often (more heat and power draw, worst on a laptop).
+    //
+    // Since Win10 2004 a process's timer request is honoured PER-PROCESS, not globally.
+    // GlobalTimerResolutionRequests=1 (HKLM, reboot) restores the old global behaviour so a
+    // single process's request raises the timer for the whole system; Systema then provides
+    // that request via NtSetTimerResolution while it runs (re-issued on launch — App.xaml.cs).
+    // Nothing is applied on install — the toggle is OFF until the user opts in, and OFF here
+    // removes the value and releases the request.
+    private const string KernelKey            = @"SYSTEM\CurrentControlSet\Control\Session Manager\kernel";
+    private const uint   TargetResolution100ns = 5000;   // 0.5 ms, in 100-ns units
+
+    [DllImport("ntdll.dll")]
+    private static extern int NtQueryTimerResolution(out uint Minimum, out uint Maximum, out uint Current);
+    [DllImport("ntdll.dll")]
+    private static extern int NtSetTimerResolution(uint DesiredResolution, bool SetResolution, out uint CurrentResolution);
+
+    /// <summary>The current system timer resolution in milliseconds (live).</summary>
+    public double GetTimerResolutionMs()
+    {
+        try { if (NtQueryTimerResolution(out _, out _, out uint cur) == 0) return cur / 10000.0; }
+        catch (Exception ex) { Log.Warn("GraphicsTweaks", $"NtQueryTimerResolution failed: {ex.Message}"); }
+        return 0;
+    }
+
+    /// <summary>Human-readable current resolution, e.g. "0.50 ms (high-resolution)" or
+    /// "15.60 ms (Windows default)".</summary>
+    public string GetTimerResolutionText()
+    {
+        double ms = GetTimerResolutionMs();
+        if (ms <= 0) return "unknown";
+        string s = $"{ms:0.00} ms";
+        if (ms >= 15.0)      s += " (Windows default)";
+        else if (ms <= 0.6)  s += " (high-resolution)";
+        return s;
+    }
+
+    /// <summary>True when Systema's global high-resolution timer request is in force
+    /// (GlobalTimerResolutionRequests = 1).</summary>
+    public bool IsTimerResolutionForced()
+    {
+        try
+        {
+            using var key = Registry.LocalMachine.OpenSubKey(KernelKey);
+            return key?.GetValue("GlobalTimerResolutionRequests") is int v && v == 1;
+        }
+        catch (Exception ex) { Log.Warn("GraphicsTweaks", $"IsTimerResolutionForced read failed: {ex.Message}"); return false; }
+    }
+
+    // ── Holding the 0.5 ms request + reinforcing it if it drifts ──────────────
+    // NtSetTimerResolution is held only while THIS process keeps requesting it, so a one-shot
+    // call can quietly drift back. We simply re-issue it on a short loop so anything that
+    // changes the resolution is corrected within seconds. Deliberately uses ONLY the same
+    // documented ntdll timer API — no process/power-state calls — to keep the unsigned binary
+    // conservative. (Trade-off: with a background process throttled by Win11, the resolution
+    // can briefly dip to 1 ms between re-pins instead of holding rock-steady at 0.5 ms.)
+    private CancellationTokenSource? _timerHoldCts;
+
+    /// <summary>Issues the 0.5 ms request and keeps it pinned by re-asserting it every ~20 s,
+    /// so if the resolution drifts it's corrected automatically. Called on launch (when opted
+    /// in) and when the user turns the toggle on. Safe to call repeatedly.</summary>
+    public void StartTimerResolutionHold()
+    {
+        StopTimerResolutionHold();
+        var cts = new CancellationTokenSource();
+        _timerHoldCts = cts;
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                while (!cts.IsCancellationRequested)
+                {
+                    NtSetTimerResolution(TargetResolution100ns, true, out _);   // re-pin if it drifted back
+                    await Task.Delay(TimeSpan.FromSeconds(20), cts.Token);
+                }
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex) { Log.Warn("GraphicsTweaks", $"Timer-hold loop failed: {ex.Message}"); }
+        }, cts.Token);
+        Log.Info("GraphicsTweaks", "Timer-resolution hold started (20 s re-pin).");
+    }
+
+    /// <summary>Stops the re-pin loop and releases the request.</summary>
+    public void StopTimerResolutionHold()
+    {
+        _timerHoldCts?.Cancel();
+        _timerHoldCts = null;
+        try { NtSetTimerResolution(TargetResolution100ns, false, out _); } catch { /* best effort */ }
+    }
+
+    public TweakResult SetTimerResolution(bool on)
+    {
+        try
+        {
+            using var key = Registry.LocalMachine.CreateSubKey(KernelKey, writable: true);
+            if (key == null) return TweakResult.Fail("Could not open the kernel key (run as Administrator).");
+            if (on)
+            {
+                key.SetValue("GlobalTimerResolutionRequests", 1, RegistryValueKind.DWord);
+                StartTimerResolutionHold();   // issue + keep pinned (re-pin loop)
+                Log.Info("GraphicsTweaks", "Timer resolution forced to 0.5 ms (GlobalTimerResolutionRequests=1 + hold started)");
+                return TweakResult.Ok("Timer resolution set to 0.5 ms and kept pinned. Restart your PC so it applies system-wide.");
+            }
+            StopTimerResolutionHold();        // stop the loop, release the request
+            key.DeleteValue("GlobalTimerResolutionRequests", throwOnMissingValue: false);
+            Log.Info("GraphicsTweaks", "Timer resolution restored to Windows default (hold stopped + flag removed)");
+            return TweakResult.Ok("Timer resolution restored to the Windows default. Restart your PC to fully apply.");
+        }
+        catch (Exception ex) { Log.Error("GraphicsTweaks", "SetTimerResolution failed", ex); return TweakResult.FromException(ex); }
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    //  6 — Game DVR / Game Bar background capture
+    // ════════════════════════════════════════════════════════════════════════
+    // The Xbox Game Bar's background recording ("Capture") keeps a rolling buffer while
+    // you play — overhead that adds frame-time variance and a little input latency.
+    // Turning it off removes that overhead. Two HKCU values: GameDVR_Enabled (the user
+    // Game DVR switch) and AppCaptureEnabled (the Game Bar capture switch). Reflect-state
+    // only — nothing is applied on install; the toggle mirrors the live value and writes
+    // only when the user flips it. Reversible; applies on the next game launch.
+    private const string GameConfigStoreKey = @"System\GameConfigStore";
+    private const string GameDvrKey         = @"Software\Microsoft\Windows\CurrentVersion\GameDVR";
+
+    /// <summary>True when Game DVR / Game Bar background capture is OFF (GameDVR_Enabled = 0).</summary>
+    public bool IsGameDvrDisabled()
+    {
+        try
+        {
+            using var key = Registry.CurrentUser.OpenSubKey(GameConfigStoreKey);
+            return key?.GetValue("GameDVR_Enabled") is int v && v == 0;
+        }
+        catch (Exception ex) { Log.Warn("GraphicsTweaks", $"IsGameDvrDisabled read failed: {ex.Message}"); return false; }
+    }
+
+    public TweakResult SetGameDvrDisabled(bool disable)
+    {
+        try
+        {
+            using (var gcs = Registry.CurrentUser.CreateSubKey(GameConfigStoreKey, writable: true))
+                gcs?.SetValue("GameDVR_Enabled", disable ? 0 : 1, RegistryValueKind.DWord);
+            using (var gdvr = Registry.CurrentUser.CreateSubKey(GameDvrKey, writable: true))
+                gdvr?.SetValue("AppCaptureEnabled", disable ? 0 : 1, RegistryValueKind.DWord);
+            Log.Info("GraphicsTweaks", $"Game DVR capture {(disable ? "disabled" : "enabled")} (GameDVR_Enabled={(disable ? 0 : 1)})");
+            return TweakResult.Ok(disable
+                ? "Game Bar background capture turned off — less overhead while gaming. Restart any open games to apply."
+                : "Game Bar background capture restored to the Windows default. Restart any open games to apply.");
+        }
+        catch (Exception ex) { Log.Error("GraphicsTweaks", "SetGameDvrDisabled failed", ex); return TweakResult.FromException(ex); }
     }
 
     // ── DirectXUserGlobalSettings token helpers ("Key1=Val1;Key2=Val2;") ───────

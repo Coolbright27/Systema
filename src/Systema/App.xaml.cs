@@ -452,6 +452,16 @@ public partial class App : Application
                 });
             }
 
+            // ── Timer-resolution hold (opt-in) ──
+            // GlobalTimerResolutionRequests persists in the registry, but the actual 0.5 ms
+            // request must be re-issued by a running process each boot and kept pinned. If the
+            // user opted in, start the hold now — this changes no setting, it just honours it.
+            if (graphicsTweaks.IsTimerResolutionForced())
+            {
+                graphicsTweaks.StartTimerResolutionHold();
+                Log.Info("App", "Started 0.5 ms timer-resolution hold (user opted in).");
+            }
+
             Log.Info("App", "All ViewModels constructed");
 
             // ── Wire GameBooster → TaskSleep game-mode suppression ──

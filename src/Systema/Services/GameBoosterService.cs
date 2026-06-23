@@ -40,7 +40,6 @@ public sealed class GameBoosterService : IDisposable
     private readonly BatteryPauseService   _batteryPause;
 
     private DispatcherTimer? _gameCheckTimer;
-    private DispatcherTimer? _xboxCheckTimer;
     private TrayService?     _tray;
 
     // ── State ──────────────────────────────────────────────────────────────────
@@ -502,6 +501,8 @@ public sealed class GameBoosterService : IDisposable
         // Crash recovery: if the previous session crashed while boost was active,
         // restore all settings to their pre-boost originals before doing anything else.
         RecoverBoostStateFromCrash();
+        RestoreMultimediaProfile();   // crash-safe MMCSS restore (no-op unless a boost was left active)
+        ResumeIndexing();             // crash-safe: un-pause the Search indexer if a boost left it suspended
 
         // Initial game install scan (large-stack thread — Process.GetProcesses() needs it)
         _ = RunOnLargeStackAsync(ScanForInstalledGames);
@@ -514,14 +515,6 @@ public sealed class GameBoosterService : IDisposable
         };
         _gameCheckTimer.Tick += (_, _) => _ = RunOnLargeStackAsync(CheckRunningGames);
         _gameCheckTimer.Start();
-
-        // Xbox service check every 4 hours
-        _xboxCheckTimer = new DispatcherTimer(DispatcherPriority.Background)
-        {
-            Interval = TimeSpan.FromHours(4)
-        };
-        _xboxCheckTimer.Tick += (_, _) => _ = CheckXboxServicesAsync();
-        _xboxCheckTimer.Start();
 
         _log.Info("GameBoosterService", $"Monitoring started (interval: {_settings.GameCheckIntervalMinutes} min)");
     }
@@ -684,9 +677,6 @@ public sealed class GameBoosterService : IDisposable
             GamesInstalled = found;
             _log.Info("GameBoosterService", $"Games installed: {found}");
             GamesInstalledChanged?.Invoke(found);
-
-            if (!found)
-                _ = CheckXboxServicesAsync();
         }
         return found;
     }
@@ -778,43 +768,54 @@ public sealed class GameBoosterService : IDisposable
     {
         try
         {
+            // Only boost a game that's actually ON SCREEN — a minimized game shouldn't trigger
+            // (or hold) boost. Uses the same EnumWindows + IsIconic / IsWindowVisible detection
+            // Task Sleep already ships, so no new API surface is introduced.
+            var onScreenPids = GetOnScreenPids();
+
             var procs = Process.GetProcesses();
             foreach (var proc in procs)
             {
                 try
                 {
-                    foreach (var game in KnownGameProcesses)
+                    bool onScreen = onScreenPids.Contains(proc.Id);
+                    if (onScreen)
                     {
-                        if (game.StartsWith("*") && game.EndsWith("*"))
+                        foreach (var game in KnownGameProcesses)
                         {
-                            // *fragment* → contains match
-                            var frag = game[1..^1];
-                            if (proc.ProcessName.Contains(frag, StringComparison.OrdinalIgnoreCase))
-                                return proc.ProcessName;
-                        }
-                        else if (game.StartsWith("*"))
-                        {
-                            // *suffix → ends-with match
-                            var suffix = game[1..];
-                            if (proc.ProcessName.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
-                                return proc.ProcessName;
-                        }
-                        else if (game.EndsWith("*"))
-                        {
-                            // prefix* → starts-with match
-                            var prefix = game[..^1];
-                            if (proc.ProcessName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
-                                return proc.ProcessName;
-                        }
-                        else if (proc.ProcessName.Equals(game, StringComparison.OrdinalIgnoreCase))
-                        {
-                            return game;
+                            if (game.StartsWith("*") && game.EndsWith("*"))
+                            {
+                                // *fragment* → contains match
+                                var frag = game[1..^1];
+                                if (proc.ProcessName.Contains(frag, StringComparison.OrdinalIgnoreCase))
+                                    return proc.ProcessName;
+                            }
+                            else if (game.StartsWith("*"))
+                            {
+                                // *suffix → ends-with match
+                                var suffix = game[1..];
+                                if (proc.ProcessName.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+                                    return proc.ProcessName;
+                            }
+                            else if (game.EndsWith("*"))
+                            {
+                                // prefix* → starts-with match
+                                var prefix = game[..^1];
+                                if (proc.ProcessName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                                    return proc.ProcessName;
+                            }
+                            else if (proc.ProcessName.Equals(game, StringComparison.OrdinalIgnoreCase))
+                            {
+                                return game;
+                            }
                         }
                     }
 
-                    // Check anti-cheats as a proxy for a game running
+                    // Anti-cheat as a proxy for an (unknown) game — but only when a real app is
+                    // on screen (foreground isn't the desktop), so it won't boost while the user
+                    // sits on the desktop with everything minimized.
                     foreach (var ac in AntiCheatProcesses)
-                        if (proc.ProcessName.Contains(ac, StringComparison.OrdinalIgnoreCase))
+                        if (proc.ProcessName.Contains(ac, StringComparison.OrdinalIgnoreCase) && IsRealAppForeground())
                             return "Unknown Game (Anti-Cheat detected)";
                 }
                 catch { }
@@ -822,6 +823,58 @@ public sealed class GameBoosterService : IDisposable
         }
         catch { }
         return null;
+    }
+
+    // ── On-screen / minimized detection ────────────────────────────────────────
+    // Same window-state method Task Sleep uses (EnumWindows + IsWindowVisible + IsIconic) —
+    // these are standard, ubiquitous user32 calls already present in the binary, so adding
+    // them here introduces no new API surface.
+    private delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+    [DllImport("user32.dll")] private static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);
+    [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
+    [DllImport("user32.dll")] private static extern bool IsWindowVisible(IntPtr hWnd);
+    [DllImport("user32.dll")] private static extern bool IsIconic(IntPtr hWnd);
+    [DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
+
+    /// <summary>PIDs that own at least one visible, non-minimized top-level window — i.e. apps
+    /// actually on screen. Same EnumWindows + IsWindowVisible + IsIconic approach as Task Sleep.</summary>
+    private static HashSet<int> GetOnScreenPids()
+    {
+        var pids = new HashSet<int>();
+        try
+        {
+            EnumWindows((hWnd, _) =>
+            {
+                try
+                {
+                    if (IsWindowVisible(hWnd) && !IsIconic(hWnd))
+                    {
+                        GetWindowThreadProcessId(hWnd, out uint wpid);
+                        if (wpid != 0) pids.Add((int)wpid);
+                    }
+                }
+                catch { }
+                return true;
+            }, IntPtr.Zero);
+        }
+        catch (Exception ex) { _log.Warn("GameBoosterService", $"GetOnScreenPids failed: {ex.Message}"); }
+        return pids;
+    }
+
+    /// <summary>True when a real (non-shell) app owns the foreground window. Gates the anti-cheat
+    /// proxy so it won't boost while the desktop is showing with everything minimized.</summary>
+    private static bool IsRealAppForeground()
+    {
+        try
+        {
+            IntPtr hwnd = GetForegroundWindow();
+            if (hwnd == IntPtr.Zero) return false;
+            GetWindowThreadProcessId(hwnd, out uint pid);
+            if (pid == 0) return false;
+            try { return !Process.GetProcessById((int)pid).ProcessName.Equals("explorer", StringComparison.OrdinalIgnoreCase); }
+            catch { return true; }
+        }
+        catch { return false; }
     }
 
     // ── Boost Activation ──────────────────────────────────────────────────────
@@ -1048,6 +1101,7 @@ public sealed class GameBoosterService : IDisposable
         // 0. New network / system options (applied before the heavy RAM trim)
         if (_settings.GameBoosterDisableGameBar)   ApplyGameBarDisable();
         if (_settings.GameBoosterGpuProfile)       ApplyMultimediaProfile();
+        if (_settings.GameBoosterPauseIndexing)    PauseIndexing();
         if (_settings.GameBoosterDisableNagle)          ApplyDisableNagle();
         if (_settings.GameBoosterFlushDns)              FlushDns();
         if (_settings.GameBoosterNicPowerSaving)        ApplyNicPowerSaving();
@@ -1243,6 +1297,7 @@ public sealed class GameBoosterService : IDisposable
         RestoreNicPowerSaving();
         RestoreNagle();
         RestoreMultimediaProfile();
+        ResumeIndexing();   // always best-effort — no-op if we didn't pause it
         if (_savedAppCaptureEnabled.HasValue || _savedGameDvrEnabled.HasValue) RestoreGameBarDvr();
 
         // 1. Restore notifications — only if we actually suppressed them (were ON before boost)
@@ -1764,14 +1819,21 @@ public sealed class GameBoosterService : IDisposable
             // that opt in via AvSetMmThreadCharacteristics("Games", ...) — it does
             // NOT displace DWM (which uses the "Window Manager" category), so it is
             // VSync-safe.
-            using var gamesKey = Registry.LocalMachine.OpenSubKey(MmGamesKey, writable: true);
+            // CreateSubKey (not OpenSubKey) — the Tasks\Games key doesn't exist on every system,
+            // and OpenSubKey returned null there, silently skipping the whole tweak ("doesn't set").
+            using var gamesKey = Registry.LocalMachine.CreateSubKey(MmGamesKey, writable: true);
             if (gamesKey != null)
             {
-                var curPri = gamesKey.GetValue("Priority");
-                _savedMmPriority = curPri is int ip ? ip : 2;
-
-                _savedSchedulingCategory = gamesKey.GetValue("Scheduling Category") as string ?? "Medium";
-                _savedSfIoPriority       = gamesKey.GetValue("SFIO Priority")       as string ?? "Normal";
+                // Capture the TRUE originals ONCE and PERSIST them, so restore works even after a
+                // crash/restart and a second apply never mistakes the boosted values for originals.
+                // -1 / "" mean the value did not exist before boost → delete it on restore.
+                if (!_settings.MmProfileSavedActive)
+                {
+                    _settings.MmProfileSavedPriority      = gamesKey.GetValue("Priority") is int ip ? ip : -1;
+                    _settings.MmProfileSavedSchedCategory = gamesKey.GetValue("Scheduling Category") as string ?? "";
+                    _settings.MmProfileSavedSfioPriority  = gamesKey.GetValue("SFIO Priority")       as string ?? "";
+                    _settings.MmProfileSavedActive        = true;
+                }
 
                 gamesKey.SetValue("Priority",            6,      RegistryValueKind.DWord);
                 gamesKey.SetValue("Scheduling Category", "High", RegistryValueKind.String);
@@ -1812,15 +1874,26 @@ public sealed class GameBoosterService : IDisposable
             }
             _savedSystemResponsiveness = null; // current code never sets this; kept for back-compat
 
-            if (_savedMmPriority.HasValue)
+            // Restore the MMCSS "Games" values from the PERSISTED originals, so it undoes
+            // correctly even if Systema was killed mid-boost (the in-memory copy would be lost).
+            if (_settings.MmProfileSavedActive)
             {
                 using var gamesKey = Registry.LocalMachine.OpenSubKey(MmGamesKey, writable: true);
                 if (gamesKey != null)
                 {
-                    gamesKey.SetValue("Priority",            _savedMmPriority.Value,      RegistryValueKind.DWord);
-                    gamesKey.SetValue("Scheduling Category", _savedSchedulingCategory!,    RegistryValueKind.String);
-                    gamesKey.SetValue("SFIO Priority",       _savedSfIoPriority!,          RegistryValueKind.String);
+                    if (_settings.MmProfileSavedPriority >= 0)
+                        gamesKey.SetValue("Priority", _settings.MmProfileSavedPriority, RegistryValueKind.DWord);
+                    else gamesKey.DeleteValue("Priority", throwOnMissingValue: false);
+
+                    if (!string.IsNullOrEmpty(_settings.MmProfileSavedSchedCategory))
+                        gamesKey.SetValue("Scheduling Category", _settings.MmProfileSavedSchedCategory, RegistryValueKind.String);
+                    else gamesKey.DeleteValue("Scheduling Category", throwOnMissingValue: false);
+
+                    if (!string.IsNullOrEmpty(_settings.MmProfileSavedSfioPriority))
+                        gamesKey.SetValue("SFIO Priority", _settings.MmProfileSavedSfioPriority, RegistryValueKind.String);
+                    else gamesKey.DeleteValue("SFIO Priority", throwOnMissingValue: false);
                 }
+                _settings.MmProfileSavedActive = false;
                 _savedMmPriority = null;
                 _savedSchedulingCategory = null;
                 _savedSfIoPriority = null;
@@ -1829,6 +1902,57 @@ public sealed class GameBoosterService : IDisposable
             _log.Info("GameBoosterService", "Multimedia system profile restored");
         }
         catch (Exception ex) { _log.Warn("GameBoosterService", $"RestoreMultimediaProfile: {ex.Message}"); }
+    }
+
+    // ·· Pause / resume Windows Search indexing ································
+    // Pauses indexing while a game is boosting by SUSPENDING the SearchIndexer process — the
+    // WSearch service stays running (it's a pause, not a stop), so search keeps working and the
+    // indexer simply halts crawling until resumed. Crash-safe: ResumeIndexing is also called on
+    // startup, so a boost cut short by a crash never leaves the indexer suspended.
+    [DllImport("ntdll.dll")] private static extern uint NtSuspendProcess(IntPtr hProcess);
+    [DllImport("ntdll.dll")] private static extern uint NtResumeProcess(IntPtr hProcess);
+    private const uint PROCESS_SUSPEND_RESUME = 0x0800;
+    private bool _indexingPaused;
+
+    private void PauseIndexing()
+    {
+        if (_indexingPaused) return;
+        try
+        {
+            bool any = false;
+            foreach (var p in Process.GetProcessesByName("SearchIndexer"))
+            {
+                try
+                {
+                    IntPtr h = OpenProcess(PROCESS_SUSPEND_RESUME, false, p.Id);
+                    if (h != IntPtr.Zero) { NtSuspendProcess(h); CloseHandle(h); any = true; }
+                }
+                catch { }
+                finally { p.Dispose(); }
+            }
+            if (any) { _indexingPaused = true; _log.Info("GameBoosterService", "Search indexing paused (SearchIndexer suspended — WSearch service still running)"); }
+        }
+        catch (Exception ex) { _log.Warn("GameBoosterService", $"PauseIndexing failed: {ex.Message}"); }
+    }
+
+    private void ResumeIndexing()
+    {
+        try
+        {
+            foreach (var p in Process.GetProcessesByName("SearchIndexer"))
+            {
+                try
+                {
+                    IntPtr h = OpenProcess(PROCESS_SUSPEND_RESUME, false, p.Id);
+                    if (h != IntPtr.Zero) { NtResumeProcess(h); CloseHandle(h); }
+                }
+                catch { }
+                finally { p.Dispose(); }
+            }
+            if (_indexingPaused) _log.Info("GameBoosterService", "Search indexing resumed");
+            _indexingPaused = false;
+        }
+        catch (Exception ex) { _log.Warn("GameBoosterService", $"ResumeIndexing failed: {ex.Message}"); }
     }
 
     // ·· Sleep Prevention ······················································
@@ -2344,36 +2468,11 @@ public sealed class GameBoosterService : IDisposable
 
     // ── Xbox Services Logic ────────────────────────────────────────────────────
 
-    private static readonly string[] XboxServices =
-    {
-        "XboxGipSvc", "xbgm", "XblAuthManager", "XblGameSave", "XboxNetApiSvc"
-    };
-
-    private async Task CheckXboxServicesAsync()
-    {
-        // If user has overridden Xbox setting, respect it
-        if (_settings.XboxServicesUserOverride) return;
-
-        if (GamesInstalled)
-        {
-            _log.Info("GameBoosterService", "Games installed — keeping Xbox services enabled");
-            return;
-        }
-
-        _log.Info("GameBoosterService", "No games found — disabling Xbox services");
-        foreach (var svc in XboxServices)
-        {
-            try { await _serviceControl.DisableServiceAsync(svc); }
-            catch { }
-        }
-    }
-
     // ── Dispose ────────────────────────────────────────────────────────────────
 
     public void Dispose()
     {
         _gameCheckTimer?.Stop();
-        _xboxCheckTimer?.Stop();
         _manualBoostTimeoutTimer?.Stop();
 
         if (_boostActive)

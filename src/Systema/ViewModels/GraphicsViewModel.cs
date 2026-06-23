@@ -35,6 +35,9 @@ public partial class GraphicsViewModel : ObservableObject, IAutoRefreshable, IDi
     [ObservableProperty] private bool _hagsSupported = true;
     [ObservableProperty] private bool _windowedOptimizations;
     [ObservableProperty] private bool _extendGpuRecoveryTimeout;
+    [ObservableProperty] private bool _forceTimerResolution;
+    [ObservableProperty] private string _timerResolutionDisplay = "—";
+    [ObservableProperty] private bool _disableGameDvr;
     [ObservableProperty] private string _statusMessage = string.Empty;
 
     /// <summary>True when Auto-Pilot Mode is on. MPO is an Auto-Pilot-managed setting,
@@ -66,6 +69,9 @@ public partial class GraphicsViewModel : ObservableObject, IAutoRefreshable, IDi
             HardwareGpuScheduling    = _gfx.IsHagsEnabled();
             WindowedOptimizations    = _gfx.IsWindowedOptimizationsEnabled();
             ExtendGpuRecoveryTimeout = _gfx.IsTdrDelayExtended();
+            ForceTimerResolution     = _gfx.IsTimerResolutionForced();
+            TimerResolutionDisplay   = _gfx.GetTimerResolutionText();
+            DisableGameDvr           = _gfx.IsGameDvrDisabled();
         }
         finally { _loading = false; }
     }
@@ -112,5 +118,23 @@ public partial class GraphicsViewModel : ObservableObject, IAutoRefreshable, IDi
         var r = _gfx.SetTdrDelayExtended(value);
         StatusMessage = r.Message;
         if (!r.Success) { _loading = true; ExtendGpuRecoveryTimeout = !value; _loading = false; }
+    }
+
+    partial void OnForceTimerResolutionChanged(bool value)
+    {
+        if (_loading) return;
+        var r = _gfx.SetTimerResolution(value);
+        StatusMessage = r.Message;
+        if (!r.Success) { _loading = true; ForceTimerResolution = !value; _loading = false; }
+        // Reflect the new live value straight away (it changes the moment we request it).
+        TimerResolutionDisplay = _gfx.GetTimerResolutionText();
+    }
+
+    partial void OnDisableGameDvrChanged(bool value)
+    {
+        if (_loading) return;
+        var r = _gfx.SetGameDvrDisabled(value);
+        StatusMessage = r.Message;
+        if (!r.Success) { _loading = true; DisableGameDvr = !value; _loading = false; }
     }
 }

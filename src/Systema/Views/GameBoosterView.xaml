@@ -204,6 +204,17 @@
                                       IsChecked="{Binding GpuProfileOnBoost, Mode=TwoWay}" VerticalAlignment="Center"/>
                         </Grid>
 
+                        <Grid Margin="0,0,0,16">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" Margin="0,0,24,0" VerticalAlignment="Center">
+                                <TextBlock Text="Pause indexing during games" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
+                                <TextBlock Text="Pauses the Windows Search indexer while a game is boosting to free up disk I/O, then resumes it after. The search service keeps running — it's paused, not stopped. On by default."
+                                           Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,2,0,0"/>
+                            </StackPanel>
+                            <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}"
+                                      IsChecked="{Binding PauseIndexing, Mode=TwoWay}" VerticalAlignment="Center"/>
+                        </Grid>
+
                         <!-- SYSTEM -->
                         <TextBlock Text="SYSTEM" Style="{StaticResource SectionLabel}" Margin="0,0,0,12"/>
 
@@ -288,20 +299,6 @@
                                          core:NumericTextBox.IsNumericOnly="True"/>
                                 <TextBlock Text="minutes" Style="{StaticResource CaptionText}" VerticalAlignment="Center"/>
                             </StackPanel>
-                        </Grid>
-
-                        <!-- Lock Xbox services -->
-                        <Grid Margin="0,0,0,16">
-                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                            <StackPanel Grid.Column="0" Margin="0,0,20,0" VerticalAlignment="Center">
-                                <TextBlock Text="Lock Xbox services" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                                <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,2,0,0">
-                                    When on, Systema will never automatically disable Xbox services
-                                    (even when no games are detected).
-                                </TextBlock>
-                            </StackPanel>
-                            <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}"
-                                      IsChecked="{Binding XboxOverride, Mode=TwoWay}" VerticalAlignment="Center"/>
                         </Grid>
 
                         <!-- What Systema detects -->

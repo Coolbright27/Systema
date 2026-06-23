@@ -150,6 +150,65 @@
                 </StackPanel>
             </Border>
 
+            <!-- ===== CARD: Stable timer resolution (0.5 ms) ===== -->
+            <Border Style="{StaticResource Card}" Margin="0,0,0,16">
+                <StackPanel>
+                    <Grid Margin="0,0,0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" Margin="0,0,16,0">
+                            <TextBlock Text="Stable timer resolution (0.5 ms)" Style="{StaticResource HeadingMedium}" Margin="0,0,0,4"/>
+                            <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" MaxWidth="620">
+                                Pins the Windows system timer to 0.5 ms instead of letting it idle around 15.6 ms, so the
+                                scheduler ticks more often. This can tighten frame pacing and steady out FPS in some games.
+                                It's off by default and changes nothing until you turn it on.
+                                <LineBreak/><Run FontWeight="SemiBold">Needs a restart to take effect system-wide.</Run>
+                            </TextBlock>
+                            <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" MaxWidth="620" Margin="0,8,0,0"
+                                       Foreground="{StaticResource AccentYellowBrush}"
+                                       Text="Keeps the CPU waking more often, so it can increase heat and power draw (worst on a laptop / on battery) — turn it on only if the smoother FPS is worth that to you."/>
+                            <TextBlock Margin="0,8,0,0" Style="{StaticResource CaptionText}">
+                                <Run Text="Current: "/><Run Text="{Binding TimerResolutionDisplay, Mode=OneWay}"
+                                     Foreground="{StaticResource AccentGreenBrush}" FontWeight="SemiBold"/>
+                            </TextBlock>
+                        </StackPanel>
+                        <CheckBox Grid.Column="1" VerticalAlignment="Center"
+                                  Style="{StaticResource ToggleSwitch}"
+                                  IsChecked="{Binding ForceTimerResolution, Mode=TwoWay}"/>
+                    </Grid>
+                    <TextBlock Text="⟳  Restart your PC so it applies system-wide."
+                               Style="{StaticResource CaptionText}" Foreground="{StaticResource AccentYellowBrush}"/>
+                </StackPanel>
+            </Border>
+
+            <!-- ===== CARD: Game DVR / Game Bar capture ===== -->
+            <Border Style="{StaticResource Card}" Margin="0,0,0,16">
+                <StackPanel>
+                    <Grid Margin="0,0,0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" Margin="0,0,16,0">
+                            <TextBlock Text="Turn off Game Bar capture" Style="{StaticResource HeadingMedium}" Margin="0,0,0,4"/>
+                            <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" MaxWidth="620">
+                                The Xbox Game Bar keeps a rolling background recording ("Game DVR") while you play, which adds
+                                frame-time variance and a little input latency. Turning it on here switches that capture off for
+                                steadier FPS and lower latency. This reflects your current Windows setting and changes nothing
+                                until you flip it; off restores the Windows default.
+                            </TextBlock>
+                        </StackPanel>
+                        <CheckBox Grid.Column="1" VerticalAlignment="Center"
+                                  Style="{StaticResource ToggleSwitch}"
+                                  IsChecked="{Binding DisableGameDvr, Mode=TwoWay}"/>
+                    </Grid>
+                    <TextBlock Text="⟳  Restart any open games to apply."
+                               Style="{StaticResource CaptionText}" Foreground="{StaticResource AccentYellowBrush}"/>
+                </StackPanel>
+            </Border>
+
             <!-- status -->
             <TextBlock Text="{Binding StatusMessage}" Style="{StaticResource CaptionText}"
                        Margin="0,4,0,0" TextWrapping="Wrap"/>

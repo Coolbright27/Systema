@@ -727,6 +727,111 @@ public class SystemStabilityService
         }
     });
 
+    // ── Faster service shutdown (WaitToKillServiceTimeout) ────────────────────
+    // On shutdown / restart Windows waits WaitToKillServiceTimeout (default 5000 ms) for
+    // each still-running service to stop before forcing it. Trimming to 2000 ms makes
+    // reboots and shutdowns finish noticeably quicker, while still giving services a
+    // couple of seconds to flush. Service counterpart of Fast App Close. HKLM REG_SZ,
+    // fully reversible.
+    private const string ControlKey = @"SYSTEM\CurrentControlSet\Control";
+    private const string WaitToKillServiceFast    = "2000";
+    private const string WaitToKillServiceDefault = "5000";
+
+    /// <summary>True when the service-stop wait is trimmed (WaitToKillServiceTimeout = 2000).</summary>
+    public bool IsServiceShutdownFastEnabled()
+    {
+        try
+        {
+            using var key = Registry.LocalMachine.OpenSubKey(ControlKey);
+            return key?.GetValue("WaitToKillServiceTimeout") is string s && s == WaitToKillServiceFast;
+        }
+        catch (Exception ex)
+        {
+            Log.Warn("SystemStability", $"IsServiceShutdownFastEnabled read failed: {ex.Message}");
+            return false;
+        }
+    }
+
+    public Task<TweakResult> EnableServiceShutdownFastAsync() => Task.Run(() =>
+    {
+        try
+        {
+            using var key = Registry.LocalMachine.OpenSubKey(ControlKey, writable: true);
+            if (key == null)
+                return TweakResult.Fail("Could not open the Control key. Run Systema as Administrator.");
+            key.SetValue("WaitToKillServiceTimeout", WaitToKillServiceFast, RegistryValueKind.String);
+            Log.Info("SystemStability", $"Faster service shutdown enabled (WaitToKillServiceTimeout={WaitToKillServiceFast})");
+            return TweakResult.Ok("Faster service shutdown enabled — services stop quickly on shutdown / restart.");
+        }
+        catch (Exception ex)
+        {
+            Log.Error("SystemStability", "EnableServiceShutdownFast failed", ex);
+            return TweakResult.FromException(ex);
+        }
+    });
+
+    /// <summary>Restores the Windows default (WaitToKillServiceTimeout = 5000 ms).</summary>
+    public Task<TweakResult> DisableServiceShutdownFastAsync() => Task.Run(() =>
+    {
+        try
+        {
+            using var key = Registry.LocalMachine.OpenSubKey(ControlKey, writable: true);
+            key?.SetValue("WaitToKillServiceTimeout", WaitToKillServiceDefault, RegistryValueKind.String);
+            Log.Info("SystemStability", $"Faster service shutdown disabled (WaitToKillServiceTimeout={WaitToKillServiceDefault} — Windows default)");
+            return TweakResult.Ok("Service-stop wait restored to the Windows default.");
+        }
+        catch (Exception ex)
+        {
+            Log.Error("SystemStability", "DisableServiceShutdownFast failed", ex);
+            return TweakResult.FromException(ex);
+        }
+    });
+
+    // ── Disable UWP / Store background apps (BackgroundAccessApplications) ──────
+    // Stops packaged (Store/UWP) apps from running background tasks at all — Xbox, Phone Link,
+    // Mail, Weather, etc. A PREVENTIVE complement to Task Sleep (which throttles already-running
+    // processes): this stops Store apps from running in the background in the first place. Win11
+    // removed the global Settings toggle, so this HKCU value is the only clean control left.
+    // Reversible — OFF restores the Windows default (background apps allowed).
+    private const string BackgroundAppsKey = @"Software\Microsoft\Windows\CurrentVersion\BackgroundAccessApplications";
+
+    /// <summary>True when UWP/Store background apps are globally disabled (GlobalUserDisabled = 1).</summary>
+    public bool IsBackgroundAppsDisabled()
+    {
+        try
+        {
+            using var key = Registry.CurrentUser.OpenSubKey(BackgroundAppsKey);
+            return key?.GetValue("GlobalUserDisabled") is int v && v == 1;
+        }
+        catch (Exception ex) { Log.Warn("SystemStability", $"IsBackgroundAppsDisabled read failed: {ex.Message}"); return false; }
+    }
+
+    public Task<TweakResult> EnableBackgroundAppsOffAsync() => Task.Run(() =>
+    {
+        try
+        {
+            using var key = Registry.CurrentUser.CreateSubKey(BackgroundAppsKey, writable: true);
+            if (key == null) return TweakResult.Fail("Could not open the BackgroundAccessApplications key.");
+            key.SetValue("GlobalUserDisabled", 1, RegistryValueKind.DWord);
+            Log.Info("SystemStability", "UWP background apps disabled (GlobalUserDisabled=1)");
+            return TweakResult.Ok("Store/UWP apps no longer run in the background.");
+        }
+        catch (Exception ex) { Log.Error("SystemStability", "EnableBackgroundAppsOff failed", ex); return TweakResult.FromException(ex); }
+    });
+
+    /// <summary>Restores the Windows default (GlobalUserDisabled = 0 — background apps allowed).</summary>
+    public Task<TweakResult> DisableBackgroundAppsOffAsync() => Task.Run(() =>
+    {
+        try
+        {
+            using var key = Registry.CurrentUser.CreateSubKey(BackgroundAppsKey, writable: true);
+            key?.SetValue("GlobalUserDisabled", 0, RegistryValueKind.DWord);
+            Log.Info("SystemStability", "UWP background apps restored to Windows default (GlobalUserDisabled=0)");
+            return TweakResult.Ok("Store/UWP background apps restored to the Windows default.");
+        }
+        catch (Exception ex) { Log.Error("SystemStability", "DisableBackgroundAppsOff failed", ex); return TweakResult.FromException(ex); }
+    });
+
     // ── Input Hook Timeout (LowLevelHooksTimeout) ─────────────────────────────
     // When a misbehaving app installs a low-level keyboard/mouse hook and stalls,
     // Windows freezes input until LowLevelHooksTimeout elapses (default ~5000 ms).
