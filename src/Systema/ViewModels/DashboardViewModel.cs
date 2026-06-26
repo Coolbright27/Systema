@@ -32,6 +32,7 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Microsoft.Win32;
 using Systema.Core;
 using Systema.Services;
 using static Systema.Core.ThreadHelper;
@@ -45,6 +46,16 @@ public class AutoPilotItem
     public string Label  { get; set; } = "";
     public bool   IsDone { get; set; }
     public string Detail { get; set; } = "";
+}
+
+/// <summary>A single "recommended change" card in the Auto Pilot feed. Built from a pending
+/// checklist item; the Label is the join key to the apply meta in DashboardViewModel.</summary>
+public class Recommendation
+{
+    public string Label  { get; init; } = "";
+    public string Title  { get; init; } = "";
+    public string Why    { get; init; } = "";
+    public string Safety { get; init; } = "Safe · Reversible";
 }
 
 public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
@@ -118,6 +129,24 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
     /// <summary>Live checklist shown inside the Auto-Pilot card.</summary>
     public ObservableCollection<AutoPilotItem> AutoPilotChecklist { get; } = new();
 
+    // ── Auto Pilot redesign: two zones (master + recommended feed) ─────────────
+    /// <summary>The recommended changes currently visible (up to 3 at a time).</summary>
+    public ObservableCollection<Recommendation> Recommendations { get; } = new();
+    [ObservableProperty] private bool   _hasRecommendations;
+    [ObservableProperty] private bool   _autoPilotActive;            // drives the status dot colour
+    [ObservableProperty] private string _autoPilotStatusLine = "Checking…";
+    [ObservableProperty] private bool   _seeWhatsOnExpanded;
+
+    /// <summary>The recommendations the user dismissed, shown in the Dismissed popup.</summary>
+    public ObservableCollection<Recommendation> Dismissed { get; } = new();
+    [ObservableProperty] private int  _dismissedCount;
+    [ObservableProperty] private bool _hasDismissed;
+
+    // Recommendations the user dismissed (persisted), and the per-item apply meta.
+    private readonly HashSet<string> _dismissed = new(StringComparer.OrdinalIgnoreCase);
+    private Dictionary<string, (string Title, string Why, Func<Task> Apply)> _recMeta = new();
+    private const string DismissedRegKey = @"Software\Systema\AutoPilot";
+
     // ── Constructor ───────────────────────────────────────────────────────────
 
     public DashboardViewModel(
@@ -149,6 +178,10 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
 
         // Restore persisted mode — no PropertyChanged callback fires on field-init.
         _autoPilotModeEnabled = _settings.AutoPilotModeEnabled;
+
+        _recMeta = BuildRecMeta();
+        LoadDismissed();
+        RebuildDismissed();
 
         _ = InitAsync();
     }
@@ -493,6 +526,7 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
                 foreach (var item in items)
                     AutoPilotChecklist.Add(item);
 
+                RebuildRecommendationsFromChecklist();
                 RunAutoPilotCommand.NotifyCanExecuteChanged();
 
                 // Auto-Pilot Mode enforcement: if the mode is on and any setting drifted
@@ -527,6 +561,8 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
         _log.Info("DashboardViewModel",
             value ? "Auto-Pilot Mode ON — applying settings and locking controls"
                   : "Auto-Pilot Mode OFF — controls unlocked");
+
+        RebuildRecommendationsFromChecklist();   // mode on hides the feed; off resurfaces it
 
         if (value)
             _ = RunAutoPilotAsync();
@@ -704,4 +740,162 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
     // The only gate property is IsAutoPilotRunning — notify when it changes.
     partial void OnIsAutoPilotRunningChanged(bool value) =>
         RunAutoPilotCommand.NotifyCanExecuteChanged();
+
+    // ── Recommended feed (two-zone Auto Pilot) ────────────────────────────────
+
+    /// <summary>The "why" + per-item apply action for each optimization, keyed by the SAME
+    /// Label the checklist uses. Each Apply mirrors the matching step in RunAutoPilotAsync, so
+    /// applying one recommendation does exactly what the full pass would do for that item.</summary>
+    private Dictionary<string, (string Title, string Why, Func<Task> Apply)> BuildRecMeta() => new()
+    {
+        ["Page file"] = ("Set an optimized page file",
+            "A fixed page file sized to your RAM stops Windows resizing it on the fly, which avoids stutters when memory fills up.",
+            async () => { var (rec, _) = _memoryService.GetRecommendedPagefileWithRam(); await _memoryService.ConfigurePagefileAsync(rec, rec); }),
+        ["Privacy & background services"] = ("Turn off data collection and bloat services",
+            "Disables the telemetry and background services that quietly collect data and use resources, with nothing you would miss.",
+            async () => await _serviceControl.DisablePrivacyAndRecommendedAsync(_gameBooster.GamesInstalled)),
+        ["Power plan"] = ("Switch to the High Performance power plan",
+            "The High Performance plan stops Windows down-clocking the CPU on light load, so your PC responds the instant you ask it to.",
+            async () => { await _powerPlan.SetHighPerformanceAsync(); _settings.PerformanceModeEnabled = true; }),
+        ["Balanced on battery"] = ("Balance power automatically on battery",
+            "Keeps High Performance on AC but switches to a balanced plan on battery, so you get speed when plugged in and runtime when you are not.",
+            async () => { if (_powerPlan.HasBattery()) { _settings.BatteryOptimizationMode = "balanced"; if (_powerPlan.IsOnBattery()) await _powerPlan.SetBalancedOnBatteryAsync(); } }),
+        ["Game Boost"] = ("Turn on Game Boost",
+            "Game Boost frees up CPU and quiets background apps while you play, for steadier frame rates.",
+            () => { _settings.GameBoosterEnabled = true; _gameBooster.SetEnabled(true); return Task.CompletedTask; }),
+        ["DNS"] = ("Use Cloudflare DNS (1.1.1.1)",
+            "Cloudflare's 1.1.1.1 resolver is usually faster and more private than your default DNS, so pages and games connect quicker.",
+            async () => { var cf = DnsService.Profiles.FirstOrDefault(p => p.Primary == "1.1.1.1"); if (cf != null) await _dnsService.ApplyProfileAsync(cf); }),
+        ["Preview updates"] = ("Block Windows preview updates",
+            "Keeps you on stable Windows releases instead of the buggy preview and insider builds.",
+            async () => await _wuTweaks.BlockPreviewUpdatesAsync()),
+        ["CPU core efficiency"] = ("Disable Core Parking",
+            "Windows parks idle CPU cores to save power, which adds a wake-up delay. Keeping them ready makes the system feel snappier.",
+            async () => await _corePark.EnableForcedCoreParking()),
+        ["Launch on startup"] = ("Start Systema with Windows",
+            "Lets Systema start with Windows so your optimizations stay applied and maintained from the moment you log in.",
+            () => { _settings.StartWithWindows = true; return Task.CompletedTask; }),
+        ["SMBv1 removed"] = ("Remove the insecure SMBv1 protocol",
+            "SMBv1 is an old, insecure file-sharing protocol and a known security risk. Removing it closes that hole with no downside on a modern PC.",
+            async () => { if (_optFeatures.IsSMBv1Present()) await _optFeatures.RemoveSMBv1Async(); }),
+        ["NTFS last-access timestamps"] = ("Stop NTFS last-access writes",
+            "Stops Windows writing a timestamp every time a file is read, which cuts needless disk writes and wear.",
+            async () => { if (!_stability.IsNtfsLastAccessDisabled()) await _stability.DisableNtfsLastAccessAsync(); }),
+        ["Foreground priority boost"] = ("Boost the app you're using",
+            "Gives the active window a bigger share of CPU, so it stays responsive even when something heavy runs in the background.",
+            async () => { if (!_stability.IsForegroundBoostEnabled()) { await _stability.EnableForegroundBoostAsync(); _settings.ForegroundBoostEnabled = true; } }),
+        ["Launch Boost"] = ("Speed up app launches",
+            "Gives apps a quick priority boost the moment they launch so they open faster, then hands control back to Windows.",
+            () => { if (!_taskSleepVm.IsEnabled || !_taskSleepVm.LaunchBoostEnabled) _taskSleepVm.EnableLaunchBoost(); return Task.CompletedTask; }),
+        ["Disable MPO"] = ("Disable Multi-Plane Overlay",
+            "Some GPU drivers handle Multi-Plane Overlay poorly, which causes flicker and uneven frames. Turning it off is Microsoft's own fix.",
+            () => { if (!_graphics.IsMpoDisabled()) _graphics.SetMpoDisabled(true); return Task.CompletedTask; }),
+        ["Extend GPU recovery timeout"] = ("Extend the GPU recovery timeout",
+            "Gives the GPU a moment longer to recover from a hang before Windows resets the driver, which avoids black screens under heavy load.",
+            () => { if (!_graphics.IsTdrDelayExtended()) _graphics.SetTdrDelayExtended(true); return Task.CompletedTask; }),
+        ["Maximum system responsiveness"] = ("Maximize system responsiveness",
+            "Hands the CPU time Windows reserves for background work over to your foreground and multimedia apps, for steadier frame pacing.",
+            async () => { if (!_stability.IsMaxResponsivenessEnabled()) { await _stability.EnableMaxResponsivenessAsync(); _settings.MaxResponsivenessEnabled = true; } }),
+    };
+
+    /// <summary>Rebuilds the status line + the visible recommendation feed from the current
+    /// checklist (already computed by the background pass). UI thread only. When Auto Pilot Mode
+    /// is on the feed is empty (the engine manages everything, so the "all set" state shows).</summary>
+    private void RebuildRecommendationsFromChecklist()
+    {
+        int applied = AutoPilotChecklist.Count(i => i.IsDone);
+        int total   = AutoPilotChecklist.Count;
+        AutoPilotActive     = AutoPilotModeEnabled || applied > 0;
+        AutoPilotStatusLine = AutoPilotModeEnabled
+            ? $"On · {applied} optimization{(applied == 1 ? "" : "s")} active · re-checked automatically"
+            : (total > 0 ? $"{applied} of {total} optimizations applied" : "Checking…");
+
+        Recommendations.Clear();
+        if (!AutoPilotModeEnabled)
+        {
+            foreach (var item in AutoPilotChecklist)
+            {
+                if (item.IsDone || _dismissed.Contains(item.Label)) continue;
+                if (!_recMeta.TryGetValue(item.Label, out var meta)) continue;
+                Recommendations.Add(new Recommendation { Label = item.Label, Title = meta.Title, Why = meta.Why });
+                if (Recommendations.Count >= 3) break;
+            }
+        }
+        HasRecommendations = Recommendations.Count > 0;
+    }
+
+    /// <summary>Applies a single recommendation, then re-checks so the next one surfaces.</summary>
+    [RelayCommand]
+    private async Task ApplyRecommendation(Recommendation? rec)
+    {
+        if (rec == null || !_recMeta.TryGetValue(rec.Label, out var meta)) return;
+        Recommendations.Remove(rec);                       // snappy: drop it right away
+        HasRecommendations = Recommendations.Count > 0;
+        try
+        {
+            await meta.Apply();
+            StatusMessage = $"Applied: {rec.Title}";
+            _log.Info("DashboardViewModel", $"Recommendation applied: {rec.Label}");
+        }
+        catch (Exception ex) { _log.Warn("DashboardViewModel", $"ApplyRecommendation '{rec.Label}' failed: {ex.Message}"); }
+        await CheckAutoPilotStatusAsync();                 // refresh state + surface the next item
+    }
+
+    /// <summary>Dismisses a recommendation (persisted) and surfaces the next one.</summary>
+    [RelayCommand]
+    private void DismissRecommendation(Recommendation? rec)
+    {
+        if (rec == null) return;
+        _dismissed.Add(rec.Label);
+        SaveDismissed();
+        RebuildDismissed();
+        RebuildRecommendationsFromChecklist();
+    }
+
+    /// <summary>Un-dismisses a recommendation so it can appear in the feed again.</summary>
+    [RelayCommand]
+    private void RestoreRecommendation(Recommendation? rec)
+    {
+        if (rec == null) return;
+        _dismissed.Remove(rec.Label);
+        SaveDismissed();
+        RebuildDismissed();
+        RebuildRecommendationsFromChecklist();
+    }
+
+    /// <summary>Rebuilds the dismissed list + its count from the persisted dismissed keys.</summary>
+    private void RebuildDismissed()
+    {
+        Dismissed.Clear();
+        foreach (var label in _dismissed)
+            if (_recMeta.TryGetValue(label, out var meta))
+                Dismissed.Add(new Recommendation { Label = label, Title = meta.Title, Why = meta.Why });
+        DismissedCount = Dismissed.Count;
+        HasDismissed   = Dismissed.Count > 0;
+    }
+
+    [RelayCommand]
+    private void ToggleSeeWhatsOn() => SeeWhatsOnExpanded = !SeeWhatsOnExpanded;
+
+    private void LoadDismissed()
+    {
+        try
+        {
+            using var k = Registry.CurrentUser.OpenSubKey(DismissedRegKey);
+            if (k?.GetValue("Dismissed") is string s)
+                foreach (var part in s.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+                    _dismissed.Add(part);
+        }
+        catch (Exception ex) { _log.Warn("DashboardViewModel", $"LoadDismissed failed: {ex.Message}"); }
+    }
+
+    private void SaveDismissed()
+    {
+        try
+        {
+            using var k = Registry.CurrentUser.CreateSubKey(DismissedRegKey, writable: true);
+            k?.SetValue("Dismissed", string.Join("\n", _dismissed), RegistryValueKind.String);
+        }
+        catch (Exception ex) { _log.Warn("DashboardViewModel", $"SaveDismissed failed: {ex.Message}"); }
+    }
 }

@@ -92,6 +92,45 @@ public sealed class GameBoosterService : IDisposable
     [DllImport("kernel32.dll", SetLastError = true)]
     private static extern bool CloseHandle(IntPtr hObject);
 
+    // SeDebugPrivilege — needed to OpenProcess(PROCESS_SUSPEND_RESUME) on SearchIndexer, which
+    // runs as NT AUTHORITY\SYSTEM. Elevation alone isn't enough; without this privilege enabled
+    // the open is access-denied and the pause silently no-ops. Admins have the privilege in their
+    // token but it's disabled by default — we enable it once, best-effort.
+    [DllImport("kernel32.dll")] private static extern IntPtr GetCurrentProcess();
+    [DllImport("advapi32.dll", SetLastError = true)]
+    private static extern bool OpenProcessToken(IntPtr h, uint access, out IntPtr token);
+    [DllImport("advapi32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+    private static extern bool LookupPrivilegeValue(string? host, string name, out LUID luid);
+    [DllImport("advapi32.dll", SetLastError = true)]
+    private static extern bool AdjustTokenPrivileges(IntPtr token, bool disableAll, ref TOKEN_PRIVILEGES newState, uint len, IntPtr prev, IntPtr retLen);
+
+    [StructLayout(LayoutKind.Sequential)] private struct LUID { public uint LowPart; public int HighPart; }
+    [StructLayout(LayoutKind.Sequential)] private struct TOKEN_PRIVILEGES { public uint Count; public LUID Luid; public uint Attributes; }
+    private const uint TOKEN_ADJUST_PRIVILEGES = 0x0020, TOKEN_QUERY = 0x0008, SE_PRIVILEGE_ENABLED = 0x0002;
+    private static bool _debugPrivilegeEnabled;
+
+    private void EnsureDebugPrivilege()
+    {
+        if (_debugPrivilegeEnabled) return;
+        try
+        {
+            if (!OpenProcessToken(GetCurrentProcess(), TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY, out IntPtr token)) return;
+            try
+            {
+                if (LookupPrivilegeValue(null, "SeDebugPrivilege", out LUID luid))
+                {
+                    var tp = new TOKEN_PRIVILEGES { Count = 1, Luid = luid, Attributes = SE_PRIVILEGE_ENABLED };
+                    AdjustTokenPrivileges(token, false, ref tp, 0, IntPtr.Zero, IntPtr.Zero);
+                    // AdjustTokenPrivileges returns true even on partial success — verify via last error.
+                    _debugPrivilegeEnabled = Marshal.GetLastWin32Error() == 0;
+                    if (!_debugPrivilegeEnabled) _log.Warn("GameBoosterService", "SeDebugPrivilege not granted (indexer pause may not work)");
+                }
+            }
+            finally { CloseHandle(token); }
+        }
+        catch (Exception ex) { _log.Warn("GameBoosterService", $"EnsureDebugPrivilege failed: {ex.Message}"); }
+    }
+
     // Flush modified pages + purge standby list to maximise immediately-free RAM.
     // Requires SeProfileSingleProcessPrivilege (available to admin processes).
     [DllImport("ntdll.dll")]
@@ -1919,6 +1958,7 @@ public sealed class GameBoosterService : IDisposable
         if (_indexingPaused) return;
         try
         {
+            EnsureDebugPrivilege();   // SearchIndexer runs as SYSTEM — needed or the open is denied
             bool any = false;
             foreach (var p in Process.GetProcessesByName("SearchIndexer"))
             {
@@ -1939,6 +1979,7 @@ public sealed class GameBoosterService : IDisposable
     {
         try
         {
+            EnsureDebugPrivilege();   // also needed to re-open the SYSTEM-owned indexer to resume it
             foreach (var p in Process.GetProcessesByName("SearchIndexer"))
             {
                 try

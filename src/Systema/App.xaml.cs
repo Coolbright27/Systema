@@ -396,12 +396,13 @@ public partial class App : Application
                 win11CleanupService);
             var bloatwareVm   = new BloatwareViewModel(bloatwareService, restoreService, settingsService);
             var graphicsVm    = new GraphicsViewModel(graphicsTweaks, settingsService);
+            var audioVm       = new AudioViewModel(new AudioService());
             var intelVm       = new IntelGpuViewModel(intelGpuService, settingsService);
             var nvidiaVm      = new NvidiaGpuViewModel(nvidiaGpuService, settingsService);
             var dellVm        = new DellViewModel(thermalService, settingsService, powerPlanService);
 
             _mainVm = new MainViewModel(dashboardVm, memoryVm, servicesVm,
-                                        visualVm, gameBoosterVm, settingsVm, toolsVm, taskSleepVm, bloatwareVm, graphicsVm, intelVm, nvidiaVm, dellVm);
+                                        visualVm, gameBoosterVm, settingsVm, toolsVm, taskSleepVm, bloatwareVm, graphicsVm, audioVm, intelVm, nvidiaVm, dellVm);
 
             // NOTE: Graphics tweaks are intentionally reflect-only — Systema NEVER changes
             // them on launch. The Graphics tab reads the live Windows state and only writes
@@ -545,6 +546,22 @@ public partial class App : Application
                 Log.Info("App", "Pre-update: Task Sleep restored — proceeding with update install");
             };
             _updateService.ShutdownRequested += () =>
+            {
+                // FORCE-EXIT SAFETY NET. The graceful Shutdown(0) below can wedge — a slow
+                // watchdog/Task-Scheduler call, the tray teardown, or any lingering work on the
+                // UI thread — and because the window never truly closes (Close → Hide) and the
+                // app is OnExplicitShutdown, a stuck UI thread leaves the process alive. That
+                // keeps Systema.exe LOCKED, so the installer can't replace it: the update appears
+                // to "freeze" and never relaunches. This timer runs OFF the UI thread, so even a
+                // fully wedged UI can't stop it — it hard-exits after a few seconds, freeing the
+                // exe so the installer finishes and its silent relaunch fires.
+                _ = System.Threading.Tasks.Task.Run(async () =>
+                {
+                    await System.Threading.Tasks.Task.Delay(4000);
+                    Log.Warn("App", "Update shutdown didn't finish in 4 s — forcing exit so the installer can replace the exe and relaunch");
+                    Environment.Exit(0);
+                });
+
                 Dispatcher.Invoke(() =>
                 {
                     Log.Info("App", "Auto-updater requesting shutdown to apply update");
@@ -556,6 +573,7 @@ public partial class App : Application
                     _trayService?.Dispose();
                     Shutdown(0);
                 });
+            };
             _updateService.StartAutoUpdate();
 
             // "--silent" or "--autostart" → tray-only (Ghost Mode); else show window immediately

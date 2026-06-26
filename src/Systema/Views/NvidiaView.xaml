@@ -50,16 +50,16 @@
                     <StackPanel Grid.Column="0" Margin="0,0,20,0">
                         <TextBlock Text="GPU Power Management (Similar to RC6)" Style="{StaticResource HeadingMedium}" Margin="0,0,0,4"/>
                         <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" MaxWidth="560">
-                            Controls how the NVIDIA GPU manages power when idle (the PowerMizer state — NVIDIA's
-                            equivalent of Intel's RC6 render standby). It's a driver-registry setting
-                            <Run FontWeight="SemiBold">not exposed in the NVIDIA Control Panel</Run>. On lets the GPU
-                            idle down to save power and run cooler (the driver default); Off forces "prefer maximum
-                            performance" — full clocks all the time, on both AC and battery.
+                            Controls how the NVIDIA GPU manages power when it's idle. This is the PowerMizer state,
+                            NVIDIA's take on Intel's RC6 render standby, and it's a driver-registry setting
+                            <Run FontWeight="SemiBold">the NVIDIA Control Panel doesn't expose</Run>. On lets the GPU
+                            idle down to save power and run cooler, which is the driver default. Off forces "prefer
+                            maximum performance," so it holds full clocks all the time, on both AC and battery.
                             <Run FontStyle="Italic">Takes effect after a restart.</Run>
                         </TextBlock>
                         <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" MaxWidth="560" Margin="0,8,0,0"
                                    Foreground="{StaticResource AccentYellowBrush}"
-                                   Text="Recommended On for laptops — full clocks make more heat and drain more battery than a thermally-limited laptop can sustain, so turning it Off often causes thermal throttling that makes things slower, not faster."/>
+                                   Text="Recommended On for laptops. Full clocks make more heat and drain more battery than a thermally limited laptop can sustain, so turning it Off often causes thermal throttling that makes things slower, not faster."/>
                         <TextBlock Margin="0,8,0,0" Style="{StaticResource CaptionText}">
                             <Run Text="Current: "/><Run Text="{Binding PowerSavingDetected, Mode=OneWay}"
                                  Foreground="{StaticResource AccentGreenBrush}" FontWeight="SemiBold"/>

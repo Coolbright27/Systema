@@ -125,9 +125,9 @@ public sealed class ThermalManagementService
                     $"Detection: Dell BIOS WMI provider not usable ({probeEx.GetType().Name}: {probeEx.Message})");
                 _statusMessage =
                     "Dell thermal control needs the Dell BIOS WMI provider, which isn't installed. " +
-                    "Install “Dell Command | Monitor” — it's a lightweight, headless WMI provider " +
-                    "(no MyDell / SupportAssist / TechHub bloat) that exposes the BIOS thermal setting. " +
-                    "Once installed, this card switches to the thermal selectors automatically.";
+                    "Install “Dell Command | Monitor”, a lightweight, headless WMI provider " +
+                    "(no MyDell, SupportAssist, or TechHub bloat) that exposes the BIOS thermal setting. " +
+                    "Once it's installed, this card switches to the thermal selectors automatically.";
                 return _support;
             }
 

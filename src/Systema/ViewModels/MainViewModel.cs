@@ -54,6 +54,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
     public TaskSleepViewModel   TaskSleepVm   { get; }
     public BloatwareViewModel   BloatwareVm   { get; }
     public GraphicsViewModel    GraphicsVm    { get; }
+    public AudioViewModel       AudioVm       { get; }
     public IntelGpuViewModel    IntelVm       { get; }
     public NvidiaGpuViewModel   NvidiaVm      { get; }
     public DellViewModel        DellVm        { get; }
@@ -92,6 +93,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         TaskSleepViewModel   taskSleepVm,
         BloatwareViewModel   bloatwareVm,
         GraphicsViewModel    graphicsVm,
+        AudioViewModel       audioVm,
         IntelGpuViewModel    intelVm,
         NvidiaGpuViewModel   nvidiaVm,
         DellViewModel        dellVm)
@@ -106,6 +108,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         TaskSleepVm   = taskSleepVm;
         BloatwareVm   = bloatwareVm;
         GraphicsVm    = graphicsVm;
+        AudioVm       = audioVm;
         IntelVm       = intelVm;
         NvidiaVm      = nvidiaVm;
         DellVm        = dellVm;
@@ -187,6 +190,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
                 "TaskSleep"   => TaskSleepVm,
                 "Bloatware"   => BloatwareVm,
                 "Graphics"    => GraphicsVm,
+                "Audio"       => AudioVm,
                 "Intel"       => IntelVm,
                 "Nvidia"      => NvidiaVm,
                 "Dell"        => DellVm,
@@ -244,6 +248,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         SettingsVm?.Dispose();
         ToolsVm?.Dispose();
         GraphicsVm?.Dispose();
+        AudioVm?.Dispose();
         IntelVm?.Dispose();
         NvidiaVm?.Dispose();
         DellVm?.Dispose();

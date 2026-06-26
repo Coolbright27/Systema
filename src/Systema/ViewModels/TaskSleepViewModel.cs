@@ -158,8 +158,8 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
 
     // ── Reinforcements (engine-gated, default on) ──────────────────────────────
     // Network Throttling off pairs with Maximum System Responsiveness; Power Throttling
-    // off pairs with Foreground Priority Boost (AC-gated so battery is never hurt — see
-    // OnPowerModeChangedForThrottling); Fast App Close trims the shutdown/sign-out wait.
+    // off pairs with Foreground Priority Boost (stays on for both AC and battery — it no
+    // longer drops off when unplugged); Fast App Close trims the shutdown/sign-out wait.
     [ObservableProperty] private bool _networkThrottlingOffEnabled = true;
     [ObservableProperty] private bool _powerThrottlingOffEnabled   = true;
     [ObservableProperty] private bool _fastAppCloseEnabled         = true;
@@ -246,6 +246,7 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
 
     private readonly DispatcherTimer _monitorTimer;
     private readonly DispatcherTimer _processRefreshTimer;
+    private readonly DispatcherTimer _reinforceTimer;
     private bool _isGameModeActive;
 
     // True only while LoadSettings() is populating properties from the registry.
@@ -308,9 +309,9 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
             _loadingSettings = false;
         }
 
-        // Power Throttling off is AC-gated — re-apply it when the user plugs in / unplugs
-        // so battery runtime is never sacrificed. The handler no-ops unless both the engine
-        // and the toggle are on.
+        // Reinforce the boosts whenever the user plugs in / unplugs — a power-source change
+        // is a moment Windows sometimes re-touches power/perf settings, so we re-assert intent
+        // and refresh the toggles. The handler no-ops unless the engine is on.
         SystemEvents.PowerModeChanged += OnPowerModeChangedForThrottling;
 
         // StartupDelayInMSec lives in Explorer's Serialize key, which Explorer itself
@@ -337,6 +338,15 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
         _monitorTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
         _monitorTimer.Tick += (_, _) => RefreshMonitor();
         _monitorTimer.Start();
+
+        // Reinforcement: every 5 minutes, re-apply each boost the user wants and refresh the
+        // toggles to the live result. This heals any value Windows quietly reset (so "On"
+        // never lingers while the registry value is actually gone) and keeps the displayed
+        // state honest without the user having to restart. Idempotent registry writes; the
+        // tick no-ops while the engine is off (ApplyResponsivenessAsync is only meaningful then).
+        _reinforceTimer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(5) };
+        _reinforceTimer.Tick += (_, _) => { if (IsEnabled) _ = ApplyResponsivenessAsync(); };
+        _reinforceTimer.Start();
 
         // Auto-refresh the running process picker every 15 s so newly-launched
         // apps appear without the user having to click the refresh button.
@@ -723,13 +733,13 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
         else Assign();
     }
 
-    /// <summary>Re-applies the AC-gated Power Throttling state on plug-in / unplug so it
-    /// only suppresses throttling on AC and never costs battery runtime.</summary>
+    /// <summary>Reinforces every responsiveness boost on plug-in / unplug. A power-source
+    /// transition is a moment Windows sometimes re-touches power/perf settings, so we re-assert
+    /// the user's intent (and refresh the toggles to the live result) whenever it happens.</summary>
     private void OnPowerModeChangedForThrottling(object sender, PowerModeChangedEventArgs e)
     {
         if (e.Mode != PowerModes.StatusChange) return;
-        if (_wantPowerThrottlingOff && IsEnabled)
-            _ = _stability.EnablePowerThrottlingOffAsync();
+        if (IsEnabled) _ = ApplyResponsivenessAsync();
     }
 
     /// <summary>The responsiveness boosts can only be used while the engine is on.
@@ -1363,6 +1373,8 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
 
         _monitorTimer.Stop();
         _processRefreshTimer.Stop();
+        _reinforceTimer.Stop();
+        SystemEvents.PowerModeChanged -= OnPowerModeChangedForThrottling;
         _service.Dispose();
     }
 

@@ -468,8 +468,9 @@ public class SystemStabilityService
     // ── Power Throttling off (reinforces Foreground Priority Boost) ────────────
     // Windows quietly down-clocks threads it deems background to save power. Disabling
     // Power Throttling (PowerThrottlingOff=1) keeps the foreground app at full clocks.
-    // AC-GATED: on battery we leave throttling ON (value 0) so runtime isn't hurt; the
-    // engine re-applies on power-state changes. Reversible (value removed on disable).
+    // Applied on BOTH AC and battery — the boost stays on whatever the power source is
+    // (it used to drop off on battery, which read as the toggle silently turning itself
+    // off). Reversible (value removed on disable).
     private const string PowerThrottlingKey = @"SYSTEM\CurrentControlSet\Control\Power\PowerThrottling";
 
     [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
@@ -481,7 +482,8 @@ public class SystemStabilityService
     [System.Runtime.InteropServices.DllImport("kernel32.dll")]
     private static extern bool GetSystemPowerStatus(out SYSTEM_POWER_STATUS sps);
 
-    /// <summary>True when running on battery (AC offline). Used to AC-gate Power Throttling off.</summary>
+    /// <summary>True when running on battery (AC offline). Retained for callers that need
+    /// the power source; Power Throttling off no longer gates on it (stays on either way).</summary>
     public static bool IsOnBatteryPower()
     {
         try { if (GetSystemPowerStatus(out var s)) return s.ACLineStatus == 0; }
@@ -504,20 +506,18 @@ public class SystemStabilityService
         }
     }
 
-    /// <summary>Applies the AC-gated Power Throttling state: off (1) on AC, on (0) on battery.</summary>
+    /// <summary>Disables Power Throttling (PowerThrottlingOff=1) on both AC and battery,
+    /// so the foreground app keeps full clocks whatever the power source.</summary>
     public Task<TweakResult> EnablePowerThrottlingOffAsync() => Task.Run(() =>
     {
         try
         {
-            bool onBattery = IsOnBatteryPower();
             using var key = Registry.LocalMachine.CreateSubKey(PowerThrottlingKey, writable: true);
             if (key == null)
                 return TweakResult.Fail("Could not open the PowerThrottling key. Run Systema as Administrator.");
-            key.SetValue("PowerThrottlingOff", onBattery ? 0 : 1, RegistryValueKind.DWord);
-            Log.Info("SystemStability", $"Power Throttling off applied (PowerThrottlingOff={(onBattery ? 0 : 1)}; onBattery={onBattery})");
-            return TweakResult.Ok(onBattery
-                ? "Power Throttling stays on while on battery (saves runtime) — turns off automatically on AC."
-                : "Power Throttling off — the foreground app runs at full clock speed.");
+            key.SetValue("PowerThrottlingOff", 1, RegistryValueKind.DWord);
+            Log.Info("SystemStability", "Power Throttling off applied (PowerThrottlingOff=1)");
+            return TweakResult.Ok("Power Throttling off — the foreground app runs at full clock speed on AC and battery.");
         }
         catch (Exception ex)
         {

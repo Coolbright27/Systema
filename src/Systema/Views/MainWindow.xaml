@@ -69,6 +69,9 @@
         <DataTemplate DataType="{x:Type vm:GraphicsViewModel}">
             <views:GraphicsView/>
         </DataTemplate>
+        <DataTemplate DataType="{x:Type vm:AudioViewModel}">
+            <views:AudioView/>
+        </DataTemplate>
         <DataTemplate DataType="{x:Type vm:IntelGpuViewModel}">
             <views:IntelView/>
         </DataTemplate>
@@ -191,7 +194,7 @@
                                 </Style>
                             </StackPanel.Resources>
 
-                            <!-- Dashboard — home -->
+                            <!-- Auto Pilot — home / landing (CommandParameter + Tag stay "Dashboard" as the internal nav key) -->
                             <Button Command="{Binding NavigateCommand}" CommandParameter="Dashboard"
                                     Tag="Dashboard" Style="{StaticResource NavButton}">
                                 <StackPanel Orientation="Horizontal">
@@ -199,7 +202,7 @@
                                         <Path Style="{StaticResource NavIcon}"
                                               Data="M3 10.5 L12 3 L21 10.5 M5.5 9 V19.5 A1 1 0 0 0 6.5 20.5 H17.5 A1 1 0 0 0 18.5 19.5 V9 M9.5 20.5 V14.5 H14.5 V20.5"/>
                                     </Viewbox>
-                                    <TextBlock Text="Dashboard"/>
+                                    <TextBlock Text="Auto Pilot"/>
                                 </StackPanel>
                             </Button>
 
@@ -299,6 +302,18 @@
                                 </StackPanel>
                             </Button>
 
+                            <!-- Audio — speaker with sound waves -->
+                            <Button Command="{Binding NavigateCommand}" CommandParameter="Audio"
+                                    Tag="Audio" Style="{StaticResource NavButton}">
+                                <StackPanel Orientation="Horizontal">
+                                    <Viewbox Width="18" Height="18" Margin="0,0,12,0" VerticalAlignment="Center">
+                                        <Path Style="{StaticResource NavIcon}"
+                                              Data="M4 9 H7 L11 5 V19 L7 15 H4 Z M15 9 A4 4 0 0 1 15 15 M17.5 7 A7.5 7.5 0 0 1 17.5 17"/>
+                                    </Viewbox>
+                                    <TextBlock Text="Audio"/>
+                                </StackPanel>
+                            </Button>
+
                             <!-- Separator before hardware section -->
                             <Border Height="1" Background="{StaticResource BorderBrush}" Margin="8,12"
                                     Visibility="{Binding HasOnDeviceSections, Converter={StaticResource BoolToVis}}"/>
@@ -366,7 +381,7 @@
                                 Background="{StaticResource BgSurfaceBrush}"
                                 BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="10">
                             <StackPanel>
-                                <TextBlock Text="Systema v0.7.173" FontSize="11" FontWeight="SemiBold"
+                                <TextBlock Text="Systema v0.7.191" FontSize="11" FontWeight="SemiBold"
                                            Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,7"/>
 
                                 <!-- Live status: green check + status text from the updater -->

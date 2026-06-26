@@ -47,8 +47,8 @@
                         <TextBlock Text="Power Policy" Style="{StaticResource HeadingMedium}" Margin="0,0,0,4"/>
                         <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" MaxWidth="560">
                             Controls how the Intel graphics chip balances performance against power saving.
-                            <Run FontWeight="SemiBold">Recommended: Max Performance</Run> when plugged in for the smoothest experience;
-                            Default lets the driver decide. <Run FontStyle="Italic">Takes effect after a restart.</Run>
+                            <Run FontWeight="SemiBold">Recommended: Max Performance</Run> when you're plugged in, for the smoothest feel.
+                            Default just lets the driver decide. <Run FontStyle="Italic">Takes effect after a restart.</Run>
                         </TextBlock>
                         <TextBlock Margin="0,6,0,0" Style="{StaticResource CaptionText}">
                             <Run Text="Current: "/><Run Text="{Binding PowerPolicyDetected, Mode=OneWay}"
@@ -113,8 +113,8 @@
                         <TextBlock Text="Display Power Saving (DPST)" Style="{StaticResource HeadingMedium}" Margin="0,0,0,4"/>
                         <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" MaxWidth="560">
                             Dims and adjusts the backlight automatically to save battery. <Run FontWeight="SemiBold">Recommended: On</Run>
-                            for longer battery life; turn it Off if the auto-dimming is distracting or you want consistent
-                            brightness for photo/video work. <Run FontStyle="Italic">Takes effect after a restart.</Run>
+                            for longer battery life. Turn it Off if the auto-dimming bugs you or you want steady
+                            brightness for photo or video work. <Run FontStyle="Italic">Takes effect after a restart.</Run>
                         </TextBlock>
                         <TextBlock Margin="0,6,0,0" Style="{StaticResource CaptionText}">
                             <Run Text="Current: "/><Run Text="{Binding DpstDetected, Mode=OneWay}"
@@ -143,8 +143,8 @@
                         <StackPanel Grid.Column="0" Margin="0,0,20,0">
                             <TextBlock Text="Dynamic Refresh Switching" Style="{StaticResource HeadingMedium}" Margin="0,0,0,4"/>
                             <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" MaxWidth="560">
-                                Lowers the built-in screen's refresh rate when showing static content to save power.
-                                <Run FontWeight="SemiBold">Recommended: On</Run> on a laptop. Turn it Off if you notice
+                                Lowers the built-in screen's refresh rate when the picture is static to save power.
+                                <Run FontWeight="SemiBold">Recommended: On</Run> for a laptop. Turn it Off if you notice a
                                 stutter when the refresh rate switches. <Run FontStyle="Italic">Takes effect after a restart.</Run>
                             </TextBlock>
                             <TextBlock Margin="0,6,0,0" Style="{StaticResource CaptionText}">

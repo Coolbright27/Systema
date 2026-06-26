@@ -61,8 +61,8 @@
                             <TextBlock Text="Thermal Profile" Style="{StaticResource HeadingMedium}"/>
                         </StackPanel>
                         <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,0,0,16" MaxWidth="640">
-                            Sets the same BIOS thermal mode as the Dell / MyDell app (Optimized, Cool,
-                            Quiet, Ultra Performance). Set it once — Systema applies your choice and
+                            Sets the same BIOS thermal mode as the Dell or MyDell app (Optimized, Cool,
+                            Quiet, Ultra Performance). Set it once and Systema applies your choice, then
                             re-applies it automatically whenever you plug in or unplug.
                         </TextBlock>
 
@@ -76,8 +76,8 @@
                                            Foreground="{StaticResource AccentYellowBrush}" TextWrapping="Wrap"/>
                                 <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,8,0,0"
                                            Foreground="{StaticResource TextSecondaryBrush}">
-                                    Search "Dell Command Monitor download" → install the standalone package.
-                                    No reboot needed — reopen this tab and the selectors appear.
+                                    Search for "Dell Command Monitor download" and install the standalone package.
+                                    No reboot needed. Just reopen this tab and the selectors show up.
                                 </TextBlock>
                             </StackPanel>
                         </Border>
@@ -112,7 +112,7 @@
                             </Grid.ColumnDefinitions>
                             <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,16,0">
                                 <TextBlock Text="On battery" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                                <TextBlock Text="Thermal mode applied when running on battery — usually Optimized or Quiet for heat and runtime."
+                                <TextBlock Text="Thermal mode applied when you're on battery. Usually Optimized or Quiet for the best mix of heat and runtime."
                                            Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,2,0,0"/>
                             </StackPanel>
                             <ComboBox Grid.Column="1" VerticalAlignment="Center"

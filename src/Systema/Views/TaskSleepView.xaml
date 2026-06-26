@@ -53,7 +53,7 @@
 
             <!-- ===== HEADER ===== -->
             <TextBlock Text="Systema Engine" Style="{StaticResource HeadingLarge}"/>
-            <TextBlock Text="Sleeps idle apps, speeds up launches, and keeps the app you're using responsive — automatically."
+            <TextBlock Text="Sleeps idle apps, speeds up launches, and keeps the app you're using responsive, all on its own."
                        Style="{StaticResource CaptionText}" Margin="0,4,0,16"/>
 
             <!-- ===== STATUS HERO ===== -->
@@ -252,7 +252,7 @@
                             </Grid.ColumnDefinitions>
                             <StackPanel Grid.Column="0" Margin="0,0,16,0" VerticalAlignment="Center">
                                 <TextBlock Text="GPU priority → Max" Style="{StaticResource BodyText}" VerticalAlignment="Center"/>
-                                <TextBlock Text="Advanced — raises GPU scheduling priority. May affect VSync / frame pacing on some systems. Off by default."
+                                <TextBlock Text="Advanced. Raises GPU scheduling priority. It can affect VSync or frame pacing on some systems, so it's off by default."
                                            Style="{StaticResource CaptionText}" TextWrapping="Wrap"
                                            Foreground="{StaticResource AccentYellowBrush}" Margin="0,2,0,0"/>
                             </StackPanel>
@@ -290,7 +290,7 @@
                             </Grid.ColumnDefinitions>
                             <StackPanel Grid.Column="0">
                                 <TextBlock Text="Responsiveness boosts" Style="{StaticResource HeadingMedium}"/>
-                                <TextBlock Text="Eleven tweaks that keep the active app fast — priority, focus, throttling, startup, shutdown."
+                                <TextBlock Text="Eleven tweaks that keep the active app fast: priority, focus, throttling, startup, and shutdown."
                                            Style="{StaticResource CaptionText}" Margin="0,3,0,0"/>
                             </StackPanel>
                             <TextBlock Grid.Column="1" VerticalAlignment="Center" Margin="12,0,0,0"
@@ -330,7 +330,7 @@
                                 snappy while background apps keep running.
                                 <LineBreak/><Run FontWeight="SemiBold">Recommended on with Systema Engine:</Run> as the
                                 engine quiets background apps, this steers that freed-up CPU to the app you're actually
-                                using — so the two work together.
+                                using, so the two work together.
                             </TextBlock>
                         </StackPanel>
                         <CheckBox Grid.Column="1" VerticalAlignment="Center"
@@ -388,7 +388,7 @@
                                 shutdown, so they launch immediately instead of trickling in ~10 seconds late.
                                 Takes effect on the next boot.
                                 <LineBreak/><Run FontWeight="SemiBold">Recommended on with Systema Engine:</Run> your apps
-                                start at full speed, and the engine then keeps the idle ones quiet — fast startup without
+                                start at full speed, and the engine then keeps the idle ones quiet, so you get fast startup without
                                 the lingering background bloat.
                             </TextBlock>
                         </StackPanel>
@@ -415,10 +415,10 @@
                             </StackPanel>
                             <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" MaxWidth="600">
                                 Sets the MMCSS SystemResponsiveness reserve to 0, handing the CPU quanta Windows normally
-                                holds back for background work to multimedia and foreground apps — steadier frame pacing
+                                holds back for background work to multimedia and foreground apps. You get steadier frame pacing
                                 under load. OFF restores the Windows default (20).
                                 <LineBreak/><Run FontWeight="SemiBold">Recommended on with Systema Engine:</Run> it
-                                reinforces what the engine is already doing — less CPU reserved for background work, more
+                                reinforces what the engine is already doing, with less CPU reserved for background work and more
                                 for the app in front.
                             </TextBlock>
                             <TextBlock Text="⟳ Requires a restart to take effect."
@@ -448,10 +448,10 @@
                             </StackPanel>
                             <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" MaxWidth="600">
                                 Windows throttles your network to ~10 packets/ms whenever audio or video is playing, to keep
-                                sound smooth. Turning that off hands the full network pipe to the app you're using — snappier
-                                downloads, streaming, and online games. OFF restores the Windows default.
+                                sound smooth. Turning that off hands the full network pipe to the app you're using, so
+                                downloads, streaming, and online games feel snappier. OFF restores the Windows default.
                                 <LineBreak/><Run FontWeight="SemiBold">Recommended on with Systema Engine:</Run> it pairs with
-                                Maximum System Responsiveness — same multimedia profile, now without the network brake.
+                                Maximum System Responsiveness, the same multimedia profile, now without the network brake.
                             </TextBlock>
                             <TextBlock Text="⟳ Requires a restart to take effect."
                                        Style="{StaticResource CaptionText}" TextWrapping="Wrap"
@@ -464,7 +464,7 @@
 
                     <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,16,0,16"/>
 
-                    <!-- Power Throttling Off — pairs with Foreground Priority Boost. AC-gated. -->
+                    <!-- Power Throttling Off — pairs with Foreground Priority Boost. -->
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
@@ -480,10 +480,10 @@
                             </StackPanel>
                             <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" MaxWidth="600">
                                 Windows quietly lowers the clock speed of apps it decides are in the background to save power.
-                                Turning Power Throttling off keeps the app you're using at full speed. On battery it's left on
-                                automatically so your runtime isn't affected — it only kicks in on AC power.
+                                Turning Power Throttling off keeps the app you're using at full speed on AC and on battery
+                                alike, so it stays on instead of dropping off when you unplug.
                                 <LineBreak/><Run FontWeight="SemiBold">Recommended on with Systema Engine:</Run> it backs up
-                                Foreground Priority Boost — the active app gets both more CPU time and full clock speed.
+                                Foreground Priority Boost, so the active app gets both more CPU time and full clock speed.
                             </TextBlock>
                         </StackPanel>
                         <CheckBox Grid.Column="1" VerticalAlignment="Center"
@@ -509,7 +509,7 @@
                             </StackPanel>
                             <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" MaxWidth="600">
                                 Windows waits up to 20 seconds for an app to close when you shut down or sign out before
-                                nudging it. This trims that wait so shutdown and restart feel immediate — apps still get a
+                                nudging it. This trims that wait so shutdown and restart feel immediate, and apps still get a
                                 few seconds to save. OFF restores the Windows default.
                                 <LineBreak/><Run FontWeight="SemiBold">Recommended on with Systema Engine:</Run> less waiting
                                 when you close things, matching the engine's snappy feel.
@@ -539,7 +539,7 @@
                             <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" MaxWidth="600">
                                 Stops Windows from paging the kernel and drivers out to disk (DisablePagingExecutive), so the
                                 system stays responsive under memory load instead of hitching. OFF restores the Windows default.
-                                <LineBreak/><Run FontWeight="SemiBold">Only recommended if your PC has 16 GB or more of RAM</Run> —
+                                <LineBreak/><Run FontWeight="SemiBold">Only recommended if your PC has 16 GB or more of RAM.</Run>
                                 Systema leaves this off by default on machines with less than 14 GB.
                             </TextBlock>
                             <TextBlock Text="⟳ Requires a restart to take effect."
@@ -601,7 +601,7 @@
                                 When a misbehaving app installs a keyboard/mouse hook and stalls, Windows freezes your input
                                 until it gives up (LowLevelHooksTimeout, ~5000 ms). This trims it to 1000 ms so input recovers
                                 in a second instead of five. To enforce it everywhere it also writes the same value to the
-                                system's .DEFAULT profile (used at the logon screen) — safe and reversible. OFF restores the default.
+                                system's .DEFAULT profile (used at the logon screen). It's safe and reversible. OFF restores the default.
                                 <LineBreak/><Run FontWeight="SemiBold">Recommended on with Systema Engine:</Run> the mouse and
                                 keyboard stay responsive even when an app misbehaves.
                             </TextBlock>
@@ -658,7 +658,7 @@
                                 </Border>
                             </StackPanel>
                             <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" MaxWidth="600">
-                                Fast Startup makes "Shut down" a hybrid hibernate — it reloads the old kernel/driver state on the
+                                Fast Startup makes "Shut down" a hybrid hibernate that reloads the old kernel and driver state on the
                                 next boot, so glitches that build up survive a shutdown and only a full Restart clears them. Turning
                                 it off makes every shutdown a clean cold boot, which fixes a whole class of "a restart fixes it"
                                 instability and lets driver/firmware updates apply correctly. It also turns off hibernation (Fast
@@ -689,8 +689,8 @@
                                 </Border>
                             </StackPanel>
                             <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" MaxWidth="600">
-                                Stops packaged Store / UWP apps (Xbox, Phone Link, Mail, Weather, etc.) from running tasks in the
-                                background at all — a preventive complement to the engine, which only quiets apps once they're already
+                                Stops packaged Store and UWP apps (Xbox, Phone Link, Mail, Weather, etc.) from running tasks in the
+                                background at all. It's a preventive complement to the engine, which only quiets apps once they're already
                                 running. Windows 11 hid the global switch for this, so this is the clean way to control it. Trade-off:
                                 those apps won't update live tiles or push background notifications until you open them. OFF restores
                                 the Windows default.
@@ -1001,7 +1001,7 @@
                                                                   RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                                                               CommandParameter="{Binding}"/>
                                                     <Separator/>
-                                                    <MenuItem Header="Whitelist — never nap this app"
+                                                    <MenuItem Header="Whitelist (never nap this app)"
                                                               Command="{Binding DataContext.WhitelistProcessCommand,
                                                                   RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                                                               CommandParameter="{Binding}"/>
@@ -1252,7 +1252,7 @@
                             </Grid.ColumnDefinitions>
                             <StackPanel Grid.Column="0">
                                 <TextBlock Text="Sleep rules" Style="{StaticResource HeadingMedium}"/>
-                                <TextBlock Text="Which apps get put to sleep — minimized, tray, unused, and idle — plus how aggressively."
+                                <TextBlock Text="Which apps get put to sleep (minimized, tray, unused, and idle) and how aggressively."
                                            Style="{StaticResource CaptionText}" Margin="0,3,0,0"/>
                             </StackPanel>
                             <TextBlock Grid.Column="1" VerticalAlignment="Center" Margin="12,0,0,0"
@@ -1322,7 +1322,7 @@
                         <StackPanel Grid.Column="0" Margin="0,0,24,0">
                             <TextBlock Text="Sleep unused apps"
                                        Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                            <TextBlock Text="Apps you haven't used in a few minutes are put to sleep, even if they're not minimized. The most effective mode — catches everything you're not actively using."
+                            <TextBlock Text="Apps you haven't used in a few minutes are put to sleep, even if they're not minimized. It's the most effective mode and catches everything you're not actively using."
                                        Style="{StaticResource CaptionText}"
                                        Foreground="{StaticResource TextSecondaryBrush}"
                                        TextWrapping="Wrap" Margin="0,3,0,0"/>
@@ -1386,7 +1386,7 @@
                         <StackPanel Grid.Column="0" Margin="0,0,24,0">
                             <TextBlock Text="Keep busy apps awake"
                                        Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                            <TextBlock Text="Don't sleep a minimized or tray app while its whole process tree is using more than 30% CPU — it's probably still doing work (an export, a render, a build). The entire app stays awake, and naps normally once it settles down."
+                            <TextBlock Text="Don't sleep a minimized or tray app while its whole process tree is using more than 30% CPU, since it's probably still doing work like an export, a render, or a build. The entire app stays awake, and naps normally once it settles down."
                                        Style="{StaticResource CaptionText}"
                                        Foreground="{StaticResource TextSecondaryBrush}"
                                        TextWrapping="Wrap" Margin="0,3,0,0"/>
@@ -1408,7 +1408,7 @@
                         <StackPanel Grid.Column="0" Margin="0,0,24,0">
                             <TextBlock Text="Compress memory in deep sleep"
                                        Style="{StaticResource BodyText}" FontWeight="SemiBold" Margin="0,0,0,3"/>
-                            <TextBlock Text="When a napped app has been idle long enough to enter deep sleep (~10 minutes by default), trim its working set so Windows can compress those pages on the standby list at roughly 2–4× ratio. Re-trim after every brief wake while the process is still in deep sleep, so the compressed footprint stays stable. Closest Windows equivalent to macOS's App Nap + Compressed Memory behavior."
+                            <TextBlock Text="When a napped app has been idle long enough to enter deep sleep (~10 minutes by default), Systema trims its working set so Windows can compress those pages on the standby list at roughly 2 to 4 times. It re-trims after every brief wake while the process is still in deep sleep, so the compressed footprint stays stable. This is the closest Windows gets to macOS's App Nap plus Compressed Memory behavior."
                                        Style="{StaticResource CaptionText}"
                                        Foreground="{StaticResource TextSecondaryBrush}"
                                        TextWrapping="Wrap"/>
@@ -1547,7 +1547,7 @@
                         <StackPanel Grid.Column="0" Margin="0,0,24,0">
                             <TextBlock Text="Pause brief wakes while gaming"
                                        Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                            <TextBlock Text="When Game Booster is active, napped apps stay fully asleep — no periodic wakes — so 100% of the CPU goes to your game. Turn off if you need background apps (Discord bots, streaming tools, etc.) to keep running while gaming."
+                            <TextBlock Text="When Game Booster is active, napped apps stay fully asleep with no periodic wakes, so 100% of the CPU goes to your game. Turn it off if you need background apps like Discord bots or streaming tools to keep running while gaming."
                                        Style="{StaticResource CaptionText}"
                                        Foreground="{StaticResource TextSecondaryBrush}"
                                        TextWrapping="Wrap" Margin="0,3,0,0"/>
