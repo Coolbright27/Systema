@@ -294,7 +294,7 @@ public partial class CrashReportWindow : Window
         sb.AppendLine();
         sb.AppendLine("══════════════════════════════════════════════════════════════");
         sb.AppendLine($"Report file: {crashFilePath}");
-        sb.AppendLine("Please paste this report in the Systema Discord: https://discord.gg/DjxBswDeN8");
+        sb.AppendLine("Please paste this report in the Systema Discord: https://discord.gg/yYhM7mdupH");
         sb.AppendLine("══════════════════════════════════════════════════════════════");
         return sb.ToString();
     }
@@ -341,7 +341,7 @@ public partial class CrashReportWindow : Window
     {
         try
         {
-            Process.Start(new ProcessStartInfo("https://discord.gg/DjxBswDeN8")
+            Process.Start(new ProcessStartInfo("https://discord.gg/yYhM7mdupH")
             {
                 UseShellExecute = true
             });

@@ -166,7 +166,7 @@ public partial class MainWindow : Window
         => OpenExternal("https://github.com/Coolbright27/Systema/releases");
 
     private void DiscordButton_Click(object sender, RoutedEventArgs e)
-        => OpenExternal("https://discord.gg/QEzKYwfB3N");
+        => OpenExternal("https://discord.gg/yYhM7mdupH");
 
     private static void OpenExternal(string url)
     {

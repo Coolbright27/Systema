@@ -131,64 +131,76 @@ public class AudioService
     // endpoint with effects back on, so the live value drifts off the user's choice. We store
     // what the user WANTS and re-assert it (ReinforceFromIntent) on a timer / device change.
     private const string EnhIntentValue     = "EnhancementsOffIntent";
+    private const string EnhDevPrefix       = "EnhDev_";   // HKCU markers: output endpoints we flipped, so toggle-off can reset them even when unplugged
     private const string SpatialIntentValue = "SpatialOffIntent";
 
-    // Vendor effect APOs (Realtek / Waves / etc.) don't ride the Disable_SysFx bypass — they're
-    // driver-injected APOs listed in the endpoint's effect-CLSID lists ({d04e05a6...},13/14/15/19/20).
-    // We strip the vendor entries (each identified by a sibling "{clsid},100" value pointing at a
-    // SWD\DRIVERENUM device) while keeping Microsoft's own APOs, saving originals for exact restore.
-    private const string FxCompositeFmtId = "{d04e05a6-594b-4fb6-a80d-01af5eed7d1d}";
-    private static readonly int[] FxListPids = { 13, 14, 15, 19, 20 };
-    private const string FxListSavePrefix = "FxList_";
+    // Microphone (capture) side. Same machinery as Render, pointed at the Capture device class.
+    // A separate intent key and FX-list save prefix keep it independent of the output toggle.
+    private const string CaptureDevicesKey  = @"SOFTWARE\Microsoft\Windows\CurrentVersion\MMDevices\Audio\Capture";
+    private const string MicEnhIntentValue  = "MicEnhancementsOffIntent";
+    private const string MicEnhDevPrefix    = "MicEnhDev_";   // HKCU markers: mic endpoints we flipped (same role as EnhDevPrefix)
+    private const string MicFxSavePrefix    = "MicFxList_";
+
+    // Audio effects (APOs) are driver-injected and listed in the endpoint's effect-CLSID lists. Windows
+    // exposes TWO effect property sets and a driver can use either (or both): the plain FX set
+    // ({d04e05a6...},N — slots 13/14/15/19/20 on speakers, 17 on mics) and the COMPOSITE FX set
+    // ({d3993a3f...},N — slots 5/6/7/9/11/12), which is where vendor packs like Realtek/Waves actually
+    // park their APOs on many machines. Neither set rides the Disable_SysFx bypass, so to turn ALL
+    // enhancements off we empty every list in BOTH sets (ClearAllFx), saving each original under
+    // FxListSavePrefix (keyed by the full value name) for an exact restore.
+    private const string FxCompositeFmtId  = "{d04e05a6-594b-4fb6-a80d-01af5eed7d1d}";   // PKEY_FX_*
+    private const string FxCompositeFmtId2 = "{d3993a3f-99c2-4402-b5ec-a92a0367664b}";   // PKEY_CompositeFX_* (Realtek/Waves)
+    private const string FxListSavePrefix  = "FxList_";
 
     /// <summary>Opens an endpoint's Properties subkey requesting only the rights actually
     /// granted on these keys (SetValue + read), so the write isn't denied for missing
     /// CreateSubKey rights. Returns null if the key is absent.</summary>
-    private static RegistryKey? OpenEndpointPropsWritable(string endpointId) =>
+    private static RegistryKey? OpenEndpointPropsWritable(string devicesKey, string endpointId) =>
         Registry.LocalMachine.OpenSubKey(
-            $@"{RenderDevicesKey}\{endpointId}\Properties",
+            $@"{devicesKey}\{endpointId}\Properties",
             RegistryKeyPermissionCheck.ReadWriteSubTree,
             RegistryRights.SetValue | RegistryRights.QueryValues);
 
     /// <summary>Same SetValue-only open as above, for the endpoint's FxProperties subkey.</summary>
-    private static RegistryKey? OpenEndpointFxWritable(string endpointId) =>
+    private static RegistryKey? OpenEndpointFxWritable(string devicesKey, string endpointId) =>
         Registry.LocalMachine.OpenSubKey(
-            $@"{RenderDevicesKey}\{endpointId}\FxProperties",
+            $@"{devicesKey}\{endpointId}\FxProperties",
             RegistryKeyPermissionCheck.ReadWriteSubTree,
             RegistryRights.SetValue | RegistryRights.QueryValues);
 
-    /// <summary>The registry ids of every active (plugged-in, enabled) audio output endpoint.</summary>
-    private List<string> GetActiveOutputEndpointIds()
+    /// <summary>The registry ids of every active (plugged-in, enabled) endpoint in the device
+    /// class (Render for speakers/headphones, Capture for microphones).</summary>
+    private List<string> GetActiveEndpointIds(string devicesKey)
     {
         var ids = new List<string>();
         try
         {
-            using var render = Registry.LocalMachine.OpenSubKey(RenderDevicesKey);
-            if (render == null) return ids;
-            foreach (var id in render.GetSubKeyNames())
+            using var root = Registry.LocalMachine.OpenSubKey(devicesKey);
+            if (root == null) return ids;
+            foreach (var id in root.GetSubKeyNames())
             {
                 try
                 {
-                    using var dev = render.OpenSubKey(id);
+                    using var dev = root.OpenSubKey(id);
                     if (dev?.GetValue("DeviceState") is int s && s == DeviceStateActive) ids.Add(id);
                 }
                 catch (Exception ex) { Log.Warn("Audio", $"endpoint {id} state read failed: {ex.Message}"); }
             }
         }
-        catch (Exception ex) { Log.Warn("Audio", $"GetActiveOutputEndpointIds failed: {ex.Message}"); }
+        catch (Exception ex) { Log.Warn("Audio", $"GetActiveEndpointIds failed: {ex.Message}"); }
         return ids;
     }
 
-    /// <summary>True only when EVERY active output device has enhancements disabled.</summary>
-    public bool AreEnhancementsDisabledEverywhere()
+    /// <summary>True only when EVERY active endpoint in the class has enhancements disabled.</summary>
+    private bool AreEnhancementsDisabled(string devicesKey)
     {
-        var ids = GetActiveOutputEndpointIds();
+        var ids = GetActiveEndpointIds(devicesKey);
         if (ids.Count == 0) return false;
         foreach (var id in ids)
         {
             try
             {
-                using var props = Registry.LocalMachine.OpenSubKey($@"{RenderDevicesKey}\{id}\Properties");
+                using var props = Registry.LocalMachine.OpenSubKey($@"{devicesKey}\{id}\Properties");
                 if (props?.GetValue(DisableSysFxValue) is int v && v == 1) continue;
             }
             catch (Exception ex) { Log.Warn("Audio", $"enh read {id} failed: {ex.Message}"); }
@@ -197,58 +209,109 @@ public class AudioService
         return true;
     }
 
-    /// <summary>Disables (or re-enables) audio enhancements on every active output device,
-    /// verifying each write actually stuck, and recording the user's intent for reinforcement.</summary>
-    public TweakResult SetEnhancementsDisabledEverywhere(bool disable)
+    /// <summary>True when every active OUTPUT device has enhancements disabled.</summary>
+    public bool AreEnhancementsDisabledEverywhere() => AreEnhancementsDisabled(RenderDevicesKey);
+
+    /// <summary>Disables (or re-enables) ALL enhancements on every endpoint in the class: sets the
+    /// Disable_SysFx flag and empties the ENTIRE effect chain (every list in both effect property sets,
+    /// whatever slot it's in), so no APO loads at all (vendor packs like Realtek/Waves included) and
+    /// Win11's dropdown reads "Off". Records intent for reinforcement. On toggle-off it returns EVERY
+    /// device we touched to default, including ones currently UNPLUGGED — their MMDevices registry keys
+    /// persist, and we remember each touched device under <paramref name="touchedPrefix"/>. Reversible.</summary>
+    private TweakResult SetEnhancements(string devicesKey, string intentKey, string fxSavePrefix, string touchedPrefix, string noun, bool disable)
     {
-        WriteIntent(EnhIntentValue, disable);   // remember what the user wants, even if a device is locked
+        WriteIntent(intentKey, disable);   // remember what the user wants, even if a device is locked
 
-        var ids = GetActiveOutputEndpointIds();
-        if (ids.Count == 0) return TweakResult.Fail("No active output devices were found.");
+        using var sys = Registry.CurrentUser.CreateSubKey(SystemaAudioKey, writable: true);
+        int ok = 0, fail = 0;
 
-        int want = disable ? 1 : 0, ok = 0, fail = 0;
-        foreach (var id in ids)
+        if (disable)
+        {
+            var ids = GetActiveEndpointIds(devicesKey);
+            if (ids.Count == 0) return TweakResult.Fail("No active devices were found.");
+
+            foreach (var id in ids)
+            {
+                try
+                {
+                    using var props = OpenEndpointPropsWritable(devicesKey, id);
+                    if (props == null) { fail++; continue; }
+                    props.SetValue(DisableSysFxValue, 1, RegistryValueKind.DWord);
+                    // Some driver stacks (e.g. Realtek) also key off the same flag in FxProperties.
+                    try { using var fx = OpenEndpointFxWritable(devicesKey, id); fx?.SetValue(DisableSysFxValue, 1, RegistryValueKind.DWord); }
+                    catch (Exception ex) { Log.Warn("Audio", $"enh FxProperties write {id} failed: {ex.Message}"); }
+                    if (props.GetValue(DisableSysFxValue) is int got && got == 1)
+                    {
+                        ok++;
+                        sys?.SetValue(touchedPrefix + id, 1, RegistryValueKind.DWord);   // remember it, so we can reset it later even if it unplugs
+                    }
+                    else fail++;
+                }
+                catch (Exception ex) { fail++; Log.Warn("Audio", $"enh write {id} failed: {ex.Message}"); }
+            }
+
+            // Empty the ENTIRE effect chain (both property sets, any slot) so no APO loads at all
+            // (Realtek/Waves/Nahimic included).
+            int fxChanged = 0;
+            if (sys != null) foreach (var id in ids) fxChanged += ClearAllFx(devicesKey, fxSavePrefix, id, sys);
+
+            Log.Info("Audio", $"{noun} disabled: {ok} verified, {fail} failed");
+            if (ok == 0) return TweakResult.Fail("Windows blocked the change on every device.");
+            string m = $"{noun} disabled on {ok} device{(ok == 1 ? "" : "s")} (verified).";
+            if (fxChanged > 0) m += " Cleared the effect chain (incl. Realtek/Waves) too.";
+            m += " Restart your PC to apply.";
+            if (fail > 0) m += $" ({fail} couldn't be changed.)";
+            return TweakResult.Ok(m);
+        }
+
+        // ── Restore (toggle off) ── reset every device we touched, plus anything active now. A touched
+        // device that's currently unplugged is reset too: its registry keys live on, so the write lands.
+        var targets = new HashSet<string>(GetActiveEndpointIds(devicesKey), StringComparer.OrdinalIgnoreCase);
+        if (sys != null)
+            foreach (var n in sys.GetValueNames().Where(n => n.StartsWith(touchedPrefix, StringComparison.Ordinal)).ToList())
+                targets.Add(n.Substring(touchedPrefix.Length));
+
+        foreach (var id in targets)
         {
             try
             {
-                using var props = OpenEndpointPropsWritable(id);
-                if (props == null) { fail++; continue; }
-                props.SetValue(DisableSysFxValue, want, RegistryValueKind.DWord);
-                // Some driver stacks (e.g. Realtek) also key off the same flag in FxProperties —
-                // mirror it there when the key is reachable so the change is honoured consistently.
-                try { using var fx = OpenEndpointFxWritable(id); fx?.SetValue(DisableSysFxValue, want, RegistryValueKind.DWord); }
-                catch (Exception ex) { Log.Warn("Audio", $"enh FxProperties write {id} failed: {ex.Message}"); }
-                // Verify the write took — read it back rather than assume success.
-                if (props.GetValue(DisableSysFxValue) is int got && got == want) ok++; else fail++;
+                using var props = OpenEndpointPropsWritable(devicesKey, id);
+                if (props != null)
+                {
+                    props.SetValue(DisableSysFxValue, 0, RegistryValueKind.DWord);
+                    try { using var fx = OpenEndpointFxWritable(devicesKey, id); fx?.SetValue(DisableSysFxValue, 0, RegistryValueKind.DWord); }
+                    catch (Exception ex) { Log.Warn("Audio", $"enh FxProperties reset {id} failed: {ex.Message}"); }
+                    ok++;
+                }
+                else fail++;
             }
-            catch (Exception ex) { fail++; Log.Warn("Audio", $"enh write {id} failed: {ex.Message}"); }
+            catch (Exception ex) { fail++; Log.Warn("Audio", $"enh reset {id} failed: {ex.Message}"); }
+            sys?.DeleteValue(touchedPrefix + id, throwOnMissingValue: false);
         }
-        Log.Info("Audio", $"Enhancements {(disable ? "disabled" : "re-enabled")} device-wide: {ok} verified, {fail} failed");
 
-        // Also empty the endpoint-effect chain so Win11's "Audio enhancements" dropdown reads "Off",
-        // and strip (or restore) driver-injected vendor APOs (Realtek/Waves) that ignore the
-        // Disable_SysFx bypass above. Reversible via saved original effect lists.
-        int fxChanged = 0;
-        try
-        {
-            using var sys = Registry.CurrentUser.CreateSubKey(SystemaAudioKey, writable: true);
-            if (sys != null)
-            {
-                if (disable) { foreach (var id in ids) fxChanged += StripVendorApos(id, sys); }
-                else RestoreVendorApos(sys);
-            }
-        }
-        catch (Exception ex) { Log.Warn("Audio", $"vendor APO {(disable ? "strip" : "restore")} failed: {ex.Message}"); }
+        // Put the saved effect lists back (registry, so unplugged devices too).
+        if (sys != null) RestoreVendorApos(devicesKey, fxSavePrefix, sys);
 
-        if (ok == 0) return TweakResult.Fail("Windows blocked the change on every device.");
-        string msg = disable
-            ? $"Audio enhancements disabled on {ok} device{(ok == 1 ? "" : "s")} (verified)."
-            : $"Audio enhancements re-enabled on {ok} device{(ok == 1 ? "" : "s")} (verified).";
-        if (disable && fxChanged > 0) msg += " Cleared the device effect chain (incl. Realtek/Waves) too.";
-        msg += " Restart your PC to apply.";
+        Log.Info("Audio", $"{noun} restored: {ok} ok, {fail} failed");
+        string msg = ok == 0 && fail == 0
+            ? $"{noun} were already at the default."
+            : $"{noun} restored on {ok} device{(ok == 1 ? "" : "s")} (unplugged ones included). Restart your PC to apply.";
         if (fail > 0) msg += $" ({fail} couldn't be changed.)";
         return TweakResult.Ok(msg);
     }
+
+    /// <summary>Disables (or re-enables) ALL audio enhancements on every active OUTPUT device by
+    /// clearing the entire effect chain (Microsoft, Realtek, Waves, everything) for a raw signal.
+    /// Reversible via saved originals.</summary>
+    public TweakResult SetEnhancementsDisabledEverywhere(bool disable) =>
+        SetEnhancements(RenderDevicesKey, EnhIntentValue, FxListSavePrefix, EnhDevPrefix, "Audio enhancements", disable);
+
+    /// <summary>Disables (or re-enables) ALL enhancements on every active MICROPHONE / input device by
+    /// clearing the entire effect chain, including driver-injected vendor packs (Realtek/Waves/Nahimic)
+    /// in whatever slot they sit that ordinary "disable enhancements" leaves running. Mics use different
+    /// slots than speakers, so we empty every list rather than vendor-filtering. Reversible.</summary>
+    public TweakResult SetMicEnhancementsDisabledEverywhere(bool disable) =>
+        SetEnhancements(CaptureDevicesKey, MicEnhIntentValue, MicFxSavePrefix, MicEnhDevPrefix, "Microphone enhancements", disable);
 
     // ── 4. Disable spatial audio (Windows Sonic / Dolby / DTS), device-wide ──
     // Spatial is the endpoint EFX in FxProperties. Turning it off = setting that CLSID to the
@@ -279,7 +342,7 @@ public class AudioService
 
             if (disable)
             {
-                foreach (var id in GetActiveOutputEndpointIds())
+                foreach (var id in GetActiveEndpointIds(RenderDevicesKey))
                 {
                     try
                     {
@@ -287,7 +350,7 @@ public class AudioService
                         var cur = fxRO?.GetValue(FxEfxValue) as string;
                         // Skip devices with no spatial effect, or already off.
                         if (string.IsNullOrEmpty(cur) || cur.Equals(NullClsid, StringComparison.OrdinalIgnoreCase)) continue;
-                        using var fw = OpenEndpointFxWritable(id);
+                        using var fw = OpenEndpointFxWritable(RenderDevicesKey, id);
                         if (fw == null) { fail++; continue; }
                         sys.SetValue(SpatialOrigPrefix + id, cur, RegistryValueKind.String);   // save original
                         fw.SetValue(FxEfxValue, NullClsid, RegistryValueKind.String);
@@ -311,7 +374,7 @@ public class AudioService
                 var orig = sys.GetValue(name) as string;
                 try
                 {
-                    using var fw = OpenEndpointFxWritable(id);
+                    using var fw = OpenEndpointFxWritable(RenderDevicesKey, id);
                     if (fw != null && !string.IsNullOrEmpty(orig)) { fw.SetValue(FxEfxValue, orig, RegistryValueKind.String); ok++; }
                 }
                 catch (Exception ex) { fail++; Log.Warn("Audio", $"spatial restore {id} failed: {ex.Message}"); }
@@ -333,96 +396,32 @@ public class AudioService
         return Array.Empty<string>();
     }
 
-    /// <summary>CLSIDs in this endpoint's FxProperties that are driver-injected vendor APOs
-    /// (Realtek/Waves/etc.) — flagged by a "{clsid},100" sibling pointing at a driver device.</summary>
-    private static HashSet<string> VendorApoClsids(RegistryKey fxRO)
-    {
-        var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var n in fxRO.GetValueNames())
-        {
-            if (!n.EndsWith(",100", StringComparison.Ordinal)) continue;
-            if (fxRO.GetValue(n) is string s &&
-                (s.IndexOf("DRIVERENUM", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                 s.IndexOf("WAVESAPO",  StringComparison.OrdinalIgnoreCase) >= 0))
-            {
-                set.Add(n.Substring(0, n.Length - ",100".Length));
-            }
-        }
-        return set;
-    }
+    /// <summary>True if this FxProperties value name is an effect-CLSID list in EITHER property set:
+    /// the plain FX set ({d04e05a6...}) or the composite FX set ({d3993a3f...}, where Realtek/Waves sit).</summary>
+    private static bool IsFxListName(string name) =>
+        name.StartsWith(FxCompositeFmtId  + ",", StringComparison.OrdinalIgnoreCase) ||
+        name.StartsWith(FxCompositeFmtId2 + ",", StringComparison.OrdinalIgnoreCase);
 
-    /// <summary>True if any active endpoint has effect drift while enhancements are meant to be off:
-    /// a non-empty EFX list (pid 15 — backs Win11's "Audio enhancements" dropdown) or a vendor APO
-    /// still listed (driver re-injected it on reconnect/reboot).</summary>
-    private bool AnyActiveEndpointHasEffectDrift()
+    /// <summary>Restores every saved effect list for this class, then clears the originals.</summary>
+    private void RestoreVendorApos(string devicesKey, string fxSavePrefix, RegistryKey sys)
     {
-        foreach (var id in GetActiveOutputEndpointIds())
+        foreach (var name in sys.GetValueNames().Where(n => n.StartsWith(fxSavePrefix, StringComparison.Ordinal)).ToList())
         {
             try
             {
-                using var fxRO = Registry.LocalMachine.OpenSubKey($@"{RenderDevicesKey}\{id}\FxProperties");
-                if (fxRO == null) continue;
-                if (ReadList(fxRO, $"{FxCompositeFmtId},15").Length > 0) return true;   // dropdown would read "on"
-                var vendor = VendorApoClsids(fxRO);
-                if (vendor.Count == 0) continue;
-                foreach (var pid in FxListPids)
-                    if (ReadList(fxRO, $"{FxCompositeFmtId},{pid}").Any(c => vendor.Contains(c))) return true;
-            }
-            catch { /* ignore one endpoint */ }
-        }
-        return false;
-    }
-
-    /// <summary>Clears the endpoint-effect list (so Win11's "Audio enhancements" dropdown reads
-    /// "Off") and removes vendor APO CLSIDs (Realtek/Waves) from the other effect lists while
-    /// keeping Microsoft's. Saves each original list first. Returns the number of lists changed.</summary>
-    private int StripVendorApos(string id, RegistryKey sys)
-    {
-        int changed = 0;
-        try
-        {
-            using var fxRO = Registry.LocalMachine.OpenSubKey($@"{RenderDevicesKey}\{id}\FxProperties");
-            if (fxRO == null) return 0;
-            var vendor = VendorApoClsids(fxRO);
-            using var fw = OpenEndpointFxWritable(id);
-            if (fw == null) return 0;
-            foreach (var pid in FxListPids)
-            {
-                var lv  = $"{FxCompositeFmtId},{pid}";
-                var cur = ReadList(fxRO, lv);
-                if (cur.Length == 0) continue;
-                // pid 15 is the EFX list that backs Windows 11's "Audio enhancements" dropdown — empty
-                // it entirely (incl. Microsoft's default endpoint effect) so the dropdown reads "Off".
-                // The other lists keep Microsoft's APOs and only drop vendor (Realtek/Waves) entries.
-                var filtered = (pid == 15) ? Array.Empty<string>() : cur.Where(c => !vendor.Contains(c)).ToArray();
-                if (filtered.Length == cur.Length) continue;   // nothing to change
-                var saveName = $"{FxListSavePrefix}{id}__{pid}";
-                if (sys.GetValue(saveName) == null) sys.SetValue(saveName, cur, RegistryValueKind.MultiString);   // keep the FIRST original
-                fw.SetValue(lv, filtered, RegistryValueKind.MultiString);
-                changed++;
-            }
-        }
-        catch (Exception ex) { Log.Warn("Audio", $"StripVendorApos {id} failed: {ex.Message}"); }
-        return changed;
-    }
-
-    /// <summary>Restores every saved vendor-APO effect list, then clears the saved originals.</summary>
-    private void RestoreVendorApos(RegistryKey sys)
-    {
-        foreach (var name in sys.GetValueNames().Where(n => n.StartsWith(FxListSavePrefix, StringComparison.Ordinal)).ToList())
-        {
-            try
-            {
-                var rest = name.Substring(FxListSavePrefix.Length);
+                var rest = name.Substring(fxSavePrefix.Length);
                 int sep = rest.LastIndexOf("__", StringComparison.Ordinal);
                 if (sep >= 0)
                 {
-                    var id  = rest.Substring(0, sep);
-                    var pid = rest.Substring(sep + 2);
+                    var id     = rest.Substring(0, sep);
+                    var suffix = rest.Substring(sep + 2);
+                    // New saves store the FULL value name ("{guid},pid"); older saves stored a bare pid
+                    // (always the plain {d04e05a6...} set). Support both so prior saves still restore.
+                    var valueName = suffix.Contains(',') ? suffix : $"{FxCompositeFmtId},{suffix}";
                     if (sys.GetValue(name) is string[] saved)
                     {
-                        using var fw = OpenEndpointFxWritable(id);
-                        fw?.SetValue($"{FxCompositeFmtId},{pid}", saved, RegistryValueKind.MultiString);
+                        using var fw = OpenEndpointFxWritable(devicesKey, id);
+                        fw?.SetValue(valueName, saved, RegistryValueKind.MultiString);
                     }
                 }
             }
@@ -431,13 +430,65 @@ public class AudioService
         }
     }
 
+    /// <summary>Empties EVERY effect-CLSID list on the endpoint across BOTH property sets (plain
+    /// {d04e05a6...} and composite {d3993a3f...}), whatever slot it's in (drivers vary: ,13/14/15/19/20
+    /// on speakers, ,17 on mics, and ,5/6/7/9/11/12 for vendor composite chains), so no APO loads at all
+    /// — a fully raw signal. Saves each original (keyed by full value name) for an exact restore.</summary>
+    private int ClearAllFx(string devicesKey, string fxSavePrefix, string id, RegistryKey sys)
+    {
+        int changed = 0;
+        try
+        {
+            using var fxRO = Registry.LocalMachine.OpenSubKey($@"{devicesKey}\{id}\FxProperties");
+            if (fxRO == null) return 0;
+            using var fw = OpenEndpointFxWritable(devicesKey, id);
+            if (fw == null) return 0;
+            foreach (var name in fxRO.GetValueNames())
+            {
+                if (!IsFxListName(name)) continue;
+                if (fxRO.GetValueKind(name) != RegistryValueKind.MultiString) continue;   // skip single-String values
+                if (ReadList(fxRO, name).Length == 0) continue;
+                // Save under the FULL value name so the two property sets round-trip without colliding.
+                var saveName = $"{fxSavePrefix}{id}__{name}";
+                if (sys.GetValue(saveName) == null) sys.SetValue(saveName, ReadList(fxRO, name), RegistryValueKind.MultiString);
+                fw.SetValue(name, Array.Empty<string>(), RegistryValueKind.MultiString);
+                changed++;
+            }
+        }
+        catch (Exception ex) { Log.Warn("Audio", $"ClearAllFx {id} failed: {ex.Message}"); }
+        return changed;
+    }
+
+    /// <summary>True if any active endpoint in the class still has a non-empty effect list (any slot).
+    /// Used as the drift check for the clear-everything path (outputs and mics).</summary>
+    private bool AnyFxPresent(string devicesKey)
+    {
+        foreach (var id in GetActiveEndpointIds(devicesKey))
+        {
+            try
+            {
+                using var fxRO = Registry.LocalMachine.OpenSubKey($@"{devicesKey}\{id}\FxProperties");
+                if (fxRO == null) continue;
+                foreach (var name in fxRO.GetValueNames())
+                {
+                    if (!IsFxListName(name)) continue;
+                    if (fxRO.GetValueKind(name) != RegistryValueKind.MultiString) continue;
+                    if (ReadList(fxRO, name).Length > 0) return true;
+                }
+            }
+            catch { /* ignore one endpoint */ }
+        }
+        return false;
+    }
+
     // ── 5. Intent + reinforcement ───────────────────────────────────────────
     // The toggles reflect the user's saved INTENT (not the momentary live value), and a
     // background pass re-asserts that intent so a device that came back with effects on gets
     // corrected without the user having to touch the toggle again.
 
-    public bool GetEnhancementsOffIntent() => ReadIntent(EnhIntentValue);
-    public bool GetSpatialOffIntent()      => ReadIntent(SpatialIntentValue);
+    public bool GetEnhancementsOffIntent()    => ReadIntent(EnhIntentValue);
+    public bool GetMicEnhancementsOffIntent() => ReadIntent(MicEnhIntentValue);
+    public bool GetSpatialOffIntent()         => ReadIntent(SpatialIntentValue);
 
     private static bool ReadIntent(string name)
     {
@@ -454,7 +505,7 @@ public class AudioService
     /// <summary>True if any active output device currently has a (non-null) spatial EFX.</summary>
     private bool AnyActiveEndpointHasSpatial()
     {
-        foreach (var id in GetActiveOutputEndpointIds())
+        foreach (var id in GetActiveEndpointIds(RenderDevicesKey))
         {
             try
             {
@@ -475,9 +526,14 @@ public class AudioService
         bool changed = false;
         try
         {
-            if (GetEnhancementsOffIntent() && (!AreEnhancementsDisabledEverywhere() || AnyActiveEndpointHasEffectDrift()))
+            if (GetEnhancementsOffIntent() && (!AreEnhancementsDisabled(RenderDevicesKey) || AnyFxPresent(RenderDevicesKey)))
             {
                 SetEnhancementsDisabledEverywhere(true);
+                changed = true;
+            }
+            if (GetMicEnhancementsOffIntent() && (!AreEnhancementsDisabled(CaptureDevicesKey) || AnyFxPresent(CaptureDevicesKey)))
+            {
+                SetMicEnhancementsDisabledEverywhere(true);
                 changed = true;
             }
             if (GetSpatialOffIntent() && AnyActiveEndpointHasSpatial())

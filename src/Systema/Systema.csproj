@@ -11,7 +11,7 @@
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
     <AssemblyName>Systema</AssemblyName>
     <RootNamespace>Systema</RootNamespace>
-    <Version>0.7.191</Version>
+    <Version>0.7.201</Version>
     <Company>Systema</Company>
     <Product>Systema Optimization Suite</Product>
     <Description>High-performance Windows optimization suite</Description>
@@ -69,9 +69,12 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Update="Assets\logo.ico">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
+    <!-- Embed the icon in the assembly so the system-tray icon (TrayService.LoadIcon) always loads the
+         current build's logo straight from memory. We no longer copy it loose next to the exe: single-file
+         publish doesn't deploy it reliably, and a stale {app}\Assets\logo.ico left by an old installer was
+         being read instead, so the tray kept the old logo. The taskbar/exe icon still comes from
+         <ApplicationIcon> above, which reads the same file at build time. -->
+    <EmbeddedResource Include="Assets\logo.ico" />
   </ItemGroup>
 
 </Project>

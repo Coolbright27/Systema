@@ -172,6 +172,45 @@
                 </StackPanel>
             </Border>
 
+            <!-- ===== CARD: Disable all microphone enhancements (device-wide) ===== -->
+            <Border Style="{StaticResource Card}" Margin="0,0,0,16">
+                <StackPanel>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" Margin="0,0,16,0">
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                <TextBlock Text="Disable all microphone enhancements" Style="{StaticResource HeadingMedium}"/>
+                                <Border CornerRadius="4" Padding="5,2" Margin="8,0,0,0" VerticalAlignment="Center"
+                                        Background="#1A4C8CF0" BorderBrush="{StaticResource AccentBlueBrush}" BorderThickness="1">
+                                    <TextBlock Text="ALL MICS" FontSize="8" FontWeight="Bold" Foreground="{StaticResource AccentBlueBrush}"/>
+                                </Border>
+                            </StackPanel>
+                            <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" MaxWidth="620">
+                                Turns off every processing layer on your microphones: noise suppression, echo cancellation,
+                                automatic gain, and driver packs like Realtek, Waves, or Nahimic. Your mic runs raw, exactly
+                                what it captures.
+                            </TextBlock>
+                            <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" MaxWidth="620"
+                                       Foreground="{StaticResource AccentYellowBrush}" Margin="0,6,0,0">
+                                Good for lower mic latency, for cleaner sound on a nice mic or audio interface, or when an app
+                                like Discord or OBS already does its own noise processing and you don't want it done twice.
+                                Off by default, since a basic built-in mic often leans on this processing to cut background noise.
+                            </TextBlock>
+                        </StackPanel>
+                        <CheckBox Grid.Column="1" VerticalAlignment="Center"
+                                  Style="{StaticResource ToggleSwitch}"
+                                  IsChecked="{Binding DisableMicEnhancements, Mode=TwoWay}"/>
+                    </Grid>
+                    <TextBlock Text="⟳  Needs a full restart to take effect."
+                               Style="{StaticResource CaptionText}" Foreground="{StaticResource AccentYellowBrush}" Margin="0,8,0,0"/>
+                    <TextBlock Text="↻  Stays enforced. If a mic reconnects with processing back on, Systema turns it off again on its own."
+                               Style="{StaticResource CaptionText}" Foreground="{StaticResource AccentGreenBrush}" TextWrapping="Wrap" Margin="0,4,0,0"/>
+                </StackPanel>
+            </Border>
+
             <TextBlock Text="{Binding StatusMessage}" Style="{StaticResource CaptionText}"
                        Foreground="{StaticResource AccentGreenBrush}" TextWrapping="Wrap" Margin="2,12,0,0"/>
 

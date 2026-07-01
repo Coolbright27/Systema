@@ -13,6 +13,7 @@
 // ════════════════════════════════════════════════════════════════════════════
 
 using System.Drawing;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
 
@@ -188,16 +189,32 @@ public sealed class TrayService : IDisposable
 
     private static Icon LoadIcon()
     {
+        // Primary: the icon embedded in this assembly. It always matches the current build and has no
+        // file-path dependency. (The single-file deployment doesn't place a loose logo.ico next to the
+        // exe, and an old copy can linger in {app}\Assets — reading that file showed a stale tray icon.)
         try
         {
-            // Try to load the application's own icon
+            var asm = Assembly.GetExecutingAssembly();
+            var resName = Array.Find(asm.GetManifestResourceNames(),
+                n => n.EndsWith("logo.ico", StringComparison.OrdinalIgnoreCase));
+            if (resName != null)
+            {
+                using var s = asm.GetManifestResourceStream(resName);
+                if (s != null) return new Icon(s, SystemInformation.SmallIconSize);
+            }
+        }
+        catch { /* fall through to the on-disk copy */ }
+
+        // Fallback: a logo.ico deployed next to the app.
+        try
+        {
             string iconPath = Path.Combine(AppContext.BaseDirectory, "Assets", "logo.ico");
             if (File.Exists(iconPath))
                 return new Icon(iconPath);
         }
         catch { /* fall through to system icon */ }
 
-        // Fallback: use a standard system icon
+        // Last resort: a standard system icon.
         return SystemIcons.Application;
     }
 

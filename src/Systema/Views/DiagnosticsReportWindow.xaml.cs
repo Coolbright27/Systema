@@ -262,7 +262,7 @@ public partial class DiagnosticsReportWindow : Window
     {
         try
         {
-            Process.Start(new ProcessStartInfo("https://discord.gg/DjxBswDeN8")
+            Process.Start(new ProcessStartInfo("https://discord.gg/yYhM7mdupH")
             {
                 UseShellExecute = true
             });

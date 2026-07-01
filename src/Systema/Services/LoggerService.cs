@@ -187,7 +187,7 @@ public class LoggerService
         sb.AppendLine(GetRecentLog(60));
         sb.AppendLine();
         sb.AppendLine("══════════════════════════════════════════════════════════════");
-        sb.AppendLine("Please send this file to the Systema Discord: https://discord.gg/DjxBswDeN8");
+        sb.AppendLine("Please send this file to the Systema Discord: https://discord.gg/yYhM7mdupH");
         sb.AppendLine("══════════════════════════════════════════════════════════════");
 
         return sb.ToString();
@@ -365,7 +365,7 @@ public class LoggerService
         // ── Footer ───────────────────────────────────────────────────────────
         sb.AppendLine("══════════════════════════════════════════════════════════════");
         sb.AppendLine("Please paste this report in the Systema Discord:");
-        sb.AppendLine("  https://discord.gg/DjxBswDeN8");
+        sb.AppendLine("  https://discord.gg/yYhM7mdupH");
         sb.AppendLine("══════════════════════════════════════════════════════════════");
 
         return sb.ToString();
