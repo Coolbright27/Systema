@@ -80,7 +80,8 @@
                        Style="{StaticResource CaptionText}" Margin="0,4,0,20"/>
 
             <!-- ══════════════════════════════ Visual style picker ══════════════════════════════ -->
-            <TextBlock Text="Visual style" Style="{StaticResource SectionLabel}" Margin="2,0,0,10"/>
+            <TextBlock Text="Visual style" Style="{StaticResource SectionLabel}"
+                       FontWeight="Bold" FontSize="13" Margin="2,0,0,10"/>
             <Grid Margin="0,0,0,24">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
@@ -162,9 +163,13 @@
                         <StackPanel Grid.Column="0" Margin="0,0,24,0">
                             <TextBlock Text="Performance mode" Style="{StaticResource HeadingMedium}" Margin="0,0,0,4"/>
                             <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap">
-                                Keeps your CPU at full speed — no throttling during gaming or heavy work.
+                                Keeps your CPU at full speed with no throttling during gaming or heavy work.
                                 Automatically restores every time you plug back in after running on battery.
                             </TextBlock>
+                            <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,6,0,0"
+                                       Foreground="{StaticResource AccentYellowBrush}"
+                                       Visibility="{Binding HasBattery, Converter={StaticResource BoolToVis}}"
+                                       Text="On a laptop, running at full speed can make it warmer and use more battery."/>
                         </StackPanel>
                         <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                             <TextBlock VerticalAlignment="Center" Margin="0,0,10,0" FontSize="13">
@@ -220,7 +225,7 @@
                         </Border>
                     </StackPanel>
                     <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,0,0,14">
-                        Limits CPU speed on battery only — plugged-in performance is always unchanged.
+                        Choose how your CPU behaves on battery. Plugged-in performance is always unchanged.
                     </TextBlock>
 
                     <!-- Off · Balanced no turbo · Max life segmented control -->
@@ -228,6 +233,20 @@
                             Background="{StaticResource BgSurfaceBrush}"
                             BorderBrush="{StaticResource BorderBrush}" BorderThickness="1">
                         <StackPanel Orientation="Horizontal">
+                            <!-- Shown only when Performance Mode is on: keep full speed on battery too. -->
+                            <Button Command="{Binding SetBatteryModeCommand}" CommandParameter="performance" Content="Performance"
+                                    Visibility="{Binding PerformanceModeEnabled, Converter={StaticResource BoolToVis}}">
+                                <Button.Style>
+                                    <Style TargetType="Button" BasedOn="{StaticResource BatterySegment}">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding ActiveBatteryMode}" Value="performance">
+                                                <Setter Property="Background" Value="#3341C77A"/>
+                                                <Setter Property="Foreground" Value="{StaticResource AccentGreenBrush}"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Button.Style>
+                            </Button>
                             <Button Command="{Binding SetBatteryModeCommand}" CommandParameter="" Content="Off">
                                 <Button.Style>
                                     <Style TargetType="Button" BasedOn="{StaticResource BatterySegment}">
@@ -271,8 +290,11 @@
                     <TextBlock TextWrapping="Wrap" Margin="2,12,0,0">
                         <TextBlock.Style>
                             <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionText}">
-                                <Setter Property="Text" Value="No limits — full performance all the time."/>
+                                <Setter Property="Text" Value="No limits. Full performance all the time."/>
                                 <Style.Triggers>
+                                    <DataTrigger Binding="{Binding ActiveBatteryMode}" Value="performance">
+                                        <Setter Property="Text" Value="Runs at full speed on battery too. Expect more heat and shorter battery life."/>
+                                    </DataTrigger>
                                     <DataTrigger Binding="{Binding ActiveBatteryMode}" Value="balanced">
                                         <Setter Property="Text" Value="Stops turbo-boost while on battery. Plugged-in performance unchanged."/>
                                     </DataTrigger>

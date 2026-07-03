@@ -353,6 +353,26 @@ public partial class App : Application
                 catch (Exception ex) { Log.Warn("App", $"Win11 nag reinforcement failed: {ex.Message}"); }
             });
 
+            // ── Sleep → Hibernate reinforcement ──
+            // A Windows Update, a power-plan switch, or an OEM power tool can wipe the HIBERNATEIDLE
+            // timeout, so the setting "stops working" until the user re-toggles it. Re-assert the saved
+            // choice on every launch (only when it's on) so it survives reboots and plan resets. Delayed
+            // off the critical startup path.
+            if (settingsService.SleepToHibernateEnabled || settingsService.SleepToHibernateAcEnabled)
+            {
+                _ = System.Threading.Tasks.Task.Run(async () =>
+                {
+                    try
+                    {
+                        await System.Threading.Tasks.Task.Delay(15_000);
+                        await stabilityService.ReinforceSleepToHibernateAsync(
+                            settingsService.SleepToHibernateEnabled,   settingsService.SleepToHibernateMinutes,
+                            settingsService.SleepToHibernateAcEnabled, settingsService.SleepToHibernateAcMinutes);
+                    }
+                    catch (Exception ex) { Log.Warn("App", $"Sleep-to-Hibernate reinforcement failed: {ex.Message}"); }
+                });
+            }
+
             // ── First-run defaults ──
             // Enable "Start with Windows" automatically on first launch so the app
             // is available in the background without the user having to opt-in.
@@ -461,6 +481,45 @@ public partial class App : Application
             {
                 graphicsTweaks.StartTimerResolutionHold();
                 Log.Info("App", "Started 0.5 ms timer-resolution hold (user opted in).");
+            }
+
+            // ── One-time seed: adopt already-applied disable tweaks as intent ──
+            // For users who set MPO / TdrDelay / Game DVR before reinforcement existed, adopt those
+            // deliberately-tweaked states as their saved intent once, so they get reinforced without a
+            // re-toggle. Only the clear non-default "disable/extend" states are seeded — HAGS and
+            // windowed-opts are left unarmed until the user explicitly flips them (they're on/off mirrors
+            // of Windows' own settings, so we don't want to adopt a plain default as "intent").
+            if (!settingsService.GraphicsIntentSeeded)
+            {
+                if (graphicsTweaks.IsMpoDisabled())      settingsService.GraphicsMpoDisabled     = true;
+                if (graphicsTweaks.IsTdrDelayExtended()) settingsService.GraphicsTdrExtended     = true;
+                if (graphicsTweaks.IsGameDvrDisabled())  settingsService.GraphicsGameDvrDisabled = true;
+                settingsService.GraphicsIntentSeeded = true;
+                Log.Info("App", "Seeded graphics disable-tweak intents from current state (first run).");
+            }
+
+            // ── Graphics tweaks reinforcement ──
+            // A GPU driver update or Windows feature update can silently reset MPO / HAGS / TdrDelay, and
+            // Windows re-enables Game DVR — so a toggle the user set "stops working" until they re-toggle
+            // it. Re-assert only the choices the user actually made, and only when the live value drifted
+            // (never on a fresh install). MPO/TdrDelay are left to Auto-Pilot while it's on. Delayed off
+            // the critical startup path.
+            if (settingsService.GraphicsMpoDisabled || settingsService.GraphicsTdrExtended
+                || settingsService.GraphicsGameDvrDisabled || settingsService.GraphicsHagsPref >= 0
+                || settingsService.GraphicsWindowedOptPref >= 0)
+            {
+                _ = System.Threading.Tasks.Task.Run(async () =>
+                {
+                    try
+                    {
+                        await System.Threading.Tasks.Task.Delay(18_000);
+                        graphicsTweaks.ReinforceGraphicsFromIntent(
+                            settingsService.GraphicsMpoDisabled,   settingsService.GraphicsHagsPref,
+                            settingsService.GraphicsTdrExtended,   settingsService.GraphicsWindowedOptPref,
+                            settingsService.GraphicsGameDvrDisabled, settingsService.AutoPilotModeEnabled);
+                    }
+                    catch (Exception ex) { Log.Warn("App", $"Graphics reinforcement failed: {ex.Message}"); }
+                });
             }
 
             Log.Info("App", "All ViewModels constructed");

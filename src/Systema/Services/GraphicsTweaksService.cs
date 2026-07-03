@@ -63,7 +63,13 @@ public class GraphicsTweaksService
             if (key == null) return TweakResult.Fail("Could not open the DWM key (run as Administrator).");
             if (disable) key.SetValue("OverlayTestMode", 5, RegistryValueKind.DWord);
             else         key.DeleteValue("OverlayTestMode", throwOnMissingValue: false); // restore Windows default
-            Log.Info("GraphicsTweaks", $"MPO {(disable ? "disabled (OverlayTestMode=5)" : "restored to default")}");
+            // Verify the registry actually reflects the change (a group policy or driver tool can reject it).
+            bool now = key.GetValue("OverlayTestMode") is int v && v == 5;
+            if (now != disable)
+                return TweakResult.Fail(disable
+                    ? "Couldn't disable Multi-Plane Overlay (the value didn't stick). A driver tool or policy may control it."
+                    : "Couldn't restore Multi-Plane Overlay to default (the value didn't clear).");
+            Log.Info("GraphicsTweaks", $"MPO {(disable ? "disabled (OverlayTestMode=5)" : "restored to default")} — verified");
             return TweakResult.Ok(disable
                 ? "Multi-Plane Overlay disabled. Restart your PC to apply."
                 : "Multi-Plane Overlay restored to the Windows default. Restart your PC to apply.");
@@ -104,7 +110,10 @@ public class GraphicsTweaksService
             using var key = Registry.LocalMachine.CreateSubKey(GfxDrvKey, writable: true);
             if (key == null) return TweakResult.Fail("Could not open the GraphicsDrivers key (run as Administrator).");
             key.SetValue("HwSchMode", enable ? 2 : 1, RegistryValueKind.DWord);
-            Log.Info("GraphicsTweaks", $"HAGS {(enable ? "enabled (HwSchMode=2)" : "disabled (HwSchMode=1)")}");
+            bool now = key.GetValue("HwSchMode") is int v && v == 2;
+            if (now != enable)
+                return TweakResult.Fail("Couldn't change GPU scheduling (the value didn't stick). A driver tool or policy may control it.");
+            Log.Info("GraphicsTweaks", $"HAGS {(enable ? "enabled (HwSchMode=2)" : "disabled (HwSchMode=1)")} — verified");
             return TweakResult.Ok($"Hardware-accelerated GPU scheduling {(enable ? "enabled" : "disabled")}. Restart your PC to apply.");
         }
         catch (Exception ex) { Log.Error("GraphicsTweaks", "SetHags failed", ex); return TweakResult.FromException(ex); }
@@ -140,7 +149,12 @@ public class GraphicsTweaksService
             if (key == null) return TweakResult.Fail("Could not open the GraphicsDrivers key (run as Administrator).");
             if (extend) key.SetValue("TdrDelay", TdrDelaySeconds, RegistryValueKind.DWord);
             else        key.DeleteValue("TdrDelay", throwOnMissingValue: false); // restore Windows default (~2s)
-            Log.Info("GraphicsTweaks", $"TdrDelay {(extend ? $"set to {TdrDelaySeconds}s" : "removed (restored default)")}");
+            bool now = key.GetValue("TdrDelay") is int v && v == TdrDelaySeconds;
+            if (now != extend)
+                return TweakResult.Fail(extend
+                    ? "Couldn't extend the GPU recovery timeout (the value didn't stick)."
+                    : "Couldn't restore the GPU recovery timeout to default (the value didn't clear).");
+            Log.Info("GraphicsTweaks", $"TdrDelay {(extend ? $"set to {TdrDelaySeconds}s" : "removed (restored default)")} — verified");
             return TweakResult.Ok(extend
                 ? $"GPU recovery timeout extended to {TdrDelaySeconds} seconds. Restart your PC to apply."
                 : "GPU recovery timeout restored to the Windows default. Restart your PC to apply.");
@@ -173,7 +187,10 @@ public class GraphicsTweaksService
             string cur = key.GetValue(GpuPrefValue) as string ?? "";
             string updated = UpsertToken(cur, "SwapEffectUpgradeEnable", enable ? "1" : "0");
             key.SetValue(GpuPrefValue, updated, RegistryValueKind.String);
-            Log.Info("GraphicsTweaks", $"Windowed-game optimizations {(enable ? "enabled" : "disabled")} (\"{updated}\")");
+            bool now = ParseToken(key.GetValue(GpuPrefValue) as string ?? "", "SwapEffectUpgradeEnable") == "1";
+            if (now != enable)
+                return TweakResult.Fail("Couldn't change windowed-game optimizations (the value didn't stick).");
+            Log.Info("GraphicsTweaks", $"Windowed-game optimizations {(enable ? "enabled" : "disabled")} (\"{updated}\") — verified");
             return TweakResult.Ok($"Optimizations for windowed games {(enable ? "enabled" : "disabled")}. Restart any open games to apply.");
         }
         catch (Exception ex) { Log.Error("GraphicsTweaks", "SetWindowedOptimizations failed", ex); return TweakResult.FromException(ex); }
@@ -326,12 +343,51 @@ public class GraphicsTweaksService
                 gcs?.SetValue("GameDVR_Enabled", disable ? 0 : 1, RegistryValueKind.DWord);
             using (var gdvr = Registry.CurrentUser.CreateSubKey(GameDvrKey, writable: true))
                 gdvr?.SetValue("AppCaptureEnabled", disable ? 0 : 1, RegistryValueKind.DWord);
-            Log.Info("GraphicsTweaks", $"Game DVR capture {(disable ? "disabled" : "enabled")} (GameDVR_Enabled={(disable ? 0 : 1)})");
+            // Verify the primary switch took (GameDVR_Enabled is the one Windows and games read).
+            using (var chk = Registry.CurrentUser.OpenSubKey(GameConfigStoreKey))
+            {
+                bool now = chk?.GetValue("GameDVR_Enabled") is int v && v == 0;
+                if (now != disable)
+                    return TweakResult.Fail("Couldn't change Game Bar background capture (the value didn't stick).");
+            }
+            Log.Info("GraphicsTweaks", $"Game DVR capture {(disable ? "disabled" : "enabled")} (GameDVR_Enabled={(disable ? 0 : 1)}) — verified");
             return TweakResult.Ok(disable
                 ? "Game Bar background capture turned off — less overhead while gaming. Restart any open games to apply."
                 : "Game Bar background capture restored to the Windows default. Restart any open games to apply.");
         }
         catch (Exception ex) { Log.Error("GraphicsTweaks", "SetGameDvrDisabled failed", ex); return TweakResult.FromException(ex); }
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    //  Reinforcement — re-assert the user's saved graphics choices
+    // ════════════════════════════════════════════════════════════════════════
+    // A GPU driver update or Windows feature update can reset HwSchMode / OverlayTestMode / TdrDelay,
+    // and Windows re-enables Game DVR after some updates. This re-applies ONLY the choices the user
+    // explicitly made, and ONLY when the live value has actually drifted off it — never on a fresh
+    // install and never a redundant write. MPO and TdrDelay are Auto-Pilot-managed, so when Auto-Pilot
+    // is on we leave those to it. hagsPref / windowedPref: -1 = no preference (skip).
+
+    /// <summary>Re-asserts drifted graphics tweaks the user set. Safe to call on every launch.</summary>
+    public void ReinforceGraphicsFromIntent(bool mpoDisabled, int hagsPref, bool tdrExtended,
+                                            int windowedPref, bool gameDvrDisabled, bool autoPilotActive)
+    {
+        try
+        {
+            if (!autoPilotActive)
+            {
+                if (mpoDisabled && !IsMpoDisabled())
+                    Log.Info("GraphicsTweaks", $"MPO reinforced on drift: {SetMpoDisabled(true).Message}");
+                if (tdrExtended && !IsTdrDelayExtended())
+                    Log.Info("GraphicsTweaks", $"TdrDelay reinforced on drift: {SetTdrDelayExtended(true).Message}");
+            }
+            if (gameDvrDisabled && !IsGameDvrDisabled())
+                Log.Info("GraphicsTweaks", $"Game DVR reinforced on drift: {SetGameDvrDisabled(true).Message}");
+            if (hagsPref >= 0 && IsHagsSupported() && IsHagsEnabled() != (hagsPref == 1))
+                Log.Info("GraphicsTweaks", $"HAGS reinforced on drift: {SetHags(hagsPref == 1).Message}");
+            if (windowedPref >= 0 && IsWindowedOptimizationsEnabled() != (windowedPref == 1))
+                Log.Info("GraphicsTweaks", $"Windowed optimizations reinforced on drift: {SetWindowedOptimizations(windowedPref == 1).Message}");
+        }
+        catch (Exception ex) { Log.Warn("GraphicsTweaks", $"ReinforceGraphicsFromIntent failed: {ex.Message}"); }
     }
 
     // ── DirectXUserGlobalSettings token helpers ("Key1=Val1;Key2=Val2;") ───────

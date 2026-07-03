@@ -1091,8 +1091,13 @@ public class SystemStabilityService
         {
             int seconds = minutes * 60;
 
-            // Ensure hibernate file is present (needed for the idle timer to fire).
-            RunPowercfg("/hibernate on");
+            // Ensure hibernate is on. The idle timer can only fire if the PC can hibernate at all —
+            // if it can't, tell the user plainly instead of silently doing nothing.
+            var (hibCode, _) = RunPowercfg("/hibernate on");
+            if (hibCode != 0 || !IsHibernateAvailable())
+                return TweakResult.Fail(
+                    "This PC can't hibernate, so Sleep → Hibernate can't work here. " +
+                    "That's a firmware or driver limitation, not a Systema setting.");
 
             // Disable Hybrid Sleep on battery — if it's on the HIBERNATEIDLE timer
             // is ignored because the system wakes straight from the combined state.
@@ -1218,7 +1223,11 @@ public class SystemStabilityService
         try
         {
             int seconds = minutes * 60;
-            RunPowercfg("/hibernate on");
+            var (hibCode, _) = RunPowercfg("/hibernate on");
+            if (hibCode != 0 || !IsHibernateAvailable())
+                return TweakResult.Fail(
+                    "This PC can't hibernate, so Sleep → Hibernate can't work here. " +
+                    "That's a firmware or driver limitation, not a Systema setting.");
             RunPowercfg("/setacvalueindex SCHEME_CURRENT SUB_SLEEP HYBRIDSLEEP 0");
             RunPowercfg($"/setacvalueindex SCHEME_CURRENT SUB_SLEEP HIBERNATEIDLE {seconds}");
             RunPowercfg("/setactive SCHEME_CURRENT");
@@ -1273,6 +1282,29 @@ public class SystemStabilityService
         }
     });
 
+    /// <summary>Re-asserts the user's saved Sleep → Hibernate choice when the live power setting has
+    /// drifted off. A Windows Update, a power-plan switch, or an OEM tool can wipe HIBERNATEIDLE, which
+    /// is why the toggle "sometimes stops working." Only ever re-applies an intent that is ON, and only
+    /// when the current value doesn't already match, so it never forces the feature off. Called on
+    /// startup and on the System Tweaks refresh.</summary>
+    public async Task ReinforceSleepToHibernateAsync(bool dcEnabled, int dcMinutes, bool acEnabled, int acMinutes)
+    {
+        try
+        {
+            if (dcEnabled && (!IsSleepToHibernateEnabled() || GetSleepToHibernateMinutes() != dcMinutes))
+            {
+                var r = await EnableSleepToHibernateAsync(dcMinutes);
+                Log.Info("SystemStability", $"Sleep → Hibernate (battery) reinforced on drift: {r.Message}");
+            }
+            if (acEnabled && (!IsSleepToHibernateAcEnabled() || GetSleepToHibernateAcMinutes() != acMinutes))
+            {
+                var r = await EnableSleepToHibernateAcAsync(acMinutes);
+                Log.Info("SystemStability", $"Sleep → Hibernate (AC) reinforced on drift: {r.Message}");
+            }
+        }
+        catch (Exception ex) { Log.Warn("SystemStability", $"ReinforceSleepToHibernate failed: {ex.Message}"); }
+    }
+
     /// <summary>
     /// Parses the "Current AC Power Setting Index: 0x..." line from powercfg /query output.
     /// Returns 0 on parse failure.
@@ -1325,11 +1357,36 @@ public class SystemStabilityService
             UseShellExecute        = false,
             CreateNoWindow         = true,
             RedirectStandardOutput = true,
+            RedirectStandardError  = true,
         };
         using var proc = Process.Start(psi)!;
         string output = proc.StandardOutput.ReadToEnd();
+        string error  = proc.StandardError.ReadToEnd();
         proc.WaitForExit(10_000);
-        return (proc.HasExited ? proc.ExitCode : -1, output.Trim());
+        int code = proc.HasExited ? proc.ExitCode : -1;
+        // powercfg writes rejection reasons (group policy, protected setting, bad alias) to stderr and a
+        // non-zero exit code. Surfacing them turns a silent no-op into something we can see and report.
+        if (code != 0 && !string.IsNullOrWhiteSpace(error))
+            Log.Warn("SystemStability", $"powercfg {args} exited {code}: {error.Trim()}");
+        return (code, output.Trim());
+    }
+
+    /// <summary>True when this PC can actually hibernate. If it can't, Sleep → Hibernate cannot work no
+    /// matter what timeout we set (a firmware/driver limitation). Best-effort: never blocks on a parse
+    /// failure, so a machine that CAN hibernate is never wrongly refused.</summary>
+    private static bool IsHibernateAvailable()
+    {
+        try
+        {
+            var (_, output) = RunPowercfg("/availablesleepstates");
+            if (string.IsNullOrWhiteSpace(output)) return true;
+            int hibIdx = output.IndexOf("Hibernate", StringComparison.OrdinalIgnoreCase);
+            if (hibIdx < 0) return true;   // word not present at all — don't block
+            int notIdx = output.IndexOf("not available", StringComparison.OrdinalIgnoreCase);
+            // "Hibernate" listed in the available section (before the "not available" heading) = supported.
+            return notIdx < 0 || hibIdx < notIdx;
+        }
+        catch { return true; }
     }
 
     private static (int ExitCode, string Output) RunFsutil(string args)

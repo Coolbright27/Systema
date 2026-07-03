@@ -198,11 +198,27 @@ public partial class ToolsViewModel : ObservableObject, IAutoRefreshable, IDispo
             }
 
             bool hasBattery        = await Task.Run(() => _stability.HasBattery());
+
+            // Sleep → Hibernate (battery): reflect actual powercfg state, and auto-heal — if the saved
+            // preference is ON but Windows or the power plan wiped it, silently re-apply so it sticks.
             bool sleepHibernateOn  = await Task.Run(() => _stability.IsSleepToHibernateEnabled());
+            if (!sleepHibernateOn && _settings.SleepToHibernateEnabled && !IsSleepToHibernateLoading)
+            {
+                _log.Info("ToolsViewModel", "Sleep → Hibernate (battery) drifted off — re-applying (auto-heal)");
+                var heal = await _stability.EnableSleepToHibernateAsync(_settings.SleepToHibernateMinutes);
+                sleepHibernateOn = heal.Success;
+            }
             int  sleepHibMinutes   = sleepHibernateOn
                 ? await Task.Run(() => _stability.GetSleepToHibernateMinutes())
                 : _settings.SleepToHibernateMinutes;
+
             bool sleepHibAcOn      = await Task.Run(() => _stability.IsSleepToHibernateAcEnabled());
+            if (!sleepHibAcOn && _settings.SleepToHibernateAcEnabled && !IsSleepToHibernateAcLoading)
+            {
+                _log.Info("ToolsViewModel", "Sleep → Hibernate (AC) drifted off — re-applying (auto-heal)");
+                var heal = await _stability.EnableSleepToHibernateAcAsync(_settings.SleepToHibernateAcMinutes);
+                sleepHibAcOn = heal.Success;
+            }
             int  sleepHibAcMinutes = sleepHibAcOn
                 ? await Task.Run(() => _stability.GetSleepToHibernateAcMinutes())
                 : _settings.SleepToHibernateAcMinutes;

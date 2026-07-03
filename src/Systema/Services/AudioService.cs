@@ -250,15 +250,19 @@ public class AudioService
                 catch (Exception ex) { fail++; Log.Warn("Audio", $"enh write {id} failed: {ex.Message}"); }
             }
 
-            // Empty the ENTIRE effect chain (both property sets, any slot) so no APO loads at all
-            // (Realtek/Waves/Nahimic included).
+            // Empty the ENTIRE effect chain (both property sets, both forms, any slot) so no APO loads at
+            // all (Realtek/Waves/Nahimic included).
             int fxChanged = 0;
             if (sys != null) foreach (var id in ids) fxChanged += ClearAllFx(devicesKey, fxSavePrefix, id, sys);
 
-            Log.Info("Audio", $"{noun} disabled: {ok} verified, {fail} failed");
+            // Verify the clear actually took: read back and confirm nothing is left registered.
+            bool anyLeft = AnyFxPresent(devicesKey);
+
+            Log.Info("Audio", $"{noun} disabled: {ok} verified, {fail} failed, effect-chain clean={(!anyLeft)}");
             if (ok == 0) return TweakResult.Fail("Windows blocked the change on every device.");
             string m = $"{noun} disabled on {ok} device{(ok == 1 ? "" : "s")} (verified).";
             if (fxChanged > 0) m += " Cleared the effect chain (incl. Realtek/Waves) too.";
+            if (anyLeft) m += " Note: one device kept an effect Windows won't let us clear.";
             m += " Restart your PC to apply.";
             if (fail > 0) m += $" ({fail} couldn't be changed.)";
             return TweakResult.Ok(m);
@@ -418,11 +422,10 @@ public class AudioService
                     // New saves store the FULL value name ("{guid},pid"); older saves stored a bare pid
                     // (always the plain {d04e05a6...} set). Support both so prior saves still restore.
                     var valueName = suffix.Contains(',') ? suffix : $"{FxCompositeFmtId},{suffix}";
-                    if (sys.GetValue(name) is string[] saved)
-                    {
-                        using var fw = OpenEndpointFxWritable(devicesKey, id);
-                        fw?.SetValue(valueName, saved, RegistryValueKind.MultiString);
-                    }
+                    var saved = sys.GetValue(name);
+                    using var fw = OpenEndpointFxWritable(devicesKey, id);
+                    if (saved is string[] arr)      fw?.SetValue(valueName, arr, RegistryValueKind.MultiString);
+                    else if (saved is string str)   fw?.SetValue(valueName, str, RegistryValueKind.String);
                 }
             }
             catch (Exception ex) { Log.Warn("Audio", $"RestoreVendorApos {name} failed: {ex.Message}"); }
@@ -430,10 +433,12 @@ public class AudioService
         }
     }
 
-    /// <summary>Empties EVERY effect-CLSID list on the endpoint across BOTH property sets (plain
-    /// {d04e05a6...} and composite {d3993a3f...}), whatever slot it's in (drivers vary: ,13/14/15/19/20
-    /// on speakers, ,17 on mics, and ,5/6/7/9/11/12 for vendor composite chains), so no APO loads at all
-    /// — a fully raw signal. Saves each original (keyed by full value name) for an exact restore.</summary>
+    /// <summary>Nulls EVERY effect-CLSID registration on the endpoint across BOTH property sets (plain
+    /// {d04e05a6...} and composite {d3993a3f...}), in BOTH forms: the MultiString list form (e.g. ,13/14/
+    /// 15/19/20 on speakers, ,17 on mics, ,5/6/7/9/11/12 for composite chains) AND the single-CLSID String
+    /// form (e.g. ,5 = WM LFX / ,6 = WM GFX / ,7 = effect proxy), so no APO is registered to load at all —
+    /// a fully raw signal. The spatial slot (,3) is left alone; that's the spatial toggle's job. Saves
+    /// each original (keyed by full value name) for an exact restore.</summary>
     private int ClearAllFx(string devicesKey, string fxSavePrefix, string id, RegistryKey sys)
     {
         int changed = 0;
@@ -446,21 +451,37 @@ public class AudioService
             foreach (var name in fxRO.GetValueNames())
             {
                 if (!IsFxListName(name)) continue;
-                if (fxRO.GetValueKind(name) != RegistryValueKind.MultiString) continue;   // skip single-String values
-                if (ReadList(fxRO, name).Length == 0) continue;
-                // Save under the FULL value name so the two property sets round-trip without colliding.
-                var saveName = $"{fxSavePrefix}{id}__{name}";
-                if (sys.GetValue(saveName) == null) sys.SetValue(saveName, ReadList(fxRO, name), RegistryValueKind.MultiString);
-                fw.SetValue(name, Array.Empty<string>(), RegistryValueKind.MultiString);
-                changed++;
+                if (FxPid(name) == "3") continue;   // spatial EFX — owned by the spatial toggle, not enhancements
+                var saveName = $"{fxSavePrefix}{id}__{name}";   // full value name so both property sets round-trip
+                var kind = fxRO.GetValueKind(name);
+                if (kind == RegistryValueKind.MultiString)
+                {
+                    if (ReadList(fxRO, name).Length == 0) continue;
+                    if (sys.GetValue(saveName) == null) sys.SetValue(saveName, ReadList(fxRO, name), RegistryValueKind.MultiString);
+                    fw.SetValue(name, Array.Empty<string>(), RegistryValueKind.MultiString);
+                    changed++;
+                }
+                else if (kind == RegistryValueKind.String)
+                {
+                    var cur = fxRO.GetValue(name) as string ?? "";
+                    if (cur.Length == 0 || cur.Equals(NullClsid, StringComparison.OrdinalIgnoreCase)) continue;
+                    if (sys.GetValue(saveName) == null) sys.SetValue(saveName, cur, RegistryValueKind.String);
+                    fw.SetValue(name, NullClsid, RegistryValueKind.String);
+                    changed++;
+                }
             }
         }
         catch (Exception ex) { Log.Warn("Audio", $"ClearAllFx {id} failed: {ex.Message}"); }
         return changed;
     }
 
-    /// <summary>True if any active endpoint in the class still has a non-empty effect list (any slot).
-    /// Used as the drift check for the clear-everything path (outputs and mics).</summary>
+    /// <summary>The pid (part after the last comma) of a "{guid},pid" FxProperties value name.</summary>
+    private static string FxPid(string name) => name.Substring(name.LastIndexOf(',') + 1);
+
+    /// <summary>True if any active endpoint still has an effect registered — in either form (a non-empty
+    /// MultiString list, or a non-null single-CLSID String), in either property set, in any slot except
+    /// the spatial one (,3). This is the drift check for the clear-everything path (outputs and mics), so
+    /// a reconnected device that came back with effects — list OR single-CLSID — gets re-cleared.</summary>
     private bool AnyFxPresent(string devicesKey)
     {
         foreach (var id in GetActiveEndpointIds(devicesKey))
@@ -472,8 +493,14 @@ public class AudioService
                 foreach (var name in fxRO.GetValueNames())
                 {
                     if (!IsFxListName(name)) continue;
-                    if (fxRO.GetValueKind(name) != RegistryValueKind.MultiString) continue;
-                    if (ReadList(fxRO, name).Length > 0) return true;
+                    if (FxPid(name) == "3") continue;   // spatial slot — tracked separately
+                    var kind = fxRO.GetValueKind(name);
+                    if (kind == RegistryValueKind.MultiString && ReadList(fxRO, name).Length > 0) return true;
+                    if (kind == RegistryValueKind.String)
+                    {
+                        var cur = fxRO.GetValue(name) as string ?? "";
+                        if (cur.Length > 0 && !cur.Equals(NullClsid, StringComparison.OrdinalIgnoreCase)) return true;
+                    }
                 }
             }
             catch { /* ignore one endpoint */ }

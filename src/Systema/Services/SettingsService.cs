@@ -86,6 +86,55 @@ public class SettingsService
         set => WriteBool(nameof(CoreParkingEnabled), value);
     }
 
+    // ── Graphics tweaks (re-asserted on launch when the user set them) ─────────
+    // A GPU driver update or Windows feature update can silently reset these, so we remember the
+    // user's explicit choice and re-apply it on launch only when the live value has drifted off.
+    // The on/off mirrors (HAGS, windowed opts) use -1 to mean "no preference / never touched".
+
+    /// <summary>User asked to disable Multi-Plane Overlay. Default false (no preference).</summary>
+    public bool GraphicsMpoDisabled
+    {
+        get => ReadBool(nameof(GraphicsMpoDisabled), defaultValue: false);
+        set => WriteBool(nameof(GraphicsMpoDisabled), value);
+    }
+
+    /// <summary>User asked to extend the GPU recovery timeout (TdrDelay). Default false.</summary>
+    public bool GraphicsTdrExtended
+    {
+        get => ReadBool(nameof(GraphicsTdrExtended), defaultValue: false);
+        set => WriteBool(nameof(GraphicsTdrExtended), value);
+    }
+
+    /// <summary>User asked to turn off Game DVR / Game Bar background capture. Default false.</summary>
+    public bool GraphicsGameDvrDisabled
+    {
+        get => ReadBool(nameof(GraphicsGameDvrDisabled), defaultValue: false);
+        set => WriteBool(nameof(GraphicsGameDvrDisabled), value);
+    }
+
+    /// <summary>HAGS preference: -1 none, 0 off, 1 on. Default -1 (never touched).</summary>
+    public int GraphicsHagsPref
+    {
+        get => ReadInt(nameof(GraphicsHagsPref), defaultValue: -1);
+        set => WriteInt(nameof(GraphicsHagsPref), value);
+    }
+
+    /// <summary>Windowed-game optimizations preference: -1 none, 0 off, 1 on. Default -1.</summary>
+    public int GraphicsWindowedOptPref
+    {
+        get => ReadInt(nameof(GraphicsWindowedOptPref), defaultValue: -1);
+        set => WriteInt(nameof(GraphicsWindowedOptPref), value);
+    }
+
+    /// <summary>One-time flag: on first launch after reinforcement shipped we adopt the user's
+    /// already-applied disable tweaks (MPO/TdrDelay/Game DVR) as intent so they get reinforced without
+    /// a re-toggle. Set true once done.</summary>
+    public bool GraphicsIntentSeeded
+    {
+        get => ReadBool(nameof(GraphicsIntentSeeded), defaultValue: false);
+        set => WriteBool(nameof(GraphicsIntentSeeded), value);
+    }
+
     // ── Windows Update tweaks ─────────────────────────────────────────────────
 
     /// <summary>Persists whether the user has enabled blocking of Windows preview updates.</summary>

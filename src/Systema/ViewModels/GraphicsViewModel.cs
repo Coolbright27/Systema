@@ -91,7 +91,8 @@ public partial class GraphicsViewModel : ObservableObject, IAutoRefreshable, IDi
         if (IsAutoPilotActive) { _loading = true; DisableMpo = !value; _loading = false; return; }
         var r = _gfx.SetMpoDisabled(value);
         StatusMessage = r.Message;
-        if (!r.Success) { _loading = true; DisableMpo = !value; _loading = false; }
+        if (r.Success) _settings.GraphicsMpoDisabled = value;   // remember the choice so launch can re-assert it
+        else { _loading = true; DisableMpo = !value; _loading = false; }
     }
 
     partial void OnHardwareGpuSchedulingChanged(bool value)
@@ -99,7 +100,8 @@ public partial class GraphicsViewModel : ObservableObject, IAutoRefreshable, IDi
         if (_loading) return;
         var r = _gfx.SetHags(value);
         StatusMessage = r.Message;
-        if (!r.Success) { _loading = true; HardwareGpuScheduling = !value; _loading = false; }
+        if (r.Success) _settings.GraphicsHagsPref = value ? 1 : 0;
+        else { _loading = true; HardwareGpuScheduling = !value; _loading = false; }
     }
 
     partial void OnWindowedOptimizationsChanged(bool value)
@@ -107,7 +109,8 @@ public partial class GraphicsViewModel : ObservableObject, IAutoRefreshable, IDi
         if (_loading) return;
         var r = _gfx.SetWindowedOptimizations(value);
         StatusMessage = r.Message;
-        if (!r.Success) { _loading = true; WindowedOptimizations = !value; _loading = false; }
+        if (r.Success) _settings.GraphicsWindowedOptPref = value ? 1 : 0;
+        else { _loading = true; WindowedOptimizations = !value; _loading = false; }
     }
 
     partial void OnExtendGpuRecoveryTimeoutChanged(bool value)
@@ -117,7 +120,8 @@ public partial class GraphicsViewModel : ObservableObject, IAutoRefreshable, IDi
         if (IsAutoPilotActive) { _loading = true; ExtendGpuRecoveryTimeout = !value; _loading = false; return; }
         var r = _gfx.SetTdrDelayExtended(value);
         StatusMessage = r.Message;
-        if (!r.Success) { _loading = true; ExtendGpuRecoveryTimeout = !value; _loading = false; }
+        if (r.Success) _settings.GraphicsTdrExtended = value;
+        else { _loading = true; ExtendGpuRecoveryTimeout = !value; _loading = false; }
     }
 
     partial void OnForceTimerResolutionChanged(bool value)
@@ -135,6 +139,7 @@ public partial class GraphicsViewModel : ObservableObject, IAutoRefreshable, IDi
         if (_loading) return;
         var r = _gfx.SetGameDvrDisabled(value);
         StatusMessage = r.Message;
-        if (!r.Success) { _loading = true; DisableGameDvr = !value; _loading = false; }
+        if (r.Success) _settings.GraphicsGameDvrDisabled = value;
+        else { _loading = true; DisableGameDvr = !value; _loading = false; }
     }
 }

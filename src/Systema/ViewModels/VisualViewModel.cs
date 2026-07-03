@@ -96,8 +96,9 @@ public partial class VisualViewModel : ObservableObject, IAutoRefreshable, IDisp
     /// </summary>
     public string ActiveBatteryMode => _activeBatteryOpt;
 
-    /// <summary>True when battery optimization is active but the system is currently on AC power (cap is dormant).</summary>
-    public bool IsOnAcWithBatteryPlanActive => IsBatteryPlanActive && !IsOnBattery;
+    /// <summary>True when a CAP-based battery mode is active but the system is on AC power (cap is dormant).
+    /// Excludes "performance" mode, which removes the cap and runs High Performance rather than capping.</summary>
+    public bool IsOnAcWithBatteryPlanActive => IsBatteryPlanActive && !IsOnBattery && _activeBatteryOpt != "performance";
 
     partial void OnActivePowerPlanChanged(string value) =>
         OnPropertyChanged(nameof(IsHighPerformancePlanActive));
@@ -162,9 +163,7 @@ public partial class VisualViewModel : ObservableObject, IAutoRefreshable, IDisp
                 {
                     try
                     {
-                        TweakResult result = optSnapshot == "max"
-                            ? await _powerPlanService.SetMaxBatteryLifeAsync()
-                            : await _powerPlanService.SetBalancedOnBatteryAsync();
+                        TweakResult result = await ApplyBatteryOptForModeAsync(optSnapshot);
                         System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
                             StatusMessage = result.Success ? "Battery optimization re-applied." : result.Message);
                     }
@@ -270,15 +269,13 @@ public partial class VisualViewModel : ObservableObject, IAutoRefreshable, IDisp
             }
             else
             {
-                // ── Unplugged — switch to battery plan (Balanced or Power Saver) ──
-                _log.Info("VisualViewModel", "Battery power detected — switching to battery plan");
-                StatusMessage = "On battery — switching power plan…";
+                // ── Unplugged — apply the chosen battery mode (cap, or High Performance for "performance") ──
+                _log.Info("VisualViewModel", "Battery power detected — applying battery mode");
+                StatusMessage = "On battery — applying your battery mode…";
                 string optSnapshot = activeOpt;
                 Task.Run(async () =>
                 {
-                    TweakResult result = optSnapshot == "max"
-                        ? await _powerPlanService.SetMaxBatteryLifeAsync()
-                        : await _powerPlanService.SetBalancedOnBatteryAsync();
+                    TweakResult result = await ApplyBatteryOptForModeAsync(optSnapshot);
                     string plan = await RunOnLargeStackAsync(() => _powerPlanService.GetActivePlan());
                     System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
                     {
@@ -745,6 +742,18 @@ public partial class VisualViewModel : ObservableObject, IAutoRefreshable, IDisp
         }
         else
         {
+            // The "Performance" battery mode only makes sense while Performance Mode is on. If it was
+            // selected, clear it so it doesn't linger on a now-hidden segment or re-apply High
+            // Performance on the next unplug.
+            if (_activeBatteryOpt == "performance")
+            {
+                _activeBatteryOpt                 = string.Empty;
+                _settings.BatteryOptimizationMode = string.Empty;
+                IsBatteryPlanActive               = false;
+                OnPropertyChanged(nameof(ActiveBatteryMode));
+                OnPropertyChanged(nameof(IsOnAcWithBatteryPlanActive));
+            }
+
             // Always restore Balanced when toggling off (if on AC).
             // Battery opt will take over on the next unplug via OnPowerModeChanged.
             if (!_powerPlanService.IsOnBattery())
@@ -794,14 +803,66 @@ public partial class VisualViewModel : ObservableObject, IAutoRefreshable, IDisp
         mode ??= "";
         switch (mode)
         {
-            case "balanced": await ApplyBalancedOnBatteryAsync(); break;
-            case "max":      await ApplyMaxBatteryLifeAsync();    break;
-            default:         await ApplyStopBatteryOptAsync();    break;
+            case "performance": await ApplyPerformanceOnBatteryAsync(); break;
+            case "balanced":    await ApplyBalancedOnBatteryAsync();    break;
+            case "max":         await ApplyMaxBatteryLifeAsync();       break;
+            default:            await ApplyStopBatteryOptAsync();       break;
         }
         OnPropertyChanged(nameof(ActiveBatteryMode));
+        OnPropertyChanged(nameof(IsOnAcWithBatteryPlanActive));
+    }
+
+    /// <summary>The power-plan side of a battery mode (no UI/state writes). Shared by the startup
+    /// re-apply and the on-unplug transition so all modes behave the same in every path.</summary>
+    private async Task<TweakResult> ApplyBatteryOptForModeAsync(string mode)
+    {
+        switch (mode)
+        {
+            case "performance":
+                // Full speed on battery: drop any DC cap and force High Performance.
+                await _powerPlanService.RemoveBatteryCpuCapAsync();
+                return await _powerPlanService.SetHighPerformanceAsync();
+            case "max":
+                return await _powerPlanService.SetMaxBatteryLifeAsync();
+            default:
+                return await _powerPlanService.SetBalancedOnBatteryAsync();
+        }
     }
 
     // ── Internal power plan helpers ────────────────────────────────────────────
+
+    /// <summary>"Performance" battery mode: keep full CPU speed on battery by removing any DC cap and
+    /// running High Performance. Only offered while Performance Mode is on. Reversible via the other
+    /// segments (Off restores Balanced and clears the cap state).</summary>
+    private async Task ApplyPerformanceOnBatteryAsync()
+    {
+        IsLoading = true;
+        IsOnBattery = _powerPlanService.IsOnBattery();
+        StatusMessage = IsOnBattery
+            ? "Switching to High Performance on battery…"
+            : "Battery Mode set. High Performance activates when you unplug.";
+        try
+        {
+            _planBeforeOpt = await RunOnLargeStackAsync(() => _powerPlanService.GetActivePlan());
+            _settings.PlanBeforeOptimization = _planBeforeOpt;
+
+            var result = await ApplyBatteryOptForModeAsync("performance");
+            ActivePowerPlan = await RunOnLargeStackAsync(() => _powerPlanService.GetActivePlan());
+            if (result.Success)
+            {
+                IsBatteryPlanActive               = true;
+                _activeBatteryOpt                 = "performance";
+                _settings.BatteryOptimizationMode = "performance";
+            }
+            StatusMessage = result.Message;
+        }
+        catch (Exception ex)
+        {
+            _log.Error("VisualViewModel", "Performance-on-battery failed", ex);
+            StatusMessage = $"Error: {ex.Message}";
+        }
+        finally { IsLoading = false; }
+    }
 
     private async Task ApplyBalancedOnBatteryAsync()
     {
