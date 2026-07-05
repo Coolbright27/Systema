@@ -218,7 +218,7 @@
                                 </StackPanel>
                             </Button>
 
-                            <!-- Cleanup &amp; Services — droplet -->
+                            <!-- Cleanup &amp; Privacy — droplet -->
                             <Button Command="{Binding NavigateCommand}" CommandParameter="Services"
                                     Tag="Services" Style="{StaticResource NavButton}">
                                 <StackPanel Orientation="Horizontal">
@@ -226,7 +226,7 @@
                                         <Path Style="{StaticResource NavIcon}"
                                               Data="M12 3 C12 3 5.5 10 5.5 14.5 A6.5 6.5 0 0 0 18.5 14.5 C18.5 10 12 3 12 3 Z"/>
                                     </Viewbox>
-                                    <TextBlock Text="Cleanup &amp; Services"/>
+                                    <TextBlock Text="Cleanup &amp; Privacy"/>
                                 </StackPanel>
                             </Button>
 
@@ -381,7 +381,7 @@
                                 Background="{StaticResource BgSurfaceBrush}"
                                 BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="10">
                             <StackPanel>
-                                <TextBlock Text="Systema v0.7.205" FontSize="11" FontWeight="SemiBold"
+                                <TextBlock Text="Systema v0.7.209" FontSize="11" FontWeight="SemiBold"
                                            Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,7"/>
 
                                 <!-- Live status: green check + status text from the updater -->

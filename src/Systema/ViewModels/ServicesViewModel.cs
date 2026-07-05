@@ -51,6 +51,14 @@ public partial class ServicesViewModel : ObservableObject, IAutoRefreshable, IDi
     [ObservableProperty] private bool   _isPrivacyCleanupBusy;
     private bool _suppressPrivacyToggleSideEffect;
 
+    // "No Telemetry Pro" — the maximal telemetry kill (policy + services + tasks). Reflects live state;
+    // flipping it fires OnNoTelemetryProChanged. Suppressed while refresh writes the reflected value.
+    [ObservableProperty] private bool   _noTelemetryPro;
+    [ObservableProperty] private string _noTelemetryStatusText = string.Empty;
+    private bool _suppressNoTelemetrySideEffect;
+    private bool _noTelemetryBusy;
+    public bool HasNoTelemetryStatus => !string.IsNullOrEmpty(NoTelemetryStatusText);
+
     // ── Expander state ─────────────────────────────────────────────────────────
     [ObservableProperty] private bool _showWindowsFeatures;
     [RelayCommand] private void ToggleWindowsFeatures() => ShowWindowsFeatures = !ShowWindowsFeatures;
@@ -85,14 +93,14 @@ public partial class ServicesViewModel : ObservableObject, IAutoRefreshable, IDi
     public int RecommendedServiceCount => Services.Count(s => s.IsRecommended);
 
     public string RecommendedSummaryText =>
-        $"Stops Microsoft data collection (telemetry) and optimizes the {RecommendedServiceCount} background " +
-        $"service{(RecommendedServiceCount == 1 ? "" : "s")} recommended for your PC. Internet, Windows Update, " +
-        "security, and search are never touched.";
+        $"Sets the {RecommendedServiceCount} background service{(RecommendedServiceCount == 1 ? "" : "s")} " +
+        "that are safe for most PCs to Manual, so they only start when something needs them. Internet, " +
+        "Windows Update, security, printing, and search are never touched. Telemetry has its own toggle below.";
 
     public string RecommendedStatusText =>
         PrivacyCleanupApplied
-            ? "On — data collection is stopped and recommended services are optimized."
-            : "Off — telemetry and recommended services are running normally.";
+            ? "On. The safe background services only start when needed."
+            : "Off. Those background services are running normally.";
 
     public string PerformanceCategorySubtitle => $"{Services.Count} background service{(Services.Count == 1 ? "" : "s")}";
     public string ExtrasCategorySubtitle =>
@@ -122,7 +130,7 @@ public partial class ServicesViewModel : ObservableObject, IAutoRefreshable, IDi
     public string SelectedCategoryTitle => SelectedCategory switch
     {
         "privacy"     => "Privacy & data",
-        "performance" => "Performance",
+        "performance" => "Services",
         "extras"      => "Windows extras",
         _             => string.Empty
     };
@@ -237,9 +245,12 @@ public partial class ServicesViewModel : ObservableObject, IAutoRefreshable, IDi
             // Update the toggle reflection without re-firing the disable / restore action.
             _suppressPrivacyToggleSideEffect = true;
             PrivacyCleanupApplied =
-                _serviceControl.AreTelemetryServicesDisabled()
-                && _serviceControl.AreAllRecommendedDisabled(_gameBooster.GamesInstalled);
+                _serviceControl.AreAllRecommendedDisabled(_gameBooster.GamesInstalled);
             _suppressPrivacyToggleSideEffect = false;
+
+            _suppressNoTelemetrySideEffect = true;
+            NoTelemetryPro = _serviceControl.IsNoTelemetryProEnabled();
+            _suppressNoTelemetrySideEffect = false;
 
             // Optional Windows features are no longer listed in-app — the "Windows extras"
             // card opens Windows' own panel (optionalfeatures.exe) directly — so we skip the
@@ -434,6 +445,44 @@ public partial class ServicesViewModel : ObservableObject, IAutoRefreshable, IDi
     partial void OnIsFeatureLoadingChanged(bool value)
         => OnPropertyChanged(nameof(ExtrasCategorySubtitle));
 
+    // ── No Telemetry Pro toggle ────────────────────────────────────────────────
+    partial void OnNoTelemetryStatusTextChanged(string value) => OnPropertyChanged(nameof(HasNoTelemetryStatus));
+
+    partial void OnNoTelemetryProChanged(bool value)
+    {
+        if (_suppressNoTelemetrySideEffect) return;
+        _ = RunNoTelemetryToggleAsync(value);
+    }
+
+    private async Task RunNoTelemetryToggleAsync(bool turnOn)
+    {
+        if (_noTelemetryBusy) return;               // ignore taps while a run is in flight
+        _noTelemetryBusy = true;
+        IsLoading = true;
+        NoTelemetryStatusText = turnOn ? "Turning off all Windows telemetry…" : "Restoring telemetry to Windows defaults…";
+        try
+        {
+            var r = await _serviceControl.SetNoTelemetryProAsync(turnOn);
+            NoTelemetryStatusText = r.Message;
+            StatusMessage         = r.Message;
+            if (!r.Success)
+            {
+                _suppressNoTelemetrySideEffect = true;
+                NoTelemetryPro = !turnOn;           // revert the switch on failure
+                _suppressNoTelemetrySideEffect = false;
+            }
+        }
+        catch (Exception ex)
+        {
+            _log.Error("ServicesViewModel", "No Telemetry Pro toggle failed", ex);
+            NoTelemetryStatusText = $"Error: {ex.Message}";
+            _suppressNoTelemetrySideEffect = true;
+            NoTelemetryPro = !turnOn;
+            _suppressNoTelemetrySideEffect = false;
+        }
+        finally { _noTelemetryBusy = false; IsLoading = false; }
+    }
+
     private async Task RunPrivacyToggleAsync(bool turnOn)
     {
         // Re-entrancy guard: ignore taps while a previous toggle is still running.
@@ -445,37 +494,31 @@ public partial class ServicesViewModel : ObservableObject, IAutoRefreshable, IDi
         {
             if (turnOn)
             {
-                // Build a preview of what we'll disable so the user knows what to expect.
+                // Build a preview of what we'll switch off so the user knows what to expect.
                 var willDisable = Services
                     .Where(s => s.IsRecommended && s.ColorState != ServiceColorState.Red)
                     .ToList();
-                bool telemetryNeedsDisable = !_serviceControl.AreTelemetryServicesDisabled();
 
-                if (willDisable.Count == 0 && !telemetryNeedsDisable)
+                if (willDisable.Count == 0)
                 {
-                    StatusMessage = "Privacy cleanup already applied — nothing to do.";
+                    StatusMessage = "Service Cleanup already applied — nothing to do.";
                     return;
                 }
 
                 var preview = new System.Text.StringBuilder();
-                preview.Append("Turning this ON will:\n");
-                if (telemetryNeedsDisable)
-                    preview.Append("\n  • Stop Microsoft data collection (telemetry services + scheduled tasks)");
-                if (willDisable.Count > 0)
-                {
-                    preview.Append($"\n  • Disable {willDisable.Count} recommended background service")
-                           .Append(willDisable.Count == 1 ? "" : "s")
-                           .Append(":");
-                    foreach (var s in willDisable.Take(8))
-                        preview.Append("\n      – ").Append(s.DisplayName);
-                    if (willDisable.Count > 8)
-                        preview.Append($"\n      – …and {willDisable.Count - 8} more");
-                }
+                preview.Append("Turning this ON will switch these background services to Manual so they only start when something needs them:\n");
+                preview.Append($"\n  • {willDisable.Count} service")
+                       .Append(willDisable.Count == 1 ? "" : "s")
+                       .Append(":");
+                foreach (var s in willDisable.Take(8))
+                    preview.Append("\n      – ").Append(s.DisplayName);
+                if (willDisable.Count > 8)
+                    preview.Append($"\n      – …and {willDisable.Count - 8} more");
                 preview.Append("\n\nTurn the switch OFF later to restore these services. Proceed?");
 
                 var confirm = MessageBox.Show(
                     preview.ToString(),
-                    "Disable Privacy & Background Services",
+                    "Service Cleanup",
                     MessageBoxButton.OKCancel,
                     MessageBoxImage.Information,
                     MessageBoxResult.OK);
@@ -490,18 +533,17 @@ public partial class ServicesViewModel : ObservableObject, IAutoRefreshable, IDi
                     return;
                 }
 
-                StatusMessage = "Applying privacy cleanup…";
-                var result = await _serviceControl.DisablePrivacyAndRecommendedAsync(GamesInstalled);
+                StatusMessage = "Applying Service Cleanup…";
+                var result = await _serviceControl.DisableRecommendedServicesAsync(GamesInstalled);
                 StatusMessage = result.Message;
             }
             else
             {
                 // Turning OFF → restore.
                 var confirm = MessageBox.Show(
-                    "This will restore Microsoft data collection (telemetry services) and " +
-                    "re-enable every Recommended background service to Manual start " +
-                    "(they will start on demand, not at boot).\n\nProceed?",
-                    "Restore Privacy & Background Services",
+                    "This will re-enable every background service this cleanup turned off, setting them " +
+                    "back to Manual start (they start on demand, not at boot).\n\nProceed?",
+                    "Restore Services",
                     MessageBoxButton.OKCancel,
                     MessageBoxImage.Warning,
                     MessageBoxResult.Cancel);
@@ -517,7 +559,7 @@ public partial class ServicesViewModel : ObservableObject, IAutoRefreshable, IDi
                 }
 
                 StatusMessage = "Restoring services…";
-                var result = await _serviceControl.RestorePrivacyAndRecommendedAsync(GamesInstalled);
+                var result = await _serviceControl.RestoreRecommendedServicesAsync(GamesInstalled);
                 StatusMessage = result.Message;
             }
 
@@ -530,9 +572,12 @@ public partial class ServicesViewModel : ObservableObject, IAutoRefreshable, IDi
             // Reflect actual state in case the partial action left things mid-flight.
             _suppressPrivacyToggleSideEffect = true;
             PrivacyCleanupApplied =
-                _serviceControl.AreTelemetryServicesDisabled()
-                && _serviceControl.AreAllRecommendedDisabled(_gameBooster.GamesInstalled);
+                _serviceControl.AreAllRecommendedDisabled(_gameBooster.GamesInstalled);
             _suppressPrivacyToggleSideEffect = false;
+
+            _suppressNoTelemetrySideEffect = true;
+            NoTelemetryPro = _serviceControl.IsNoTelemetryProEnabled();
+            _suppressNoTelemetrySideEffect = false;
         }
         finally
         {

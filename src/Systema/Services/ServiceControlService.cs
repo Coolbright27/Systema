@@ -68,16 +68,10 @@ public class ServiceControlService
 
     public static readonly List<(string ServiceName, string DisplayName, string Description, string Tooltip)> OptimizableServices = new()
     {
-        // ── Telemetry & diagnostics ───────────────────────────────────────────
-        ("DiagTrack",         "Connected User Experiences & Telemetry",
-            "Silently uploads usage statistics, diagnostics, and behavioral data to Microsoft servers around the clock.",
-            "Safe to disable. Does not affect Windows Update, security, or performance."),
-        ("dmwappushservice",  "Device Management WAP Push",
-            "Routes WAP Push messages for Mobile Device Management (MDM) enrollment — used by corporate IT to manage devices remotely.",
-            "Safe to disable on personal PCs not managed by a company IT department."),
-        ("WerSvc",            "Windows Error Reporting",
-            "Automatically captures crash dumps and sends error reports to Microsoft when apps or Windows itself crashes.",
-            "Safe to disable. Crash reports help Microsoft but are not needed for your PC to run."),
+        // ── Telemetry moved to "No Telemetry Pro" ─────────────────────────────
+        // DiagTrack, dmwappushservice, and WerSvc (plus the policy + scheduled tasks) are handled by the
+        // dedicated No Telemetry Pro toggle now, so they're deliberately NOT listed here and the Service
+        // Cleanup bundle no longer touches telemetry.
 
         // ── Search & indexing ─────────────────────────────────────────────────
         ("WSearch",           "Windows Search",
@@ -267,6 +261,20 @@ public class ServiceControlService
         ("WFDSConMgrSvc",     "Wi-Fi Direct Services Connection Manager",
             "Manages Wi-Fi Direct connections used by Miracast wireless displays and some legacy device pairing.",
             "Safe to disable if you don't cast to a wireless display. Re-enable if Miracast stops working."),
+
+        // ── More services that are safe to switch off for most home PCs ──────
+        ("SharedAccess",      "Internet Connection Sharing (ICS)",
+            "Lets this PC share its internet connection with other devices. Off by default on most PCs.",
+            "Safe to disable if you don't share this PC's connection with other devices."),
+        ("SEMgrSvc",          "Payments and NFC/SE Manager",
+            "Handles NFC tap-to-pay and secure-element payment cards.",
+            "Safe to disable if you don't use NFC payments on this PC — most desktops and laptops don't."),
+        ("EntAppSvc",         "Enterprise App Management",
+            "Manages business apps that a company's IT department pushes to a managed device.",
+            "Safe to disable on a personal PC that isn't managed by a workplace."),
+        ("WwanSvc",           "Mobile Broadband (Cellular)",
+            "Runs the cellular / mobile-broadband modem connection where a PC has one built in.",
+            "Safe to disable if this PC has no built-in cellular modem. Re-enable if you use mobile data."),
     };
 
     // ── Telemetry service list (for master toggle) ──
@@ -367,6 +375,59 @@ public class ServiceControlService
         catch (Exception ex) { Log.Warn("ServiceControl", $"GetStartType({serviceName}) failed: {ex.Message}"); return "Unknown"; }
     }
 
+    // ── Restore-to-default support ────────────────────────────────────────────
+    // Restoring a service means putting it back to its OUT-OF-BOX Windows default, which VARIES: most
+    // are Manual (3), a few are Automatic (2), and a few ship Disabled (4). Blanket "set everything to
+    // Manual" was wrong — it left Auto services (Maps, TrkWks, PcaSvc) non-starting and quietly enabled
+    // ones Windows ships Disabled (RemoteRegistry, RemoteAccess, NetTcpPortSharing). So before disabling
+    // a service we CAPTURE its real Start value, and OFF restores exactly that. This map is the fallback
+    // for services disabled before capture existed (e.g. by an older build).
+    private const string ServiceDefaultsKey = @"Software\Systema\ServiceDefaults";   // HKCU
+    private static readonly Dictionary<string, int> ServiceDefaultStart = new(StringComparer.OrdinalIgnoreCase)
+    {
+        // Automatic by default (2)
+        ["SysMain"] = 2, ["WSearch"] = 2, ["Spooler"] = 2, ["MapsBroker"] = 2,
+        ["PcaSvc"] = 2,  ["TrkWks"] = 2,  ["DiagTrack"] = 2, ["DoSvc"] = 2, ["BITS"] = 2,
+        // Disabled by default (4)
+        ["RemoteRegistry"] = 4, ["RemoteAccess"] = 4, ["NetTcpPortSharing"] = 4,
+        // everything else → Manual (3), the safe start-on-demand default.
+    };
+
+    private static int GetDefaultStart(string serviceName)
+        => ServiceDefaultStart.TryGetValue(serviceName, out int v) ? v : 3;
+
+    private static string StartModeArg(int start) => start switch { 2 => "auto", 4 => "disabled", _ => "demand" };
+
+    /// <summary>Records a service's current Start value before we change it (first value only, so our own
+    /// 4 never overwrites the real one), so OFF can restore it exactly.</summary>
+    private static void CaptureServiceDefault(string serviceName, int currentStart)
+    {
+        try
+        {
+            using var key = Registry.CurrentUser.CreateSubKey(ServiceDefaultsKey, writable: true);
+            if (key != null && key.GetValue(serviceName) == null)
+                key.SetValue(serviceName, currentStart, RegistryValueKind.DWord);
+        }
+        catch (Exception ex) { Log.Warn("ServiceControl", $"CaptureServiceDefault({serviceName}) failed: {ex.Message}"); }
+    }
+
+    /// <summary>The Start value to restore a service to: the captured original (2 or 3) if we saved one,
+    /// otherwise the documented Windows default. Clears the saved marker.</summary>
+    private static int ResolveRestoreStart(string serviceName)
+    {
+        try
+        {
+            using var key = Registry.CurrentUser.OpenSubKey(ServiceDefaultsKey, writable: true);
+            if (key?.GetValue(serviceName) is int saved)
+            {
+                key.DeleteValue(serviceName, throwOnMissingValue: false);
+                if (saved is 2 or 3) return saved;   // a real captured value; 0/1 never apply to these services
+            }
+        }
+        catch (Exception ex) { Log.Warn("ServiceControl", $"ResolveRestoreStart({serviceName}) failed: {ex.Message}"); }
+        return GetDefaultStart(serviceName);
+    }
+
     // ── Service state changes ─────────────────────────────────────────────────
 
     /// <summary>
@@ -448,6 +509,7 @@ public class ServiceControlService
                     $@"SYSTEM\CurrentControlSet\Services\{serviceName}", true);
                 if (key == null)
                     return TweakResult.Fail($"Cannot open registry key for {serviceName} — access denied or service not found.");
+                if (key.GetValue("Start") is int cur && cur != 4) CaptureServiceDefault(serviceName, cur);   // remember it for restore
                 key.SetValue("Start", 4, RegistryValueKind.DWord);
                 InvalidateCache();
                 Log.Info("ServiceControl", $"Service disabled: {serviceName}");
@@ -493,7 +555,7 @@ public class ServiceControlService
                     $@"SYSTEM\CurrentControlSet\Services\{serviceName}", true);
                 if (key == null)
                     return TweakResult.Fail($"Cannot open registry key for {serviceName} — access denied or service not found.");
-                key.SetValue("Start", 2, RegistryValueKind.DWord);
+                key.SetValue("Start", ResolveRestoreStart(serviceName), RegistryValueKind.DWord);   // captured original, else Windows default
                 InvalidateCache();
                 Log.Info("ServiceControl", $"Service re-enabled: {serviceName}");
                 Log.LogChange("Service Re-enabled", serviceName);
@@ -570,12 +632,16 @@ public class ServiceControlService
     /// <returns>Summary of what was disabled, suitable for the status bar.</returns>
     public async Task<TweakResult> DisablePrivacyAndRecommendedAsync(bool gamesInstalled)
     {
-        // 1. Telemetry services + scheduled tasks
         var telemetryResult = await DisableAllTelemetryServicesAsync();
+        var svcResult       = await DisableRecommendedServicesAsync(gamesInstalled);
+        return TweakResult.Ok($"{telemetryResult.Message} {svcResult.Message}");
+    }
 
-        // 2. Every "Recommended" optional service that isn't already disabled.
-        //    BITS is special — it's intentionally NOT marked Recommended (Windows
-        //    Update needs it), so the loop below already skips it.
+    /// <summary>Disables every "Recommended" background service for this PC. NO telemetry — that's the
+    /// dedicated No Telemetry Pro toggle's job now. This is what the Service Cleanup toggle runs. BITS
+    /// stays untouched (Windows Update needs it) since it isn't marked Recommended.</summary>
+    public async Task<TweakResult> DisableRecommendedServicesAsync(bool gamesInstalled)
+    {
         int disabled = 0, alreadyOff = 0, failed = 0;
         var skipped = new List<string>();
 
@@ -585,16 +651,15 @@ public class ServiceControlService
             {
                 if (!ComputeRecommended(name, gamesInstalled)) continue;
 
-                // Skip if already disabled
+                // Skip if already disabled; otherwise remember its real Start so OFF restores it exactly.
                 try
                 {
                     using var key = Registry.LocalMachine.OpenSubKey(
                         $@"SYSTEM\CurrentControlSet\Services\{name}");
-                    if (key != null && (int?)key.GetValue("Start") == 4)
-                    {
-                        alreadyOff++;
-                        continue;
-                    }
+                    if (key == null) { skipped.Add(name); continue; }
+                    int cur = (int?)key.GetValue("Start") ?? 3;
+                    if (cur == 4) { alreadyOff++; continue; }
+                    CaptureServiceDefault(name, cur);
                 }
                 catch
                 {
@@ -653,7 +718,7 @@ public class ServiceControlService
 
         InvalidateCache();
 
-        var msg = $"{telemetryResult.Message} Background services: {disabled} disabled" +
+        var msg = $"Background services: {disabled} disabled" +
                   (alreadyOff > 0 ? $", {alreadyOff} already off" : string.Empty) +
                   (failed > 0    ? $", {failed} failed"           : string.Empty) + ".";
         return TweakResult.Ok(msg);
@@ -713,7 +778,7 @@ public class ServiceControlService
                 {
                     using var key = Registry.LocalMachine.OpenSubKey(
                         $@"SYSTEM\CurrentControlSet\Services\{svcName}", true);
-                    key?.SetValue("Start", 2, RegistryValueKind.DWord);
+                    key?.SetValue("Start", GetDefaultStart(svcName), RegistryValueKind.DWord);   // DiagTrack=Auto, dmwappush=Manual
                 }
                 catch (Exception ex) { Log.Warn("ServiceControl", $"Could not restore telemetry service '{svcName}': {ex.Message}"); }
             }
@@ -732,10 +797,15 @@ public class ServiceControlService
     /// </summary>
     public async Task<TweakResult> RestorePrivacyAndRecommendedAsync(bool gamesInstalled)
     {
-        // 1. Telemetry first
         var telemetryResult = await RestoreTelemetryServicesAsync();
+        var svcResult       = await RestoreRecommendedServicesAsync(gamesInstalled);
+        return TweakResult.Ok($"{telemetryResult.Message} {svcResult.Message}");
+    }
 
-        // 2. Every Recommended service that's currently disabled → Manual.
+    /// <summary>Restores every previously-disabled Recommended service to Manual. No telemetry — the No
+    /// Telemetry Pro toggle owns that. This is what the Service Cleanup toggle runs when flipped off.</summary>
+    public async Task<TweakResult> RestoreRecommendedServicesAsync(bool gamesInstalled)
+    {
         int restored = 0, skipped = 0;
 
         await Task.Run(() =>
@@ -757,8 +827,9 @@ public class ServiceControlService
 
                 if (currentStart != 4) { skipped++; continue; } // already not disabled
 
-                // Try direct registry write first, fall back to sc.exe for
-                // TrustedInstaller-protected keys (same pattern as the disable path).
+                // Restore to the captured original (or the documented Windows default) — NOT a blanket
+                // Manual. Some services default to Automatic, and a few ship Disabled.
+                int target = ResolveRestoreStart(name);
                 bool ok = false;
                 try
                 {
@@ -766,14 +837,14 @@ public class ServiceControlService
                         $@"SYSTEM\CurrentControlSet\Services\{name}", writable: true);
                     if (writeKey != null)
                     {
-                        writeKey.SetValue("Start", 3, RegistryValueKind.DWord); // Manual
+                        writeKey.SetValue("Start", target, RegistryValueKind.DWord);
                         ok = true;
                     }
                 }
                 catch (UnauthorizedAccessException)   { /* fall through to sc.exe */ }
                 catch (System.Security.SecurityException) { /* fall through to sc.exe */ }
 
-                if (!ok) ok = SetStartTypeViaSc(name, "demand"); // "demand" == Manual in sc.exe
+                if (!ok) ok = SetStartTypeViaSc(name, StartModeArg(target));
                 if (ok) restored++; else skipped++;
             }
         });
@@ -781,30 +852,33 @@ public class ServiceControlService
         InvalidateCache();
 
         return TweakResult.Ok(
-            $"{telemetryResult.Message} Background services: {restored} restored to Manual" +
+            $"Background services: {restored} restored to Manual" +
             (skipped > 0 ? $", {skipped} left unchanged" : string.Empty) + ".");
     }
 
-    private static void DisableTelemetryTasks()
+    private static readonly string[] TelemetryTasks =
     {
-        string[] tasks =
-        {
-            @"\Microsoft\Windows\Application Experience\Microsoft Compatibility Appraiser",
-            @"\Microsoft\Windows\Application Experience\ProgramDataUpdater",
-            @"\Microsoft\Windows\Autochk\Proxy",
-            @"\Microsoft\Windows\Customer Experience Improvement Program\Consolidator",
-            @"\Microsoft\Windows\Customer Experience Improvement Program\UsbCeip",
-            @"\Microsoft\Windows\DiskDiagnostic\Microsoft-Windows-DiskDiagnosticDataCollector",
-        };
+        @"\Microsoft\Windows\Application Experience\Microsoft Compatibility Appraiser",
+        @"\Microsoft\Windows\Application Experience\ProgramDataUpdater",
+        @"\Microsoft\Windows\Autochk\Proxy",
+        @"\Microsoft\Windows\Customer Experience Improvement Program\Consolidator",
+        @"\Microsoft\Windows\Customer Experience Improvement Program\UsbCeip",
+        @"\Microsoft\Windows\DiskDiagnostic\Microsoft-Windows-DiskDiagnosticDataCollector",
+    };
 
-        foreach (var task in tasks)
+    private static void DisableTelemetryTasks() => SetTelemetryTasks(disable: true);
+
+    /// <summary>Disables or re-enables the telemetry scheduled tasks via schtasks.exe.</summary>
+    private static void SetTelemetryTasks(bool disable)
+    {
+        foreach (var task in TelemetryTasks)
         {
             try
             {
                 var psi = new System.Diagnostics.ProcessStartInfo
                 {
                     FileName  = "schtasks.exe",
-                    Arguments = $"/Change /TN \"{task}\" /Disable",
+                    Arguments = $"/Change /TN \"{task}\" /{(disable ? "Disable" : "Enable")}",
                     UseShellExecute        = false,
                     CreateNoWindow         = true
                 };
@@ -816,16 +890,169 @@ public class ServiceControlService
                 }
                 bool exited = proc.WaitForExit(5000);
                 if (!exited)
-                    Log.Warn("ServiceControl", $"schtasks.exe timed out disabling task: {task}");
+                    Log.Warn("ServiceControl", $"schtasks.exe timed out on task: {task}");
                 else if (proc.ExitCode != 0)
-                    // Exit 1 from schtasks /Change /Disable usually means the task
-                    // is owned by TrustedInstaller (Compat Appraiser, ProgramDataUpdater
-                    // on Win11 25H2+). Expected — drop to Info so it doesn't show as
-                    // a warning in the diagnostic report.
+                    // Exit 1 usually means the task is owned by TrustedInstaller (Compat Appraiser,
+                    // ProgramDataUpdater on Win11 25H2+). Expected — Info so it isn't a warning.
                     Log.Info("ServiceControl", $"schtasks.exe exit {proc.ExitCode} on '{task}' — likely TrustedInstaller-protected, skipping.");
             }
-            catch (Exception ex) { Log.Warn("ServiceControl", $"Failed to disable telemetry task '{task}': {ex.Message}"); }
+            catch (Exception ex) { Log.Warn("ServiceControl", $"Failed to {(disable ? "disable" : "enable")} telemetry task '{task}': {ex.Message}"); }
         }
+    }
+
+    // ── No Telemetry Pro: the registry-policy layer (tells Windows not to collect) ─
+    // On top of the telemetry SERVICES + TASKS above, this sets the documented data-collection
+    // policies to their off state. Reversible: toggling off deletes what we set so Windows returns
+    // to its defaults. HKLM policy paths need admin (we run elevated); HKCU values are per-user.
+    private static readonly (bool Hklm, string Path, string Name, int Off)[] TelemetryRegistry =
+    {
+        (true,  @"SOFTWARE\Policies\Microsoft\Windows\DataCollection",                "AllowTelemetry",                 0),
+        (true,  @"SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\DataCollection", "AllowTelemetry",                 0),
+        (true,  @"SOFTWARE\Policies\Microsoft\Windows\DataCollection",                "DoNotShowFeedbackNotifications", 1),
+        (true,  @"SOFTWARE\Policies\Microsoft\Windows\DataCollection",                "AllowDeviceNameInTelemetry",     0),
+        (true,  @"SOFTWARE\Policies\Microsoft\Windows\AdvertisingInfo",               "DisabledByGroupPolicy",          1),
+        (false, @"SOFTWARE\Microsoft\Windows\CurrentVersion\AdvertisingInfo",         "Enabled",                        0),
+        (false, @"SOFTWARE\Microsoft\Windows\CurrentVersion\Privacy",                 "TailoredExperiencesWithDiagnosticDataEnabled", 0),
+        (true,  @"SOFTWARE\Policies\Microsoft\Windows\System",                        "EnableActivityFeed",             0),
+        (true,  @"SOFTWARE\Policies\Microsoft\Windows\System",                        "PublishUserActivities",          0),
+        (true,  @"SOFTWARE\Policies\Microsoft\Windows\System",                        "UploadUserActivities",           0),
+        (false, @"SOFTWARE\Microsoft\Siuf\Rules",                                     "NumberOfSIUFInPeriod",           0),
+        // Extra data-collection policies. These are Group-Policy settings: Pro / Enterprise / Education
+        // honor them (a much fuller telemetry-off); Home ignores the GP-only ones, where they're harmless.
+        (true,  @"SOFTWARE\Policies\Microsoft\Windows\DataCollection",                "LimitEnhancedDiagnosticDataWindowsAnalytics", 0),
+        (true,  @"SOFTWARE\Policies\Microsoft\Windows\DataCollection",                "DisableOneSettingsDownloads",    1),
+        (true,  @"SOFTWARE\Policies\Microsoft\Windows\DataCollection",                "DisableTelemetryOptInSettingsUx",1),
+        (true,  @"SOFTWARE\Policies\Microsoft\Windows\DataCollection",                "DisableTelemetryOptInChangeNotification", 1),
+        // Application inventory / compatibility telemetry.
+        (true,  @"SOFTWARE\Policies\Microsoft\Windows\AppCompat",                     "AITEnable",                      0),
+        (true,  @"SOFTWARE\Policies\Microsoft\Windows\AppCompat",                     "DisableInventory",               1),
+        (true,  @"SOFTWARE\Policies\Microsoft\Windows\AppCompat",                     "DisableUAR",                     1),
+        // CEIP master switch + Windows Error Reporting policy.
+        (true,  @"SOFTWARE\Microsoft\SQMClient\Windows",                              "CEIPEnable",                     0),
+        (true,  @"SOFTWARE\Policies\Microsoft\Windows\Windows Error Reporting",       "Disabled",                       1),
+        // Typing / inking / handwriting / online-speech telemetry.
+        (true,  @"SOFTWARE\Policies\Microsoft\InputPersonalization",                  "RestrictImplicitTextCollection", 1),
+        (true,  @"SOFTWARE\Policies\Microsoft\InputPersonalization",                  "RestrictImplicitInkCollection",  1),
+        (true,  @"SOFTWARE\Policies\Microsoft\Windows\HandwritingErrorReports",       "PreventHandwritingErrorReports", 1),
+        (true,  @"SOFTWARE\Policies\Microsoft\Windows\TabletPC",                      "PreventHandwritingDataSharing",  1),
+        (false, @"SOFTWARE\Microsoft\Input\TIPC",                                     "Enabled",                        0),
+        (false, @"SOFTWARE\Microsoft\Speech_OneCore\Settings\OnlineSpeechPrivacy",    "HasAccepted",                    0),
+    };
+
+    private static void SetTelemetryRegistry(bool off)
+    {
+        foreach (var (hklm, path, name, offVal) in TelemetryRegistry)
+        {
+            try
+            {
+                var root = hklm ? Registry.LocalMachine : Registry.CurrentUser;
+                if (off)
+                {
+                    using var key = root.CreateSubKey(path, writable: true);
+                    key?.SetValue(name, offVal, RegistryValueKind.DWord);
+                }
+                else
+                {
+                    using var key = root.OpenSubKey(path, writable: true);
+                    key?.DeleteValue(name, throwOnMissingValue: false);   // back to Windows default
+                }
+            }
+            catch (Exception ex) { Log.Warn("ServiceControl", $"Telemetry policy {(off ? "set" : "clear")} {path}\\{name} failed: {ex.Message}"); }
+        }
+    }
+
+    /// <summary>True when the telemetry data-collection policy is set to off (AllowTelemetry = 0).</summary>
+    private static bool IsTelemetryRegistryOff()
+    {
+        try
+        {
+            using var key = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Policies\Microsoft\Windows\DataCollection");
+            return key?.GetValue("AllowTelemetry") is int v && v == 0;
+        }
+        catch { return false; }
+    }
+
+    // Extra telemetry-related services No Telemetry Pro also disables. Both are demand-start and safe
+    // to disable; default Start is Manual (3), which is what a toggle-off restores them to.
+    private static readonly string[] ExtraTelemetryServices =
+    {
+        "diagnosticshub.standardcollector.service",   // Diagnostics Hub Standard Collector
+        "WerSvc",                                      // Windows Error Reporting
+    };
+
+    private static void SetExtraTelemetryServices(bool disable)
+    {
+        foreach (var name in ExtraTelemetryServices)
+        {
+            try
+            {
+                if (disable)
+                {
+                    try
+                    {
+                        using var svc = new ServiceController(name);
+                        if (svc.Status == ServiceControllerStatus.Running)
+                        { svc.Stop(); PollForStatus(svc, ServiceControllerStatus.Stopped, 6); }
+                    }
+                    catch (Exception ex) { Log.Info("ServiceControl", $"Stop({name}) skipped: {ex.Message}"); }
+                }
+                using var key = Registry.LocalMachine.OpenSubKey($@"SYSTEM\CurrentControlSet\Services\{name}", writable: true);
+                key?.SetValue("Start", disable ? 4 : 3, RegistryValueKind.DWord);
+            }
+            catch (Exception ex) { Log.Warn("ServiceControl", $"{(disable ? "Disable" : "Restore")} service '{name}' failed: {ex.Message}"); }
+        }
+    }
+
+    private static string GetWindowsEdition()
+    {
+        try
+        {
+            using var key = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Windows NT\CurrentVersion");
+            return key?.GetValue("EditionID") as string ?? "";
+        }
+        catch { return ""; }
+    }
+
+    /// <summary>True on editions where AllowTelemetry=0 is honored as the full "Security" (off) level
+    /// (Enterprise, Education, IoT, Server). Home and Pro floor at the "Required" minimum.</summary>
+    private static bool IsFullTelemetryOffEdition()
+    {
+        var e = GetWindowsEdition();
+        return e.IndexOf("Enterprise", StringComparison.OrdinalIgnoreCase) >= 0
+            || e.IndexOf("Education",  StringComparison.OrdinalIgnoreCase) >= 0
+            || e.IndexOf("IoT",        StringComparison.OrdinalIgnoreCase) >= 0
+            || e.IndexOf("Server",     StringComparison.OrdinalIgnoreCase) >= 0;
+    }
+
+    /// <summary>True when No Telemetry Pro is applied: the policy is off AND the telemetry services
+    /// are disabled. (Reflect-state for the toggle.)</summary>
+    public bool IsNoTelemetryProEnabled() => IsTelemetryRegistryOff() && AreTelemetryServicesDisabled();
+
+    /// <summary>The maximal safe telemetry kill: data-collection + inventory + input/handwriting/speech
+    /// policies (Pro/Enterprise/Education honor the fuller set), the telemetry services (DiagTrack,
+    /// dmwappushservice, Diagnostics Hub, Error Reporting), AND the telemetry scheduled tasks. Fully
+    /// reversible; deliberately does NOT touch the hosts file or Windows Update/security channels.</summary>
+    public async Task<TweakResult> SetNoTelemetryProAsync(bool on)
+    {
+        if (on)
+        {
+            SetTelemetryRegistry(off: true);
+            await DisableAllTelemetryServicesAsync();   // DiagTrack + dmwappushservice + tasks
+            await RunOnLargeStackAsync(() => { SetExtraTelemetryServices(disable: true); return true; });
+            InvalidateCache();
+            Log.LogChange("No Telemetry Pro", "on");
+            string level = IsFullTelemetryOffEdition()
+                ? "Your edition honors the full off level, so diagnostics are set to Security (off)."
+                : "On Home and Pro, Windows keeps a required minimum; everything else is off.";
+            return TweakResult.Ok($"No Telemetry Pro on. Policies, telemetry services, error reporting, and scheduled tasks are all off. {level} Restart to fully apply.");
+        }
+
+        SetTelemetryRegistry(off: false);               // delete the policy values (back to default)
+        await RestoreTelemetryServicesAsync();          // DiagTrack/dmwappush back to Auto
+        await RunOnLargeStackAsync(() => { SetExtraTelemetryServices(disable: false); SetTelemetryTasks(disable: false); return true; });
+        InvalidateCache();
+        Log.LogChange("No Telemetry Pro", "off");
+        return TweakResult.Ok("No Telemetry Pro off. Telemetry policies, services, error reporting, and scheduled tasks restored to Windows defaults.");
     }
 
     /// <summary>Check whether all known telemetry services are currently disabled.</summary>

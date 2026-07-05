@@ -73,7 +73,7 @@
         <StackPanel Margin="32,28,32,28">
 
             <!-- Header -->
-            <TextBlock Text="Cleanup &amp; Services" Style="{StaticResource HeadingLarge}"/>
+            <TextBlock Text="Cleanup &amp; Privacy" Style="{StaticResource HeadingLarge}"/>
             <TextBlock Text="A quick read on what's running in the background, with one-click cleanup and plain-language categories."
                        Style="{StaticResource CaptionText}" Margin="0,4,0,20"/>
 
@@ -127,7 +127,7 @@
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
                             <StackPanel Grid.Column="0" Margin="0,0,18,0">
-                                <TextBlock Text="Recommended cleanup" Style="{StaticResource HeadingSmall}"/>
+                                <TextBlock Text="Service Cleanup" Style="{StaticResource HeadingSmall}"/>
                                 <TextBlock Text="{Binding RecommendedSummaryText}" Style="{StaticResource CaptionText}"
                                            TextWrapping="Wrap" Margin="0,5,0,0"/>
                             </StackPanel>
@@ -166,6 +166,43 @@
                     </StackPanel>
                 </Border>
 
+                <!-- No Telemetry Pro — kills ALL Windows telemetry (policy + services + tasks). -->
+                <Border CornerRadius="14" Padding="20,18" Margin="0,0,0,24"
+                        Background="{StaticResource BgCardBrush}"
+                        BorderBrush="{StaticResource BorderBrush}" BorderThickness="1">
+                    <StackPanel Style="{StaticResource ManagedSection}">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" Margin="0,0,18,0">
+                                <TextBlock Text="No Telemetry Pro" Style="{StaticResource HeadingSmall}"/>
+                                <TextBlock Text="Turns off every Windows telemetry channel at once, as far as your edition allows. It sets the do not collect policies, disables the telemetry services (DiagTrack, error reporting, diagnostics hub), switches off the telemetry scheduled tasks, and stops typing, handwriting, and app inventory collection. Pro and Education get the fuller policy set. Fully reversible."
+                                           Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,5,0,0"/>
+                            </StackPanel>
+                            <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}" VerticalAlignment="Center"
+                                      IsChecked="{Binding NoTelemetryPro}"/>
+                        </Grid>
+                        <StackPanel Orientation="Horizontal" Margin="0,12,0,0"
+                                    Visibility="{Binding HasNoTelemetryStatus, Converter={StaticResource BoolToVis}}">
+                            <Ellipse Width="9" Height="9" VerticalAlignment="Center" Margin="0,0,7,0">
+                                <Ellipse.Style>
+                                    <Style TargetType="Ellipse">
+                                        <Setter Property="Fill" Value="{StaticResource TextSecondaryBrush}"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding NoTelemetryPro}" Value="True">
+                                                <Setter Property="Fill" Value="{StaticResource AccentGreenBrush}"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Ellipse.Style>
+                            </Ellipse>
+                            <TextBlock Text="{Binding NoTelemetryStatusText}" Style="{StaticResource CaptionText}" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
                 <!-- Category cards (Privacy & data removed — the Recommended cleanup toggle covers it). -->
                 <TextBlock Text="Browse by category" Style="{StaticResource HeadingMedium}" Margin="2,0,0,12"/>
                 <Grid>
@@ -183,7 +220,7 @@
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
                             <StackPanel Grid.Column="0" Margin="0,0,8,0">
-                                <TextBlock Text="Performance" Style="{StaticResource HeadingSmall}"/>
+                                <TextBlock Text="Services" Style="{StaticResource HeadingSmall}"/>
                                 <TextBlock Text="{Binding PerformanceCategorySubtitle}" Style="{StaticResource CaptionText}" Margin="0,2,0,0"/>
                             </StackPanel>
                             <TextBlock Grid.Column="1" Text="&#x203A;" FontSize="20" VerticalAlignment="Center"
@@ -214,7 +251,7 @@
             <StackPanel Visibility="{Binding IsPerformanceCategory, Converter={StaticResource BoolToVis}}">
                 <Button Content="&#x2190; Back" Command="{Binding BackToOverviewCommand}"
                         Style="{StaticResource GhostButton}" HorizontalAlignment="Left" Margin="0,0,0,14"/>
-                <TextBlock Text="Performance" Style="{StaticResource HeadingMedium}" Margin="2,0,0,2"/>
+                <TextBlock Text="Services" Style="{StaticResource HeadingMedium}" Margin="2,0,0,2"/>
                 <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="2,0,0,10"
                            Text="Background services Windows runs for you. Each one explains what it does — pick how it starts:"/>
                 <StackPanel Orientation="Horizontal" Margin="2,0,0,16">
