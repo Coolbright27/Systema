@@ -37,8 +37,22 @@ public partial class GraphicsViewModel : ObservableObject, IAutoRefreshable, IDi
     [ObservableProperty] private bool _extendGpuRecoveryTimeout;
     [ObservableProperty] private bool _forceTimerResolution;
     [ObservableProperty] private string _timerResolutionDisplay = "—";
+    [ObservableProperty] private bool _timerSystemWideActive;
     [ObservableProperty] private bool _disableGameDvr;
+    [ObservableProperty] private bool _priorityGraphicsScheduling;
     [ObservableProperty] private string _statusMessage = string.Empty;
+
+    /// <summary>Timer is on but the machine hasn't restarted yet, so the global policy is pending.</summary>
+    public bool ShowTimerRestartNote => ForceTimerResolution && !TimerSystemWideActive;
+    /// <summary>Timer is on AND active for every process (booted since it was enabled).</summary>
+    public bool ShowTimerActiveNote  => ForceTimerResolution && TimerSystemWideActive;
+
+    private void RaiseTimerNotes()
+    {
+        OnPropertyChanged(nameof(ShowTimerRestartNote));
+        OnPropertyChanged(nameof(ShowTimerActiveNote));
+    }
+    partial void OnTimerSystemWideActiveChanged(bool value) => RaiseTimerNotes();
 
     /// <summary>True when Auto-Pilot Mode is on. MPO is an Auto-Pilot-managed setting,
     /// so its toggle grays out while Auto-Pilot is on (same pattern as Core Parking).</summary>
@@ -71,7 +85,10 @@ public partial class GraphicsViewModel : ObservableObject, IAutoRefreshable, IDi
             ExtendGpuRecoveryTimeout = _gfx.IsTdrDelayExtended();
             ForceTimerResolution     = _gfx.IsTimerResolutionForced();
             TimerResolutionDisplay   = _gfx.GetTimerResolutionText();
+            TimerSystemWideActive    = _gfx.IsTimerResolutionActiveSystemWide();
             DisableGameDvr           = _gfx.IsGameDvrDisabled();
+            PriorityGraphicsScheduling = _gfx.IsGraphicsSchedulingBoosted();
+            RaiseTimerNotes();
         }
         finally { _loading = false; }
     }
@@ -132,6 +149,8 @@ public partial class GraphicsViewModel : ObservableObject, IAutoRefreshable, IDi
         if (!r.Success) { _loading = true; ForceTimerResolution = !value; _loading = false; }
         // Reflect the new live value straight away (it changes the moment we request it).
         TimerResolutionDisplay = _gfx.GetTimerResolutionText();
+        TimerSystemWideActive  = _gfx.IsTimerResolutionActiveSystemWide();
+        RaiseTimerNotes();
     }
 
     partial void OnDisableGameDvrChanged(bool value)
@@ -141,5 +160,13 @@ public partial class GraphicsViewModel : ObservableObject, IAutoRefreshable, IDi
         StatusMessage = r.Message;
         if (r.Success) _settings.GraphicsGameDvrDisabled = value;
         else { _loading = true; DisableGameDvr = !value; _loading = false; }
+    }
+
+    partial void OnPriorityGraphicsSchedulingChanged(bool value)
+    {
+        if (_loading) return;
+        var r = _gfx.SetGraphicsSchedulingBoosted(value);
+        StatusMessage = r.Message;
+        if (!r.Success) { _loading = true; PriorityGraphicsScheduling = !value; _loading = false; }
     }
 }

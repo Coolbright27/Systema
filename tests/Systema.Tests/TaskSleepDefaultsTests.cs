@@ -94,10 +94,17 @@ public class TaskSleepDefaultsTests
     }
 
     [Fact]
-    public void TaskSleepSettings_BusyMinimizedCpuThreshold_DefaultIs30()
+    public void TaskSleepSettings_BusyMinimizedCpuThreshold_DefaultIs20()
     {
         var s = new TaskSleepSettings();
-        Assert.Equal(30, s.BusyMinimizedCpuThresholdPercent);
+        Assert.Equal(20, s.BusyMinimizedCpuThresholdPercent);
+    }
+
+    [Fact]
+    public void TaskSleepSettings_HiddenNapGrace_DefaultIs5Minutes()
+    {
+        var s = new TaskSleepSettings();
+        Assert.Equal(300_000, s.HiddenNapGraceMs);
     }
 
     [Fact]

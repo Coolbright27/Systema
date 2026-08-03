@@ -69,11 +69,13 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
 
     [ObservableProperty] private bool _napChildrenEnabled     = false;
 
-    // Compress memory in deep sleep — closest Windows equivalent to macOS's
-    // compressed-memory behaviour. ON by default. When a napped process crosses
-    // the deep-sleep threshold (default ~10 min idle), trim its working set so
-    // Windows can compress those pages on the standby list. Re-trim after each
-    // brief wake while the process is still in deep sleep.
+    // Compress napped app memory — closest Windows equivalent to macOS's
+    // compressed-memory behaviour. ON by default. As soon as a process naps, trim
+    // its working set so Windows can compress those pages on the standby list, and
+    // keep re-trimming after each brief wake. This applies to regular nap AND deep
+    // sleep; it is no longer gated to the deep-sleep threshold. (The property/
+    // registry name "CompressDeepSleep" is kept for back-compat with saved
+    // settings — its scope was widened to all naps, not renamed.)
     //
     // Replaces the v0.7.9 "Aggressive re-trim after brief wakes",
     // "Max RAM per napped app", and "Also cap foreground app's helpers" toggles.
@@ -89,8 +91,12 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
 
     // ── Minimize Nap ──────────────────────────────────────────────────────────
     [ObservableProperty] private bool _minimizeNapEnabled              = true;
+    /// <summary>Nap apps whose window is open but fully covered by other windows (occlusion). On by default.</summary>
+    [ObservableProperty] private bool _hiddenNapEnabled                = true;
+    /// <summary>How long a window must stay fully covered before it can hidden-nap. Default 5 min.</summary>
+    [ObservableProperty] private int  _hiddenNapGraceMs                = 300_000;
     [ObservableProperty] private bool _skipBusyMinimizedApps           = true;   // ON by default
-    [ObservableProperty] private int  _busyMinimizedCpuThresholdPercent = 30;
+    [ObservableProperty] private int  _busyMinimizedCpuThresholdPercent = 20;
     [ObservableProperty] private int  _minimizedBriefWakeIntervalMs    = 60_000;
     [ObservableProperty] private int  _minimizedBriefWakeDurationMs    = 10_000;
     [ObservableProperty] private int  _minimizeDeepSleepThresholdMs    = 600_000;
@@ -129,6 +135,7 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
     public int[] BriefWakeDurationOptions      { get; } = { 5, 10, 15, 20, 30 };                 // seconds
     public int[] TrayBriefWakeIntervalOptions  { get; } = { 1, 2, 5, 10, 15, 30 };               // minutes
     public int[] DeepSleepAfterOptions         { get; } = { 5, 10, 15, 20, 30, 45, 60 };         // minutes
+    public int[] HiddenNapDelayOptions         { get; } = { 1, 2, 3, 5, 10, 15, 30 };            // minutes
     public int[] TrayDeepWakeOptions           { get; } = { 5, 10, 15, 20, 30, 60 };             // minutes
 
     // ── Launch Boost ──────────────────────────────────────────────────────────
@@ -762,6 +769,12 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
     partial void OnMaxAdjustmentDurationMsChanged(int value)  => PushSettings();
 
     partial void OnMinimizeNapEnabledChanged(bool value)              => PushSettings();
+    partial void OnHiddenNapEnabledChanged(bool value)               => PushSettings();
+    partial void OnHiddenNapGraceMsChanged(int value)
+    {
+        OnPropertyChanged(nameof(HiddenNapDelayMinutes));
+        PushSettings();
+    }
     partial void OnSkipBusyMinimizedAppsChanged(bool value)           => PushSettings();
     partial void OnBusyMinimizedCpuThresholdPercentChanged(int value) => PushSettings();
     partial void OnMinimizedBriefWakeIntervalMsChanged(int value)    => PushSettings();
@@ -833,6 +846,13 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
     {
         get => MinimizeDeepSleepThresholdMs / 60_000;
         set { MinimizeDeepSleepThresholdMs = Math.Max(value, 1) * 60_000; OnPropertyChanged(); }
+    }
+
+    /// <summary>HiddenNapGraceMs in whole minutes for the "Nap after" dropdown.</summary>
+    public int HiddenNapDelayMinutes
+    {
+        get => HiddenNapGraceMs / 60_000;
+        set { HiddenNapGraceMs = Math.Max(value, 1) * 60_000; OnPropertyChanged(); }
     }
 
     /// <summary>TrayBriefWakeIntervalMs in whole minutes for the UI text box.</summary>
@@ -1049,6 +1069,8 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
         MinAdjustmentDurationMs = MinAdjustmentDurationMs,
         MaxAdjustmentDurationMs = MaxAdjustmentDurationMs,
         MinimizeNapEnabled              = MinimizeNapEnabled,
+        HiddenNapEnabled                = HiddenNapEnabled,
+        HiddenNapGraceMs                = Math.Max(HiddenNapGraceMs, 60_000),
         SkipBusyMinimizedApps           = SkipBusyMinimizedApps,
         BusyMinimizedCpuThresholdPercent = BusyMinimizedCpuThresholdPercent,
         MinimizedBriefWakeIntervalMs    = MinimizedBriefWakeIntervalMs,
@@ -1116,8 +1138,13 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
             MinAdjustmentDurationMs = Math.Clamp(ReadInt(key, "MinAdjustmentDurationMs", 5000), 500, 300_000);
             MaxAdjustmentDurationMs = Math.Clamp(ReadInt(key, "MaxAdjustmentDurationMs", 30000), 1000, 3_600_000);
             MinimizeNapEnabled              = ReadBool(key, "MinimizeNapEnabled",              true);
+            HiddenNapEnabled                = ReadBool(key, "HiddenNapEnabled",                true);
+            HiddenNapGraceMs                = Math.Clamp(ReadInt(key, "HiddenNapGraceMs", 300_000), 60_000, 3_600_000);
             SkipBusyMinimizedApps           = ReadBool(key, "SkipBusyMinimizedApps",           true);
-            BusyMinimizedCpuThresholdPercent = Math.Clamp(ReadInt(key, "BusyMinimizedCpuThresholdPercent", 30), 1, 100);
+            // No UI exposes this threshold, so a saved 30 is always the old default — migrate it to 20.
+            int busyPct = ReadInt(key, "BusyMinimizedCpuThresholdPercent", 20);
+            if (busyPct == 30) busyPct = 20;
+            BusyMinimizedCpuThresholdPercent = Math.Clamp(busyPct, 1, 100);
             MinimizedBriefWakeIntervalMs    = Math.Clamp(ReadInt(key, "MinimizedBriefWakeIntervalMs",    60_000), 1_000, 3_600_000);
             MinimizedBriefWakeDurationMs    = Math.Clamp(ReadInt(key, "MinimizedBriefWakeDurationMs",    10_000), 500, 300_000);
             MinimizeDeepSleepThresholdMs    = Math.Clamp(ReadInt(key, "MinimizeDeepSleepThresholdMs",   600_000), 60_000, 3_600_000);
@@ -1198,6 +1225,8 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
             key.SetValue("MinAdjustmentDurationMs", MinAdjustmentDurationMs,          RegistryValueKind.DWord);
             key.SetValue("MaxAdjustmentDurationMs", MaxAdjustmentDurationMs,          RegistryValueKind.DWord);
             key.SetValue("MinimizeNapEnabled",              MinimizeNapEnabled      ? 1 : 0, RegistryValueKind.DWord);
+            key.SetValue("HiddenNapEnabled",                HiddenNapEnabled        ? 1 : 0, RegistryValueKind.DWord);
+            key.SetValue("HiddenNapGraceMs",                HiddenNapGraceMs,                RegistryValueKind.DWord);
             key.SetValue("SkipBusyMinimizedApps",           SkipBusyMinimizedApps   ? 1 : 0, RegistryValueKind.DWord);
             key.SetValue("BusyMinimizedCpuThresholdPercent", BusyMinimizedCpuThresholdPercent, RegistryValueKind.DWord);
             key.SetValue("MinimizedBriefWakeIntervalMs",    MinimizedBriefWakeIntervalMs,     RegistryValueKind.DWord);

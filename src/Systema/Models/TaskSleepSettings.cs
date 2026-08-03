@@ -77,19 +77,20 @@ public class TaskSleepSettings
     /// <summary>
     /// Closest Windows equivalent to macOS's compressed-memory behavior.
     ///
-    /// When a napped process crosses into deep sleep (idle for the deep-sleep
-    /// threshold, default ~10 min), trim its working set with
+    /// As soon as a process naps, trim its working set with
     /// <c>SetProcessWorkingSetSize(-1,-1)</c> + <c>EmptyWorkingSet</c>. Pages get
     /// pushed to the standby list where Windows 10+ compresses them in place at
-    /// roughly 2-4× ratio. Also re-trims after every brief wake that ends while
-    /// the process is still in deep sleep, so the compressed footprint stays
-    /// stable across many wake cycles.
+    /// roughly 2-4× ratio. This applies to a regular nap, not just deep sleep, and
+    /// re-trims after every brief wake so the compressed footprint stays small the
+    /// whole time the app is idle. (Deep sleep still controls how often a napped
+    /// app briefly wakes; it just no longer gates the compression.)
     ///
     /// On by default — this replaces the v0.7.9-era "hard RAM cap" and
     /// "re-trim after brief wake" toggles. The hard cap was removed because
     /// modern Windows handles working-set compression automatically; this
-    /// gentler trim-on-deep-sleep approach achieves the same outcome with no
-    /// risk of crashing apps that don't tolerate a hard cap.
+    /// gentler trim approach achieves the same outcome with no risk of crashing
+    /// apps that don't tolerate a hard cap. The name is kept for back-compat with
+    /// saved settings; its scope was widened from deep-sleep-only to all naps.
     /// </summary>
     public bool CompressDeepSleep { get; set; } = true;
 
@@ -105,6 +106,24 @@ public class TaskSleepSettings
     /// actively playing audio, on a call, or screen-recording.
     /// </summary>
     public bool MinimizeNapEnabled { get; set; } = true;
+
+    /// <summary>
+    /// When true, apps whose window is open but FULLY covered by other windows (occluded — like macOS
+    /// App Nap's occlusion state) are napped too, treated exactly like a minimized app: the same skip
+    /// rules apply (busy &gt; threshold, recently used, audio, foreground, whitelist), and it wakes the
+    /// moment its window is no longer fully covered. ON by default — occlusion is computed, not reported
+    /// by Windows, so it errs toward leaving windows awake when coverage is uncertain, and a covered app
+    /// still has to sit fully hidden for HiddenNapGraceMs before it naps.
+    /// </summary>
+    public bool HiddenNapEnabled { get; set; } = true;
+
+    /// <summary>
+    /// How long (ms) a window must stay FULLY covered before it becomes eligible to hidden-nap.
+    /// This is the hidden-app grace period — separate from (and usually much longer than) the
+    /// minimize/tray grace, so a window you're flipping in front of isn't napped the instant it's
+    /// covered. The timer resets the moment the window is uncovered. Default: 300 000 ms (5 minutes).
+    /// </summary>
+    public int HiddenNapGraceMs { get; set; } = 300_000;
 
     /// <summary>
     /// How often (ms) a minimized-napped app is allowed a brief wake. Default: 60 s.
@@ -141,8 +160,8 @@ public class TaskSleepSettings
     public bool SkipBusyMinimizedApps { get; set; } = true;
 
     /// <summary>CPU % above which a minimized app is treated as "busy" and skipped when
-    /// <see cref="SkipBusyMinimizedApps"/> is on. Default: 30.</summary>
-    public int BusyMinimizedCpuThresholdPercent { get; set; } = 30;
+    /// <see cref="SkipBusyMinimizedApps"/> is on. Default: 20.</summary>
+    public int BusyMinimizedCpuThresholdPercent { get; set; } = 20;
 
     // ── Tray Nap ──────────────────────────────────────────────────────────────
     /// <summary>

@@ -168,7 +168,7 @@
                             </TextBlock>
                             <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" MaxWidth="620" Margin="0,8,0,0"
                                        Foreground="{StaticResource AccentYellowBrush}"
-                                       Text="Keeps the CPU waking more often, so it can increase heat and power draw (worst on a laptop / on battery) — turn it on only if the smoother FPS is worth that to you."/>
+                                       Text="Keeps the CPU waking more often, so it can increase heat and power draw (worst on a laptop or on battery). Turn it on only if the smoother FPS is worth that to you."/>
                             <TextBlock Margin="0,8,0,0" Style="{StaticResource CaptionText}">
                                 <Run Text="Current: "/><Run Text="{Binding TimerResolutionDisplay, Mode=OneWay}"
                                      Foreground="{StaticResource AccentGreenBrush}" FontWeight="SemiBold"/>
@@ -178,8 +178,17 @@
                                   Style="{StaticResource ToggleSwitch}"
                                   IsChecked="{Binding ForceTimerResolution, Mode=TwoWay}"/>
                     </Grid>
+                    <!-- State-aware system-wide status: pending restart vs active for every process -->
                     <TextBlock Text="⟳  Restart your PC so it applies system-wide."
-                               Style="{StaticResource CaptionText}" Foreground="{StaticResource AccentYellowBrush}"/>
+                               Style="{StaticResource CaptionText}" Foreground="{StaticResource AccentYellowBrush}"
+                               Visibility="{Binding ShowTimerRestartNote, Converter={StaticResource BoolToVis}}"/>
+                    <TextBlock Text="✓  Active system-wide. Every app now gets the 0.5 ms timer."
+                               Style="{StaticResource CaptionText}" Foreground="{StaticResource AccentGreenBrush}"
+                               Visibility="{Binding ShowTimerActiveNote, Converter={StaticResource BoolToVis}}"/>
+                    <TextBlock Text="Stays on while Systema is running. If you fully close Systema, the timer goes back to normal."
+                               Style="{StaticResource CaptionText}" Foreground="{StaticResource TextSecondaryBrush}"
+                               TextWrapping="Wrap" MaxWidth="620" Margin="0,4,0,0"
+                               Visibility="{Binding ForceTimerResolution, Converter={StaticResource BoolToVis}}"/>
                 </StackPanel>
             </Border>
 
@@ -205,6 +214,36 @@
                                   IsChecked="{Binding DisableGameDvr, Mode=TwoWay}"/>
                     </Grid>
                     <TextBlock Text="⟳  Restart any open games to apply."
+                               Style="{StaticResource CaptionText}" Foreground="{StaticResource AccentYellowBrush}"/>
+                </StackPanel>
+            </Border>
+
+            <!-- ===== CARD: Priority graphics scheduling (MMCSS) ===== -->
+            <Border Style="{StaticResource Card}" Margin="0,0,0,16">
+                <StackPanel>
+                    <Grid Margin="0,0,0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" Margin="0,0,16,0">
+                            <TextBlock Text="Priority graphics scheduling" Style="{StaticResource HeadingMedium}" Margin="0,0,0,4"/>
+                            <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" MaxWidth="620">
+                                The graphics twin of "Priority audio scheduling." Windows' multimedia scheduler ranks visual
+                                workloads; this raises the ones that matter — games and 3D apps, video playback, screen capture or
+                                streaming, and the desktop compositor itself — to the top tier so the scheduler favors them and
+                                background work stutters them less. It reflects your current setting and changes nothing until you
+                                turn it on.
+                            </TextBlock>
+                            <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" MaxWidth="620"
+                                       Foreground="{StaticResource AccentYellowBrush}" Margin="0,6,0,0"
+                                       Text="It caps at the highest safe level, not true realtime. Real realtime priority can starve Windows itself and freeze the machine, so Systema stays one notch below that. This does raise the desktop compositor's priority for a smoother whole-display pipeline, which is fully reversible if anything ever looks off."/>
+                        </StackPanel>
+                        <CheckBox Grid.Column="1" VerticalAlignment="Center"
+                                  Style="{StaticResource ToggleSwitch}"
+                                  IsChecked="{Binding PriorityGraphicsScheduling, Mode=TwoWay}"/>
+                    </Grid>
+                    <TextBlock Text="⟳  Needs a full restart to take effect."
                                Style="{StaticResource CaptionText}" Foreground="{StaticResource AccentYellowBrush}"/>
                 </StackPanel>
             </Border>

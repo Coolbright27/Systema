@@ -946,24 +946,22 @@ public sealed class TaskSleepService : IDisposable
             }
         }
 
-        // 4f. Compress-in-deep-sleep sweep.
-        //      For every napped PID, check whether it has now been napped long
-        //      enough to be considered "deep sleep" (≥ MinimizeDeepSleepThresholdMs
-        //      or TrayDeepSleepThresholdMs depending on which nap type). If yes
-        //      and we have not yet trimmed it for this deep-sleep cycle, trim
-        //      its working set so Windows can compress the pages on the standby
-        //      list. The HashSet guard avoids re-trimming a process every tick;
-        //      a brief wake clears the PID from the set so the next sweep after
-        //      the wake re-trims (this is the "re-trim after every brief wake
-        //      while in deep sleep" half of the feature).
+        // 4f. Napped-memory compression sweep.
+        //      For every napped PID that we have NOT yet trimmed this nap cycle,
+        //      trim its working set so Windows can compress the pages on the
+        //      standby list. This applies to regular nap AND deep sleep — a napped
+        //      app starts getting compressed the moment it naps, not only after it
+        //      crosses the deep-sleep threshold. The DeepSleepTrimmed guard avoids
+        //      re-trimming a process every tick; a brief wake clears the flag so
+        //      the next sweep after the wake re-trims (the "re-trim after every
+        //      brief wake" half of the feature — see FullyRestore / brief-wake
+        //      re-nap, which reset the flag).
         if (s.CompressDeepSleep && _throttledPids.Count > 0)
         {
-            DateTime now = DateTime.UtcNow;
             int trimmed = 0;
             foreach (int pid in _throttledPids.Keys.ToList())
             {
-                if (TryState(pid, out var dsSt) && dsSt.DeepSleepTrimmed) continue;  // already done
-                if (!IsInDeepSleep(pid, s, now))           continue;     // not deep yet
+                if (TryState(pid, out var dsSt) && dsSt.DeepSleepTrimmed) continue;  // already done this cycle
 
                 IntPtr h = OpenProcess(PROCESS_SET_QUOTA | PROCESS_QUERY_LIMITED_INFORMATION, false, pid);
                 if (h == IntPtr.Zero) continue;
@@ -975,7 +973,7 @@ public sealed class TaskSleepService : IDisposable
             }
             if (trimmed > 0)
                 _log.Info("TaskSleepService",
-                    $"Deep-sleep compression: trimmed {trimmed} process(es) (working set → standby/compressed)");
+                    $"Nap memory compression: trimmed {trimmed} process(es) (working set → standby/compressed)");
         }
 
         // 0. Clear skip reasons and log batch from last tick
@@ -998,11 +996,38 @@ public sealed class TaskSleepService : IDisposable
         }
         var livePids = new HashSet<int>(all.Select(p => p.Id));
 
+        // 4b. Collect window / audio state for minimize-, tray-, and hidden-nap. Computed HERE — BEFORE
+        //     the visible-on-monitor protection below — because a fully-covered ("hidden") window still
+        //     reports IsWindowVisible=true, so GetVisibleOnAnyMonitorPids() returns it. If it were
+        //     protected as "visible on a monitor" first, the very apps Nap-hidden targets would keep
+        //     themselves (and their whole name family) permanently awake and never nap.
+        HashSet<int> minimizedPids = s.MinimizeNapEnabled
+            ? GetMinimizedProcessIds() : new HashSet<int>();
+        // Always query audio PIDs — all nap types (minimize, tray, background, idle)
+        // need audio detection to protect apps playing audio or using the microphone.
+        HashSet<int> audioPids = GetOrRefreshAudioPids();
+        // Tray-nap: get PIDs with NO visible non-minimized top-level windows
+        HashSet<int> trayPids = s.TrayNapEnabled
+            ? GetTrayProcessIds(minimizedPids) : new HashSet<int>();
+        // Nap hidden apps: windows that are open but FULLY covered by other windows. Treated exactly
+        // like minimized apps — merged into minimizedPids so they inherit every rule (busy-awake skip,
+        // recently-restored cooldown, audio protection, grace period, brief wakes, deep sleep) and wake
+        // automatically the moment they're uncovered (they drop out of the recomputed set next tick).
+        // Computed AFTER trayPids so tray detection is unaffected; a hidden app has a visible window so
+        // it's never a tray candidate anyway.
+        HashSet<int> hiddenPids = s.HiddenNapEnabled
+            ? GetHiddenProcessIds(minimizedPids, trayPids) : new HashSet<int>();
+        if (hiddenPids.Count > 0) minimizedPids.UnionWith(hiddenPids);
+
         // 2b. Multi-monitor awareness — protect all PIDs visible on any monitor.
         //     If the user can see the app, it must never be napped (minimize, tray, or CPU).
         //     Also protect all same-name processes (Electron renderers share the parent name).
         HashSet<int> visibleOnMonitorPids = s.MultiMonitorAwarenessEnabled
             ? GetVisibleOnAnyMonitorPids() : new HashSet<int>();
+        // A fully-covered window still reports IsWindowVisible=true, so it shows up here. Drop the hidden
+        // pids or the protection below (and the background-nap "in front" refresh at 2d) would keep the
+        // apps Nap-hidden is meant to sleep permanently awake — this is why covered apps never napped.
+        if (hiddenPids.Count > 0) visibleOnMonitorPids.ExceptWith(hiddenPids);
         if (visibleOnMonitorPids.Count > 0)
         {
             // Collect process names of visible PIDs, then protect ALL PIDs that belong to
@@ -1109,8 +1134,25 @@ public sealed class TaskSleepService : IDisposable
                 StateFor(pid).LastForegroundAt = now2;
         }
 
-        // Build parent→child map for child process napping (minimize/tray nap)
-        Dictionary<int, int> parentMap = (s.MinimizeNapEnabled || s.TrayNapEnabled)
+        // A hidden app must nap as a UNIT. GetHiddenProcessIds only flags the process that OWNS the
+        // covered window; a multi-process app (Electron/Chromium) runs its renderer/GPU/utility work in
+        // separate, WINDOWLESS child processes. Those children would otherwise be tray/idle/background-
+        // napped on their own short grace the moment the app lost visible-family protection (they stop
+        // being "visible on a monitor" once the parent is hidden) — napping half the app seconds after
+        // it's covered instead of honouring the hidden delay. Pull the whole process tree into hiddenPids
+        // so every member rides the same hidden grace and naps together. Any descendant that still has a
+        // visible window of its own is left out — it stays protected and isn't dragged down.
+        if (s.HiddenNapEnabled && hiddenPids.Count > 0)
+        {
+            var hiddenFamily = new HashSet<int>(hiddenPids);
+            ExpandWithDescendants(hiddenPids, hiddenFamily);
+            hiddenFamily.ExceptWith(visibleOnMonitorPids);   // never nap a still-visible child
+            hiddenPids.UnionWith(hiddenFamily);
+            minimizedPids.UnionWith(hiddenFamily);
+        }
+
+        // Build parent→child map for child process napping (minimize/tray/hidden nap)
+        Dictionary<int, int> parentMap = (s.MinimizeNapEnabled || s.TrayNapEnabled || s.HiddenNapEnabled)
             ? BuildParentMap() : new Dictionary<int, int>();
 
         // 3. Collect per-process CPU samples (QUERY_LIMITED access only)
@@ -1119,15 +1161,9 @@ public sealed class TaskSleepService : IDisposable
         // 4. Clean up state for processes that no longer exist
         CleanupDeadProcesses(livePids);
 
-        // 4b. Collect window / audio state for minimize-nap and tray-nap
-        HashSet<int> minimizedPids = s.MinimizeNapEnabled
-            ? GetMinimizedProcessIds() : new HashSet<int>();
-        // Always query audio PIDs — all nap types (minimize, tray, background, idle)
-        // need audio detection to protect apps playing audio or using the microphone.
-        HashSet<int> audioPids = GetOrRefreshAudioPids();
-        // Tray-nap: get PIDs with NO visible non-minimized top-level windows
-        HashSet<int> trayPids = s.TrayNapEnabled
-            ? GetTrayProcessIds(minimizedPids) : new HashSet<int>();
+        // (Window / audio state — minimizedPids, audioPids, trayPids, hiddenPids — is now collected
+        //  earlier, above the visible-on-monitor protection, so a fully-covered app isn't protected as
+        //  "visible" before hidden-nap can act on it.)
 
         // 4b-2. "Keep busy apps awake": if a minimized / tray app's WHOLE TREE is over the busy CPU
         // threshold it's likely still doing work the user backgrounded — keep its ENTIRE tree awake
@@ -1422,7 +1458,11 @@ public sealed class TaskSleepService : IDisposable
         //   toggles so it can't be silently disabled.
         var wakeSeeds = new HashSet<int>();
         if (foregroundPid > 4) wakeSeeds.Add((int)foregroundPid);
-        foreach (int vp in GetVisibleOnAnyMonitorPids()) wakeSeeds.Add(vp);
+        // A fully-covered ("hidden") window still counts as visible-on-a-monitor, so exclude those or
+        // this sweep would wake them right back every tick. They rejoin the seeds the moment they're
+        // uncovered (they drop out of hiddenPids), which is exactly what wakes them.
+        foreach (int vp in GetVisibleOnAnyMonitorPids())
+            if (!hiddenPids.Contains(vp)) wakeSeeds.Add(vp);
         if (wakeSeeds.Count > 0)
         {
             var childToParent = BuildParentMap();                 // child → parent (full snapshot)
@@ -1517,7 +1557,7 @@ public sealed class TaskSleepService : IDisposable
                 // During BeginBriefWake the pid is removed from _throttledPids, so the main
                 // wake loop at #5 can't see it. We have to evaluate user-focus / audio /
                 // un-minimize here and fully restore if any of them triggered.
-                if (s.MinimizeNapEnabled &&
+                if ((s.MinimizeNapEnabled || s.HiddenNapEnabled) &&
                     !_throttledPids.ContainsKey(proc.Id) &&
                     _napBuckets.Is(proc.Id, NapReason.Minimized))
                 {
@@ -1537,7 +1577,7 @@ public sealed class TaskSleepService : IDisposable
                         _processNames.TryGetValue(proc.Id, out string? wn);
                         string reason = reNapAudio   ? "audio detected"
                                        : userFocused ? "opened by user"
-                                                     : "app un-minimized";
+                                                     : "window shown again";   // un-minimized or no longer covered
                         AddEvent(wn ?? proc.ProcessName, proc.Id, "Woke up", reason);
                     }
                     else if (wakeWindowOver)
@@ -1559,10 +1599,10 @@ public sealed class TaskSleepService : IDisposable
                         if (s.NapChildrenEnabled && s.NappedCpuCapEnabled)
                             SetNapChildCaps(proc.Id, s.NappedCpuCapPercent);
 
-                        // Compress-in-deep-sleep: re-trim immediately if the process was in deep
-                        // sleep when the brief wake started. The wake faulted pages back in; push
-                        // them straight back to standby so Windows can re-compress.
-                        if (s.CompressDeepSleep && IsInDeepSleep(proc.Id, s, DateTime.UtcNow))
+                        // Nap memory compression: the brief wake faulted pages back in; push them
+                        // straight back to standby so Windows can re-compress. Applies to regular
+                        // nap and deep sleep alike.
+                        if (s.CompressDeepSleep)
                         {
                             TrimWorkingSetByPid(proc.Id, rn ?? proc.ProcessName);
                             StateFor(proc.Id).DeepSleepTrimmed = true;
@@ -1610,8 +1650,8 @@ public sealed class TaskSleepService : IDisposable
                         if (s.NapChildrenEnabled && s.NappedCpuCapEnabled)
                             SetNapChildCaps(proc.Id, s.NappedCpuCapPercent);
 
-                        // Compress-in-deep-sleep: see the matching minimize-nap branch above.
-                        if (s.CompressDeepSleep && IsInDeepSleep(proc.Id, s, DateTime.UtcNow))
+                        // Nap memory compression: see the matching minimize-nap branch above.
+                        if (s.CompressDeepSleep)
                         {
                             TrimWorkingSetByPid(proc.Id, tn ?? proc.ProcessName);
                             StateFor(proc.Id).DeepSleepTrimmed = true;
@@ -1637,19 +1677,26 @@ public sealed class TaskSleepService : IDisposable
                 // ── Minimize-nap: throttle minimized apps after grace period ──
                 // (Busy minimized/tray apps are already handled up front via busyAwakePids — their
                 //  whole tree is kept awake, so they never reach here.)
-                if (s.MinimizeNapEnabled && minimizedPids.Contains(proc.Id))
+                if ((s.MinimizeNapEnabled || s.HiddenNapEnabled) && minimizedPids.Contains(proc.Id))
                 {
                     bool hasAudio = IsAudioProtected(proc.Id, proc.ProcessName, audioPids);
 
                     if (!hasAudio)
                     {
-                        // Record when this process first went minimized (grace period start)
+                        // Record when this process first went minimized / hidden (grace period start)
                         if (!_minimizeGraceSince.ContainsKey(proc.Id))
                             _minimizeGraceSince[proc.Id] = DateTime.UtcNow;
 
+                        // Hidden (fully-covered) apps get their own, longer, user-adjustable grace so a
+                        // window you're just flipping in front of isn't napped the instant it's covered.
+                        // Minimized/tray apps keep the short MinimizeTrayGraceMs.
+                        bool pendingHidden = hiddenPids.Contains(proc.Id);
+                        StateFor(proc.Id).IsPendingHidden = pendingHidden;
+                        double graceMs = pendingHidden ? s.HiddenNapGraceMs : MinimizeTrayGraceMs;
+
                         bool graceElapsed =
                             (DateTime.UtcNow - _minimizeGraceSince[proc.Id]).TotalMilliseconds
-                            >= MinimizeTrayGraceMs;
+                            >= graceMs;
 
                         if (graceElapsed)
                         {
@@ -1664,8 +1711,10 @@ public sealed class TaskSleepService : IDisposable
                                 _nextBriefWakeAt[proc.Id] =
                                     DateTime.UtcNow.AddMilliseconds(s.MinimizedBriefWakeIntervalMs);
                                 _briefWakeEndAt.Remove(proc.Id);
-                                string napDetail = "app minimized";
-                                AddEvent(proc.ProcessName, proc.Id, "Minimize Nap", napDetail);
+                                bool isHidden = hiddenPids.Contains(proc.Id);
+                                AddEvent(proc.ProcessName, proc.Id,
+                                    isHidden ? "Hidden Nap"                 : "Minimize Nap",
+                                    isHidden ? "hidden behind other windows" : "app minimized");
                                 // Nap the whole tree as a unit so the entire app goes down together
                                 // (renderers/helpers), not just the window owner. Restored together
                                 // by the full-app wake sweep when the window comes back.
@@ -3531,6 +3580,148 @@ public sealed class TaskSleepService : IDisposable
         return pids;
     }
 
+    // ── Nap hidden apps: occlusion detection ───────────────────────────────────
+    // Windows has no native "is this window covered?" API (macOS does), so we compute it. EnumWindows
+    // returns top-level windows in Z-order, TOPMOST first. Walking that order we accumulate the union
+    // of every OPAQUE visible window seen so far — which are exactly the windows ABOVE the current one
+    // — and a window is "fully covered" when subtracting that accumulated region leaves nothing. A PID
+    // is "hidden" only if it has at least one normal visible window AND every one of them is fully
+    // covered, so an app with any uncovered window (its front window) is never treated as hidden.
+    //
+    // SAFE BY DESIGN — the cardinal sin is napping something you can still see, so we bias to
+    // false-negatives:
+    //   • A window counts as an OCCLUDER only when confidently opaque. Layered/alpha-blended windows
+    //     and windows whose opacity we can't read are NOT occluders (we under-count coverage).
+    //   • Cloaked windows (other virtual desktop / suspended UWP) are skipped entirely.
+    //   • Any doubt → the window stays awake.
+    private HashSet<int> GetHiddenProcessIds(HashSet<int> minimizedPids, HashSet<int> trayPids)
+    {
+        var hasUncovered = new HashSet<int>();   // pid has ≥1 normal window still (partly) visible → NOT hidden
+        var hasCovered   = new HashSet<int>();   // pid has ≥1 normal window fully covered → hidden candidate
+
+        IntPtr accumulated = CreateRectRgn(0, 0, 0, 0);   // union of opaque windows ABOVE the current one
+        if (accumulated == IntPtr.Zero) return hasCovered;
+        try
+        {
+            EnumWindows((hWnd, _) =>
+            {
+                try
+                {
+                    if (!IsWindowVisible(hWnd) || IsIconic(hWnd)) return true;
+                    if (IsWindowCloaked(hWnd)) return true;                       // other desktop / suspended — not on screen
+                    uint exStyle = GetWindowLong(hWnd, GWL_EXSTYLE);
+                    if ((exStyle & WS_EX_TOOLWINDOW) != 0) return true;          // tool windows don't participate
+                    if (!GetWindowRect(hWnd, out RECT raw)) return true;
+                    RECT rc = GetVisibleBounds(hWnd, raw);                       // visible frame, not the invisible-border rect
+                    int w = rc.Right - rc.Left, h = rc.Bottom - rc.Top;
+                    if (w <= 1 || h <= 1) return true;                           // zero-size ghost window
+                    if (MonitorFromWindow(hWnd, MONITOR_DEFAULTTONULL) == IntPtr.Zero) return true; // fully off-screen
+
+                    GetWindowThreadProcessId(hWnd, out uint upid);
+                    int pid = (int)upid;
+                    bool normalAppWindow = pid > 4 && !minimizedPids.Contains(pid) && !trayPids.Contains(pid);
+
+                    IntPtr cand = CreateRectRgn(rc.Left, rc.Top, rc.Right, rc.Bottom);
+                    if (cand != IntPtr.Zero)
+                    {
+                        try
+                        {
+                            if (normalAppWindow)
+                            {
+                                IntPtr diff = CreateRectRgn(0, 0, 0, 0);
+                                if (diff != IntPtr.Zero)
+                                {
+                                    try
+                                    {
+                                        // Fully covered ⇔ (this window − everything opaque above it) is empty.
+                                        bool fullyCovered = CombineRgn(diff, cand, accumulated, RGN_DIFF) == NULLREGION;
+                                        if (fullyCovered) hasCovered.Add(pid);
+                                        else              hasUncovered.Add(pid);
+                                    }
+                                    finally { DeleteObject(diff); }
+                                }
+                            }
+                            // This window occludes the ones below it only if it's confidently opaque.
+                            if (IsOpaqueWindow(hWnd, exStyle))
+                                CombineRgn(accumulated, accumulated, cand, RGN_OR);
+                        }
+                        finally { DeleteObject(cand); }
+                    }
+                }
+                catch { /* skip one window; never abort the whole scan */ }
+                return true;
+            }, IntPtr.Zero);
+        }
+        catch (Exception ex) { _log.Warn("TaskSleepService", $"GetHiddenProcessIds failed: {ex.Message}"); }
+        finally { DeleteObject(accumulated); }
+
+        // Hidden = has a fully-covered window AND no still-visible window.
+        hasCovered.ExceptWith(hasUncovered);
+
+        // Diagnostic: log only when the covered set changes, so a live test shows exactly
+        // what the detector sees without spamming the log every tick.
+        if (!hasCovered.SetEquals(_lastHiddenLog))
+        {
+            _lastHiddenLog = new HashSet<int>(hasCovered);
+            if (hasCovered.Count == 0)
+                _log.Info("TaskSleepService", "Nap hidden apps: nothing is fully covered right now");
+            else
+            {
+                var names = new List<string>();
+                foreach (int p in hasCovered)
+                {
+                    try { names.Add(Process.GetProcessById(p).ProcessName + "(" + p + ")"); }
+                    catch { names.Add(p.ToString()); }
+                }
+                _log.Info("TaskSleepService", "Nap hidden apps: fully covered = " + string.Join(", ", names));
+            }
+        }
+        return hasCovered;
+    }
+
+    private HashSet<int> _lastHiddenLog = new();
+
+    /// <summary>Confidently opaque? Non-layered windows are. A layered window is only trusted as an
+    /// occluder when it uses a constant alpha of 255 with no colour-key holes; per-pixel alpha or an
+    /// unreadable state is treated as see-through (conservative — we'd rather under-count coverage).</summary>
+    private static bool IsOpaqueWindow(IntPtr hWnd, uint exStyle)
+    {
+        if ((exStyle & WS_EX_LAYERED) == 0) return true;
+        if (GetLayeredWindowAttributes(hWnd, out _, out byte alpha, out uint flags))
+            return (flags & LWA_ALPHA) != 0 && alpha == 255 && (flags & LWA_COLORKEY) == 0;
+        return false;   // UpdateLayeredWindow / per-pixel alpha — can't verify → not an occluder
+    }
+
+    /// <summary>True when DWM has cloaked the window (another virtual desktop, or a suspended UWP) —
+    /// it isn't really on screen, so it neither occludes nor counts as a covered app window.</summary>
+    private static bool IsWindowCloaked(IntPtr hWnd)
+    {
+        try { if (DwmGetWindowAttribute(hWnd, DWMWA_CLOAKED, out int cloaked, sizeof(int)) == 0) return cloaked != 0; }
+        catch { }
+        return false;
+    }
+
+    [DllImport("gdi32.dll")] private static extern IntPtr CreateRectRgn(int left, int top, int right, int bottom);
+    [DllImport("gdi32.dll")] private static extern int  CombineRgn(IntPtr dst, IntPtr src1, IntPtr src2, int mode);
+    [DllImport("gdi32.dll")] private static extern bool DeleteObject(IntPtr hObject);
+    [DllImport("user32.dll")] private static extern bool GetLayeredWindowAttributes(IntPtr hWnd, out uint crKey, out byte bAlpha, out uint dwFlags);
+    [DllImport("dwmapi.dll")] private static extern int  DwmGetWindowAttribute(IntPtr hWnd, int attr, out int value, int size);
+    [DllImport("dwmapi.dll", EntryPoint = "DwmGetWindowAttribute")] private static extern int DwmGetWindowAttributeRect(IntPtr hWnd, int attr, out RECT value, int size);
+    private const int  RGN_OR = 2, RGN_DIFF = 4, NULLREGION = 1;
+    private const uint WS_EX_LAYERED = 0x00080000, LWA_COLORKEY = 0x1, LWA_ALPHA = 0x2;
+    private const int  DWMWA_CLOAKED = 14, DWMWA_EXTENDED_FRAME_BOUNDS = 9;
+
+    /// <summary>The window's real on-screen rectangle. GetWindowRect includes ~7px of invisible
+    /// resize border on every side, which can leave a phantom uncovered sliver even when a window
+    /// is visually 100% hidden. DWMWA_EXTENDED_FRAME_BOUNDS is the actual painted frame — using it
+    /// for both the covered window and its occluders makes "completely covered" mean visibly covered.</summary>
+    private static RECT GetVisibleBounds(IntPtr hWnd, RECT fallback)
+    {
+        try { if (DwmGetWindowAttributeRect(hWnd, DWMWA_EXTENDED_FRAME_BOUNDS, out RECT b, Marshal.SizeOf<RECT>()) == 0) return b; }
+        catch { }
+        return fallback;
+    }
+
     /// <summary>
     /// Given a set of root PIDs, walks the process tree via CreateToolhelp32Snapshot
     /// and adds all descendant PIDs to the <paramref name="target"/> set.
@@ -4295,6 +4486,13 @@ public sealed class TaskSleepService : IDisposable
         "schtasks", "sc", "fsutil", "powercfg", "where", "whoami", "tasklist",
         "taskkill", "wmic", "net", "net1", "netsh", "ipconfig", "nslookup",
         "ping", "tracert", "route", "arp", "icacls",
+        // Dev-shell subprocesses that spawn in bursts (a terminal / IDE / dev tool running
+        // commands): git & Unix coreutils from Git-Bash/WSL. Transient, sub-second, and boosting
+        // dozens of them is pure noise — this is the flood in the diagnostic report.
+        "git", "git-lfs", "bash", "sh", "conhost", "openconsole",
+        "findstr", "find", "cat", "head", "tail", "grep", "sed", "awk", "ls",
+        "sort", "wc", "cut", "tr", "xargs", "more", "dirname", "basename", "env",
+        "cygpath", "uname", "date", "sleep", "printf", "expr", "test", "true", "false",
         // UAC and user-mode security prompts
         "consent", "RuntimeBroker",
         // .NET Framework NGEN — fires in big bursts after every Windows Update;
@@ -4583,11 +4781,12 @@ public sealed class TaskSleepService : IDisposable
     }
 
     /// <summary>
-    /// Eligibility for boosting a CHILD process that a currently-boosted app spawned.
-    /// Looser than <see cref="IsBoostableLaunch"/> — it still blocks the truly critical
-    /// sets (system, security/AV, Systema, our installer) but ALLOWS the "extras"
-    /// (rundll32, helper hosts, etc.) because the boosted app intentionally spawned
-    /// them as part of its launch, and they often do the real startup work.
+    /// Eligibility for boosting a CHILD process that a currently-boosted app spawned. Blocks the
+    /// same sets as <see cref="IsBoostableLaunch"/> — including the transient CLI / shell / system
+    /// "extras" (cmd, git, bash, findstr, reg, rundll32…). Those are sub-second helpers that provide
+    /// nothing when boosted; letting them ride a parent's window is exactly what floods the log when
+    /// a terminal or dev tool runs a burst of commands. A real app's meaningful children (its own
+    /// helper exes, renderers, anti-cheat) aren't on the block list, so they still inherit the boost.
     /// </summary>
     private bool IsBoostableChild(string name)
     {
@@ -4596,6 +4795,7 @@ public sealed class TaskSleepService : IDisposable
         if (SystemProcessNames.Contains(name))           return false;
         if (SecurityCriticalProcessNames.Contains(name)) return false;
         if (_detectedAvProcessNames.Contains(name))      return false;
+        if (LaunchBoostExclusionExtras.Contains(name))   return false;   // transient CLI/shell/system junk — never boost, even as a child
         if (name.StartsWith("Systema_Setup", StringComparison.OrdinalIgnoreCase)) return false;
         return true;
     }
@@ -4651,6 +4851,16 @@ public sealed class TaskSleepService : IDisposable
         "smartscreen", "SearchIndexer", "SearchProtocolHost", "SgrmBroker",
     };
 
+    /// <summary>Interpreters / shells that RUN commands rather than launch apps. A child of one of
+    /// these is a script or tool subprocess, not a user launch, so it must never originate a fresh
+    /// boost session — otherwise a terminal, IDE, or dev tool cascades boosts across its whole
+    /// subprocess tree. (Game launchers like Steam/Epic are deliberately NOT here.)</summary>
+    private static readonly HashSet<string> LaunchBoostShellParents = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "cmd", "powershell", "pwsh", "bash", "sh", "wsl", "wslhost", "conhost", "openconsole",
+        "node", "python", "python3", "py", "perl", "ruby", "git",
+    };
+
     /// <summary>
     /// True when a brand-new top-level process looks like something the USER just launched,
     /// rather than a background spawn or a child of an already-running app. We can't read the
@@ -4680,7 +4890,12 @@ public sealed class TaskSleepService : IDisposable
         if (LaunchBoostBackgroundParents.Contains(parent)) return false;    // service / scheduler / updater host
         if (parent.Equals("explorer", StringComparison.OrdinalIgnoreCase)) return true;   // direct shell launch
 
-        // Transient launcher stub (young, non-background parent) → treat as a launch origin.
+        // A shell / interpreter parent (cmd, bash, git, node…) is running a command or script — not a
+        // user launching an app — so it never originates a boost session. Without this, a terminal or
+        // dev tool cascades a fresh boost onto every subprocess it spawns.
+        if (LaunchBoostShellParents.Contains(parent)) return false;
+
+        // Transient launcher stub (young, non-background, non-shell parent) → treat as a launch origin.
         TimeSpan? age = GetProcessAgeSafe(ppid);
         if (age.HasValue && age.Value < TimeSpan.FromSeconds(20)) return true;
 
@@ -4961,7 +5176,10 @@ public sealed class TaskSleepService : IDisposable
                     _trayGraceSince.TryGetValue(pid, out DateTime tgs);
                     DateTime earliest = mgs == default ? tgs : (tgs == default ? mgs : (mgs < tgs ? mgs : tgs));
                     double elapsedMs  = (now - earliest).TotalMilliseconds;
-                    double remSec     = Math.Max(0, (MinimizeTrayGraceMs - elapsedMs) / 1000.0);
+                    // Hidden apps run the longer, user-set grace; minimized/tray use the short const.
+                    double graceMs    = (TryState(pid, out var pgSt) && pgSt.IsPendingHidden)
+                                        ? s.HiddenNapGraceMs : MinimizeTrayGraceMs;
+                    double remSec     = Math.Max(0, (graceMs - elapsedMs) / 1000.0);
                     pendingLabel = $"~{(int)Math.Ceiling(remSec)}s";
                 }
 

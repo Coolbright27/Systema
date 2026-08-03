@@ -10,9 +10,10 @@
 //
 //   Intent-backed + reinforced (these drift when a device reconnects, so the toggle reflects
 //   the user's saved INTENT and a 30 s pass re-asserts it where the live state slipped):
-//     • DisableAllEnhancements → turn off the enhancement/effects (APO) layer on every output device
+//     • DisableAllEnhancements → master switch: clears the effect chain on BOTH outputs AND mics
+//                                and stops the shared vendor services/agents (Waves/Realtek/Intel).
+//                                Combines what used to be two separate toggles.
 //     • DisableSpatialAudio    → null the spatial EFX (Windows Sonic / Dolby / DTS) on every device
-//     • DisableMicEnhancements → turn off ALL processing on every microphone (incl. Realtek/Waves)
 //
 // RELATED FILES
 //   Services/AudioService.cs — the registry reads/writes, intent persistence, ReinforceFromIntent
@@ -39,7 +40,6 @@ public partial class AudioViewModel : ObservableObject, IAutoRefreshable, IDispo
     [ObservableProperty] private bool _boostAudioScheduling;
     [ObservableProperty] private bool _disableAllEnhancements;
     [ObservableProperty] private bool _disableSpatialAudio;
-    [ObservableProperty] private bool _disableMicEnhancements;
     [ObservableProperty] private string _statusMessage = string.Empty;
 
     public AudioViewModel(AudioService audio)
@@ -64,9 +64,8 @@ public partial class AudioViewModel : ObservableObject, IAutoRefreshable, IDispo
         {
             DisableDucking         = _audio.IsDuckingDisabled();
             BoostAudioScheduling   = _audio.IsAudioSchedulingBoosted();
-            DisableAllEnhancements = _audio.GetEnhancementsOffIntent();
+            DisableAllEnhancements = _audio.GetAllEnhancementsOffIntent();
             DisableSpatialAudio    = _audio.GetSpatialOffIntent();
-            DisableMicEnhancements = _audio.GetMicEnhancementsOffIntent();
         }
         finally { _loading = false; }
     }
@@ -104,18 +103,12 @@ public partial class AudioViewModel : ObservableObject, IAutoRefreshable, IDispo
     partial void OnDisableAllEnhancementsChanged(bool value)
     {
         if (_loading) return;
-        StatusMessage = _audio.SetEnhancementsDisabledEverywhere(value).Message;
+        StatusMessage = _audio.SetAllEnhancementsDisabledEverywhere(value).Message;
     }
 
     partial void OnDisableSpatialAudioChanged(bool value)
     {
         if (_loading) return;
         StatusMessage = _audio.SetSpatialAudioDisabled(value).Message;
-    }
-
-    partial void OnDisableMicEnhancementsChanged(bool value)
-    {
-        if (_loading) return;
-        StatusMessage = _audio.SetMicEnhancementsDisabledEverywhere(value).Message;
     }
 }

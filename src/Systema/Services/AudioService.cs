@@ -27,6 +27,7 @@
 // ════════════════════════════════════════════════════════════════════════════
 
 using System.Security.AccessControl;
+using System.ServiceProcess;
 using Microsoft.Win32;
 using Systema.Core;
 
@@ -305,10 +306,18 @@ public class AudioService
     }
 
     /// <summary>Disables (or re-enables) ALL audio enhancements on every active OUTPUT device by
-    /// clearing the entire effect chain (Microsoft, Realtek, Waves, everything) for a raw signal.
-    /// Reversible via saved originals.</summary>
-    public TweakResult SetEnhancementsDisabledEverywhere(bool disable) =>
-        SetEnhancements(RenderDevicesKey, EnhIntentValue, FxListSavePrefix, EnhDevPrefix, "Audio enhancements", disable);
+    /// clearing the entire effect chain (Microsoft, Realtek, Waves, everything) for a raw signal, AND
+    /// stopping the vendor DSP services (Waves/Realtek/Nahimic) so nothing re-injects processing.
+    /// Reversible via saved originals (both the effect chain and each service's Start type).</summary>
+    public TweakResult SetEnhancementsDisabledEverywhere(bool disable)
+    {
+        var r   = SetEnhancements(RenderDevicesKey, EnhIntentValue, FxListSavePrefix, EnhDevPrefix, "Audio enhancements", disable);
+        int svc = SetVendorAudioServices(disable);
+        int agt = SetVendorAudioStartupAgents(disable);
+        if (r.Success && disable && (svc > 0 || agt > 0))
+            return TweakResult.Ok(r.Message + " Stopped the Realtek/Waves audio services and startup agents too.");
+        return r;
+    }
 
     /// <summary>Disables (or re-enables) ALL enhancements on every active MICROPHONE / input device by
     /// clearing the entire effect chain, including driver-injected vendor packs (Realtek/Waves/Nahimic)
@@ -316,6 +325,20 @@ public class AudioService
     /// slots than speakers, so we empty every list rather than vendor-filtering. Reversible.</summary>
     public TweakResult SetMicEnhancementsDisabledEverywhere(bool disable) =>
         SetEnhancements(CaptureDevicesKey, MicEnhIntentValue, MicFxSavePrefix, MicEnhDevPrefix, "Microphone enhancements", disable);
+
+    /// <summary>The one master switch behind the combined toggle: disables (or re-enables) ALL audio
+    /// processing on BOTH outputs AND microphones — clears both effect chains and stops the shared
+    /// vendor services/agents (Waves/Realtek/Intel) that process either side. Fully reversible.</summary>
+    public TweakResult SetAllEnhancementsDisabledEverywhere(bool disable)
+    {
+        var rOut = SetEnhancementsDisabledEverywhere(disable);    // output FX + vendor services + startup agents
+        var rMic = SetMicEnhancementsDisabledEverywhere(disable); // microphone FX (shared services already handled above)
+        if (!rOut.Success) return rOut;   // surface the first real failure
+        if (!rMic.Success) return rMic;
+        return TweakResult.Ok(disable
+            ? "All audio and microphone enhancements disabled. Cleared both effect chains and stopped the Realtek/Waves/Intel services and startup agents. Restart to fully apply."
+            : "Audio and microphone enhancements re-enabled. Effect chains, services, and startup agents restored.");
+    }
 
     // ── 4. Disable spatial audio (Windows Sonic / Dolby / DTS), device-wide ──
     // Spatial is the endpoint EFX in FxProperties. Turning it off = setting that CLSID to the
@@ -402,7 +425,7 @@ public class AudioService
 
     /// <summary>True if this FxProperties value name is an effect-CLSID list in EITHER property set:
     /// the plain FX set ({d04e05a6...}) or the composite FX set ({d3993a3f...}, where Realtek/Waves sit).</summary>
-    private static bool IsFxListName(string name) =>
+    internal static bool IsFxListName(string name) =>
         name.StartsWith(FxCompositeFmtId  + ",", StringComparison.OrdinalIgnoreCase) ||
         name.StartsWith(FxCompositeFmtId2 + ",", StringComparison.OrdinalIgnoreCase);
 
@@ -517,6 +540,11 @@ public class AudioService
     public bool GetMicEnhancementsOffIntent() => ReadIntent(MicEnhIntentValue);
     public bool GetSpatialOffIntent()         => ReadIntent(SpatialIntentValue);
 
+    /// <summary>The combined "disable all audio &amp; mic enhancements" state — on if EITHER the output or
+    /// microphone off-intent is set. Used to reflect the single merged toggle and drive reinforcement,
+    /// and it migrates users who previously had only one of the two old toggles on.</summary>
+    public bool GetAllEnhancementsOffIntent() => GetEnhancementsOffIntent() || GetMicEnhancementsOffIntent();
+
     private static bool ReadIntent(string name)
     {
         try { using var k = Registry.CurrentUser.OpenSubKey(SystemaAudioKey); return k?.GetValue(name) is int v && v == 1; }
@@ -553,15 +581,24 @@ public class AudioService
         bool changed = false;
         try
         {
-            if (GetEnhancementsOffIntent() && (!AreEnhancementsDisabled(RenderDevicesKey) || AnyFxPresent(RenderDevicesKey)))
+            // Combined master: if EITHER off-intent is set, keep BOTH outputs and mics raw and the
+            // shared vendor services/agents stopped. (Either-intent also migrates users who had only
+            // one of the two old toggles on — the other side gets brought in line on the next pass.)
+            if (GetAllEnhancementsOffIntent())
             {
-                SetEnhancementsDisabledEverywhere(true);
-                changed = true;
-            }
-            if (GetMicEnhancementsOffIntent() && (!AreEnhancementsDisabled(CaptureDevicesKey) || AnyFxPresent(CaptureDevicesKey)))
-            {
-                SetMicEnhancementsDisabledEverywhere(true);
-                changed = true;
+                bool renderDrift = !AreEnhancementsDisabled(RenderDevicesKey)  || AnyFxPresent(RenderDevicesKey);
+                bool micDrift    = !AreEnhancementsDisabled(CaptureDevicesKey) || AnyFxPresent(CaptureDevicesKey);
+
+                if (renderDrift || VendorServicesNeedReassert() || VendorStartupAgentsNeedReassert())
+                {
+                    SetEnhancementsDisabledEverywhere(true);   // output FX + vendor services + startup agents
+                    changed = true;
+                }
+                if (micDrift)
+                {
+                    SetMicEnhancementsDisabledEverywhere(true); // microphone FX
+                    changed = true;
+                }
             }
             if (GetSpatialOffIntent() && AnyActiveEndpointHasSpatial())
             {
@@ -572,5 +609,285 @@ public class AudioService
         catch (Exception ex) { Log.Warn("Audio", $"ReinforceFromIntent failed: {ex.Message}"); }
         if (changed) Log.Info("Audio", "ReinforceFromIntent re-applied drifted audio settings");
         return changed;
+    }
+
+    // ── Vendor audio ENHANCEMENT services (Waves / Realtek / Nahimic / Intel SST) ─
+    // "Disable all audio enhancements" also stops these so no vendor DSP runs and the signal goes
+    // almost straight to the endpoint. This list is enhancement / console / effect / SST services.
+    // NEVER add Audiosrv or AudioEndpointBuilder — those ARE core Windows audio and stopping them
+    // kills all sound. IntelAudioService (Intel Smart Sound) is included because it was tested safe
+    // to stop here, but it's the RISKIEST entry: on some machines Intel SST is the actual audio path,
+    // so it's the one most likely to need a toggle-off if a device ever goes silent. Fully reversible:
+    // each service's original Start type is captured before the first change, and on the way back we
+    // ONLY restore services we ourselves disabled (so a service you disabled by hand is left alone).
+    // Start values: 2 = Automatic, 3 = Manual, 4 = Disabled.
+    internal static readonly string[] VendorAudioServices =
+    {
+        "WavesSysSvc",               // Waves Audio Services (MaxxAudio)
+        "WavesAudioService",         // Waves Audio Universal Services
+        "RtkAudioUniversalService",  // Realtek Audio Universal Service (UAD effects / console)
+        "RtkAudioService",           // Realtek Audio Service (older naming)
+        "NahimicService",            // Nahimic audio enhancement
+        "IntelAudioService",         // Intel Smart Sound audio service (DSP). Tested safe to stop; riskiest entry.
+    };
+    private const string AudioSvcDefaultsKey = @"Software\Systema\AudioServiceDefaults"; // HKCU — captured Start values
+    private static string SvcRegPath(string name) => $@"SYSTEM\CurrentControlSet\Services\{name}";
+
+    /// <summary>Stops + disables the vendor enhancement services (disable=true), or restores the ones
+    /// we disabled to the Start type they had before (disable=false). Only installed services are
+    /// touched, and restore skips any service we never disabled. Returns how many were changed; never throws.</summary>
+    private int SetVendorAudioServices(bool disable)
+    {
+        int changed = 0;
+        foreach (var name in VendorAudioServices)
+        {
+            try
+            {
+                using var svcKey = Registry.LocalMachine.OpenSubKey(SvcRegPath(name), writable: true);
+                if (svcKey == null) continue;                       // not installed on this machine
+                int current = svcKey.GetValue("Start") is int s ? s : 3;
+
+                if (disable)
+                {
+                    CaptureAudioServiceDefault(name, current);      // first value only — the true original
+                    if (current != 4) { svcKey.SetValue("Start", 4, RegistryValueKind.DWord); changed++; }
+                    if (TryStopService(name)) changed++;
+                }
+                else
+                {
+                    // Only restore services WE disabled; if there's no capture we never touched it, so leave it.
+                    if (!TryTakeCapturedDefault(name, out int restore)) continue;
+                    if (current != restore) { svcKey.SetValue("Start", restore, RegistryValueKind.DWord); changed++; }
+                    if (restore == 2) TryStartService(name);        // only auto-start services get started back up
+                }
+            }
+            catch (Exception ex) { Log.Warn("Audio", $"SetVendorAudioServices({name}) failed: {ex.Message}"); }
+        }
+        if (changed > 0)
+            Log.Info("Audio", $"Vendor audio services {(disable ? "stopped/disabled" : "restored")} ({changed} change(s))");
+        return changed;
+    }
+
+    /// <summary>True when a vendor enhancement service has crept back (not disabled, or still running)
+    /// — so the 30 s reinforcement loop knows to re-disable it. Reads only; cheap.</summary>
+    private static bool VendorServicesNeedReassert()
+    {
+        foreach (var name in VendorAudioServices)
+        {
+            try
+            {
+                using var svcKey = Registry.LocalMachine.OpenSubKey(SvcRegPath(name));
+                if (svcKey == null) continue;
+                if ((svcKey.GetValue("Start") is int s ? s : 3) != 4) return true;   // not disabled
+                using var sc = new ServiceController(name);
+                var st = sc.Status;
+                if (st != ServiceControllerStatus.Stopped && st != ServiceControllerStatus.StopPending)
+                    return true;                                                       // still running
+            }
+            catch { /* not installed / access — ignore */ }
+        }
+        return false;
+    }
+
+    private static bool TryStopService(string name)
+    {
+        try
+        {
+            using var sc = new ServiceController(name);
+            if (sc.Status is ServiceControllerStatus.Stopped or ServiceControllerStatus.StopPending) return false;
+            if (!sc.CanStop) return false;
+            sc.Stop();
+            sc.WaitForStatus(ServiceControllerStatus.Stopped, TimeSpan.FromSeconds(5));
+            return true;
+        }
+        catch { return false; }   // access / dependency / timeout — never fatal
+    }
+
+    private static void TryStartService(string name)
+    {
+        try
+        {
+            using var sc = new ServiceController(name);
+            if (sc.Status == ServiceControllerStatus.Stopped)
+            {
+                sc.Start();
+                sc.WaitForStatus(ServiceControllerStatus.Running, TimeSpan.FromSeconds(5));
+            }
+        }
+        catch { /* best effort */ }
+    }
+
+    /// <summary>Records a service's Start value before we first change it (first write wins, so our own
+    /// Disabled(4) can never overwrite the real original).</summary>
+    private static void CaptureAudioServiceDefault(string name, int currentStart)
+    {
+        try
+        {
+            using var key = Registry.CurrentUser.CreateSubKey(AudioSvcDefaultsKey, writable: true);
+            if (key != null && key.GetValue(name) == null)
+                key.SetValue(name, currentStart, RegistryValueKind.DWord);
+        }
+        catch (Exception ex) { Log.Warn("Audio", $"CaptureAudioServiceDefault({name}) failed: {ex.Message}"); }
+    }
+
+    /// <summary>Reads and clears the captured original Start for a service. Returns false when there's
+    /// no capture (meaning Systema never disabled it, so the caller must leave it untouched).</summary>
+    private static bool TryTakeCapturedDefault(string name, out int start)
+    {
+        start = 3;
+        try
+        {
+            using var key = Registry.CurrentUser.OpenSubKey(AudioSvcDefaultsKey, writable: true);
+            if (key?.GetValue(name) is int saved && saved is 2 or 3 or 4)
+            {
+                key.DeleteValue(name, throwOnMissingValue: false);
+                start = saved;
+                return true;
+            }
+        }
+        catch (Exception ex) { Log.Warn("Audio", $"TryTakeCapturedDefault({name}) failed: {ex.Message}"); }
+        return false;
+    }
+
+    // ── Vendor audio startup AGENTS (Run-key launchers) ──────────────────────
+    // Vendors auto-start user-mode agent apps at logon, separate from their services (Waves' jack
+    // agent, Realtek's console agent, etc.). Even with the services disabled these keep running and
+    // can poke at the audio. "Disable all audio enhancements" removes their Run entries so they never
+    // launch again, and stops any that are running now. Reversible: each Run value is saved before
+    // removal and re-written on restore. Only audio-vendor agents are named here — audiodg.exe and
+    // core Windows audio are NEVER killed.
+    internal static readonly string[] VendorAudioRunEntries =
+    {
+        "WavesSvc", "WavesGUI", "MaxxAudioPro",                          // Waves
+        "RtkAudUService", "RtHDVCpl", "RAVCpl64", "RtkNGUI64", "FMAPP",  // Realtek
+        "NahimicSvc", "Nahimic",                                        // Nahimic
+    };
+    // Process names of those agents to stop immediately, so "off" takes effect this session too.
+    internal static readonly string[] VendorAudioAgentProcesses =
+    {
+        "WavesSvc64", "WavesSvc", "MaxxAudioPro",
+        "RtkAudUService64", "RtkAudUService", "RAVCpl64", "RtHDVCpl", "RtkNGUI64", "FMAPP",
+        "NahimicSvc",
+    };
+    private const string AudioStartupDefaultsKey = @"Software\Systema\AudioStartupDefaults"; // HKCU — captured Run values
+    private const string RunKeyPath = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Run";
+
+    /// <summary>Removes the vendor audio agents' Run-key launchers and stops any running ones
+    /// (disable=true), or restores every Run entry we removed (disable=false). Never throws; returns
+    /// how many changes were made.</summary>
+    private int SetVendorAudioStartupAgents(bool disable)
+    {
+        int changed = 0;
+        if (disable)
+        {
+            foreach (var (tag, root) in new[] { ("HKLM", Registry.LocalMachine), ("HKCU", Registry.CurrentUser) })
+            {
+                try
+                {
+                    using var run = root.OpenSubKey(RunKeyPath, writable: true);
+                    if (run == null) continue;
+                    foreach (var name in VendorAudioRunEntries)
+                    {
+                        if (run.GetValue(name) is not string val || val.Length == 0) continue;
+                        CaptureAudioStartup($"{tag}\\{name}", val);      // first value wins — the true original
+                        run.DeleteValue(name, throwOnMissingValue: false);
+                        changed++;
+                    }
+                }
+                catch (Exception ex) { Log.Warn("Audio", $"Disable vendor startup ({tag}) failed: {ex.Message}"); }
+            }
+            changed += KillVendorAudioAgents();
+        }
+        else
+        {
+            // Restore everything we captured, back to whichever Run key it came from.
+            try
+            {
+                using var caps = Registry.CurrentUser.OpenSubKey(AudioStartupDefaultsKey, writable: true);
+                if (caps != null)
+                {
+                    foreach (var capName in caps.GetValueNames())
+                    {
+                        int slash = capName.IndexOf('\\');
+                        if (slash <= 0 || caps.GetValue(capName) is not string data)
+                        {
+                            caps.DeleteValue(capName, throwOnMissingValue: false);
+                            continue;
+                        }
+                        var root = capName[..slash] == "HKLM" ? Registry.LocalMachine : Registry.CurrentUser;
+                        string runName = capName[(slash + 1)..];
+                        using (var run = root.OpenSubKey(RunKeyPath, writable: true))
+                            run?.SetValue(runName, data, RegistryValueKind.String);
+                        caps.DeleteValue(capName, throwOnMissingValue: false);
+                        changed++;
+                    }
+                }
+            }
+            catch (Exception ex) { Log.Warn("Audio", $"Restore vendor startup failed: {ex.Message}"); }
+        }
+        if (changed > 0)
+            Log.Info("Audio", $"Vendor audio startup agents {(disable ? "disabled/stopped" : "restored")} ({changed} change(s))");
+        return changed;
+    }
+
+    /// <summary>True when a vendor agent Run entry exists or an agent process is running — used by the
+    /// reinforcement loop to know when to re-disable. Reads only.</summary>
+    private static bool VendorStartupAgentsNeedReassert()
+    {
+        foreach (var root in new[] { Registry.LocalMachine, Registry.CurrentUser })
+        {
+            try
+            {
+                using var run = root.OpenSubKey(RunKeyPath);
+                if (run == null) continue;
+                foreach (var name in VendorAudioRunEntries)
+                    if (run.GetValue(name) != null) return true;
+            }
+            catch { }
+        }
+        foreach (var pname in VendorAudioAgentProcesses)
+        {
+            try
+            {
+                var ps = System.Diagnostics.Process.GetProcessesByName(pname);
+                bool any = ps.Length > 0;
+                foreach (var p in ps) p.Dispose();
+                if (any) return true;
+            }
+            catch { }
+        }
+        return false;
+    }
+
+    private static int KillVendorAudioAgents()
+    {
+        int killed = 0;
+        foreach (var pname in VendorAudioAgentProcesses)
+        {
+            try
+            {
+                foreach (var p in System.Diagnostics.Process.GetProcessesByName(pname))
+                {
+                    try { p.Kill(); killed++; }
+                    catch { /* already gone / access — non-fatal */ }
+                    finally { p.Dispose(); }
+                }
+            }
+            catch { }
+        }
+        return killed;
+    }
+
+    /// <summary>Saves a Run value before we remove it (first write wins, so our own removal can't lose
+    /// the real original). Value name is tagged with the hive so restore knows where it belongs.</summary>
+    private static void CaptureAudioStartup(string capName, string value)
+    {
+        try
+        {
+            using var key = Registry.CurrentUser.CreateSubKey(AudioStartupDefaultsKey, writable: true);
+            if (key != null && key.GetValue(capName) == null)
+                key.SetValue(capName, value, RegistryValueKind.String);
+        }
+        catch (Exception ex) { Log.Warn("Audio", $"CaptureAudioStartup({capName}) failed: {ex.Message}"); }
     }
 }

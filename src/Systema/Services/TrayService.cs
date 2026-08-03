@@ -77,6 +77,33 @@ public sealed class TrayService : IDisposable
 
         _notifyIcon.DoubleClick += (_, _) => ShowWindowRequested?.Invoke();
         _notifyIcon.ContextMenuStrip = BuildContextMenu();
+
+        StartVisibilityReassert();
+    }
+
+    // When Systema launches at boot it can beat explorer's taskbar to the punch, so the icon's
+    // initial add silently fails. WinForms re-adds on the TaskbarCreated broadcast, but if the
+    // shell was already up (just not tray-ready yet) that broadcast never comes and the icon stays
+    // missing — which locks a tray-only app out of view. Re-asserting the icon a few times over the
+    // first ~20 s forces a re-add once the tray is ready. Each toggle is a brief no-op flicker if the
+    // icon is already present.
+    private System.Windows.Forms.Timer? _reassertTimer;
+    private int _reassertTicks;
+
+    private void StartVisibilityReassert()
+    {
+        _reassertTimer = new System.Windows.Forms.Timer { Interval = 5000 };
+        _reassertTimer.Tick += (_, _) =>
+        {
+            try { _notifyIcon.Visible = false; _notifyIcon.Visible = true; } catch { /* non-critical */ }
+            if (++_reassertTicks >= 4)
+            {
+                _reassertTimer?.Stop();
+                _reassertTimer?.Dispose();
+                _reassertTimer = null;
+            }
+        };
+        _reassertTimer.Start();
     }
 
     // ── Public API ─────────────────────────────────────────────────────────────
@@ -220,6 +247,7 @@ public sealed class TrayService : IDisposable
 
     public void Dispose()
     {
+        try { _reassertTimer?.Stop(); _reassertTimer?.Dispose(); } catch { }
         _notifyIcon.Visible = false;
         _notifyIcon.Dispose();
     }

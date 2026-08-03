@@ -16,90 +16,120 @@
             <TextBlock Text="See how your memory is doing and manage the apps that open when your PC starts."
                        Style="{StaticResource CaptionText}" Margin="0,4,0,20"/>
 
-            <!-- Metric tiles -->
-            <Grid Margin="0,0,0,16">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="12"/>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="12"/>
-                    <ColumnDefinition Width="*"/>
-                </Grid.ColumnDefinitions>
-
-                <Border Grid.Column="0" Background="{StaticResource BgSurfaceBrush}" CornerRadius="12" Padding="16,14">
-                    <StackPanel>
-                        <TextBlock Text="In use" Style="{StaticResource CaptionText}"/>
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="{Binding UsedRamGb}" FontSize="26" FontWeight="SemiBold"
-                                       Foreground="{StaticResource TextPrimaryBrush}"/>
-                            <TextBlock Text=" GB" FontSize="13" VerticalAlignment="Bottom" Margin="3,0,0,5"
-                                       Foreground="{StaticResource TextSecondaryBrush}"/>
+            <!-- Hero: live memory breakdown + trend line -->
+            <Border Background="{StaticResource BgSurfaceBrush}" CornerRadius="12" Padding="18,16" Margin="0,0,0,12">
+                <StackPanel>
+                    <Grid Margin="0,0,0,13">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                            <TextBlock Text="Free right now" Style="{StaticResource CaptionText}"/>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="{Binding FreeRamGb}" FontSize="31" FontWeight="SemiBold"
+                                           Foreground="{StaticResource AccentGreenBrush}"/>
+                                <TextBlock VerticalAlignment="Bottom" Margin="7,0,0,6" FontSize="13"
+                                           Foreground="{StaticResource TextSecondaryBrush}">
+                                    <Run Text="GB of "/><Run Text="{Binding TotalRamGb, Mode=OneWay}"/><Run Text=" GB"/>
+                                </TextBlock>
+                            </StackPanel>
                         </StackPanel>
-                    </StackPanel>
-                </Border>
-
-                <Border Grid.Column="2" Background="{StaticResource BgSurfaceBrush}" CornerRadius="12" Padding="16,14">
-                    <StackPanel>
-                        <TextBlock Text="Free" Style="{StaticResource CaptionText}"/>
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="{Binding FreeRamGb}" FontSize="26" FontWeight="SemiBold"
-                                       Foreground="{StaticResource AccentGreenBrush}"/>
-                            <TextBlock Text=" GB" FontSize="13" VerticalAlignment="Bottom" Margin="3,0,0,5"
-                                       Foreground="{StaticResource TextSecondaryBrush}"/>
+                        <!-- live memory-in-use trend line -->
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center"
+                                    Visibility="{Binding HasSparkline, Converter={StaticResource BoolToVis}}">
+                            <TextBlock Text="Memory in use" Style="{StaticResource CaptionText}"
+                                       HorizontalAlignment="Right" Margin="0,0,2,3"/>
+                            <Grid Width="168" Height="46">
+                                <Polygon Points="{Binding SparklineArea}" Fill="#2E5E81AC"/>
+                                <Polyline Points="{Binding SparklinePoints}" Stroke="{StaticResource AccentBlueBrush}"
+                                          StrokeThickness="2" StrokeLineJoin="Round"/>
+                            </Grid>
                         </StackPanel>
+                    </Grid>
+
+                    <!-- three-segment usage bar -->
+                    <Border CornerRadius="7" Height="14" ClipToBounds="True"
+                            BorderBrush="{StaticResource BorderBrush}" BorderThickness="1">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="{Binding InUseStar}"/>
+                                <ColumnDefinition Width="{Binding CachedStar}"/>
+                                <ColumnDefinition Width="{Binding FreeStar}"/>
+                            </Grid.ColumnDefinitions>
+                            <Border Grid.Column="0" Background="{StaticResource AccentBlueBrush}"/>
+                            <Border Grid.Column="1" Background="#4A6A5C"/>
+                            <Border Grid.Column="2" Background="{StaticResource AccentGreenBrush}"/>
+                        </Grid>
+                    </Border>
+
+                    <!-- legend -->
+                    <WrapPanel Margin="0,11,0,0">
+                        <StackPanel Orientation="Horizontal" Margin="0,0,18,0">
+                            <Ellipse Width="9" Height="9" Fill="{StaticResource AccentBlueBrush}" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                            <TextBlock Style="{StaticResource CaptionText}"><Run Text="In use "/><Run Text="{Binding InUseGb, Mode=OneWay}" Foreground="{StaticResource TextPrimaryBrush}" FontWeight="SemiBold"/><Run Text=" GB"/></TextBlock>
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,18,0"
+                                    Visibility="{Binding HasCached, Converter={StaticResource BoolToVis}}">
+                            <Ellipse Width="9" Height="9" Fill="#4A6A5C" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                            <TextBlock Style="{StaticResource CaptionText}"><Run Text="Cached "/><Run Text="{Binding CachedGb, Mode=OneWay}" Foreground="{StaticResource TextPrimaryBrush}" FontWeight="SemiBold"/><Run Text=" GB"/></TextBlock>
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,18,0">
+                            <Ellipse Width="9" Height="9" Fill="{StaticResource AccentGreenBrush}" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                            <TextBlock Style="{StaticResource CaptionText}"><Run Text="Free "/><Run Text="{Binding FreeSegGb, Mode=OneWay}" Foreground="{StaticResource TextPrimaryBrush}" FontWeight="SemiBold"/><Run Text=" GB"/></TextBlock>
+                        </StackPanel>
+                        <TextBlock Style="{StaticResource CaptionText}" VerticalAlignment="Center"
+                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                   Visibility="{Binding HasCompressed, Converter={StaticResource BoolToVis}}">
+                            <Run Text="Compressed "/><Run Text="{Binding CompressedGb, Mode=OneWay}" Foreground="{StaticResource TextPrimaryBrush}" FontWeight="SemiBold"/><Run Text=" GB"/>
+                        </TextBlock>
+                    </WrapPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- Free up memory -->
+            <Border Style="{StaticResource Card}" Margin="0,0,0,12">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0" Margin="0,0,16,0" VerticalAlignment="Center">
+                        <TextBlock Text="Free up memory" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
+                        <TextBlock Text="Flushes background working sets and clears standby RAM so the app you're using gets it."
+                                   Style="{StaticResource CaptionText}" TextWrapping="Wrap"/>
+                        <TextBlock Text="{Binding FreeRamStatus}" Foreground="{StaticResource AccentGreenBrush}"
+                                   TextWrapping="Wrap" Margin="0,8,0,0">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionText}">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding FreeRamStatus}" Value="">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
                     </StackPanel>
-                </Border>
-
-                <Border Grid.Column="4" Background="{StaticResource BgSurfaceBrush}" CornerRadius="12" Padding="16,14">
-                    <StackPanel>
-                        <TextBlock Text="Startup apps" Style="{StaticResource CaptionText}"/>
-                        <TextBlock Text="{Binding StartupItems.Count, Mode=OneWay}" FontSize="26" FontWeight="SemiBold"
-                                   Foreground="{StaticResource TextPrimaryBrush}"/>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                        <Button Command="{Binding FreeRamCommand}" MinWidth="130">
+                            <Button.Style>
+                                <Style TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
+                                    <Setter Property="Content"   Value="Free up memory"/>
+                                    <Setter Property="IsEnabled" Value="True"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsFreeing}" Value="True">
+                                            <Setter Property="Content"   Value="Freeing up…"/>
+                                            <Setter Property="IsEnabled" Value="False"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
+                        </Button>
                     </StackPanel>
-                </Border>
-            </Grid>
-
-            <!-- Actions -->
-            <Grid Margin="0,0,0,4">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="10"/>
-                    <ColumnDefinition Width="*"/>
-                </Grid.ColumnDefinitions>
-
-                <Button Grid.Column="0" Command="{Binding FreeRamCommand}" HorizontalAlignment="Stretch">
-                    <Button.Style>
-                        <Style TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
-                            <Setter Property="Content"   Value="Free up memory"/>
-                            <Setter Property="IsEnabled" Value="True"/>
-                            <Style.Triggers>
-                                <DataTrigger Binding="{Binding IsFreeing}" Value="True">
-                                    <Setter Property="Content"   Value="Freeing up…"/>
-                                    <Setter Property="IsEnabled" Value="False"/>
-                                </DataTrigger>
-                            </Style.Triggers>
-                        </Style>
-                    </Button.Style>
-                </Button>
-
-                <Button Grid.Column="2" Content="Refresh" Command="{Binding RefreshCommand}"
-                        Style="{StaticResource GhostButton}" HorizontalAlignment="Stretch"/>
-            </Grid>
-
-            <!-- Free-RAM result text -->
-            <TextBlock Text="{Binding FreeRamStatus}" Foreground="{StaticResource AccentGreenBrush}"
-                       TextWrapping="Wrap" Margin="2,8,0,0">
-                <TextBlock.Style>
-                    <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionText}">
-                        <Setter Property="Visibility" Value="Visible"/>
-                        <Style.Triggers>
-                            <DataTrigger Binding="{Binding FreeRamStatus}" Value="">
-                                <Setter Property="Visibility" Value="Collapsed"/>
-                            </DataTrigger>
-                        </Style.Triggers>
-                    </Style>
-                </TextBlock.Style>
-            </TextBlock>
+                </Grid>
+            </Border>
 
             <!-- Speed-up recommendation -->
             <Border CornerRadius="12" Padding="18,16" Margin="0,20,0,0"

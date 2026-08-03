@@ -63,38 +63,25 @@ public class SystemStabilityService
     }
 
     /// <summary>
-    /// Disables Fast Startup by both setting the registry value AND running
-    /// <c>powercfg /hibernate off</c>. Fast Startup requires hibernation — disabling
-    /// hibernation is the most reliable way to ensure Fast Startup stays off.
-    /// The registry write alone is not enough on many OEM systems.
+    /// Disables Fast Startup by setting <c>HiberbootEnabled=0</c> — that registry value IS the Fast
+    /// Startup switch, so a full shutdown is guaranteed once it's 0.
+    /// <para>
+    /// It deliberately does NOT run <c>powercfg /hibernate off</c>. That older "authoritative" call
+    /// removed the hiberfile, which disables Fast Startup as a side effect but ALSO kills manual
+    /// hibernate and the Sleep → Hibernate feature (which needs the hiberfile present) — the two
+    /// features fought, and Sleep → Hibernate silently lost after every reboot. Leaving hibernate
+    /// available while Fast Startup is off is the correct, non-destructive result and lets both
+    /// coexist. If HiberbootEnabled ever flips back, the System Tweaks reinforce re-applies it.
+    /// </para>
     /// </summary>
     public Task<TweakResult> DisableFastStartupAsync() => Task.Run(() =>
     {
         try
         {
-            // 1. Registry write (belt)
-            try
-            {
-                using var key = Registry.LocalMachine.OpenSubKey(HiberbootKey, writable: true);
-                key?.SetValue("HiberbootEnabled", 0, RegistryValueKind.DWord);
-            }
-            catch (Exception ex)
-            {
-                Log.Warn("SystemStability", $"HiberbootEnabled registry write failed: {ex.Message}");
-            }
+            using var key = Registry.LocalMachine.OpenSubKey(HiberbootKey, writable: true);
+            key?.SetValue("HiberbootEnabled", 0, RegistryValueKind.DWord);
 
-            // 2. powercfg /hibernate off (suspenders) — this is the authoritative command
-            var psi = new ProcessStartInfo
-            {
-                FileName        = "powercfg.exe",
-                Arguments       = "/hibernate off",
-                UseShellExecute = false,
-                CreateNoWindow  = true,
-            };
-            using var proc = Process.Start(psi);
-            proc?.WaitForExit(10_000);
-
-            Log.Info("SystemStability", "Fast Startup disabled (HiberbootEnabled=0 + powercfg /hibernate off)");
+            Log.Info("SystemStability", "Fast Startup disabled (HiberbootEnabled=0; hibernate left intact)");
             return TweakResult.Ok(
                 "Fast Startup disabled. Windows will perform a full shutdown each time, " +
                 "improving driver stability and ensuring firmware updates apply correctly.");
@@ -1282,21 +1269,28 @@ public class SystemStabilityService
         }
     });
 
-    /// <summary>Re-asserts the user's saved Sleep → Hibernate choice when the live power setting has
-    /// drifted off. A Windows Update, a power-plan switch, or an OEM tool can wipe HIBERNATEIDLE, which
-    /// is why the toggle "sometimes stops working." Only ever re-applies an intent that is ON, and only
-    /// when the current value doesn't already match, so it never forces the feature off. Called on
-    /// startup and on the System Tweaks refresh.</summary>
+    /// <summary>Re-asserts the user's saved Sleep → Hibernate choice when the live power state has drifted
+    /// off. A Windows Update, a power-plan switch, an OEM tool — or Systema's own "Disable Fast Startup",
+    /// which used to run <c>powercfg /hibernate off</c> — can leave the machine unable to hibernate while
+    /// HIBERNATEIDLE still reads as set, which is why the toggle "shows on but stops working." We therefore
+    /// re-apply when hibernate itself is unavailable, NOT just when HIBERNATEIDLE drifts — otherwise a
+    /// hibernate-off machine looks healthy to the old check and never self-heals. EnableSleepToHibernate*
+    /// runs <c>/hibernate on</c> + HYBRIDSLEEP=0 + HIBERNATEIDLE, so one re-apply restores the full state.
+    /// Only ever re-applies an intent that is ON. Called on startup and every 30 min.</summary>
     public async Task ReinforceSleepToHibernateAsync(bool dcEnabled, int dcMinutes, bool acEnabled, int acMinutes)
     {
         try
         {
-            if (dcEnabled && (!IsSleepToHibernateEnabled() || GetSleepToHibernateMinutes() != dcMinutes))
+            // Hibernate being disabled machine-wide breaks BOTH the DC and AC variants, and the old
+            // HIBERNATEIDLE-only check can't see it — so it's the first thing each branch re-checks.
+            bool hibOff = !IsHibernateAvailable();
+
+            if (dcEnabled && (hibOff || !IsSleepToHibernateEnabled() || GetSleepToHibernateMinutes() != dcMinutes))
             {
                 var r = await EnableSleepToHibernateAsync(dcMinutes);
                 Log.Info("SystemStability", $"Sleep → Hibernate (battery) reinforced on drift: {r.Message}");
             }
-            if (acEnabled && (!IsSleepToHibernateAcEnabled() || GetSleepToHibernateAcMinutes() != acMinutes))
+            if (acEnabled && (hibOff || !IsSleepToHibernateAcEnabled() || GetSleepToHibernateAcMinutes() != acMinutes))
             {
                 var r = await EnableSleepToHibernateAcAsync(acMinutes);
                 Log.Info("SystemStability", $"Sleep → Hibernate (AC) reinforced on drift: {r.Message}");

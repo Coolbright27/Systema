@@ -393,10 +393,10 @@ public class ServiceControlService
         // everything else → Manual (3), the safe start-on-demand default.
     };
 
-    private static int GetDefaultStart(string serviceName)
+    internal static int GetDefaultStart(string serviceName)
         => ServiceDefaultStart.TryGetValue(serviceName, out int v) ? v : 3;
 
-    private static string StartModeArg(int start) => start switch { 2 => "auto", 4 => "disabled", _ => "demand" };
+    internal static string StartModeArg(int start) => start switch { 2 => "auto", 4 => "disabled", _ => "demand" };
 
     /// <summary>Records a service's current Start value before we change it (first value only, so our own
     /// 4 never overwrites the real one), so OFF can restore it exactly.</summary>
@@ -1015,9 +1015,12 @@ public class ServiceControlService
 
     /// <summary>True on editions where AllowTelemetry=0 is honored as the full "Security" (off) level
     /// (Enterprise, Education, IoT, Server). Home and Pro floor at the "Required" minimum.</summary>
-    private static bool IsFullTelemetryOffEdition()
+    private static bool IsFullTelemetryOffEdition() => IsFullTelemetryOffEdition(GetWindowsEdition());
+
+    /// <summary>Pure edition-string test, split out from the registry read so it can be unit tested.</summary>
+    internal static bool IsFullTelemetryOffEdition(string edition)
     {
-        var e = GetWindowsEdition();
+        var e = edition ?? string.Empty;
         return e.IndexOf("Enterprise", StringComparison.OrdinalIgnoreCase) >= 0
             || e.IndexOf("Education",  StringComparison.OrdinalIgnoreCase) >= 0
             || e.IndexOf("IoT",        StringComparison.OrdinalIgnoreCase) >= 0

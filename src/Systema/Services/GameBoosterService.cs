@@ -762,6 +762,7 @@ public sealed class GameBoosterService : IDisposable
                             return true;
                 }
                 catch { }
+                finally { proc.Dispose(); }
             }
         }
         catch { }
@@ -858,6 +859,7 @@ public sealed class GameBoosterService : IDisposable
                             return "Unknown Game (Anti-Cheat detected)";
                 }
                 catch { }
+                finally { proc.Dispose(); }
             }
         }
         catch { }

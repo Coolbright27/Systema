@@ -86,11 +86,7 @@ public class PowerPlanService
                 RestoreMaxProcessorState();
 
                 // Switch back to High Performance (or Ultimate if available)
-                RunPowercfg($"/duplicatescheme {UltimatePerformanceGuid}");
-                RunPowercfg($"/setactive {UltimatePerformanceGuid}");
-                string plan = GetActivePlan();
-                if (!plan.Contains("Ultimate", StringComparison.OrdinalIgnoreCase))
-                    RunPowercfg($"/setactive {HighPerformanceGuid}");
+                ActivateUltimateOrHigh();
 
                 _log.Info("PowerPlanService", "Battery optimization stopped — restored High Performance + 100% CPU");
                 return TweakResult.Ok("Battery optimization disabled. High Performance plan restored, CPU cap removed.");
@@ -112,11 +108,7 @@ public class PowerPlanService
         {
             try
             {
-                RunPowercfg($"/duplicatescheme {UltimatePerformanceGuid}");
-                RunPowercfg($"/setactive {UltimatePerformanceGuid}");
-                string plan = GetActivePlan();
-                if (!plan.Contains("Ultimate", StringComparison.OrdinalIgnoreCase))
-                    RunPowercfg($"/setactive {HighPerformanceGuid}");
+                ActivateUltimateOrHigh();
 
                 _log.Info("PowerPlanService", "Plugged in — restored High Performance plan");
                 return TweakResult.Ok("Plugged in — High Performance plan restored.");
@@ -172,9 +164,9 @@ public class PowerPlanService
         {
             try
             {
-                // Try to enable Ultimate Performance (Windows 10 Pro+)
-                RunPowercfg($"/duplicatescheme {UltimatePerformanceGuid}");
-                RunPowercfg($"/setactive {UltimatePerformanceGuid}");
+                // Try to enable Ultimate Performance (Windows 10 Pro+); falls back to
+                // High Performance internally when Ultimate isn't available.
+                ActivateUltimateOrHigh();
                 var plan = GetActivePlan();
                 if (plan.Contains("Ultimate", StringComparison.OrdinalIgnoreCase))
                 {
@@ -182,8 +174,6 @@ public class PowerPlanService
                     return TweakResult.Ok("Ultimate Performance power plan activated.");
                 }
 
-                // Fall back to High Performance
-                RunPowercfg($"/setactive {HighPerformanceGuid}");
                 _log.Info("PowerPlanService", "Power plan changed → High Performance");
                 return TweakResult.Ok("High Performance power plan activated.");
             }
@@ -333,10 +323,7 @@ public class PowerPlanService
             try
             {
                 if (planName.Contains("Ultimate", StringComparison.OrdinalIgnoreCase))
-                {
-                    RunPowercfg($"/duplicatescheme {UltimatePerformanceGuid}");
-                    RunPowercfg($"/setactive {UltimatePerformanceGuid}");
-                }
+                    ActivateUltimateOrHigh();
                 else if (planName.Contains("High", StringComparison.OrdinalIgnoreCase))
                     RunPowercfg($"/setactive {HighPerformanceGuid}");
                 else if (planName.Contains("Power Saver", StringComparison.OrdinalIgnoreCase))
@@ -355,14 +342,105 @@ public class PowerPlanService
         });
     }
 
+    // ── Ultimate Performance resolution ────────────────────────────────────────
+    // /duplicatescheme mints a NEW plan GUID every time it succeeds. Calling it on
+    // each plan switch would stack duplicate "Ultimate Performance" entries in
+    // powercfg /list. These helpers create the plan at most once and reuse whatever
+    // is already present on subsequent calls.
+
+    /// <summary>
+    /// Returns the GUID of an Ultimate Performance plan already present on this
+    /// machine, or null if none exists. Matches the canonical Ultimate GUID or any
+    /// plan whose friendly name contains "Ultimate".
+    /// </summary>
+    private static string? FindExistingUltimateGuid()
+    {
+        try
+        {
+            string list = RunPowercfgCapture("/list").stdout;
+
+            // Fast path: the canonical Ultimate GUID is registered.
+            if (list.Contains(UltimatePerformanceGuid, StringComparison.OrdinalIgnoreCase))
+                return UltimatePerformanceGuid;
+
+            // A prior /duplicatescheme may have created one under a random GUID with
+            // the "Ultimate Performance" friendly name — reuse it, don't make another.
+            foreach (var line in list.Split('\n'))
+            {
+                if (line.Contains("Ultimate", StringComparison.OrdinalIgnoreCase))
+                {
+                    var m = System.Text.RegularExpressions.Regex.Match(line, "([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})");
+                    if (m.Success) return m.Groups[1].Value;
+                }
+            }
+        }
+        catch { }
+        return null;
+    }
+
+    /// <summary>
+    /// Activates Ultimate Performance if it exists (or can be unlocked) on this
+    /// machine, otherwise falls back to High Performance. Runs /duplicatescheme ONLY
+    /// when no Ultimate plan is already present, so repeated calls can't pollute the
+    /// power-plan list with stacked duplicate schemes.
+    /// </summary>
+    private static void ActivateUltimateOrHigh()
+    {
+        string? ultimate = FindExistingUltimateGuid();
+        if (ultimate == null)
+        {
+            // Not present yet — unlock it once. On most editions this materialises
+            // under the canonical GUID; re-resolve either way.
+            RunPowercfg($"/duplicatescheme {UltimatePerformanceGuid}");
+            ultimate = FindExistingUltimateGuid();
+        }
+
+        RunPowercfg(ultimate != null
+            ? $"/setactive {ultimate}"
+            : $"/setactive {HighPerformanceGuid}");
+    }
+
     private static void RunPowercfg(string args)
     {
-        var psi = new ProcessStartInfo("powercfg", args)
+        var (_, stderr, exit) = RunPowercfgCapture(args);
+        if (exit != 0)
+            _log.Warn("PowerPlanService",
+                $"powercfg {args} exited {exit}{(string.IsNullOrWhiteSpace(stderr) ? "" : $": {stderr.Trim()}")}");
+    }
+
+    /// <summary>
+    /// Runs powercfg and returns its stdout, stderr and exit code. Callers that only
+    /// care about success use RunPowercfg (which logs failures); callers that need the
+    /// output (plan enumeration) use this directly.
+    /// </summary>
+    private static (string stdout, string stderr, int exitCode) RunPowercfgCapture(string args)
+    {
+        try
         {
-            UseShellExecute = false,
-            CreateNoWindow = true
-        };
-        using var proc = Process.Start(psi);
-        proc?.WaitForExit(5000);
+            var psi = new ProcessStartInfo("powercfg", args)
+            {
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true
+            };
+            using var proc = Process.Start(psi);
+            if (proc == null) return (string.Empty, "powercfg failed to start", -1);
+
+            // powercfg output is tiny (well under the pipe buffer), so sequential
+            // ReadToEnd calls can't deadlock here.
+            string stdout = proc.StandardOutput.ReadToEnd();
+            string stderr = proc.StandardError.ReadToEnd();
+            if (!proc.WaitForExit(5000))
+            {
+                try { proc.Kill(); } catch { }
+                return (stdout, "powercfg timed out", -2);
+            }
+            return (stdout, stderr, proc.ExitCode);
+        }
+        catch (Exception ex)
+        {
+            return (string.Empty, ex.Message, -3);
+        }
     }
 }

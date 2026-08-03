@@ -69,6 +69,74 @@ public class MemoryService
         return (0, 0);
     }
 
+    /// <summary>
+    /// Splits physical RAM into In use / Cached (standby) / Free, in MB, for the memory bar.
+    /// "Available" from GlobalMemoryStatusEx is Cached + Free combined; this pulls the standby
+    /// (cached) vs truly-free split from the kernel's page-list counts via NtQuerySystemInformation
+    /// so users can see how much of "free" is actually reclaimable cache. Falls back to a two-way
+    /// In use / Free split (cached = 0) if the query fails, so the caller always gets sane numbers.
+    /// </summary>
+    public (long inUseMb, long cachedMb, long freeMb) GetMemoryBreakdown()
+    {
+        var (totalMb, availMb) = GetRamStats();
+
+        try
+        {
+            // SYSTEM_MEMORY_LIST_INFORMATION on x64: 5 ULONG_PTR scalars, then two ULONG_PTR[8]
+            // arrays (PageCountByPriority, RepurposedPagesByPriority), then one more scalar = 176 bytes.
+            const int bufLen = 176;
+            IntPtr buf = Marshal.AllocHGlobal(bufLen);
+            try
+            {
+                int status = NtQuerySystemInformation(SystemMemoryListInformation, buf, bufLen, out _);
+                if (status == 0) // STATUS_SUCCESS
+                {
+                    long pageSize   = Environment.SystemPageSize; // 4096 on x64
+                    long zeroPages  = ReadPtr(buf, 0);            // ZeroPageCount
+                    long freePages  = ReadPtr(buf, 1);            // FreePageCount
+                    long standby    = 0;                          // PageCountByPriority[0..7] starts at index 5
+                    for (int i = 0; i < 8; i++) standby += ReadPtr(buf, 5 + i);
+
+                    long freeMb   = (zeroPages + freePages) * pageSize / (1024 * 1024);
+                    long cachedMb = standby * pageSize / (1024 * 1024);
+                    // Clamp so the three segments always sum to Total even if counters lag slightly.
+                    cachedMb = Math.Clamp(cachedMb, 0, totalMb);
+                    freeMb   = Math.Clamp(freeMb,   0, totalMb - cachedMb);
+                    long inUseMb = Math.Max(0, totalMb - cachedMb - freeMb);
+                    return (inUseMb, cachedMb, freeMb);
+                }
+            }
+            finally { Marshal.FreeHGlobal(buf); }
+        }
+        catch (Exception ex) { Log.Warn("MemoryService", $"GetMemoryBreakdown failed: {ex.Message}"); }
+
+        // Fallback: no standby split available — treat all of Available as Free.
+        return (Math.Max(0, totalMb - availMb), 0, availMb);
+    }
+
+    /// <summary>
+    /// Best-effort size of Windows' in-RAM compression store (the "Memory Compression" system
+    /// process working set), in MB. Returns -1 when it can't be read (the process is hidden or
+    /// access is denied), so the UI can simply hide the figure rather than show a wrong one.
+    /// </summary>
+    public long GetCompressedMemoryMb()
+    {
+        try
+        {
+            foreach (var p in System.Diagnostics.Process.GetProcessesByName("Memory Compression"))
+            {
+                try { return p.WorkingSet64 / (1024 * 1024); }
+                catch { /* access denied — treat as unavailable */ }
+                finally { p.Dispose(); }
+            }
+        }
+        catch { /* enumeration failed */ }
+        return -1;
+    }
+
+    private static long ReadPtr(IntPtr baseAddr, int index) =>
+        Marshal.ReadInt64(baseAddr, index * 8); // ULONG_PTR = 8 bytes on x64
+
     // ── Pagefile ────────────────────────────────────────────────────────────────
 
     /// <summary>
@@ -186,7 +254,16 @@ public class MemoryService
     [DllImport("ntdll.dll")]
     private static extern uint NtSetSystemInformation(int SystemInformationClass, ref uint SystemInformation, int SystemInformationLength);
 
-    private const uint PROCESS_ALL_ACCESS = 0x1F0FFF;
+    [DllImport("ntdll.dll")]
+    private static extern int NtQuerySystemInformation(int SystemInformationClass, IntPtr SystemInformation, int SystemInformationLength, out int ReturnLength);
+
+    // EmptyWorkingSet documents PROCESS_QUERY_INFORMATION + PROCESS_SET_QUOTA as the
+    // required rights. Requesting exactly those (instead of PROCESS_ALL_ACCESS) lets
+    // OpenProcess succeed on many elevated/other-owner processes that deny full
+    // access, so more working sets actually get trimmed.
+    private const uint PROCESS_QUERY_INFORMATION = 0x0400;
+    private const uint PROCESS_SET_QUOTA         = 0x0100;
+    private const uint PROCESS_TRIM_ACCESS       = PROCESS_QUERY_INFORMATION | PROCESS_SET_QUOTA;
     private const int  SystemMemoryListInformation = 0x50;
     private const uint MemoryPurgeStandbyList = 4;
     private const uint MemoryFlushModifiedList  = 3;
@@ -248,13 +325,14 @@ public class MemoryService
                     continue;
                 }
 
-                var handle = OpenProcess(PROCESS_ALL_ACCESS, false, proc.Id);
+                var handle = OpenProcess(PROCESS_TRIM_ACCESS, false, proc.Id);
                 if (handle == IntPtr.Zero) continue;
                 EmptyWorkingSet(handle);
                 CloseHandle(handle);
                 trimmed++;
             }
             catch { /* skip inaccessible processes */ }
+            finally { proc.Dispose(); } // release the managed Process wrapper
         }
 
         // 2. Purge standby list (requires SeProfileSingleProcessPrivilege — present when admin)

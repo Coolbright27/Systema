@@ -93,7 +93,7 @@
                 </StackPanel>
             </Border>
 
-            <!-- ===== CARD: Disable all audio enhancements (device-wide) ===== -->
+            <!-- ===== CARD: Disable all audio & mic enhancements (device-wide) ===== -->
             <Border Style="{StaticResource Card}" Margin="0,0,0,16">
                 <StackPanel>
                     <Grid>
@@ -103,23 +103,27 @@
                         </Grid.ColumnDefinitions>
                         <StackPanel Grid.Column="0" Margin="0,0,16,0">
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                                <TextBlock Text="Disable all audio enhancements" Style="{StaticResource HeadingMedium}"/>
+                                <TextBlock Text="Disable all audio &amp; mic enhancements" Style="{StaticResource HeadingMedium}"/>
                                 <Border CornerRadius="4" Padding="5,2" Margin="8,0,0,0" VerticalAlignment="Center"
                                         Background="#1A4C8CF0" BorderBrush="{StaticResource AccentBlueBrush}" BorderThickness="1">
                                     <TextBlock Text="ALL DEVICES" FontSize="8" FontWeight="Bold" Foreground="{StaticResource AccentBlueBrush}"/>
                                 </Border>
                             </StackPanel>
                             <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" MaxWidth="620">
-                                Turns off all of Windows' effects processing on every output device at once: bass boost, loudness
-                                equalization, virtual surround, and the driver's "mode" effects. It's the master "Audio enhancements:
-                                Off" switch. It also pulls driver-injected vendor packs like Realtek and Waves MaxxAudio out of the
-                                chain, leaving only Microsoft's own processing, so your audio runs about as raw as Windows lets it.
+                                The master "enhancements off" switch for every output AND microphone at once. On speakers and
+                                headphones it clears bass boost, loudness equalization, virtual surround, and the driver's "mode"
+                                effects; on mics it clears noise suppression, echo cancellation, and auto gain. It also pulls
+                                driver-injected vendor packs like Realtek, Waves MaxxAudio, and Intel Smart Sound out of the chain and
+                                stops their background audio services and startup agents, so nothing adds effects and the raw signal
+                                goes about as straight through as Windows allows. Core Windows audio is never touched, so sound keeps
+                                working.
                             </TextBlock>
                             <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" MaxWidth="620"
                                        Foreground="{StaticResource AccentYellowBrush}" Margin="0,6,0,0">
-                                Built-in speakers that are tuned through these effects (a lot of laptops and all-in-ones, and
-                                Waves-tuned setups) can sound a bit thinner with them off. It's fully reversible, so just toggle it
-                                back if you like them on. Spatial sound has its own toggle below.
+                                Built-in speakers tuned through these effects (many laptops and all-in-ones, and Waves setups) can
+                                sound a bit thinner with them off, and turning off mic noise suppression can make you noisier on calls
+                                unless the app (Discord, Zoom) does its own. It's fully reversible, so just toggle it back if you like
+                                them on. Spatial sound has its own toggle below.
                             </TextBlock>
                         </StackPanel>
                         <CheckBox Grid.Column="1" VerticalAlignment="Center"
@@ -128,7 +132,7 @@
                     </Grid>
                     <TextBlock Text="⟳  Needs a full restart to take effect. Reopening Sound settings won't show it until the audio engine reloads."
                                Style="{StaticResource CaptionText}" Foreground="{StaticResource AccentYellowBrush}" TextWrapping="Wrap" Margin="0,8,0,0"/>
-                    <TextBlock Text="↻  Stays enforced. If a device reconnects with its effects back on, Systema turns them off again on its own."
+                    <TextBlock Text="↻  Stays enforced. If a device reconnects with its effects back on, or a vendor audio service comes back after an update, Systema turns them off again on its own."
                                Style="{StaticResource CaptionText}" Foreground="{StaticResource AccentGreenBrush}" TextWrapping="Wrap" Margin="0,4,0,0"/>
                 </StackPanel>
             </Border>
@@ -168,45 +172,6 @@
                     <TextBlock Text="⟳  Needs a full restart to take effect."
                                Style="{StaticResource CaptionText}" Foreground="{StaticResource AccentYellowBrush}" Margin="0,8,0,0"/>
                     <TextBlock Text="↻  Stays enforced. If a device reconnects with spatial back on, Systema turns it off again on its own."
-                               Style="{StaticResource CaptionText}" Foreground="{StaticResource AccentGreenBrush}" TextWrapping="Wrap" Margin="0,4,0,0"/>
-                </StackPanel>
-            </Border>
-
-            <!-- ===== CARD: Disable all microphone enhancements (device-wide) ===== -->
-            <Border Style="{StaticResource Card}" Margin="0,0,0,16">
-                <StackPanel>
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" Margin="0,0,16,0">
-                            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                                <TextBlock Text="Disable all microphone enhancements" Style="{StaticResource HeadingMedium}"/>
-                                <Border CornerRadius="4" Padding="5,2" Margin="8,0,0,0" VerticalAlignment="Center"
-                                        Background="#1A4C8CF0" BorderBrush="{StaticResource AccentBlueBrush}" BorderThickness="1">
-                                    <TextBlock Text="ALL MICS" FontSize="8" FontWeight="Bold" Foreground="{StaticResource AccentBlueBrush}"/>
-                                </Border>
-                            </StackPanel>
-                            <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" MaxWidth="620">
-                                Turns off every processing layer on your microphones: noise suppression, echo cancellation,
-                                automatic gain, and driver packs like Realtek, Waves, or Nahimic. Your mic runs raw, exactly
-                                what it captures.
-                            </TextBlock>
-                            <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" MaxWidth="620"
-                                       Foreground="{StaticResource AccentYellowBrush}" Margin="0,6,0,0">
-                                Good for lower mic latency, for cleaner sound on a nice mic or audio interface, or when an app
-                                like Discord or OBS already does its own noise processing and you don't want it done twice.
-                                Off by default, since a basic built-in mic often leans on this processing to cut background noise.
-                            </TextBlock>
-                        </StackPanel>
-                        <CheckBox Grid.Column="1" VerticalAlignment="Center"
-                                  Style="{StaticResource ToggleSwitch}"
-                                  IsChecked="{Binding DisableMicEnhancements, Mode=TwoWay}"/>
-                    </Grid>
-                    <TextBlock Text="⟳  Needs a full restart to take effect."
-                               Style="{StaticResource CaptionText}" Foreground="{StaticResource AccentYellowBrush}" Margin="0,8,0,0"/>
-                    <TextBlock Text="↻  Stays enforced. If a mic reconnects with processing back on, Systema turns it off again on its own."
                                Style="{StaticResource CaptionText}" Foreground="{StaticResource AccentGreenBrush}" TextWrapping="Wrap" Margin="0,4,0,0"/>
                 </StackPanel>
             </Border>

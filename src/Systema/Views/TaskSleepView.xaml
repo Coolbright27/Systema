@@ -643,7 +643,7 @@
 
                     <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,16,0,16"/>
 
-                    <!-- Disable Fast Startup — HiberbootEnabled=0 + powercfg /hibernate off. -->
+                    <!-- Disable Fast Startup — HiberbootEnabled=0 only (hibernate left intact so Sleep->Hibernate keeps working). -->
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
@@ -1293,6 +1293,26 @@
                                   VerticalAlignment="Top"/>
                     </Grid>
 
+                    <!-- Nap hidden apps -->
+                    <Grid Margin="0,0,0,16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" Margin="0,0,24,0">
+                            <TextBlock Text="Nap hidden apps"
+                                       Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
+                            <TextBlock Text="Also sleeps apps that are open but fully covered by other windows, treating them just like a minimized app. An app has to stay fully covered for 5 minutes before it naps (change this under Wake Timing). They wake the instant they're uncovered or clicked, and the same protections apply: anything playing audio, busy in the background, recently used, or in the foreground is left awake. On by default."
+                                       Style="{StaticResource CaptionText}"
+                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                       TextWrapping="Wrap" Margin="0,3,0,0"/>
+                        </StackPanel>
+                        <CheckBox Grid.Column="1"
+                                  IsChecked="{Binding HiddenNapEnabled, Mode=TwoWay}"
+                                  Style="{StaticResource ToggleSwitch}"
+                                  VerticalAlignment="Top"/>
+                    </Grid>
+
                     <!-- Sleep system tray apps -->
                     <Grid Margin="0,0,0,16">
                         <Grid.ColumnDefinitions>
@@ -1386,7 +1406,7 @@
                         <StackPanel Grid.Column="0" Margin="0,0,24,0">
                             <TextBlock Text="Keep busy apps awake"
                                        Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                            <TextBlock Text="Don't sleep a minimized or tray app while its whole process tree is using more than 30% CPU, since it's probably still doing work like an export, a render, or a build. The entire app stays awake, and naps normally once it settles down."
+                            <TextBlock Text="Don't sleep a minimized or tray app while its whole process tree is using more than 20% CPU, since it's probably still doing work like an export, a render, or a build. The entire app stays awake, and naps normally once it settles down."
                                        Style="{StaticResource CaptionText}"
                                        Foreground="{StaticResource TextSecondaryBrush}"
                                        TextWrapping="Wrap" Margin="0,3,0,0"/>
@@ -1399,16 +1419,16 @@
 
                     <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,0,0,16"/>
 
-                    <!-- Compress memory in deep sleep — closest Windows equivalent to macOS App Nap + Compressed Memory -->
+                    <!-- Compress napped app memory: trims the working set from the moment an app naps so Windows compresses its pages. Closest Windows equivalent to macOS App Nap plus Compressed Memory. -->
                     <Grid Margin="0,0,0,16">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <StackPanel Grid.Column="0" Margin="0,0,24,0">
-                            <TextBlock Text="Compress memory in deep sleep"
+                            <TextBlock Text="Compress napped app memory"
                                        Style="{StaticResource BodyText}" FontWeight="SemiBold" Margin="0,0,0,3"/>
-                            <TextBlock Text="When a napped app has been idle long enough to enter deep sleep (~10 minutes by default), Systema trims its working set so Windows can compress those pages on the standby list at roughly 2 to 4 times. It re-trims after every brief wake while the process is still in deep sleep, so the compressed footprint stays stable. This is the closest Windows gets to macOS's App Nap plus Compressed Memory behavior."
+                            <TextBlock Text="As soon as an app naps, Systema trims its working set so Windows can compress those pages on the standby list, usually shrinking a background app's real memory use by about 2 to 4 times. This starts on a regular nap, not just after an app reaches deep sleep, and Systema keeps re-trimming after every brief wake so the compressed footprint stays small the whole time the app is idle. This is the closest Windows gets to macOS App Nap and Compressed Memory."
                                        Style="{StaticResource CaptionText}"
                                        Foreground="{StaticResource TextSecondaryBrush}"
                                        TextWrapping="Wrap"/>
@@ -1571,7 +1591,7 @@
                         <StackPanel Grid.Column="0" Margin="0,0,24,0">
                             <TextBlock Text="Hard CPU limit for sleeping apps"
                                        Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                            <TextBlock Text="Enforced by Windows at the kernel level. Apps physically cannot exceed the cap."
+                            <TextBlock Text="Enforced by Windows at the kernel level, per process. Apps made of several processes (browsers, Spotify) add up, so their total in Task Manager can read higher than the cap."
                                        Style="{StaticResource CaptionText}"
                                        Foreground="{StaticResource TextSecondaryBrush}"
                                        TextWrapping="Wrap" Margin="0,3,0,0"/>
@@ -1590,7 +1610,7 @@
                                 <ColumnDefinition Width="70"/>
                                 <ColumnDefinition Width="50"/>
                             </Grid.ColumnDefinitions>
-                            <TextBlock Text="Max CPU while sleeping"
+                            <TextBlock Text="Max CPU per process while sleeping"
                                        Style="{StaticResource BodyText}"
                                        VerticalAlignment="Center"/>
                             <ComboBox Grid.Column="1"
@@ -1610,9 +1630,9 @@
                                 <ColumnDefinition Width="50"/>
                             </Grid.ColumnDefinitions>
                             <StackPanel Grid.Column="0" Margin="0,0,12,0" VerticalAlignment="Center">
-                                <TextBlock Text="Max CPU during brief wakes"
+                                <TextBlock Text="Max CPU per process during brief wakes"
                                            Style="{StaticResource BodyText}"/>
-                                <TextBlock Text="Cap stays on while a sleeping app briefly wakes, so it can't spike. Higher = more responsive, lower = less CPU use."
+                                <TextBlock Text="The cap stays on while a sleeping app briefly wakes. It applies per process, so an app with many processes can total higher for a moment. Higher is more responsive, lower is less CPU use."
                                            Style="{StaticResource CaptionText}"
                                            Foreground="{StaticResource TextSecondaryBrush}"
                                            TextWrapping="Wrap" Margin="0,3,0,0"/>
@@ -1664,7 +1684,7 @@
                     <!-- when Tray Deep Sleep (in Protection) is enabled.                   -->
                     <TextBlock Text="WAKE TIMING" Style="{StaticResource SectionLabel}" Margin="0,0,0,12"/>
 
-                    <TextBlock Text="Minimized apps"
+                    <TextBlock Text="Regular naps"
                                Style="{StaticResource HeadingSmall}"
                                Margin="0,0,0,12"/>
 
@@ -1701,6 +1721,31 @@
                                    Margin="8,0,0,0" Style="{StaticResource BodyText}"
                                    Foreground="{StaticResource TextSecondaryBrush}"/>
                     </Grid>
+
+                    <!-- Hidden apps — shown only when "Nap hidden apps" is on. Sets how long a window -->
+                    <!-- must stay fully covered before it becomes eligible to nap.                     -->
+                    <StackPanel Visibility="{Binding HiddenNapEnabled, Converter={StaticResource BoolToVis}}">
+                        <TextBlock Text="Hidden apps"
+                                   Style="{StaticResource HeadingSmall}"
+                                   Margin="0,0,0,12"/>
+
+                        <Grid Margin="0,0,0,20">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="70"/>
+                                <ColumnDefinition Width="36"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Nap after being hidden for" Style="{StaticResource BodyText}" VerticalAlignment="Center"/>
+                            <ComboBox Grid.Column="1"
+                                      Style="{StaticResource DarkComboBox}"
+                                      ItemsSource="{Binding HiddenNapDelayOptions}"
+                                      SelectedItem="{Binding HiddenNapDelayMinutes, Mode=TwoWay}"
+                                      HorizontalAlignment="Stretch"/>
+                            <TextBlock Grid.Column="2" Text="min" VerticalAlignment="Center"
+                                       Margin="8,0,0,0" Style="{StaticResource BodyText}"
+                                       Foreground="{StaticResource TextSecondaryBrush}"/>
+                        </Grid>
+                    </StackPanel>
 
                     <TextBlock Text="Tray apps"
                                Style="{StaticResource HeadingSmall}"

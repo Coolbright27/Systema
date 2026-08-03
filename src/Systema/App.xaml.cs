@@ -68,6 +68,13 @@ public partial class App : Application
     // Single-instance guard — prevents the watchdog task from spawning duplicates
     private static Mutex? _singleInstanceMutex;
 
+    // Cross-process "show the window" signal. The owning instance waits on this named event; a
+    // later normal launch (a user double-clicking Systema) sets it so the running instance pops
+    // its window instead of the launch exiting silently. Without this, if the tray icon isn't
+    // visible the user is locked out and has to force-quit. Name is process-global.
+    private const  string ShowWindowEventName = "Global\\SystemaShowWindow";
+    private static EventWaitHandle? _showWindowSignal;
+
     // True once the main window or tray icon has been shown successfully. Any
     // exception caught BEFORE this point must shut the process down (instead of
     // leaving a zombie that holds the single-instance mutex and prevents future
@@ -224,7 +231,31 @@ public partial class App : Application
 
             if (!isNewInstance)
             {
-                Log.Info("App", "Another instance is already running and is alive — exiting");
+                // A normal (user-initiated) launch means "open Systema" — tell the running instance
+                // to show its window before we exit, so the user isn't stuck when the tray icon is
+                // missing. A --silent / --autostart duplicate (boot / watchdog) must NOT pop a window.
+                bool silentDuplicate = e.Args.Contains("--silent") || e.Args.Contains("--autostart");
+                if (!silentDuplicate)
+                {
+                    try
+                    {
+                        if (EventWaitHandle.TryOpenExisting(ShowWindowEventName, out var sig))
+                        {
+                            sig.Set();
+                            sig.Dispose();
+                            Log.Info("App", "Another instance is already running — signaled it to show its window; exiting");
+                        }
+                        else
+                        {
+                            Log.Warn("App", "Running instance alive but show-window signal not found — exiting without surfacing it");
+                        }
+                    }
+                    catch (Exception ex) { Log.Warn("App", $"Could not signal running instance to show: {ex.Message}"); }
+                }
+                else
+                {
+                    Log.Info("App", "Another instance is already running and is alive (silent duplicate) — exiting");
+                }
                 _singleInstanceMutex.Dispose();
                 Shutdown(0);
                 return;
@@ -235,6 +266,29 @@ public partial class App : Application
         // launch can detect us and only kill us if we've actually hung.
         _heartbeat = new HeartbeatService();
         _heartbeat.Start();
+
+        // Own the "show the window" signal and wait on it: whenever a later normal launch sets it,
+        // surface our window on the UI thread. This is the reliable way back in when the tray icon
+        // didn't register at boot — a plain relaunch now opens Systema instead of silently exiting.
+        try
+        {
+            _showWindowSignal = new EventWaitHandle(false, EventResetMode.AutoReset, ShowWindowEventName);
+            var waiter = new System.Threading.Thread(() =>
+            {
+                while (true)
+                {
+                    try
+                    {
+                        _showWindowSignal.WaitOne();
+                        Dispatcher.BeginInvoke(new Action(ShowMainWindow));
+                    }
+                    catch { break; }
+                }
+            })
+            { IsBackground = true, Name = "SystemaShowWindowWaiter" };
+            waiter.Start();
+        }
+        catch (Exception ex) { Log.Warn("App", $"Show-window signal setup failed: {ex.Message}"); }
 
         // ── Check for crash from previous session ──
         // CrashGuard writes a sentinel file before risky operations and deletes it
@@ -353,25 +407,33 @@ public partial class App : Application
                 catch (Exception ex) { Log.Warn("App", $"Win11 nag reinforcement failed: {ex.Message}"); }
             });
 
-            // ── Sleep → Hibernate reinforcement ──
-            // A Windows Update, a power-plan switch, or an OEM power tool can wipe the HIBERNATEIDLE
-            // timeout, so the setting "stops working" until the user re-toggles it. Re-assert the saved
-            // choice on every launch (only when it's on) so it survives reboots and plan resets. Delayed
-            // off the critical startup path.
-            if (settingsService.SleepToHibernateEnabled || settingsService.SleepToHibernateAcEnabled)
+            // ── Sleep → Hibernate reinforcement (periodic) ──
+            // A Windows Update, a power-plan switch (including Systema's own), or an OEM power tool can
+            // wipe the HIBERNATEIDLE timeout, so the setting "stops working" while the app still shows it
+            // as on. The old version reinforced ONCE ~15 s after launch — but Systema is kept alive by the
+            // watchdog for days/weeks, so the startup path never re-fired and drift that happened mid-run
+            // (e.g. a monthly update ~a week later) was never corrected. Reinforce shortly after launch AND
+            // every 30 minutes thereafter, reading the saved choice live each pass so a mid-session toggle
+            // is honoured without a restart. The drift check inside ReinforceSleepToHibernateAsync makes
+            // each pass a cheap no-op (two powercfg /query calls) when nothing has changed, and re-applies
+            // to the CURRENT scheme so a plan switch is caught within one interval. Runs off the critical
+            // startup path; the loop lives for the process lifetime.
+            _ = System.Threading.Tasks.Task.Run(async () =>
             {
-                _ = System.Threading.Tasks.Task.Run(async () =>
+                await System.Threading.Tasks.Task.Delay(15_000); // off the critical startup path
+                while (true)
                 {
                     try
                     {
-                        await System.Threading.Tasks.Task.Delay(15_000);
-                        await stabilityService.ReinforceSleepToHibernateAsync(
-                            settingsService.SleepToHibernateEnabled,   settingsService.SleepToHibernateMinutes,
-                            settingsService.SleepToHibernateAcEnabled, settingsService.SleepToHibernateAcMinutes);
+                        if (settingsService.SleepToHibernateEnabled || settingsService.SleepToHibernateAcEnabled)
+                            await stabilityService.ReinforceSleepToHibernateAsync(
+                                settingsService.SleepToHibernateEnabled,   settingsService.SleepToHibernateMinutes,
+                                settingsService.SleepToHibernateAcEnabled, settingsService.SleepToHibernateAcMinutes);
                     }
                     catch (Exception ex) { Log.Warn("App", $"Sleep-to-Hibernate reinforcement failed: {ex.Message}"); }
-                });
-            }
+                    await System.Threading.Tasks.Task.Delay(TimeSpan.FromMinutes(30));
+                }
+            });
 
             // ── First-run defaults ──
             // Enable "Start with Windows" automatically on first launch so the app
@@ -675,9 +737,13 @@ public partial class App : Application
 
     private void ShowMainWindow()
     {
+        // A show request can race ahead of startup (a duplicate launch in the first moments).
+        // The view-model isn't built yet then, so there's nothing to show — ignore it.
+        if (_mainVm == null) return;
+
         if (_mainWindow == null)
         {
-            _mainWindow = new MainWindow(_mainVm!);
+            _mainWindow = new MainWindow(_mainVm);
             // NOTE: We never let the window truly close — Close button & Minimize both
             // call Hide(). The window is fully destroyed only on ExplicitShutdown().
         }

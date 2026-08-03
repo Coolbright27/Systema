@@ -101,6 +101,57 @@ public class XamlResourceLoadTests
     }
 
     /// <summary>
+    /// Regression guard for the v0.7.212 crash: a data-bound <c>&lt;Run Text="{Binding X}"&gt;</c>
+    /// without an explicit <c>Mode</c> binds TwoWay, because <c>Run.Text</c> is registered
+    /// BindsTwoWayByDefault. When the bound source property is get-only (a computed VM
+    /// property), WPF throws InvalidOperationException("A TwoWay or OneWayToSource binding
+    /// cannot work on the read-only property …") during layout and takes down the whole view.
+    /// Every Run.Text binding in the app is display-only, so each one must pin Mode=OneWay
+    /// (or OneTime). The compiler is happy with the omission; only a running app catches it —
+    /// which this environment can't do (SAC blocks the WPF deps), so we scan the text instead.
+    /// </summary>
+    [Fact]
+    public void RunTextBindings_MustPinOneWayOrOneTime()
+    {
+        var root = RepoRoot();
+        var xamlFiles = Directory.EnumerateFiles(
+            Path.Combine(root, "src", "Systema"), "*.xaml", SearchOption.AllDirectories);
+
+        var commentStripper = new Regex(@"<!--.*?-->", RegexOptions.Compiled | RegexOptions.Singleline);
+        // Opening <Run ...> tag (attributes contain no '>' of their own).
+        var runTag         = new Regex(@"<Run\b[^>]*?>", RegexOptions.Compiled | RegexOptions.Singleline);
+        // A Text="{Binding ...}" attribute inside that tag.
+        var runTextBinding = new Regex(@"Text\s*=\s*""(?<expr>\{Binding[^""]*)""", RegexOptions.Compiled);
+
+        var failures = new System.Collections.Generic.List<string>();
+
+        foreach (var file in xamlFiles)
+        {
+            var rawText  = File.ReadAllText(file);
+            var scanText = commentStripper.Replace(rawText, m =>
+                new string(m.Value.Select(c => c == '\n' ? '\n' : ' ').ToArray()));
+
+            foreach (Match tag in runTag.Matches(scanText))
+            {
+                var tb = runTextBinding.Match(tag.Value);
+                if (!tb.Success) continue; // static Text, or no Text — fine
+
+                var expr = tb.Groups["expr"].Value;
+                if (expr.Contains("Mode=OneWay") || expr.Contains("Mode=OneTime")) continue;
+
+                var line = scanText[..tag.Index].Count(c => c == '\n') + 1;
+                var rel  = Path.GetRelativePath(root, file).Replace('\\', '/');
+                failures.Add($"  {rel}:{line} — <Run Text=\"{{Binding …}}\"> without Mode=OneWay/OneTime " +
+                             "(Run.Text is TwoWay by default and crashes on read-only source properties)");
+            }
+        }
+
+        Assert.True(failures.Count == 0,
+            "Run.Text bindings must pin Mode=OneWay (or OneTime):" +
+            System.Environment.NewLine + string.Join(System.Environment.NewLine, failures));
+    }
+
+    /// <summary>
     /// Sanity check: confirms we are actually scanning files. If the path
     /// resolution above breaks, the property test would silently pass with
     /// zero files scanned — this test ensures that never happens.

@@ -49,6 +49,9 @@ internal sealed class ProcessState
     public System.DateTime? LastForegroundAt;
     /// <summary>When this process entered nap (deep-sleep timer / brief-wake fairness sort).</summary>
     public System.DateTime? NapSince;
+    /// <summary>True while this process is in its pre-nap grace period BECAUSE it's hidden (fully
+    /// covered), as opposed to minimized. Lets the status feed show the longer hidden-nap countdown.</summary>
+    public bool IsPendingHidden;
 
     // ── Child tracking (Batch 2) ──────────────────────────────────────────────
     /// <summary>If this process was napped as a CHILD of a napped parent, the parent's PID

@@ -212,6 +212,8 @@ public class GraphicsTweaksService
     // removes the value and releases the request.
     private const string KernelKey            = @"SYSTEM\CurrentControlSet\Control\Session Manager\kernel";
     private const uint   TargetResolution100ns = 5000;   // 0.5 ms, in 100-ns units
+    private const string SystemaKey           = @"Software\Systema";        // HKCU — Systema metadata
+    private const string TimerSetAtValue      = "TimerResolutionSetAtUtc";  // when the global policy was enabled (DateTime ticks)
 
     [DllImport("ntdll.dll")]
     private static extern int NtQueryTimerResolution(out uint Minimum, out uint Maximum, out uint Current);
@@ -248,6 +250,57 @@ public class GraphicsTweaksService
             return key?.GetValue("GlobalTimerResolutionRequests") is int v && v == 1;
         }
         catch (Exception ex) { Log.Warn("GraphicsTweaks", $"IsTimerResolutionForced read failed: {ex.Message}"); return false; }
+    }
+
+    // ── System-wide activation state ──────────────────────────────────────────
+    // GlobalTimerResolutionRequests is read by the kernel at BOOT, so enabling it doesn't affect
+    // other processes until the next restart. We stamp WHEN it was enabled and compare against the
+    // machine's boot time to tell "restart still pending" apart from "active system-wide".
+
+    private static DateTime BootTimeUtc() =>
+        DateTime.UtcNow - TimeSpan.FromMilliseconds(Environment.TickCount64);
+
+    private static void StampTimerEnabledAt(long ticks)
+    {
+        try
+        {
+            using var key = Registry.CurrentUser.CreateSubKey(SystemaKey, writable: true);
+            key?.SetValue(TimerSetAtValue, ticks, RegistryValueKind.QWord);
+        }
+        catch (Exception ex) { Log.Warn("GraphicsTweaks", $"StampTimerEnabledAt failed: {ex.Message}"); }
+    }
+
+    /// <summary>Records/clears the timestamp of when the global timer policy was enabled.</summary>
+    private static void SetTimerEnabledStamp(bool on)
+    {
+        if (on) { StampTimerEnabledAt(DateTime.UtcNow.Ticks); return; }
+        try
+        {
+            using var key = Registry.CurrentUser.CreateSubKey(SystemaKey, writable: true);
+            key?.DeleteValue(TimerSetAtValue, throwOnMissingValue: false);
+        }
+        catch (Exception ex) { Log.Warn("GraphicsTweaks", $"SetTimerEnabledStamp(off) failed: {ex.Message}"); }
+    }
+
+    /// <summary>True when the global 0.5 ms policy is not just set but ACTIVE — the machine has
+    /// booted since it was enabled, so GlobalTimerResolutionRequests is in effect for every process.
+    /// False when the flag is set but a restart is still pending.</summary>
+    public bool IsTimerResolutionActiveSystemWide()
+    {
+        if (!IsTimerResolutionForced()) return false;
+        try
+        {
+            using var key = Registry.CurrentUser.OpenSubKey(SystemaKey);
+            if (key?.GetValue(TimerSetAtValue) is long ticks)
+                return BootTimeUtc() > new DateTime(ticks, DateTimeKind.Utc);
+
+            // Legacy: flag on but no stamp (enabled by a build before this tracking existed). It was
+            // set in a prior session, so it's already active — backfill a boot-time stamp so the
+            // state stays correct from here on.
+            StampTimerEnabledAt(BootTimeUtc().Ticks);
+            return true;
+        }
+        catch (Exception ex) { Log.Warn("GraphicsTweaks", $"IsTimerResolutionActiveSystemWide failed: {ex.Message}"); return true; }
     }
 
     // ── Holding the 0.5 ms request + reinforcing it if it drifts ──────────────
@@ -300,11 +353,13 @@ public class GraphicsTweaksService
             if (on)
             {
                 key.SetValue("GlobalTimerResolutionRequests", 1, RegistryValueKind.DWord);
+                SetTimerEnabledStamp(true);   // record when, so we can detect the pending restart
                 StartTimerResolutionHold();   // issue + keep pinned (re-pin loop)
                 Log.Info("GraphicsTweaks", "Timer resolution forced to 0.5 ms (GlobalTimerResolutionRequests=1 + hold started)");
                 return TweakResult.Ok("Timer resolution set to 0.5 ms and kept pinned. Restart your PC so it applies system-wide.");
             }
             StopTimerResolutionHold();        // stop the loop, release the request
+            SetTimerEnabledStamp(false);
             key.DeleteValue("GlobalTimerResolutionRequests", throwOnMissingValue: false);
             Log.Info("GraphicsTweaks", "Timer resolution restored to Windows default (hold stopped + flag removed)");
             return TweakResult.Ok("Timer resolution restored to the Windows default. Restart your PC to fully apply.");
@@ -356,6 +411,117 @@ public class GraphicsTweaksService
                 : "Game Bar background capture restored to the Windows default. Restart any open games to apply.");
         }
         catch (Exception ex) { Log.Error("GraphicsTweaks", "SetGameDvrDisabled failed", ex); return TweakResult.FromException(ex); }
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    //  6 — Priority graphics scheduling (MMCSS multimedia tasks)
+    // ════════════════════════════════════════════════════════════════════════
+    // The mirror of the Audio tab's "Priority audio scheduling". Windows' Multimedia Class Scheduler
+    // (MMCSS) has per-workload tasks; raising the GRAPHICAL ones — Games (3D/DirectX), Playback (video),
+    // Capture (screen capture / streaming) — to the top SAFE tier makes the scheduler favour those
+    // threads so background work stutters them less.
+    //
+    // Safety line: we cap at Scheduling Category "High" (MMCSS's highest tier) and thread Priority 6 —
+    // NOT true realtime. Realtime-priority threads can starve the OS, input, and the compositor and
+    // freeze the machine. GPU Priority is left at its default so we don't contend with DWM's GPU work.
+    //
+    // NOTE on "Window Manager" (DWM): it is included here at the owner's explicit request. Boosting
+    // DWM's THREAD SCHEDULING priority is a different mechanism from changing the present/flip path
+    // (MPO, GPU scheduling mode) that caused Systema's past VSync/tearing regression — giving DWM more
+    // CPU priority generally helps it hit its frame deadlines, not miss them. DWM is still the
+    // sensitive one, so it's fully reversible: if any tearing/jank appears, toggling off restores
+    // every task's original values exactly (captured before the first change).
+    private const string MmcssTasksKey     = @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks";
+    private const string GfxSchedDefaultsKey = @"Software\Systema\GfxSchedDefaults";   // HKCU — captured originals
+    // Visual MMCSS tasks. Includes "Window Manager" (DWM, the desktop compositor) per explicit request.
+    internal static readonly string[] GraphicsMmcssTasks = { "Games", "Playback", "Capture", "Window Manager" };
+
+    /// <summary>True when the graphics MMCSS tasks are boosted (checks the Games task: Scheduling
+    /// Category + SFIO Priority both "High").</summary>
+    public bool IsGraphicsSchedulingBoosted()
+    {
+        try
+        {
+            using var key = Registry.LocalMachine.OpenSubKey($@"{MmcssTasksKey}\Games");
+            return key != null
+                && string.Equals(key.GetValue("Scheduling Category") as string, "High", StringComparison.OrdinalIgnoreCase)
+                && string.Equals(key.GetValue("SFIO Priority")       as string, "High", StringComparison.OrdinalIgnoreCase);
+        }
+        catch (Exception ex) { Log.Warn("GraphicsTweaks", $"IsGraphicsSchedulingBoosted read failed: {ex.Message}"); return false; }
+    }
+
+    public TweakResult SetGraphicsSchedulingBoosted(bool boost)
+    {
+        try
+        {
+            int changed = 0;
+            foreach (var task in GraphicsMmcssTasks)
+            {
+                using var key = Registry.LocalMachine.OpenSubKey($@"{MmcssTasksKey}\{task}", writable: true);
+                if (key == null) continue;   // task not present on this machine
+
+                if (boost)
+                {
+                    CaptureGfxSched(task, "Scheduling Category", key.GetValue("Scheduling Category") as string ?? "Medium");
+                    CaptureGfxSched(task, "SFIO Priority",       key.GetValue("SFIO Priority")       as string ?? "Normal");
+                    CaptureGfxSchedInt(task, "Priority",         key.GetValue("Priority") is int pv ? pv : 2);
+                    key.SetValue("Scheduling Category", "High", RegistryValueKind.String);
+                    key.SetValue("SFIO Priority",       "High", RegistryValueKind.String);
+                    key.SetValue("Priority", 6, RegistryValueKind.DWord);   // 6 = boosted, still below realtime
+                }
+                else
+                {
+                    key.SetValue("Scheduling Category", TakeGfxSched(task, "Scheduling Category", "Medium"), RegistryValueKind.String);
+                    key.SetValue("SFIO Priority",       TakeGfxSched(task, "SFIO Priority",       "Normal"), RegistryValueKind.String);
+                    key.SetValue("Priority",            TakeGfxSchedInt(task, "Priority", 2),               RegistryValueKind.DWord);
+                }
+                changed++;
+            }
+            Log.Info("GraphicsTweaks", $"Graphics scheduling {(boost ? "boosted (High/High/6)" : "restored to defaults")} on {changed} task(s): {string.Join(", ", GraphicsMmcssTasks)}");
+            return TweakResult.Ok(boost
+                ? "Graphics scheduling prioritized for games, video, and capture. Restart your PC to apply."
+                : "Graphics scheduling restored to the Windows default. Restart your PC to apply.");
+        }
+        catch (Exception ex) { Log.Error("GraphicsTweaks", "SetGraphicsSchedulingBoosted failed", ex); return TweakResult.FromException(ex); }
+    }
+
+    private static void CaptureGfxSched(string task, string name, string value)
+    {
+        try
+        {
+            using var k = Registry.CurrentUser.CreateSubKey(GfxSchedDefaultsKey, writable: true);
+            if (k != null && k.GetValue($"{task}|{name}") == null) k.SetValue($"{task}|{name}", value, RegistryValueKind.String);
+        }
+        catch (Exception ex) { Log.Warn("GraphicsTweaks", $"CaptureGfxSched({task}) failed: {ex.Message}"); }
+    }
+    private static void CaptureGfxSchedInt(string task, string name, int value)
+    {
+        try
+        {
+            using var k = Registry.CurrentUser.CreateSubKey(GfxSchedDefaultsKey, writable: true);
+            if (k != null && k.GetValue($"{task}|{name}") == null) k.SetValue($"{task}|{name}", value, RegistryValueKind.DWord);
+        }
+        catch (Exception ex) { Log.Warn("GraphicsTweaks", $"CaptureGfxSchedInt({task}) failed: {ex.Message}"); }
+    }
+    private static string TakeGfxSched(string task, string name, string fallback)
+    {
+        try
+        {
+            using var k = Registry.CurrentUser.OpenSubKey(GfxSchedDefaultsKey, writable: true);
+            if (k?.GetValue($"{task}|{name}") is string s) { k.DeleteValue($"{task}|{name}", throwOnMissingValue: false); return s; }
+        }
+        catch (Exception ex) { Log.Warn("GraphicsTweaks", $"TakeGfxSched({task}) failed: {ex.Message}"); }
+        return fallback;
+    }
+    private static int TakeGfxSchedInt(string task, string name, int fallback)
+    {
+        try
+        {
+            using var k = Registry.CurrentUser.OpenSubKey(GfxSchedDefaultsKey, writable: true);
+            if (k?.GetValue($"{task}|{name}") is int v) { k.DeleteValue($"{task}|{name}", throwOnMissingValue: false); return v; }
+        }
+        catch (Exception ex) { Log.Warn("GraphicsTweaks", $"TakeGfxSchedInt({task}) failed: {ex.Message}"); }
+        return fallback;
     }
 
     // ════════════════════════════════════════════════════════════════════════
