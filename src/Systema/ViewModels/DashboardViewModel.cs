@@ -147,6 +147,12 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
     private Dictionary<string, (string Title, string Why, Func<Task> Apply)> _recMeta = new();
     private const string DismissedRegKey = @"Software\Systema\AutoPilot";
 
+    // Recommendation-ONLY items (Suggestions & nags, Start web search): surfaced in the feed so they
+    // can be applied with one click, but deliberately NOT part of the Auto-Pilot checklist / Apply-all.
+    private readonly Win11CleanupService _win11 = new();
+    private readonly AudioService        _audio = new();
+    private readonly List<AutoPilotItem> _extraRecs = new();
+
     // ── Constructor ───────────────────────────────────────────────────────────
 
     public DashboardViewModel(
@@ -333,44 +339,38 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
                     Detail = detail,
                 });
 
-                // 3. Power plan
-                string plan  = _powerPlan.GetActivePlan();
-                bool hasBattery = _powerPlan.HasBattery();
-                bool onBattery  = _powerPlan.IsOnBattery();
-                bool batteryOptConfigured = !string.IsNullOrEmpty(_settings.BatteryOptimizationMode);
-                bool isHighPerf = plan.Contains("High Performance", StringComparison.OrdinalIgnoreCase)
-                               || plan.Contains("Ultimate", StringComparison.OrdinalIgnoreCase);
-                // When the laptop is on battery with battery optimization configured,
-                // a battery-appropriate plan is the CORRECT state — not a failure.
-                // That can be either "Balanced" (balanced mode) or "Power Saver"
-                // (max battery life / Max mode). Previously only "Balanced" counted,
-                // so being on battery in Max mode (Power Saver) wrongly showed a red X.
-                bool batteryPlanActive = plan.Contains("Balanced",    StringComparison.OrdinalIgnoreCase)
-                                      || plan.Contains("Power Saver",  StringComparison.OrdinalIgnoreCase)
-                                      || plan.Contains("Power saver",  StringComparison.OrdinalIgnoreCase);
-                bool planOk = isHighPerf
-                           || (hasBattery && batteryOptConfigured && onBattery && batteryPlanActive);
-                if (!planOk) pending++;
+                // 2b. No Telemetry Pro — the maximal telemetry kill: the registry policy layer
+                //     (tells Windows not to collect at all) on top of the telemetry services,
+                //     error reporting, and scheduled data-collection tasks. Broader than the
+                //     service cleanup above, so it stays a distinct item.
+                bool noTelProOk = _serviceControl.IsNoTelemetryProEnabled();
+                if (!noTelProOk) pending++;
                 items.Add(new AutoPilotItem
                 {
-                    Label  = "Power plan",
-                    IsDone = planOk,
-                    Detail = isHighPerf       ? "High Performance"
-                           : planOk           ? $"On battery — {plan} (auto-switches to High Performance on AC)"
-                                              : $"Currently: {plan}",
+                    Label  = "No Telemetry Pro",
+                    IsDone = noTelProOk,
+                    Detail = noTelProOk
+                        ? "All Windows telemetry off (policies, services, error reporting, tasks)"
+                        : "Windows telemetry policies are still active",
                 });
+
+                // 3. Power plan — Performance Mode (High Performance) is a DESKTOP-only item.
+                //    Laptops get NO power item in Auto Pilot at all: forcing High Performance drains
+                //    the battery, and battery optimization is a manual choice on the Performance tab.
+                string plan  = _powerPlan.GetActivePlan();
                 ActivePlan = plan;
 
-                // 4. Balanced on battery (only if battery present)
-                if (hasBattery)
+                if (!_powerPlan.HasBattery())
                 {
-                    bool battOk = batteryOptConfigured;
-                    if (!battOk) pending++;
+                    // Desktop: High Performance is the target plan.
+                    bool isHighPerf = plan.Contains("High Performance", StringComparison.OrdinalIgnoreCase)
+                                   || plan.Contains("Ultimate", StringComparison.OrdinalIgnoreCase);
+                    if (!isHighPerf) pending++;
                     items.Add(new AutoPilotItem
                     {
-                        Label  = "Balanced on battery",
-                        IsDone = battOk,
-                        Detail = battOk ? "Balanced on battery, High Performance on AC" : "Not configured — click Optimize to enable",
+                        Label  = "Power plan",
+                        IsDone = isHighPerf,
+                        Detail = isHighPerf ? "High Performance" : $"Currently: {plan}",
                     });
                 }
 
@@ -508,10 +508,62 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
                         ? "SystemResponsiveness = 0 — more CPU for foreground/multimedia"
                         : "Default (20) — click Optimize to maximize (restart to apply)",
                 });
+
+                // 17. Stable timer resolution — forces a global 0.5 ms timer, DESKTOPS ONLY. On a
+                //     laptop a forced high-resolution timer keeps the CPU out of deep idle states,
+                //     hurting battery and thermals, so it's not offered (checklist or feed) there.
+                if (!_powerPlan.HasBattery())
+                {
+                    bool timerOk = _graphics.IsTimerResolutionForced();
+                    if (!timerOk) pending++;
+                    items.Add(new AutoPilotItem
+                    {
+                        Label  = "Stable timer resolution",
+                        IsDone = timerOk,
+                        Detail = timerOk
+                            ? "Forced 0.5 ms system timer for steadier frame pacing"
+                            : "Not forced — click Optimize to enable (restart to apply)",
+                    });
+                }
+
+                // 18. Priority graphics scheduling — raise the MMCSS graphics/DWM tasks to high.
+                bool gfxSchedOk = _graphics.IsGraphicsSchedulingBoosted();
+                if (!gfxSchedOk) pending++;
+                items.Add(new AutoPilotItem
+                {
+                    Label  = "Priority graphics scheduling",
+                    IsDone = gfxSchedOk,
+                    Detail = gfxSchedOk
+                        ? "Graphics and desktop compositor run at high MMCSS priority"
+                        : "Default priority — click Optimize to raise (restart to apply)",
+                });
+
+                // 19. Priority audio scheduling — raise the MMCSS Audio task to high.
+                bool audioSchedOk = _audio.IsAudioSchedulingBoosted();
+                if (!audioSchedOk) pending++;
+                items.Add(new AutoPilotItem
+                {
+                    Label  = "Priority audio scheduling",
+                    IsDone = audioSchedOk,
+                    Detail = audioSchedOk
+                        ? "Audio task runs at high MMCSS priority"
+                        : "Default priority — click Optimize to raise (restart to apply)",
+                });
             });
 
             // All registry/powercfg calls are done.
             // RunOnLargeStackAsync continuations run on a ThreadPool thread, so ALL
+            // Recommendation-only checks (registry reads, still on the background thread). These never
+            // touch `pending` — they're feed suggestions, not Auto-Pilot checklist items.
+            var extras = new List<AutoPilotItem>
+            {
+                new() { Label = "Disable Suggestions & nags",  IsDone = _win11.IsConsumerContentDisabled() },
+                new() { Label = "Disable web search in Start", IsDone = _win11.IsWebSearchDisabled() },
+                new() { Label = "Turn off Game Bar capture",  IsDone = _graphics.IsGameDvrDisabled() },
+                new() { Label = "GPU scheduling & windowed optimizations",
+                        IsDone = !_graphics.IsHagsEnabled() && !_graphics.IsWindowedOptimizationsEnabled() },
+            };
+
             // ObservableCollection mutations and UI-property writes must be marshalled
             // back to the UI thread — otherwise WPF raises InvalidOperationException.
             Application.Current?.Dispatcher.BeginInvoke(() =>
@@ -525,6 +577,9 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
                 AutoPilotChecklist.Clear();
                 foreach (var item in items)
                     AutoPilotChecklist.Add(item);
+
+                _extraRecs.Clear();
+                _extraRecs.AddRange(extras);
 
                 RebuildRecommendationsFromChecklist();
                 RunAutoPilotCommand.NotifyCanExecuteChanged();
@@ -596,26 +651,25 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
             await _serviceControl.DisablePrivacyAndRecommendedAsync(gamesInstalled);
             _log.Info("DashboardViewModel", "Privacy cleanup applied (telemetry + recommended services)");
 
-            // 3. High Performance power plan
-            await _powerPlan.SetHighPerformanceAsync();
-            // Persist the toggle so VisualViewModel shows it as ON and re-applies
-            // HP at every subsequent startup (hibernate-resume, app restart after
-            // update, etc.). Without this line the plan reverts to Balanced on
-            // restart because VisualViewModel only reads this setting at init.
-            _settings.PerformanceModeEnabled = true;
-            _log.Info("DashboardViewModel", "Power plan → High Performance");
+            // 2b. No Telemetry Pro — the registry policy layer + error reporting + scheduled
+            //     tasks, on top of the telemetry services the privacy cleanup already handles.
+            await _serviceControl.SetNoTelemetryProAsync(true);
+            _log.Info("DashboardViewModel", "No Telemetry Pro applied (telemetry policies + tasks + error reporting)");
 
-            // 4. Balanced on battery (if applicable) — set the persisted setting and apply
-            //    immediately if currently on battery. VisualViewModel's PowerModeChanged
-            //    handler reads BatteryOptimizationMode from settings on plug/unplug, so
-            //    it will auto-switch plans even though Auto-Pilot bypasses VisualViewModel.
-            if (_powerPlan.HasBattery())
+            // 3. High Performance power plan — DESKTOPS ONLY. On a laptop, forcing High
+            //    Performance drains the battery; the Balanced-on-battery step below manages
+            //    laptop power instead. Persisting PerformanceModeEnabled lets VisualViewModel
+            //    re-apply HP at every subsequent startup (desktop only).
+            if (!_powerPlan.HasBattery())
             {
-                _settings.BatteryOptimizationMode = "balanced";
-                if (_powerPlan.IsOnBattery())
-                    await _powerPlan.SetBalancedOnBatteryAsync(); // switch to Balanced right now
-                _log.Info("DashboardViewModel", "Battery optimization enabled (Balanced on battery)");
+                await _powerPlan.SetHighPerformanceAsync();
+                _settings.PerformanceModeEnabled = true;
+                _log.Info("DashboardViewModel", "Power plan → High Performance (desktop)");
             }
+
+            // 4. (Battery optimization was removed from Auto-Pilot. It's a laptop-specific power
+            //     choice the user makes manually on the Performance tab, not something Auto-Pilot
+            //     forces — so laptops get no power step here at all.)
 
             // 5. Game Boost master switch on
             _settings.GameBoosterEnabled = true;
@@ -704,6 +758,28 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
                 _log.Info("DashboardViewModel", "Maximum system responsiveness enabled (Auto-Pilot)");
             }
 
+            // 17. Stable timer resolution — DESKTOPS ONLY (a forced high-res timer keeps a laptop CPU
+            //     out of deep idle, hurting battery/thermals). Restart to take effect.
+            if (!_powerPlan.HasBattery() && !_graphics.IsTimerResolutionForced())
+            {
+                _graphics.SetTimerResolution(true);
+                _log.Info("DashboardViewModel", "Stable timer resolution enabled (Auto-Pilot, desktop)");
+            }
+
+            // 18. Priority graphics scheduling — MMCSS graphics/DWM tasks to high. Restart to apply.
+            if (!_graphics.IsGraphicsSchedulingBoosted())
+            {
+                _graphics.SetGraphicsSchedulingBoosted(true);
+                _log.Info("DashboardViewModel", "Priority graphics scheduling enabled (Auto-Pilot)");
+            }
+
+            // 19. Priority audio scheduling — MMCSS Audio task to high. Restart to apply.
+            if (!_audio.IsAudioSchedulingBoosted())
+            {
+                _audio.SetAudioSchedulingBoosted(true);
+                _log.Info("DashboardViewModel", "Priority audio scheduling enabled (Auto-Pilot)");
+            }
+
             _log.Info("DashboardViewModel", "Auto-Pilot completed successfully");
             StatusMessage = "Auto-Pilot complete — your PC is fully optimized.";
         }
@@ -754,12 +830,12 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
         ["Privacy & background services"] = ("Turn off data collection and bloat services",
             "Disables the telemetry and background services that quietly collect data and use resources, with nothing you would miss.",
             async () => await _serviceControl.DisablePrivacyAndRecommendedAsync(_gameBooster.GamesInstalled)),
+        ["No Telemetry Pro"] = ("Turn off all Windows telemetry",
+            "Goes beyond the service cleanup and switches off Windows' telemetry policies, error reporting, and scheduled data-collection tasks, so the OS stops gathering and sending usage data.",
+            async () => await _serviceControl.SetNoTelemetryProAsync(true)),
         ["Power plan"] = ("Switch to the High Performance power plan",
             "The High Performance plan stops Windows down-clocking the CPU on light load, so your PC responds the instant you ask it to.",
             async () => { await _powerPlan.SetHighPerformanceAsync(); _settings.PerformanceModeEnabled = true; }),
-        ["Balanced on battery"] = ("Balance power automatically on battery",
-            "Keeps High Performance on AC but switches to a balanced plan on battery, so you get speed when plugged in and runtime when you are not.",
-            async () => { if (_powerPlan.HasBattery()) { _settings.BatteryOptimizationMode = "balanced"; if (_powerPlan.IsOnBattery()) await _powerPlan.SetBalancedOnBatteryAsync(); } }),
         ["Game Boost"] = ("Turn on Game Boost",
             "Game Boost frees up CPU and quiets background apps while you play, for steadier frame rates.",
             () => { _settings.GameBoosterEnabled = true; _gameBooster.SetEnabled(true); return Task.CompletedTask; }),
@@ -769,8 +845,8 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
         ["Preview updates"] = ("Block Windows preview updates",
             "Keeps you on stable Windows releases instead of the buggy preview and insider builds.",
             async () => await _wuTweaks.BlockPreviewUpdatesAsync()),
-        ["CPU core efficiency"] = ("Disable Core Parking",
-            "Windows parks idle CPU cores to save power, which adds a wake-up delay. Keeping them ready makes the system feel snappier.",
+        ["CPU core efficiency"] = ("Enable CPU core parking",
+            "Lets Windows park idle CPU cores across all your power plans, so the processor draws less power and runs cooler and quieter when the machine isn't under load. Systema keeps it applied across restarts.",
             async () => await _corePark.EnableForcedCoreParking()),
         ["Launch on startup"] = ("Start Systema with Windows",
             "Lets Systema start with Windows so your optimizations stay applied and maintained from the moment you log in.",
@@ -788,7 +864,7 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
             "Gives apps a quick priority boost the moment they launch so they open faster, then hands control back to Windows.",
             () => { if (!_taskSleepVm.IsEnabled || !_taskSleepVm.LaunchBoostEnabled) _taskSleepVm.EnableLaunchBoost(); return Task.CompletedTask; }),
         ["Disable MPO"] = ("Disable Multi-Plane Overlay",
-            "Some GPU drivers handle Multi-Plane Overlay poorly, which causes flicker and uneven frames. Turning it off is Microsoft's own fix.",
+            "Some GPU drivers handle Multi-Plane Overlay poorly, which causes flicker, stutter, and uneven frame pacing, so turning it off is Microsoft's own fix and usually steadies frames. Tradeoff: NVIDIA's VSync and Independent Flip rely on MPO, so on some NVIDIA setups disabling it can cause screen tearing. If you see tearing, re-enable MPO from the Graphics tab. Takes effect after a restart.",
             () => { if (!_graphics.IsMpoDisabled()) _graphics.SetMpoDisabled(true); return Task.CompletedTask; }),
         ["Extend GPU recovery timeout"] = ("Extend the GPU recovery timeout",
             "Gives the GPU a moment longer to recover from a hang before Windows resets the driver, which avoids black screens under heavy load.",
@@ -796,6 +872,33 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
         ["Maximum system responsiveness"] = ("Maximize system responsiveness",
             "Hands the CPU time Windows reserves for background work over to your foreground and multimedia apps, for steadier frame pacing.",
             async () => { if (!_stability.IsMaxResponsivenessEnabled()) { await _stability.EnableMaxResponsivenessAsync(); _settings.MaxResponsivenessEnabled = true; } }),
+        ["Stable timer resolution"] = ("Force a stable 0.5 ms system timer",
+            "Pins Windows to a steady high-resolution timer so frame pacing and input timing stay consistent instead of drifting. Best on a desktop, and it takes effect after a restart.",
+            () => { if (!_graphics.IsTimerResolutionForced()) _graphics.SetTimerResolution(true); return Task.CompletedTask; }),
+        ["Priority graphics scheduling"] = ("Raise graphics scheduling priority",
+            "Bumps the Windows multimedia scheduler priority for graphics and the desktop compositor, so rendering gets CPU time sooner for steadier frames. Takes effect after a restart.",
+            () => { if (!_graphics.IsGraphicsSchedulingBoosted()) _graphics.SetGraphicsSchedulingBoosted(true); return Task.CompletedTask; }),
+        ["Priority audio scheduling"] = ("Raise audio scheduling priority",
+            "Bumps the Windows audio task's scheduler priority so sound gets CPU time promptly, cutting crackles and dropouts when the system is busy. Takes effect after a restart.",
+            () => { if (!_audio.IsAudioSchedulingBoosted()) _audio.SetAudioSchedulingBoosted(true); return Task.CompletedTask; }),
+
+        // Recommendation-only (not in Auto-Pilot) — see _extraRecs.
+        ["Disable Suggestions & nags"] = ("Turn off Windows suggestions and nags",
+            "Stops Windows 11's tips, app suggestions, lock-screen spotlight ads, and the setup and finish-setup nags, for a quieter, less cluttered desktop.",
+            async () => await _win11.DisableConsumerContentAsync()),
+        ["Disable web search in Start"] = ("Turn off web results in Start search",
+            "Removes Bing web results from Start menu search so it only searches your PC, which makes Start search quicker and more private.",
+            async () => await _win11.DisableWebSearchAsync()),
+        ["Turn off Game Bar capture"] = ("Turn off Game Bar background capture",
+            "Stops Windows' Game Bar and Game DVR from recording in the background, removing the constant CPU and disk overhead it adds while you game. Restart any open games to apply.",
+            () => { if (!_graphics.IsGameDvrDisabled()) _graphics.SetGameDvrDisabled(true); return Task.CompletedTask; }),
+        ["GPU scheduling & windowed optimizations"] = ("Turn off GPU scheduling and windowed game optimizations",
+            "Turns off Hardware-accelerated GPU Scheduling and Optimizations for windowed games. How it helps: both add an extra layer to how frames are scheduled and presented, so turning them off keeps the graphics path simpler with fewer moving parts to glitch, which is more stable on many setups. Possible issue: on some capable GPUs these features can actually lower latency and smooth frame delivery, so if your games felt better with them on, you can re-enable them in the Graphics tab. GPU scheduling needs a PC restart, and open games need restarting.",
+            () => {
+                if (_graphics.IsHagsEnabled()) { _graphics.SetHags(false); _settings.GraphicsHagsPref = 0; }
+                if (_graphics.IsWindowedOptimizationsEnabled()) { _graphics.SetWindowedOptimizations(false); _settings.GraphicsWindowedOptPref = 0; }
+                return Task.CompletedTask;
+            }),
     };
 
     /// <summary>Rebuilds the status line + the visible recommendation feed from the current
@@ -813,7 +916,9 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
         Recommendations.Clear();
         if (!AutoPilotModeEnabled)
         {
-            foreach (var item in AutoPilotChecklist)
+            // Auto-Pilot checklist items first, then the recommendation-only extras (Suggestions &
+            // nags, Start web search). Both share the same 3-at-a-time feed cap and apply/dismiss flow.
+            foreach (var item in AutoPilotChecklist.Concat(_extraRecs))
             {
                 if (item.IsDone || _dismissed.Contains(item.Label)) continue;
                 if (!_recMeta.TryGetValue(item.Label, out var meta)) continue;

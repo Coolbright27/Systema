@@ -464,7 +464,7 @@
 
                     <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,16,0,16"/>
 
-                    <!-- Power Throttling Off — pairs with Foreground Priority Boost. -->
+                    <!-- Power Throttling On — lets Windows park background work on efficiency cores. -->
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
@@ -472,23 +472,23 @@
                         </Grid.ColumnDefinitions>
                         <StackPanel Grid.Column="0" Margin="0,0,16,0">
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                                <TextBlock Text="Power Throttling Off" Style="{StaticResource HeadingMedium}"/>
+                                <TextBlock Text="Power Throttling On" Style="{StaticResource HeadingMedium}"/>
                                 <Border BorderBrush="{StaticResource AccentGreenBrush}" BorderThickness="1" CornerRadius="3"
                                         Padding="6,2" Margin="10,0,0,0" VerticalAlignment="Center">
                                     <TextBlock Text="SAFE" FontSize="9" FontWeight="SemiBold" Foreground="{StaticResource AccentGreenBrush}"/>
                                 </Border>
                             </StackPanel>
                             <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" MaxWidth="600">
-                                Windows quietly lowers the clock speed of apps it decides are in the background to save power.
-                                Turning Power Throttling off keeps the app you're using at full speed on AC and on battery
-                                alike, so it stays on instead of dropping off when you unplug.
-                                <LineBreak/><Run FontWeight="SemiBold">Recommended on with Systema Engine:</Run> it backs up
-                                Foreground Priority Boost, so the active app gets both more CPU time and full clock speed.
+                                Lets Windows quietly slow apps it decides are in the background so they draw less power. On a
+                                laptop or a hybrid CPU that steers the background work onto the efficiency cores, cutting heat,
+                                fan noise, and battery drain, while the app you're actually using is left at full speed.
+                                <LineBreak/><Run FontWeight="SemiBold">On by default:</Run> it's the standard Windows behavior.
+                                Turn it off only if you want background apps to keep full clock speed too.
                             </TextBlock>
                         </StackPanel>
                         <CheckBox Grid.Column="1" VerticalAlignment="Center"
                                   Style="{StaticResource ToggleSwitch}"
-                                  IsChecked="{Binding PowerThrottlingOffEnabled, Mode=TwoWay}"/>
+                                  IsChecked="{Binding PowerThrottlingOn, Mode=TwoWay}"/>
                     </Grid>
 
                     <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,16,0,16"/>

@@ -9,6 +9,7 @@
 
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using System.Runtime.InteropServices;
 using Systema.Core;
 using Systema.Services;
 
@@ -18,6 +19,7 @@ public partial class NvidiaGpuViewModel : ObservableObject, IDisposable
 {
     private readonly NvidiaGpuService _service;
     private readonly SettingsService  _settings;
+    private readonly NvapiService     _nvapi = new();
     private static readonly LoggerService _log = LoggerService.Instance;
 
     private List<NvidiaAdapter> _adapters = new();
@@ -36,6 +38,11 @@ public partial class NvidiaGpuViewModel : ObservableObject, IDisposable
     // Opt-in: re-apply the saved choice after NVIDIA driver updates (which wipe the values).
     [ObservableProperty] private bool   _reapplyAfterDriverUpdate;
 
+    // ── Max Frame Rate (FPS cap) via NVAPI DRS — the same limiter the NVIDIA app uses ──
+    [ObservableProperty] private bool   _isFpsCapAvailable;
+    [ObservableProperty] private int    _fpsCapInput;
+    [ObservableProperty] private string _fpsCapCurrentText = "";
+
     private const string OnText  = "On — driver default (adaptive, saves power)";
     private const string OffText = "Off — prefer maximum performance";
 
@@ -51,6 +58,7 @@ public partial class NvidiaGpuViewModel : ObservableObject, IDisposable
         AdapterName = _adapters[0].DriverDesc;
         _reapplyAfterDriverUpdate = _settings.NvidiaGpuReapplyEnabled;
         LoadFromRegistry();
+        LoadFpsCap();
     }
 
     [RelayCommand]
@@ -60,7 +68,8 @@ public partial class NvidiaGpuViewModel : ObservableObject, IDisposable
         _adapters = _service.DetectNvidiaAdapters();
         IsNvidiaPresent = _adapters.Count > 0;
         if (IsNvidiaPresent) { AdapterName = _adapters[0].DriverDesc; LoadFromRegistry(); }
-        StatusMessage = "Re-read current NVIDIA settings from the registry.";
+        LoadFpsCap();
+        StatusMessage = "Re-read current NVIDIA settings.";
     }
 
     /// <summary>
@@ -82,9 +91,12 @@ public partial class NvidiaGpuViewModel : ObservableObject, IDisposable
             }
             else
             {
-                // No classic client — launch the modern Store package.
+                // No classic client — launch the modern Store package by its AUMID
+                // (PackageFamilyName!AppId). The AppId is "NVIDIACorp.NVIDIAControlPanel",
+                // NOT just "NVIDIAControlPanel" — the old value silently opened nothing
+                // because explorer.exe starts fine even with a bad AppsFolder target.
                 System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("explorer.exe",
-                    @"shell:AppsFolder\NVIDIACorp.NVIDIAControlPanel_56jybvy8sckqj!NVIDIAControlPanel")
+                    @"shell:AppsFolder\NVIDIACorp.NVIDIAControlPanel_56jybvy8sckqj!NVIDIACorp.NVIDIAControlPanel")
                 { UseShellExecute = true });
             }
             StatusMessage = "Opened the NVIDIA Control Panel.";
@@ -155,6 +167,83 @@ public partial class NvidiaGpuViewModel : ObservableObject, IDisposable
     {
         _settings.NvidiaGpuReapplyEnabled = value;
         _log.Info("NvidiaGpuViewModel", $"Re-apply after driver update set to {value}.");
+    }
+
+    // ── Max Frame Rate (FPS cap) — reads/writes the SAME DRS setting the NVIDIA app uses ──
+
+    private void LoadFpsCap()
+    {
+        IsFpsCapAvailable = _nvapi.IsAvailable();
+        if (!IsFpsCapAvailable) { FpsCapCurrentText = ""; return; }
+        int cur = _nvapi.GetMaxFrameRate();
+        FpsCapInput = cur;                                  // reflect the REAL value (0 when off)
+        FpsCapCurrentText = cur > 0
+            ? $"Currently capped at {cur} FPS"
+            : "Currently: Off (no frame limit)";
+    }
+
+    [RelayCommand]
+    private void ApplyFpsCap()
+    {
+        if (!IsFpsCapAvailable) return;
+        int v = FpsCapInput;
+        if (v <= 0) { ResetFpsCap(); return; }              // 0 (or blank) + Apply = reset
+        v = Math.Clamp(v, 20, 999);                         // allowed range 20–999
+        var r = _nvapi.SetMaxFrameRate(v);
+        StatusMessage = r.Message;
+        if (!r.Success) _log.Warn("NvidiaGpuViewModel", $"ApplyFpsCap failed: {r.Message}");
+        LoadFpsCap();                                       // re-read so the box shows the real applied value
+    }
+
+    [RelayCommand]
+    private void ResetFpsCap()
+    {
+        if (!IsFpsCapAvailable) return;
+        var r = _nvapi.SetMaxFrameRate(0);                  // remove the override entirely
+        StatusMessage = r.Message;
+        LoadFpsCap();
+    }
+
+    [RelayCommand]
+    private void UseMonitorRefresh()
+    {
+        int hz = GetPrimaryRefreshHz();
+        if (hz <= 0) { StatusMessage = "Couldn't read your monitor's refresh rate."; return; }
+        // Snap to the nearest multiple of 5 so a "59 Hz" panel becomes a clean 60, 74 -> 75, 76 -> 75.
+        int rounded = Math.Clamp((int)(Math.Round(hz / 5.0) * 5), 20, 999);
+        FpsCapInput = rounded;
+        StatusMessage = $"Set to {rounded} FPS (your monitor runs at {hz} Hz) — click Apply to enforce it.";
+    }
+
+    /// <summary>Primary monitor's current refresh rate in Hz (0 if unreadable).</summary>
+    private static int GetPrimaryRefreshHz()
+    {
+        try
+        {
+            var dm = new DEVMODE();
+            dm.dmSize = (ushort)Marshal.SizeOf<DEVMODE>();
+            return EnumDisplaySettings(null, ENUM_CURRENT_SETTINGS, ref dm) ? (int)dm.dmDisplayFrequency : 0;
+        }
+        catch { return 0; }
+    }
+
+    private const int ENUM_CURRENT_SETTINGS = -1;
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern bool EnumDisplaySettings(string? deviceName, int modeNum, ref DEVMODE devMode);
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    private struct DEVMODE
+    {
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)] public string dmDeviceName;
+        public ushort dmSpecVersion, dmDriverVersion, dmSize, dmDriverExtra;
+        public uint   dmFields;
+        public int    dmPositionX, dmPositionY;
+        public uint   dmDisplayOrientation, dmDisplayFixedOutput;
+        public short  dmColor, dmDuplex, dmYResolution, dmTTOption, dmCollate;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)] public string dmFormName;
+        public ushort dmLogPixels;
+        public uint   dmBitsPerPel, dmPelsWidth, dmPelsHeight, dmDisplayFlags, dmDisplayFrequency;
+        public uint   dmICMMethod, dmICMIntent, dmMediaType, dmDitherType, dmReserved1, dmReserved2, dmPanningWidth, dmPanningHeight;
     }
 
     public void Dispose() { }

@@ -168,7 +168,12 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
     // off pairs with Foreground Priority Boost (stays on for both AC and battery — it no
     // longer drops off when unplugged); Fast App Close trims the shutdown/sign-out wait.
     [ObservableProperty] private bool _networkThrottlingOffEnabled = true;
-    [ObservableProperty] private bool _powerThrottlingOffEnabled   = true;
+    // Stored as the legacy "off" flag (true = Windows Power Throttling DISABLED). Default is now FALSE
+    // = throttling ACTIVE, the efficiency default (Windows parks background work on E-cores / low
+    // clocks). The UI binds the inverse PowerThrottlingOn ("Power Throttling On").
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(PowerThrottlingOn))]
+    private bool _powerThrottlingOffEnabled = false;
     [ObservableProperty] private bool _fastAppCloseEnabled         = true;
 
     // Keep Kernel in RAM defaults ON only on machines with >= 14 GB installed (it's
@@ -194,7 +199,7 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
     private bool _wantInstantStartupApps   = true;
     private bool _wantMaxResponsiveness    = true;
     private bool _wantNetworkThrottlingOff = true;
-    private bool _wantPowerThrottlingOff   = true;
+    private bool _wantPowerThrottlingOff   = false;   // false = Power Throttling ON (efficiency default)
     private bool _wantFastAppClose         = true;
     private bool _wantKeepKernelInRam      = _ramSupportsKeepKernel;
     private bool _wantFasterShutdown       = true;
@@ -448,10 +453,11 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
             // cycle re-enables them). Persist the reset intent, apply it to Windows, then the
             // toggles reflect the live result (see ApplyResponsivenessAsync).
             _wantForegroundBoost = _wantInstantAppFocus = _wantInstantStartupApps =
-                _wantMaxResponsiveness = _wantNetworkThrottlingOff = _wantPowerThrottlingOff =
+                _wantMaxResponsiveness = _wantNetworkThrottlingOff =
                 _wantFastAppClose = _wantFasterShutdown = _wantInputHookTimeout =
                 _wantServiceShutdownFast = _wantFastStartupOff = _wantBackgroundAppsOff = true;
             _wantKeepKernelInRam = _ramSupportsKeepKernel;   // default on only at >= 14 GB
+            _wantPowerThrottlingOff = false;   // Power Throttling stays ON (efficiency); the engine no longer disables it
             SaveSettings();
             _ = ApplyResponsivenessAsync();
         }
@@ -582,12 +588,21 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
         SaveSettings();
     }
 
+    /// <summary>UI-facing inverse of <see cref="PowerThrottlingOffEnabled"/>: ON means Windows Power
+    /// Throttling is ACTIVE (the efficiency default — background work parked on E-cores / low clocks).
+    /// Toggling it drives the same apply path via the generated PowerThrottlingOffEnabled setter.</summary>
+    public bool PowerThrottlingOn
+    {
+        get => !PowerThrottlingOffEnabled;
+        set => PowerThrottlingOffEnabled = !value;
+    }
+
     partial void OnPowerThrottlingOffEnabledChanged(bool value)
     {
         if (_loadingSettings) return;
         _wantPowerThrottlingOff = value;
-        if (value) _ = _stability.EnablePowerThrottlingOffAsync();
-        else       _ = _stability.DisablePowerThrottlingOffAsync();
+        if (value) _ = _stability.EnablePowerThrottlingOffAsync();   // off toggle = disable throttling (performance)
+        else       _ = _stability.DisablePowerThrottlingOffAsync();  // on toggle  = throttling active (efficiency)
         SaveSettings();
     }
 
@@ -1182,7 +1197,9 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
             // off→on cycle resets intent back on (see OnIsEnabledChanged).
             _wantForegroundBoost      = ReadBool(key, "ForegroundBoostEnabled",      true);
             _wantNetworkThrottlingOff = ReadBool(key, "NetworkThrottlingOffEnabled", true);
-            _wantPowerThrottlingOff   = ReadBool(key, "PowerThrottlingOffEnabled",   true);
+            // New key with default ON (throttling active). Existing users lack it, so they migrate to
+            // ON automatically — the old "PowerThrottlingOffEnabled" value is deliberately ignored.
+            _wantPowerThrottlingOff   = !ReadBool(key, "PowerThrottlingOnEnabled",   true);
             _wantFastAppClose         = ReadBool(key, "FastAppCloseEnabled",         true);
             _wantKeepKernelInRam      = ReadBool(key, "KeepKernelInRamEnabled",      _ramSupportsKeepKernel);
             _wantFasterShutdown       = ReadBool(key, "FasterShutdownEnabled",       true);
@@ -1263,7 +1280,7 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
             // live-display toggles, so a value Windows reset isn't mistaken for "turned off".
             key.SetValue("ForegroundBoostEnabled",      _wantForegroundBoost      ? 1 : 0, RegistryValueKind.DWord);
             key.SetValue("NetworkThrottlingOffEnabled", _wantNetworkThrottlingOff ? 1 : 0, RegistryValueKind.DWord);
-            key.SetValue("PowerThrottlingOffEnabled",   _wantPowerThrottlingOff   ? 1 : 0, RegistryValueKind.DWord);
+            key.SetValue("PowerThrottlingOnEnabled",    _wantPowerThrottlingOff   ? 0 : 1, RegistryValueKind.DWord);
             key.SetValue("FastAppCloseEnabled",         _wantFastAppClose         ? 1 : 0, RegistryValueKind.DWord);
             key.SetValue("KeepKernelInRamEnabled",      _wantKeepKernelInRam      ? 1 : 0, RegistryValueKind.DWord);
             key.SetValue("FasterShutdownEnabled",       _wantFasterShutdown       ? 1 : 0, RegistryValueKind.DWord);

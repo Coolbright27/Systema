@@ -296,19 +296,22 @@ public partial class MemoryViewModel : ObservableObject, IAutoRefreshable, IDisp
     [RelayCommand]
     private async Task RevertPagefileAsync()
     {
-        int rec = _memoryService.GetRecommendedPagefileMb();
         IsLoading = true;
-        StatusMessage = $"Resetting page file to recommended size ({rec:N0} MB)...";
+        StatusMessage = "Resetting page file to the Windows default (system managed)...";
         try
         {
-            // "Reset to default" sets back to the RAM-based recommended static size.
-            // This avoids WMI complexity and is always reliable.
-            var result = await _memoryService.ConfigurePagefileAsync(rec, rec);
+            // "Reset to default" must restore Windows' ACTUAL default — automatic /
+            // system-managed paging (AutomaticManagedPagefile = 1), not a fixed size.
+            // The old code re-applied the recommended STATIC size, which on most PCs
+            // equals the current value, so the button appeared to do nothing.
+            var result = await _memoryService.RevertToManagedPagefileAsync();
             StatusMessage = result.Message;
             if (result.Success)
             {
-                PagefileInitialMb   = rec;
-                CurrentPagefileText = $"Set to: {rec:N0} MB static (restart required)";
+                // Show the recommended value in the box again (as a starting point if the
+                // user later wants a static size) and mark the page file as Windows-managed.
+                PagefileInitialMb   = _memoryService.GetRecommendedPagefileMb();
+                CurrentPagefileText = "Windows managed (restart required)";
             }
             else
                 _log.Error("MemoryViewModel", $"Page file reset failed: {result.Message}");
