@@ -15,7 +15,7 @@ using Systema.Services;
 
 namespace Systema.ViewModels;
 
-public partial class NvidiaGpuViewModel : ObservableObject, IDisposable
+public partial class NvidiaGpuViewModel : ObservableObject, IDisposable, IAutoRefreshable
 {
     private readonly NvidiaGpuService _service;
     private readonly SettingsService  _settings;
@@ -42,6 +42,8 @@ public partial class NvidiaGpuViewModel : ObservableObject, IDisposable
     [ObservableProperty] private bool   _isFpsCapAvailable;
     [ObservableProperty] private int    _fpsCapInput;
     [ObservableProperty] private string _fpsCapCurrentText = "";
+    private int  _lastLoadedCap = -1;   // last value read from the driver (guards input-box stomping)
+    private bool _fpsRefreshing;         // re-entrancy guard for the periodic RefreshAsync
 
     private const string OnText  = "On — driver default (adaptive, saves power)";
     private const string OffText = "Off — prefer maximum performance";
@@ -177,9 +179,33 @@ public partial class NvidiaGpuViewModel : ObservableObject, IDisposable
         if (!IsFpsCapAvailable) { FpsCapCurrentText = ""; return; }
         int cur = _nvapi.GetMaxFrameRate();
         FpsCapInput = cur;                                  // reflect the REAL value (0 when off)
+        _lastLoadedCap = cur;
         FpsCapCurrentText = cur > 0
             ? $"Currently capped at {cur} FPS"
             : "Currently: Off (no frame limit)";
+    }
+
+    /// <summary>
+    /// Periodic/on-navigate refresh (IAutoRefreshable). Re-reads the live FPS cap so a change
+    /// made elsewhere — the Dashboard's "Cap FPS to monitor refresh rate" recommendation, or the
+    /// NVIDIA app itself — shows here immediately instead of only after an app restart. The NVAPI
+    /// read is done off the UI thread, and the editable box is only refilled when the user hasn't
+    /// typed a different value (so we never stomp a number they're in the middle of entering).
+    /// </summary>
+    public async Task RefreshAsync()
+    {
+        if (!IsFpsCapAvailable || _fpsRefreshing) return;
+        _fpsRefreshing = true;
+        try
+        {
+            int cur = await Task.Run(() => _nvapi.GetMaxFrameRate());
+            if (FpsCapInput == _lastLoadedCap) FpsCapInput = cur;   // user hasn't edited → keep in sync
+            _lastLoadedCap = cur;
+            FpsCapCurrentText = cur > 0
+                ? $"Currently capped at {cur} FPS"
+                : "Currently: Off (no frame limit)";
+        }
+        finally { _fpsRefreshing = false; }
     }
 
     [RelayCommand]

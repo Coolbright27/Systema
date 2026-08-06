@@ -465,7 +465,7 @@ public partial class App : Application
                 gameboosterService, taskSleepVm, serviceControl,
                 memoryService, dnsService, powerPlanService,
                 wuTweaksService, coreParkingService, settingsService, optFeatures, stabilityService,
-                graphicsTweaks);
+                graphicsTweaks, thermalService);
 
             var memoryVm      = new MemoryViewModel(memoryService, startupService, settingsService);
             var servicesVm    = new ServicesViewModel(serviceControl, optFeatures, restoreService, settingsService, gameboosterService);

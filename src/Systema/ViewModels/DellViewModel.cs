@@ -21,6 +21,7 @@ using System.Collections.ObjectModel;
 using System.Management;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Microsoft.Win32;
+using Systema.Core;
 using Systema.Services;
 
 namespace Systema.ViewModels;
@@ -29,7 +30,7 @@ namespace Systema.ViewModels;
 /// Value = raw BIOS value, Label = friendly name, Note = optional small grey hint.</summary>
 public sealed record ThermalModeOption(string Value, string Label, string Note);
 
-public partial class DellViewModel : ObservableObject, IDisposable
+public partial class DellViewModel : ObservableObject, IDisposable, IAutoRefreshable
 {
     private readonly ThermalManagementService _thermal;
     private readonly SettingsService           _settings;
@@ -117,6 +118,17 @@ public partial class DellViewModel : ObservableObject, IDisposable
                 // whatever the BIOS currently reports so the dropdowns never start blank.
                 ThermalModeAc      = PickValid(_settings.ThermalModeAc,      current, modes);
                 ThermalModeBattery = PickValid(_settings.ThermalModeBattery, current, modes);
+
+                // Fresh install (no saved pref yet): adopt the machine's real current BIOS
+                // value as the saved preference for BOTH AC and battery, so it persists and
+                // the selectors show the real value instead of starting blank. Writing
+                // _settings directly (not via the observable setters, which are suppressed by
+                // _loadingThermal) records the value without re-applying it — it's already the
+                // live BIOS mode, so nothing on the hardware changes.
+                if (string.IsNullOrEmpty(_settings.ThermalModeAc) && !string.IsNullOrEmpty(ThermalModeAc))
+                    _settings.ThermalModeAc = ThermalModeAc;
+                if (string.IsNullOrEmpty(_settings.ThermalModeBattery) && !string.IsNullOrEmpty(ThermalModeBattery))
+                    _settings.ThermalModeBattery = ThermalModeBattery;
                 _loadingThermal = false;
 
                 // Set-and-forget: apply the right profile for the current power state now.
@@ -163,8 +175,11 @@ public partial class DellViewModel : ObservableObject, IDisposable
     private void ApplyThermalForCurrentPower()
     {
         if (!ThermalSupported) return;
+        // Read the PERSISTED preference (not the in-memory selector) so a change made elsewhere —
+        // e.g. the Dashboard "Ultra Performance on AC" recommendation — is honored on plug/unplug
+        // instead of being reverted to the stale selector value.
         // On a desktop (no battery) the "battery" preference is irrelevant — always AC.
-        string mode = (IsLaptop && IsOnBattery) ? ThermalModeBattery : ThermalModeAc;
+        string mode = (IsLaptop && IsOnBattery) ? _settings.ThermalModeBattery : _settings.ThermalModeAc;
         if (string.IsNullOrEmpty(mode)) return;
         string snapshot = mode;
         Task.Run(() => _thermal.SetMode(snapshot));
@@ -194,6 +209,31 @@ public partial class DellViewModel : ObservableObject, IDisposable
             Task.Run(() => _thermal.SetMode(snapshot));
             StatusMessage = $"Thermal profile (battery): {ThermalManagementService.FriendlyLabel(value)}";
         }
+    }
+
+    /// <summary>
+    /// On-navigate / periodic refresh (IAutoRefreshable). Re-syncs the AC/battery selectors from
+    /// the persisted preferences and the live power state, so a change made elsewhere — e.g. the
+    /// Dashboard "Ultra Performance on AC" recommendation — is reflected here without an app restart.
+    /// Cheap: no WMI, just settings reads. Guarded by _loadingThermal so it never re-applies.
+    /// </summary>
+    public Task RefreshAsync()
+    {
+        if (!ThermalSupported) return Task.CompletedTask;
+        _loadingThermal = true;
+        try
+        {
+            IsOnBattery = _powerPlan.IsOnBattery();
+            var modes = ThermalModes.Select(m => m.Value).ToList();
+            if (!string.IsNullOrEmpty(_settings.ThermalModeAc) &&
+                modes.Contains(_settings.ThermalModeAc, StringComparer.OrdinalIgnoreCase))
+                ThermalModeAc = modes.First(m => string.Equals(m, _settings.ThermalModeAc, StringComparison.OrdinalIgnoreCase));
+            if (!string.IsNullOrEmpty(_settings.ThermalModeBattery) &&
+                modes.Contains(_settings.ThermalModeBattery, StringComparer.OrdinalIgnoreCase))
+                ThermalModeBattery = modes.First(m => string.Equals(m, _settings.ThermalModeBattery, StringComparison.OrdinalIgnoreCase));
+        }
+        finally { _loadingThermal = false; }
+        return Task.CompletedTask;
     }
 
     public void Dispose()

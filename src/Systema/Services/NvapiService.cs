@@ -175,4 +175,48 @@ public class NvapiService
             return TweakResult.FromException(ex);
         }
     }
+
+    // ── Refresh-rate helpers ──────────────────────────────────────────────────
+    // Used both by the Nvidia tab's "Monitor refresh rate" button and by the
+    // "Cap FPS to monitor refresh rate" recommendation, so the two always agree.
+
+    /// <summary>The primary monitor's refresh rate snapped to a clean FPS cap target
+    /// (nearest multiple of 5, clamped 20–999) — e.g. a 59 Hz panel → 60. 0 if the
+    /// refresh rate can't be read.</summary>
+    public static int GetRefreshRateFpsTarget()
+    {
+        int hz = GetPrimaryRefreshHz();
+        return hz <= 0 ? 0 : Math.Clamp((int)(Math.Round(hz / 5.0) * 5), 20, 999);
+    }
+
+    /// <summary>Primary monitor's current refresh rate in Hz (0 if unreadable).</summary>
+    public static int GetPrimaryRefreshHz()
+    {
+        try
+        {
+            var dm = new DEVMODE();
+            dm.dmSize = (ushort)Marshal.SizeOf<DEVMODE>();
+            return EnumDisplaySettings(null, ENUM_CURRENT_SETTINGS, ref dm) ? (int)dm.dmDisplayFrequency : 0;
+        }
+        catch { return 0; }
+    }
+
+    private const int ENUM_CURRENT_SETTINGS = -1;
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern bool EnumDisplaySettings(string? deviceName, int modeNum, ref DEVMODE devMode);
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    private struct DEVMODE
+    {
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)] public string dmDeviceName;
+        public ushort dmSpecVersion, dmDriverVersion, dmSize, dmDriverExtra;
+        public uint   dmFields;
+        public int    dmPositionX, dmPositionY;
+        public uint   dmDisplayOrientation, dmDisplayFixedOutput;
+        public short  dmColor, dmDuplex, dmYResolution, dmTTOption, dmCollate;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)] public string dmFormName;
+        public ushort dmLogPixels;
+        public uint   dmBitsPerPel, dmPelsWidth, dmPelsHeight, dmDisplayFlags, dmDisplayFrequency;
+        public uint   dmICMMethod, dmICMIntent, dmMediaType, dmDitherType, dmReserved1, dmReserved2, dmPanningWidth, dmPanningHeight;
+    }
 }

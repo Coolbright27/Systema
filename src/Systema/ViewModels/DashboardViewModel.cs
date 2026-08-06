@@ -73,6 +73,7 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
     private readonly OptionalFeaturesService    _optFeatures;
     private readonly SystemStabilityService     _stability;
     private readonly GraphicsTweaksService      _graphics;
+    private readonly ThermalManagementService   _thermal;
     private static readonly LoggerService _log = LoggerService.Instance;
 
     // ── Header badges ───────────────────────────────────────────────────────
@@ -151,6 +152,9 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
     // can be applied with one click, but deliberately NOT part of the Auto-Pilot checklist / Apply-all.
     private readonly Win11CleanupService _win11 = new();
     private readonly AudioService        _audio = new();
+    private readonly NvapiService        _nvapi = new();
+    private readonly NvidiaGpuService    _nvidiaGpu = new();
+    private readonly IntelGpuService     _intelGpu = new();
     private readonly List<AutoPilotItem> _extraRecs = new();
 
     // ── Constructor ───────────────────────────────────────────────────────────
@@ -167,7 +171,8 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
         SettingsService            settings,
         OptionalFeaturesService    optFeatures,
         SystemStabilityService     stability,
-        GraphicsTweaksService      graphics)
+        GraphicsTweaksService      graphics,
+        ThermalManagementService   thermal)
     {
         _gameBooster    = gameBooster;
         _taskSleepVm    = taskSleepVm;
@@ -181,6 +186,7 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
         _optFeatures    = optFeatures;
         _stability      = stability;
         _graphics       = graphics;
+        _thermal        = thermal;
 
         // Restore persisted mode — no PropertyChanged callback fires on field-init.
         _autoPilotModeEnabled = _settings.AutoPilotModeEnabled;
@@ -564,6 +570,74 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
                         IsDone = !_graphics.IsHagsEnabled() && !_graphics.IsWindowedOptimizationsEnabled() },
             };
 
+            // NVIDIA LAPTOPS ONLY: cap FPS to the monitor's refresh rate. On a laptop, every frame
+            // rendered above the panel's refresh rate is thrown away before it's ever shown — pure
+            // wasted GPU work that costs heat, fan noise, and battery. Desktops don't get this in
+            // the feed (they're plugged in), and it's Recommended-only, never in the Apply-all pass.
+            if (_powerPlan.HasBattery() && _nvapi.IsAvailable())
+            {
+                int target = NvapiService.GetRefreshRateFpsTarget();   // refresh Hz snapped to a clean cap
+                if (target > 0)
+                {
+                    // Already "done" once any effective cap at or below the refresh rate is in place —
+                    // the wasted above-refresh frames are gone, so there's nothing left to recommend.
+                    int cap = _nvapi.GetMaxFrameRate();
+                    extras.Add(new() { Label = "Cap FPS to monitor refresh", IsDone = cap > 0 && cap <= target });
+                }
+            }
+
+            // NVIDIA DESKTOPS ONLY: turn OFF GPU power management (PowerMizer) so the dGPU holds full
+            // clocks ("prefer maximum performance"). Desktops have the power and cooling headroom to
+            // make that a free win; on a laptop it causes thermal throttling (which is why laptops keep
+            // it On), so this is Recommended-only and desktop-only, never in the Apply-all pass.
+            if (!_powerPlan.HasBattery())
+            {
+                var nvAdapters = _nvidiaGpu.DetectNvidiaAdapters();
+                if (nvAdapters.Count > 0)
+                    extras.Add(new() { Label = "GPU max performance",
+                                       IsDone = _nvidiaGpu.IsMaxPerformance(nvAdapters[0].FullPath) });
+            }
+
+            // INTEL iGPU (ALL machines, laptop and desktop): recommend the Max Performance Power
+            // Policy so the integrated graphics hold full clocks instead of the driver's power-saving
+            // default. Writes ONLY the single documented PowerPolicy flag (=2), which Reset removes —
+            // never any of the PSR2/DPST/DRRS/MSI values. Recommended-only, never in the Apply-all pass.
+            var intelAdapters = _intelGpu.DetectIntelAdapters();
+            if (intelAdapters.Count > 0)
+            {
+                string ip = intelAdapters[0].FullPath;
+                var pp = _intelGpu.ResolveFeature(ip, new[] { IntelGpuService.PowerPolicy });
+                extras.Add(new() { Label = "Intel GPU max performance", IsDone = pp.Value == 2 });
+
+                // INTEL iGPU DESKTOPS ONLY: turn off the power-saving features (RC6 render standby,
+                // and where the panel has them DPST + Dynamic Refresh Switching) so the iGPU stays
+                // fully awake. Fires the SAME setters the Intel tab's switches use (per the user's
+                // explicit choice), and every value they write is in ManagedValueNames, so the tab's
+                // Reset fully heals it. Desktop-only: DPST/DRRS are laptop panel features, and a
+                // desktop has no battery to preserve.
+                if (!_powerPlan.HasBattery())
+                {
+                    bool rc6Off  = _intelGpu.ResolveFeature(ip, new[] { IntelGpuService.RC6 }).Value == 0;
+                    bool dpstOff = _intelGpu.ResolveFeature(ip, new[] { IntelGpuService.DpstEnable }).Value == 0;
+                    bool drrsOff = _intelGpu.ResolveFeature(ip, new[] { IntelGpuService.DrrsEnabled }).Value == 0;
+                    extras.Add(new() { Label = "Intel GPU power saving off", IsDone = rc6Off && dpstOff && drrsOff });
+                }
+            }
+
+            // DELL LAPTOPS with a BIOS thermal profile ONLY: recommend the "Ultra Performance"
+            // thermal mode for the plugged-in (AC) profile. Only surfaces when the Dell BIOS
+            // actually exposes the thermal attribute (DetectSupport == Supported) and lists an
+            // UltraPerformance mode. Battery profile is left untouched. Recommended-only.
+            if (_powerPlan.HasBattery() && _thermal.DetectSupport() == ThermalSupport.Supported)
+            {
+                bool hasUltra = _thermal.AvailableModes.Any(m => string.Equals(m, "UltraPerformance", StringComparison.OrdinalIgnoreCase));
+                if (hasUltra)
+                {
+                    bool acIsUltra = string.Equals(_settings.ThermalModeAc, "UltraPerformance", StringComparison.OrdinalIgnoreCase);
+                    extras.Add(new() { Label = "Dell Ultra Performance on AC", IsDone = acIsUltra });
+                }
+            }
+
             // ObservableCollection mutations and UI-property writes must be marshalled
             // back to the UI thread — otherwise WPF raises InvalidOperationException.
             Application.Current?.Dispatcher.BeginInvoke(() =>
@@ -892,6 +966,28 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
         ["Turn off Game Bar capture"] = ("Turn off Game Bar background capture",
             "Stops Windows' Game Bar and Game DVR from recording in the background, removing the constant CPU and disk overhead it adds while you game. Restart any open games to apply.",
             () => { if (!_graphics.IsGameDvrDisabled()) _graphics.SetGameDvrDisabled(true); return Task.CompletedTask; }),
+        ["Dell Ultra Performance on AC"] = ("Set the Dell thermal profile to Ultra Performance (plugged in)",
+            "Dell laptops hold back their fans and clocks by default to stay quiet and cool. Ultra Performance lets the machine run the fans harder and hold higher clocks while it's plugged in, for noticeably more sustained CPU and GPU performance. This changes ONLY the plugged-in profile, so your on-battery runtime and behavior are untouched. Cons: plugged in it runs warmer and the fans get louder under load. It applies as soon as you're plugged in, and you can change it any time on the Dell tab.",
+            async () => { string ultra = _thermal.AvailableModes.FirstOrDefault(m => string.Equals(m, "UltraPerformance", StringComparison.OrdinalIgnoreCase)) ?? "UltraPerformance";
+                          _settings.ThermalModeAc = ultra;                                   // persist the plugged-in preference
+                          if (!_powerPlan.IsOnBattery()) await Task.Run(() => _thermal.SetMode(ultra)); }),   // apply now only if actually on AC
+        ["Intel GPU power saving off"] = ("Turn off Intel graphics power saving",
+            "Turns off the Intel integrated graphics power-saving features (RC6 render standby, plus DPST display power saving and Dynamic Refresh Switching where the panel has them) so the chip stays fully awake for the most consistent performance. This is meant for desktops, where there's no battery to preserve. Cons: it uses a little more power at idle and runs a touch warmer. Takes effect after a restart, and you can undo it any time with Reset on the Intel Graphics tab.",
+            () => { var a = _intelGpu.DetectIntelAdapters();
+                    if (a.Count > 0) { _intelGpu.SetRc6(a, on: false); _intelGpu.SetDpst(a, on: false); _intelGpu.SetDrrs(a, on: false); }
+                    return Task.CompletedTask; }),
+        ["Intel GPU max performance"] = ("Set the Intel graphics to maximum performance",
+            "By default the Intel graphics chip favors power saving and lets its clocks drop, which can make the desktop and light games feel less smooth. Setting the Power Policy to Max Performance keeps the graphics running at full speed for a snappier, more consistent feel. Cons: on a laptop running on battery it uses a bit more power, so if battery life matters more to you than smoothness, leave it on the driver default. Takes effect after a restart.",
+            () => { var a = _intelGpu.DetectIntelAdapters();
+                    if (a.Count > 0) { var pp = _intelGpu.ResolveFeature(a[0].FullPath, new[] { IntelGpuService.PowerPolicy });
+                                       _intelGpu.WriteValue(a, pp.Name ?? IntelGpuService.PowerPolicy, 2); }
+                    return Task.CompletedTask; }),
+        ["GPU max performance"] = ("Set the NVIDIA GPU to maximum performance",
+            "By default the NVIDIA GPU idles its clocks down to save power (PowerMizer). On a desktop you have the power and cooling headroom to skip that, so this holds the GPU at full clocks for the best and most consistent performance. Cons: it draws a little more power at idle, and it's not recommended on laptops (there it can cause thermal throttling), which is why this only shows on desktops. Takes effect after a restart.",
+            () => { var a = _nvidiaGpu.DetectNvidiaAdapters(); if (a.Count > 0) { _nvidiaGpu.SetPowerSaving(a, on: false); _settings.NvidiaGpuPreferMaxPerformance = true; } return Task.CompletedTask; }),
+        ["Cap FPS to monitor refresh"] = ("Cap FPS to your monitor's refresh rate",
+            "On a laptop, any frame your GPU renders above your screen's refresh rate is thrown away before you ever see it, so it's wasted work. Capping frames at your refresh rate (with NVIDIA's own limiter, the same one the NVIDIA app uses) cuts GPU load, heat, fan noise, and battery drain, and often makes frame pacing feel steadier. Cons: it adds a very tiny bit of input lag versus running fully uncapped, and it won't help games that already run below your refresh rate. You can change or remove the cap any time on the Nvidia Graphics tab.",
+            async () => { int t = NvapiService.GetRefreshRateFpsTarget(); if (t > 0) await Task.Run(() => _nvapi.SetMaxFrameRate(t)); }),
         ["GPU scheduling & windowed optimizations"] = ("Turn off GPU scheduling and windowed game optimizations",
             "Turns off Hardware-accelerated GPU Scheduling and Optimizations for windowed games. How it helps: both add an extra layer to how frames are scheduled and presented, so turning them off keeps the graphics path simpler with fewer moving parts to glitch, which is more stable on many setups. Possible issue: on some capable GPUs these features can actually lower latency and smooth frame delivery, so if your games felt better with them on, you can re-enable them in the Graphics tab. GPU scheduling needs a PC restart, and open games need restarting.",
             () => {

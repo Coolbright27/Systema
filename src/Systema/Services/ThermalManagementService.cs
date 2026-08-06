@@ -78,6 +78,10 @@ public sealed class ThermalManagementService
     private string  _attrName     = "";
     private string  _statusMessage = "Not yet detected.";
     private string[] _modes        = System.Array.Empty<string>();
+    // Current BIOS value captured during DetectSupport. Dell's per-attribute CurrentValue
+    // read is flaky (see ReadCurrentValueSafe), so we cache the one detection read and use
+    // it as a fallback — otherwise a later failed read leaves the selectors blank.
+    private string? _currentValue;
 
     public ThermalSupport Support       => _support;
     public bool           IsSupported   => _support == ThermalSupport.Supported;
@@ -203,6 +207,7 @@ public sealed class ThermalManagementService
             if (foundAttr != null)
             {
                 _attrName = foundAttr;
+                _currentValue = current;                // cache the detection read for GetCurrentMode fallback
                 _modes    = DefaultDellThermalModes;   // BIOS PossibleValues is unreliable here
                 if (!string.IsNullOrEmpty(current) &&
                     !_modes.Contains(current!, StringComparer.OrdinalIgnoreCase))
@@ -236,7 +241,12 @@ public sealed class ThermalManagementService
     public string? GetCurrentMode()
     {
         if (!IsSupported) return null;
-        return ReadCurrentValueSafe(_attrName);
+        // A fresh read wins (reflects a live change), but Dell's CurrentValue read often
+        // fails; fall back to the value captured at detection so we never return null when
+        // we actually read a real value once.
+        string? live = ReadCurrentValueSafe(_attrName);
+        if (!string.IsNullOrEmpty(live)) { _currentValue = live; return live; }
+        return _currentValue;
     }
 
     /// <summary>
