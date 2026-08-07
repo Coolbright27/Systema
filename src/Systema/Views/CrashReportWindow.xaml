@@ -19,7 +19,7 @@
     </WindowChrome.WindowChrome>
 
     <Border Background="#0F0F10"
-            BorderBrush="#C7556B"
+            BorderBrush="#EF4444"
             BorderThickness="1">
 
         <Grid>
@@ -40,9 +40,9 @@
                     </Grid.ColumnDefinitions>
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                         <!-- Red warning dot -->
-                        <Ellipse Width="12" Height="12" Fill="#C7556B" Margin="0,0,10,0">
+                        <Ellipse Width="12" Height="12" Fill="#EF4444" Margin="0,0,10,0">
                             <Ellipse.Effect>
-                                <DropShadowEffect Color="#C7556B" BlurRadius="8" ShadowDepth="0"/>
+                                <DropShadowEffect Color="#EF4444" BlurRadius="8" ShadowDepth="0"/>
                             </Ellipse.Effect>
                         </Ellipse>
                         <TextBlock Text="SYSTEMA" FontWeight="Bold" FontSize="13"
@@ -73,17 +73,17 @@
                 <StackPanel Grid.Row="0">
                     <TextBlock Text="Systema encountered an unexpected error"
                                FontSize="18" FontWeight="SemiBold"
-                               Foreground="#E8EAF0" FontFamily="Segoe UI"/>
+                               Foreground="#E8EAF0" FontFamily="Segoe UI Variable Text, Segoe UI"/>
                     <TextBlock x:Name="SubtitleText"
                                Text="The application has stopped working. A crash report has been saved."
-                               FontSize="13" Foreground="#6B7A99" FontFamily="Segoe UI"
+                               FontSize="13" Foreground="#6B7A99" FontFamily="Segoe UI Variable Text, Segoe UI"
                                TextWrapping="Wrap" Margin="0,6,0,0"/>
                 </StackPanel>
 
                 <!-- Error summary card -->
                 <Border Grid.Row="2"
                         Background="#161617"
-                        BorderBrush="#C7556B"
+                        BorderBrush="#EF4444"
                         BorderThickness="0,0,0,3"
                         CornerRadius="8"
                         Padding="16,12">
@@ -96,7 +96,7 @@
                             <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
                         <TextBlock Grid.Row="0" Text="ERROR" FontSize="10" FontWeight="Bold"
-                                   Foreground="#C7556B" FontFamily="Segoe UI" Margin="0,0,0,0"/>
+                                   Foreground="#EF4444" FontFamily="Segoe UI Variable Text, Segoe UI" Margin="0,0,0,0"/>
                         <TextBlock Grid.Row="2" x:Name="ErrorMessageText"
                                    Text="Unknown error"
                                    FontSize="13" Foreground="#E8EAF0"
@@ -120,7 +120,7 @@
                     <TextBlock Grid.Row="0"
                                Text="Stack Trace"
                                FontSize="11" FontWeight="SemiBold"
-                               Foreground="#6B7A99" FontFamily="Segoe UI"/>
+                               Foreground="#6B7A99" FontFamily="Segoe UI Variable Text, Segoe UI"/>
                     <Border Grid.Row="2"
                             Background="#171718"
                             BorderBrush="#262628"
@@ -149,7 +149,7 @@
                     <TextBlock Grid.Row="0"
                                Text="Recent Activity"
                                FontSize="11" FontWeight="SemiBold"
-                               Foreground="#6B7A99" FontFamily="Segoe UI"/>
+                               Foreground="#6B7A99" FontFamily="Segoe UI Variable Text, Segoe UI"/>
                     <Border Grid.Row="2"
                             Background="#171718"
                             BorderBrush="#262628"
@@ -182,10 +182,10 @@
                     <!-- Crash report path -->
                     <StackPanel Grid.Column="0" VerticalAlignment="Center">
                         <TextBlock Text="Crash report saved to:"
-                                   FontSize="10" Foreground="#6B7A99" FontFamily="Segoe UI"
+                                   FontSize="10" Foreground="#6B7A99" FontFamily="Segoe UI Variable Text, Segoe UI"
                                    Margin="0,0,0,3"/>
                         <TextBlock x:Name="CrashPathText"
-                                   FontSize="11" Foreground="#5E81AC"
+                                   FontSize="11" Foreground="#38BDF8"
                                    FontFamily="Consolas"
                                    TextTrimming="CharacterEllipsis"
                                    Cursor="Hand"
@@ -205,7 +205,7 @@
                                 BorderThickness="0"
                                 Padding="14,9"
                                 Cursor="Hand"
-                                FontFamily="Segoe UI"
+                                FontFamily="Segoe UI Variable Text, Segoe UI"
                                 FontSize="13"
                                 Margin="0,0,10,0">
                             <Button.Template>
@@ -233,7 +233,7 @@
                                 BorderThickness="0"
                                 Padding="14,9"
                                 Cursor="Hand"
-                                FontFamily="Segoe UI"
+                                FontFamily="Segoe UI Variable Text, Segoe UI"
                                 FontSize="13"
                                 Margin="0,0,10,0">
                             <Button.Template>
@@ -261,7 +261,7 @@
                                 BorderThickness="0"
                                 Padding="14,9"
                                 Cursor="Hand"
-                                FontFamily="Segoe UI"
+                                FontFamily="Segoe UI Variable Text, Segoe UI"
                                 FontWeight="SemiBold"
                                 FontSize="13"
                                 Margin="0,0,10,0">
@@ -285,12 +285,12 @@
                         <Button x:Name="CloseButton"
                                 Content="Close Systema"
                                 Click="Close_Click"
-                                Background="#C7556B"
+                                Background="#EF4444"
                                 Foreground="White"
                                 BorderThickness="0"
                                 Padding="14,9"
                                 Cursor="Hand"
-                                FontFamily="Segoe UI"
+                                FontFamily="Segoe UI Variable Text, Segoe UI"
                                 FontWeight="SemiBold"
                                 FontSize="13">
                             <Button.Template>

@@ -236,7 +236,7 @@
                                     <TextBlock Text="MODERATE" FontSize="9" FontWeight="SemiBold" Foreground="{StaticResource TextSecondaryBrush}"/>
                                 </Border>
                                 <Border CornerRadius="4" Padding="5,2" Margin="6,0,0,0" VerticalAlignment="Center"
-                                        Background="#1A5C9C7C" BorderBrush="{StaticResource AccentGreenBrush}"
+                                        Background="#1A22C55E" BorderBrush="{StaticResource AccentGreenBrush}"
                                         BorderThickness="1">
                                     <TextBlock Text="RECOMMENDED" FontSize="8" FontWeight="Bold"
                                                Foreground="{StaticResource AccentGreenBrush}"/>

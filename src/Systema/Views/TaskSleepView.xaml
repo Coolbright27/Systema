@@ -768,7 +768,7 @@
                                         <Setter Property="Background" Value="#12FFFFFF"/>
                                         <Style.Triggers>
                                             <DataTrigger Binding="{Binding ThrottledCountDisplay}" Value="all awake">
-                                                <Setter Property="Background" Value="#0C5C9C7C"/>
+                                                <Setter Property="Background" Value="#0C22C55E"/>
                                             </DataTrigger>
                                         </Style.Triggers>
                                     </Style>
@@ -789,7 +789,7 @@
                             </Border>
                             <!-- CPU freed pill — hidden when nothing is napped -->
                             <Border CornerRadius="10" Padding="8,3"
-                                    Background="#0C5C9C7C"
+                                    Background="#0C22C55E"
                                     Margin="8,0,0,0"
                                     VerticalAlignment="Center"
                                     Visibility="{Binding CpuFreedVisible, Converter={StaticResource BoolToVis}}">
@@ -1180,7 +1180,7 @@
                                                                 <Setter Property="Foreground" Value="{StaticResource AccentGreenBrush}"/>
                                                             </DataTrigger>
                                                             <DataTrigger Binding="{Binding Action}" Value="Error">
-                                                                <Setter Property="Foreground" Value="#C7556B"/>
+                                                                <Setter Property="Foreground" Value="#EF4444"/>
                                                             </DataTrigger>
                                                         </Style.Triggers>
                                                     </Style>
@@ -1878,7 +1878,7 @@
                                             <ColumnDefinition Width="Auto"/>
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                                            <Border Background="#0C5C9C7C" CornerRadius="4"
+                                            <Border Background="#0C22C55E" CornerRadius="4"
                                                     Padding="6,2" Margin="0,0,8,0" VerticalAlignment="Center">
                                                 <TextBlock Text="PROTECTED" FontSize="9" FontWeight="Bold"
                                                            Foreground="{StaticResource AccentGreenBrush}"/>

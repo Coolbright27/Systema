@@ -56,6 +56,27 @@ public class Recommendation
     public string Title  { get; init; } = "";
     public string Why    { get; init; } = "";
     public string Safety { get; init; } = "Safe · Reversible";
+
+    /// <summary>The reasoning WITHOUT the trailing trade-off sentence.</summary>
+    public string WhyBody    => Split(Why).Body;
+    /// <summary>Just the trade-off / caveat, so the card can show it as its own callout
+    /// instead of burying it at the end of a paragraph. Empty when there isn't one.</summary>
+    public string Tradeoff   => Split(Why).Trade;
+    public bool   HasTradeoff => Tradeoff.Length > 0;
+
+    // The recommendation copy marks its caveat with one of these three openers.
+    private static readonly string[] TradeoffMarkers = { "Cons:", "Tradeoff:", "Possible issue:" };
+
+    private static (string Body, string Trade) Split(string why)
+    {
+        if (string.IsNullOrEmpty(why)) return ("", "");
+        foreach (string marker in TradeoffMarkers)
+        {
+            int i = why.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+            if (i >= 0) return (why[..i].TrimEnd(), why[(i + marker.Length)..].Trim());
+        }
+        return (why, "");
+    }
 }
 
 public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
@@ -130,10 +151,18 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
     /// <summary>Live checklist shown inside the Auto-Pilot card.</summary>
     public ObservableCollection<AutoPilotItem> AutoPilotChecklist { get; } = new();
 
-    // ── Auto Pilot redesign: two zones (master + recommended feed) ─────────────
-    /// <summary>The recommended changes currently visible (up to 3 at a time).</summary>
+    // ── Auto Pilot redesign: status card + one-at-a-time suggestion queue ──────
+    /// <summary>Every pending suggestion for this PC. The view shows ONE at a time
+    /// (CurrentRecommendation) and the user steps through them with the arrows.</summary>
     public ObservableCollection<Recommendation> Recommendations { get; } = new();
     [ObservableProperty] private bool   _hasRecommendations;
+
+    // Which suggestion the focus card is showing.
+    private int _recIndex;
+    [ObservableProperty] private Recommendation? _currentRecommendation;
+    [ObservableProperty] private string _recPositionText = "";
+    [ObservableProperty] private bool   _canGoPrevRec;
+    [ObservableProperty] private bool   _canGoNextRec;
     [ObservableProperty] private bool   _autoPilotActive;            // drives the status dot colour
     [ObservableProperty] private string _autoPilotStatusLine = "Checking…";
     [ObservableProperty] private bool   _seeWhatsOnExpanded;
@@ -1013,16 +1042,56 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
         if (!AutoPilotModeEnabled)
         {
             // Auto-Pilot checklist items first, then the recommendation-only extras (Suggestions &
-            // nags, Start web search). Both share the same 3-at-a-time feed cap and apply/dismiss flow.
+            // nags, Start web search). The view shows one at a time, so there is no cap — the whole
+            // pending set is queued up and the user steps through it with the arrows.
             foreach (var item in AutoPilotChecklist.Concat(_extraRecs))
             {
                 if (item.IsDone || _dismissed.Contains(item.Label)) continue;
                 if (!_recMeta.TryGetValue(item.Label, out var meta)) continue;
                 Recommendations.Add(new Recommendation { Label = item.Label, Title = meta.Title, Why = meta.Why });
-                if (Recommendations.Count >= 3) break;
             }
         }
         HasRecommendations = Recommendations.Count > 0;
+        SyncCurrentRec();
+    }
+
+    /// <summary>Points the focus card at the current queue position, clamping the index after the
+    /// list changes (apply/dismiss/re-check shrink it) so the card always lands on a real item.</summary>
+    private void SyncCurrentRec()
+    {
+        int count = Recommendations.Count;
+        if (count == 0)
+        {
+            _recIndex = 0;
+            CurrentRecommendation = null;
+            RecPositionText = "";
+            CanGoPrevRec = false;
+            CanGoNextRec = false;
+            return;
+        }
+        _recIndex = Math.Clamp(_recIndex, 0, count - 1);
+        CurrentRecommendation = Recommendations[_recIndex];
+        RecPositionText = $"{_recIndex + 1} of {count}";
+        CanGoPrevRec = _recIndex > 0;
+        CanGoNextRec = _recIndex < count - 1;
+    }
+
+    /// <summary>Step back one suggestion (no change is applied).</summary>
+    [RelayCommand]
+    private void PrevRec()
+    {
+        if (_recIndex <= 0) return;
+        _recIndex--;
+        SyncCurrentRec();
+    }
+
+    /// <summary>Step forward one suggestion (no change is applied).</summary>
+    [RelayCommand]
+    private void NextRec()
+    {
+        if (_recIndex >= Recommendations.Count - 1) return;
+        _recIndex++;
+        SyncCurrentRec();
     }
 
     /// <summary>Applies a single recommendation, then re-checks so the next one surfaces.</summary>
@@ -1032,6 +1101,7 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
         if (rec == null || !_recMeta.TryGetValue(rec.Label, out var meta)) return;
         Recommendations.Remove(rec);                       // snappy: drop it right away
         HasRecommendations = Recommendations.Count > 0;
+        SyncCurrentRec();                                  // advance the card before the slow apply
         try
         {
             await meta.Apply();

@@ -54,8 +54,46 @@ public partial class MainWindow : Window
     public MainWindow(MainViewModel viewModel)
     {
         InitializeComponent();
+        ApplyWindowIcon();
         DataContext = viewModel;
         ClampToWorkArea();
+    }
+
+    /// <summary>
+    /// Sets the taskbar / Alt-Tab icon explicitly from the logo embedded in this assembly.
+    /// Without this, WPF leaves the window iconless and the shell supplies one from its
+    /// per-path icon CACHE. An in-place update keeps the same exe path, so the shell never
+    /// invalidates that cache and the window keeps showing the PREVIOUS logo even though the
+    /// new icon is correctly compiled into the exe. Loading the bytes we actually ship takes
+    /// the shell cache out of the picture. Purely cosmetic — failure just falls back.
+    /// </summary>
+    private void ApplyWindowIcon()
+    {
+        try
+        {
+            var asm = System.Reflection.Assembly.GetExecutingAssembly();
+            string? res = Array.Find(asm.GetManifestResourceNames(),
+                n => n.EndsWith("logo.ico", StringComparison.OrdinalIgnoreCase));
+            if (res == null) return;
+
+            using var stream = asm.GetManifestResourceStream(res);
+            if (stream == null) return;
+
+            // OnLoad so the frames survive the stream being disposed.
+            var decoder = System.Windows.Media.Imaging.BitmapDecoder.Create(
+                stream,
+                System.Windows.Media.Imaging.BitmapCreateOptions.None,
+                System.Windows.Media.Imaging.BitmapCacheOption.OnLoad);
+
+            // Largest frame: WPF downscales it cleanly for whatever the shell asks for,
+            // which keeps it crisp on high-DPI displays.
+            System.Windows.Media.Imaging.BitmapFrame? best = null;
+            foreach (var frame in decoder.Frames)
+                if (best == null || frame.PixelWidth > best.PixelWidth) best = frame;
+
+            if (best != null) Icon = best;
+        }
+        catch { /* cosmetic only — leave the default icon in place */ }
     }
 
     /// <summary>
@@ -134,13 +172,8 @@ public partial class MainWindow : Window
     }
 
     // Minimize → hide to tray (Ghost Mode is handled by App.xaml.cs via Closed event)
-    private void MinimizeButton_Click(object sender, RoutedEventArgs e)
-    {
-        Hide(); // collapses to tray; App.xaml.cs re-shows on tray icon double-click
-        (DataContext as MainViewModel)?.SetTrayOnly(true);
-        (Application.Current as App)?.NotifyWindowHidden();
-    }
-
+    // The separate Minimize button was removed: it called Hide() + SetTrayOnly(true), i.e.
+    // exactly what Close does, so the title bar offered two controls that did the same thing.
     // Close button → hide to tray, not exit (use tray "Exit" to fully quit)
     private void CloseButton_Click(object sender, RoutedEventArgs e)
     {

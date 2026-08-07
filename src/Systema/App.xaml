@@ -24,7 +24,7 @@
                 FrameworkElement.Resources is not a DependencyProperty and
                 caused a fatal XamlParseException during template load.
             -->
-            <SolidColorBrush x:Key="{x:Static SystemColors.WindowBrushKey}" Color="#171718"/>
+            <SolidColorBrush x:Key="{x:Static SystemColors.WindowBrushKey}" Color="#171A1D"/>
         </ResourceDictionary>
     </Application.Resources>
 </Application>

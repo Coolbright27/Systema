@@ -279,7 +279,7 @@
                                                     <TextBlock Text="{Binding DisplayName}" Style="{StaticResource BodyText}"
                                                                FontWeight="SemiBold" VerticalAlignment="Center"/>
                                                     <Border CornerRadius="6" Padding="7,1" Margin="8,0,0,0" VerticalAlignment="Center"
-                                                            Background="#22378ADD"
+                                                            Background="#2238BDF8"
                                                             Visibility="{Binding IsRecommended, Converter={StaticResource BoolToVis}}">
                                                         <TextBlock Text="Recommended" FontSize="11" FontWeight="SemiBold"
                                                                    Foreground="{StaticResource AccentBlueBrush}"/>
@@ -308,7 +308,7 @@
                                                             <Style TargetType="Button" BasedOn="{StaticResource SegmentButton}">
                                                                 <Style.Triggers>
                                                                     <DataTrigger Binding="{Binding ColorState}" Value="{x:Static models:ServiceColorState.Red}">
-                                                                        <Setter Property="Background" Value="#33C7556B"/>
+                                                                        <Setter Property="Background" Value="#33EF4444"/>
                                                                         <Setter Property="Foreground" Value="{StaticResource AccentRedBrush}"/>
                                                                     </DataTrigger>
                                                                 </Style.Triggers>
@@ -323,7 +323,7 @@
                                                             <Style TargetType="Button" BasedOn="{StaticResource SegmentButton}">
                                                                 <Style.Triggers>
                                                                     <DataTrigger Binding="{Binding ColorState}" Value="{x:Static models:ServiceColorState.Yellow}">
-                                                                        <Setter Property="Background" Value="#33C8A654"/>
+                                                                        <Setter Property="Background" Value="#33F59E0B"/>
                                                                         <Setter Property="Foreground" Value="{StaticResource AccentYellowBrush}"/>
                                                                     </DataTrigger>
                                                                 </Style.Triggers>
@@ -338,7 +338,7 @@
                                                             <Style TargetType="Button" BasedOn="{StaticResource SegmentButton}">
                                                                 <Style.Triggers>
                                                                     <DataTrigger Binding="{Binding ColorState}" Value="{x:Static models:ServiceColorState.Green}">
-                                                                        <Setter Property="Background" Value="#335C9C7C"/>
+                                                                        <Setter Property="Background" Value="#3322C55E"/>
                                                                         <Setter Property="Foreground" Value="{StaticResource AccentGreenBrush}"/>
                                                                     </DataTrigger>
                                                                 </Style.Triggers>

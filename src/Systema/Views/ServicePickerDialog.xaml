@@ -107,10 +107,10 @@
                                                     <Setter Property="Foreground" Value="#A0AEC0"/>
                                                     <Style.Triggers>
                                                         <DataTrigger Binding="{Binding Status}" Value="Running">
-                                                            <Setter Property="Foreground" Value="#5C9C7C"/>
+                                                            <Setter Property="Foreground" Value="#22C55E"/>
                                                         </DataTrigger>
                                                         <DataTrigger Binding="{Binding Status}" Value="Stopped">
-                                                            <Setter Property="Foreground" Value="#C7556B"/>
+                                                            <Setter Property="Foreground" Value="#EF4444"/>
                                                         </DataTrigger>
                                                     </Style.Triggers>
                                                 </Style>

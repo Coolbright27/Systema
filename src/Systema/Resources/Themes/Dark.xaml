@@ -3,23 +3,27 @@
                     xmlns:conv="clr-namespace:Systema.Core.Converters">
 
     <!-- ============================================================ -->
-    <!--  COLORS — neutral system palette                              -->
-    <!--  Backgrounds: pure dark grays (no purple tint)                -->
-    <!--  Accent:      muted Nord-style blue, used sparingly           -->
-    <!--  Status:      muted green / amber / red — functional only     -->
+    <!--  COLORS — cool charcoal system palette                        -->
+    <!--  Surfaces climb in three steps only: base → chrome → panel,   -->
+    <!--  each a few percent lighter, so nothing needs a bright        -->
+    <!--  outline to separate it.                                      -->
+    <!--  ONE accent (sky) carries every interactive element. Green /  -->
+    <!--  amber / red are STATUS ONLY — never decoration.              -->
     <!-- ============================================================ -->
-    <Color x:Key="BgPrimaryColor">#0F0F10</Color>
-    <Color x:Key="BgSurfaceColor">#171718</Color>
-    <Color x:Key="BgSidebarColor">#0B0B0C</Color>
-    <Color x:Key="BgCardColor">#161617</Color>
-    <Color x:Key="AccentBlueColor">#5E81AC</Color>
-    <Color x:Key="AccentGreenColor">#5C9C7C</Color>
-    <Color x:Key="AccentYellowColor">#C8A654</Color>
-    <Color x:Key="AccentRedColor">#C7556B</Color>
-    <Color x:Key="TextPrimaryColor">#E6E6E7</Color>
-    <Color x:Key="TextSecondaryColor">#8F8F92</Color>
-    <Color x:Key="BorderColor">#262628</Color>
-    <Color x:Key="HoverColor">#1F1F21</Color>
+    <Color x:Key="BgPrimaryColor">#111315</Color>   <!-- Rich Charcoal — app base      -->
+    <Color x:Key="BgSurfaceColor">#171A1D</Color>   <!-- Graphite — title bar, inputs  -->
+    <Color x:Key="BgSidebarColor">#171A1D</Color>   <!-- Graphite — nav chrome         -->
+    <Color x:Key="BgCardColor">#1E2227</Color>      <!-- Dark Slate — elevated panels  -->
+    <Color x:Key="AccentBlueColor">#38BDF8</Color>  <!-- the single accent             -->
+    <Color x:Key="AccentGreenColor">#22C55E</Color> <!-- success                       -->
+    <Color x:Key="AccentYellowColor">#F59E0B</Color><!-- warning                       -->
+    <Color x:Key="AccentRedColor">#EF4444</Color>   <!-- error                         -->
+    <Color x:Key="TextPrimaryColor">#F3F5F7</Color>
+    <Color x:Key="TextSecondaryColor">#B4BEC8</Color>
+    <Color x:Key="TextTertiaryColor">#88919C</Color>
+    <Color x:Key="DisabledColor">#5F6873</Color>
+    <Color x:Key="BorderColor">#2E343B</Color>
+    <Color x:Key="HoverColor">#252B31</Color>
 
     <SolidColorBrush x:Key="BgPrimaryBrush" Color="{StaticResource BgPrimaryColor}"/>
     <SolidColorBrush x:Key="BgSurfaceBrush" Color="{StaticResource BgSurfaceColor}"/>
@@ -31,42 +35,70 @@
     <SolidColorBrush x:Key="AccentRedBrush" Color="{StaticResource AccentRedColor}"/>
     <SolidColorBrush x:Key="TextPrimaryBrush" Color="{StaticResource TextPrimaryColor}"/>
     <SolidColorBrush x:Key="TextSecondaryBrush" Color="{StaticResource TextSecondaryColor}"/>
+    <SolidColorBrush x:Key="TextTertiaryBrush" Color="{StaticResource TextTertiaryColor}"/>
+    <SolidColorBrush x:Key="DisabledBrush" Color="{StaticResource DisabledColor}"/>
     <SolidColorBrush x:Key="BorderBrush" Color="{StaticResource BorderColor}"/>
     <SolidColorBrush x:Key="HoverBrush" Color="{StaticResource HoverColor}"/>
     <SolidColorBrush x:Key="TransparentBrush" Color="Transparent"/>
 
     <!-- ============================================================ -->
-    <!--  TYPOGRAPHY                                                  -->
+    <!--  TYPOGRAPHY — Windows 11 (Segoe UI Variable + Fluent ramp)   -->
     <!-- ============================================================ -->
-    <FontFamily x:Key="MainFont">Segoe UI</FontFamily>
+    <!-- Segoe UI Variable is Win11's UI face and ships in THREE optical sizes.
+         Using the right one per size is what makes text look native rather than
+         merely "scaled": Display is drawn for large headings (tighter, more
+         contrast), Text for reading sizes, Small for 12px and under (opened-up
+         spacing so it stays legible). Every family falls back to plain Segoe UI,
+         so Windows 10 machines simply keep the old face — nothing breaks.
+         Verified on Win11: all three resolve in WPF with real Light/Normal/
+         SemiBold/Bold weights, so nothing is faux-bolded. -->
+    <FontFamily x:Key="DisplayFont">Segoe UI Variable Display, Segoe UI</FontFamily>
+    <FontFamily x:Key="MainFont">Segoe UI Variable Text, Segoe UI</FontFamily>
+    <FontFamily x:Key="SmallFont">Segoe UI Variable Small, Segoe UI</FontFamily>
 
+    <!-- Sizes follow the Fluent type ramp. LineHeight is set explicitly with
+         BlockLineHeight so vertical rhythm is consistent instead of inherited
+         from each glyph run. -->
+
+    <!-- Fluent "Title" — page headings -->
     <Style x:Key="HeadingLarge" TargetType="TextBlock">
-        <Setter Property="FontFamily" Value="{StaticResource MainFont}"/>
-        <Setter Property="FontSize" Value="24"/>
+        <Setter Property="FontFamily" Value="{StaticResource DisplayFont}"/>
+        <Setter Property="FontSize" Value="28"/>
         <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="LineHeight" Value="36"/>
+        <Setter Property="LineStackingStrategy" Value="BlockLineHeight"/>
         <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
         <Setter Property="HorizontalAlignment" Value="Left"/>
     </Style>
 
+    <!-- Fluent "Subtitle" — card / section headings -->
     <Style x:Key="HeadingMedium" TargetType="TextBlock">
-        <Setter Property="FontFamily" Value="{StaticResource MainFont}"/>
-        <Setter Property="FontSize" Value="16"/>
+        <Setter Property="FontFamily" Value="{StaticResource DisplayFont}"/>
+        <Setter Property="FontSize" Value="18"/>
         <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="LineHeight" Value="24"/>
+        <Setter Property="LineStackingStrategy" Value="BlockLineHeight"/>
         <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
         <Setter Property="HorizontalAlignment" Value="Left"/>
     </Style>
 
+    <!-- Fluent "Body Strong" — inline emphasis / small headings -->
     <Style x:Key="HeadingSmall" TargetType="TextBlock">
         <Setter Property="FontFamily" Value="{StaticResource MainFont}"/>
         <Setter Property="FontSize" Value="14"/>
         <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="LineHeight" Value="20"/>
+        <Setter Property="LineStackingStrategy" Value="BlockLineHeight"/>
         <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
         <Setter Property="HorizontalAlignment" Value="Left"/>
     </Style>
 
+    <!-- Fluent "Body" -->
     <Style x:Key="BodyText" TargetType="TextBlock">
         <Setter Property="FontFamily" Value="{StaticResource MainFont}"/>
-        <Setter Property="FontSize" Value="13"/>
+        <Setter Property="FontSize" Value="14"/>
+        <Setter Property="LineHeight" Value="20"/>
+        <Setter Property="LineStackingStrategy" Value="BlockLineHeight"/>
         <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
         <!-- Left-align so a MaxWidth-constrained block stays under its heading instead of
              being centered in a wider slot (WPF centers Stretch elements past MaxWidth).
@@ -74,9 +106,12 @@
         <Setter Property="HorizontalAlignment" Value="Left"/>
     </Style>
 
+    <!-- Fluent "Caption" — uses the Small optical size -->
     <Style x:Key="CaptionText" TargetType="TextBlock">
-        <Setter Property="FontFamily" Value="{StaticResource MainFont}"/>
-        <Setter Property="FontSize" Value="11"/>
+        <Setter Property="FontFamily" Value="{StaticResource SmallFont}"/>
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="LineHeight" Value="16"/>
+        <Setter Property="LineStackingStrategy" Value="BlockLineHeight"/>
         <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
         <Setter Property="HorizontalAlignment" Value="Left"/>
     </Style>
@@ -97,26 +132,52 @@
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Button">
-                    <Border x:Name="Root"
-                            Background="{TemplateBinding Background}"
-                            CornerRadius="6"
-                            BorderBrush="Transparent" BorderThickness="2"
-                            Padding="{TemplateBinding Padding}">
-                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                    </Border>
+                    <!-- STATE LAYER pattern: hover/press are a white veil faded in over the
+                         button rather than a second hard-coded colour. It works over any
+                         background (primary, danger, custom), so no per-variant hover tint
+                         has to be kept in sync with the palette, and fading Opacity avoids
+                         animating a shared SolidColorBrush (WPF freezes those). -->
+                    <Grid x:Name="Wrap">
+                        <Border x:Name="Root"
+                                Background="{TemplateBinding Background}"
+                                CornerRadius="8"
+                                BorderBrush="Transparent" BorderThickness="2"/>
+                        <Border x:Name="State" CornerRadius="8" Background="#FFFFFF"
+                                Opacity="0" IsHitTestVisible="False"/>
+                        <ContentPresenter Margin="{TemplateBinding Padding}"
+                                          HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Grid>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter Property="Background" Value="#7395B5"/>
+                            <Trigger.EnterActions>
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetName="State"
+                                                         Storyboard.TargetProperty="Opacity"
+                                                         To="0.12" Duration="0:0:0.13"/>
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </Trigger.EnterActions>
+                            <Trigger.ExitActions>
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetName="State"
+                                                         Storyboard.TargetProperty="Opacity"
+                                                         To="0" Duration="0:0:0.13"/>
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </Trigger.ExitActions>
                         </Trigger>
+                        <!-- Press stays instant: delayed feedback on click feels broken. -->
                         <Trigger Property="IsPressed" Value="True">
-                            <Setter TargetName="Root" Property="Opacity" Value="0.80"/>
+                            <Setter TargetName="Wrap" Property="Opacity" Value="0.80"/>
                         </Trigger>
                         <Trigger Property="IsKeyboardFocused" Value="True">
                             <Setter TargetName="Root" Property="BorderBrush" Value="{StaticResource TextPrimaryBrush}"/>
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
-                            <Setter Property="Background" Value="#1F1F21"/>
-                            <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+                            <Setter Property="Background" Value="{StaticResource HoverBrush}"/>
+                            <Setter Property="Foreground" Value="{StaticResource DisabledBrush}"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -130,11 +191,8 @@
     <Style x:Key="DangerButton" TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
         <Setter Property="Background" Value="{StaticResource AccentRedBrush}"/>
         <Setter Property="Foreground" Value="White"/>
-        <Style.Triggers>
-            <Trigger Property="IsMouseOver" Value="True">
-                <Setter Property="Background" Value="#D6677C"/>
-            </Trigger>
-        </Style.Triggers>
+        <!-- No hover override needed: the inherited state layer tints whatever
+             background this button has, so danger red animates like every other. -->
     </Style>
 
     <!-- ============================================================ -->
@@ -149,12 +207,31 @@
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Button">
-                    <Border x:Name="bg" Background="Transparent" CornerRadius="4" Padding="0">
+                    <Grid>
+                        <Border x:Name="bg" Background="#FFFFFF" Opacity="0"
+                                CornerRadius="8" IsHitTestVisible="False"/>
                         <ContentPresenter HorizontalAlignment="Stretch"/>
-                    </Border>
+                    </Grid>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="bg" Property="Background" Value="#0CFFFFFF"/>
+                            <Trigger.EnterActions>
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetName="bg"
+                                                         Storyboard.TargetProperty="Opacity"
+                                                         To="0.05" Duration="0:0:0.13"/>
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </Trigger.EnterActions>
+                            <Trigger.ExitActions>
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetName="bg"
+                                                         Storyboard.TargetProperty="Opacity"
+                                                         To="0" Duration="0:0:0.13"/>
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </Trigger.ExitActions>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -178,24 +255,47 @@
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Button">
-                    <Border x:Name="Root"
-                            Background="{TemplateBinding Background}"
-                            BorderBrush="{TemplateBinding BorderBrush}"
-                            BorderThickness="{TemplateBinding BorderThickness}"
-                            CornerRadius="6"
-                            Padding="{TemplateBinding Padding}">
-                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                    </Border>
+                    <Grid x:Name="Wrap">
+                        <Border x:Name="Root"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="8"/>
+                        <Border x:Name="State" CornerRadius="8" Background="#FFFFFF"
+                                Opacity="0" IsHitTestVisible="False"/>
+                        <ContentPresenter Margin="{TemplateBinding Padding}"
+                                          HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Grid>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter Property="Background" Value="{StaticResource HoverBrush}"/>
                             <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+                            <Trigger.EnterActions>
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetName="State"
+                                                         Storyboard.TargetProperty="Opacity"
+                                                         To="0.07" Duration="0:0:0.13"/>
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </Trigger.EnterActions>
+                            <Trigger.ExitActions>
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetName="State"
+                                                         Storyboard.TargetProperty="Opacity"
+                                                         To="0" Duration="0:0:0.13"/>
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </Trigger.ExitActions>
                         </Trigger>
                         <Trigger Property="IsPressed" Value="True">
-                            <Setter TargetName="Root" Property="Opacity" Value="0.75"/>
+                            <Setter TargetName="Wrap" Property="Opacity" Value="0.75"/>
                         </Trigger>
                         <Trigger Property="IsKeyboardFocused" Value="True">
                             <Setter TargetName="Root" Property="BorderBrush" Value="{StaticResource AccentBlueBrush}"/>
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter TargetName="Wrap" Property="Opacity" Value="0.45"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -207,10 +307,10 @@
     <!--  CARD / SURFACE PANEL                                        -->
     <!-- ============================================================ -->
     <Style x:Key="Card" TargetType="Border">
-        <!-- Translucent (#C2 ≈ 76%) so the app backdrop shows through the card the
-             way it does behind the sidebar. Text stays high-contrast because the
-             card colour is near-black and the backdrop is dimmed. -->
-        <Setter Property="Background" Value="#C2161617"/>
+        <!-- Opaque elevated panel, ~6% lighter than the app base. No translucency
+             (there is no backdrop to reveal) and no shadow — the small lift in
+             lightness plus the hairline border is the whole separation. -->
+        <Setter Property="Background" Value="{StaticResource BgCardBrush}"/>
         <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
         <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="CornerRadius" Value="10"/>
@@ -229,28 +329,68 @@
                         <Border x:Name="Track" Width="44" Height="24" CornerRadius="12"
                                 Background="{StaticResource BorderBrush}" Cursor="Hand"
                                 BorderBrush="Transparent" BorderThickness="2">
-                            <!-- Thumb uses a Grid so we can transition via opacity/margin cleanly -->
                             <Grid>
-                                <!-- Off thumb -->
-                                <Border x:Name="ThumbOff" Width="16" Height="16" CornerRadius="8"
-                                        Background="{StaticResource TextSecondaryBrush}"
+                                <!-- Accent fill faded in when checked. Layering an opaque
+                                     accent over the dark track means the "on" colour is an
+                                     Opacity animation, never a SolidColorBrush colour
+                                     animation (shared theme brushes are frozen). -->
+                                <Border x:Name="TrackOn" CornerRadius="10"
+                                        Background="{StaticResource AccentBlueBrush}" Opacity="0"/>
+                                <!-- ONE thumb that slides, the way the Win11 toggle behaves -->
+                                <Border x:Name="Thumb" Width="16" Height="16" CornerRadius="8"
+                                        Background="#FFFFFF" Opacity="0.72"
                                         HorizontalAlignment="Left" VerticalAlignment="Center"
-                                        Margin="2,0,0,0"/>
-                                <!-- On thumb (overlaid, hidden by default) -->
-                                <Border x:Name="ThumbOn" Width="16" Height="16" CornerRadius="8"
-                                        Background="White"
-                                        HorizontalAlignment="Right" VerticalAlignment="Center"
-                                        Margin="0,0,2,0"
-                                        Opacity="0"/>
+                                        Margin="2,0,0,0">
+                                    <Border.RenderTransform>
+                                        <TranslateTransform X="0"/>
+                                    </Border.RenderTransform>
+                                </Border>
                             </Grid>
                         </Border>
                         <ContentPresenter Margin="8,0,0,0" VerticalAlignment="Center"/>
                     </StackPanel>
                     <ControlTemplate.Triggers>
+                        <!-- Track inner width is 40 (44 less the 2px border each side); the
+                             thumb spans x=2..18, so its travel to the right edge is 20px. -->
                         <Trigger Property="IsChecked" Value="True">
-                            <Setter TargetName="Track"    Property="Background" Value="{StaticResource AccentBlueBrush}"/>
-                            <Setter TargetName="ThumbOff" Property="Opacity"    Value="0"/>
-                            <Setter TargetName="ThumbOn"  Property="Opacity"    Value="1"/>
+                            <Trigger.EnterActions>
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetName="Thumb"
+                                                         Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.X)"
+                                                         To="20" Duration="0:0:0.16">
+                                            <DoubleAnimation.EasingFunction>
+                                                <CubicEase EasingMode="EaseOut"/>
+                                            </DoubleAnimation.EasingFunction>
+                                        </DoubleAnimation>
+                                        <DoubleAnimation Storyboard.TargetName="TrackOn"
+                                                         Storyboard.TargetProperty="Opacity"
+                                                         To="1" Duration="0:0:0.16"/>
+                                        <DoubleAnimation Storyboard.TargetName="Thumb"
+                                                         Storyboard.TargetProperty="Opacity"
+                                                         To="1" Duration="0:0:0.16"/>
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </Trigger.EnterActions>
+                            <Trigger.ExitActions>
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetName="Thumb"
+                                                         Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.X)"
+                                                         To="0" Duration="0:0:0.16">
+                                            <DoubleAnimation.EasingFunction>
+                                                <CubicEase EasingMode="EaseOut"/>
+                                            </DoubleAnimation.EasingFunction>
+                                        </DoubleAnimation>
+                                        <DoubleAnimation Storyboard.TargetName="TrackOn"
+                                                         Storyboard.TargetProperty="Opacity"
+                                                         To="0" Duration="0:0:0.16"/>
+                                        <DoubleAnimation Storyboard.TargetName="Thumb"
+                                                         Storyboard.TargetProperty="Opacity"
+                                                         To="0.72" Duration="0:0:0.16"/>
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </Trigger.ExitActions>
                         </Trigger>
                         <Trigger Property="IsMouseOver" Value="True">
                             <Setter TargetName="Track" Property="Opacity" Value="0.85"/>
@@ -300,7 +440,7 @@
                             <Setter Property="Background" Value="{StaticResource HoverBrush}"/>
                         </Trigger>
                         <Trigger Property="IsSelected" Value="True">
-                            <Setter Property="Background" Value="#262628"/>
+                            <Setter Property="Background" Value="#2E343B"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -317,14 +457,14 @@
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Thumb">
-                    <Border x:Name="ThumbBorder" Background="#3A3A3D" CornerRadius="3"
+                    <Border x:Name="ThumbBorder" Background="#2E343B" CornerRadius="3"
                             MinHeight="24" MinWidth="6"/>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="ThumbBorder" Property="Background" Value="#54545A"/>
+                            <Setter TargetName="ThumbBorder" Property="Background" Value="#3D4650"/>
                         </Trigger>
                         <Trigger Property="IsDragging" Value="True">
-                            <Setter TargetName="ThumbBorder" Property="Background" Value="#6A6A72"/>
+                            <Setter TargetName="ThumbBorder" Property="Background" Value="#4A5560"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -511,18 +651,91 @@
                                         TextElement.FontSize="{TemplateBinding FontSize}"/>
                                 </Border>
                                 <ControlTemplate.Triggers>
+                                    <!-- ORDER MATTERS. IsSelected must come FIRST so that when an
+                                         item is both selected and highlighted (which is exactly what
+                                         happens the moment the dropdown opens) IsHighlighted wins and
+                                         sets BOTH background and foreground. With the order reversed,
+                                         IsSelected replaced only the background and left the dark
+                                         highlight foreground behind — dark text on a dark row. -->
+                                    <Trigger Property="IsSelected" Value="True">
+                                        <Setter TargetName="ItemBorder" Property="Background" Value="{StaticResource HoverBrush}"/>
+                                        <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+                                    </Trigger>
                                     <Trigger Property="IsHighlighted" Value="True">
                                         <Setter TargetName="ItemBorder" Property="Background" Value="{StaticResource AccentBlueBrush}"/>
                                         <Setter Property="Foreground" Value="#0D0F14"/>
-                                    </Trigger>
-                                    <Trigger Property="IsSelected" Value="True">
-                                        <Setter TargetName="ItemBorder" Property="Background" Value="{StaticResource HoverBrush}"/>
                                     </Trigger>
                                 </ControlTemplate.Triggers>
                             </ControlTemplate>
                         </Setter.Value>
                     </Setter>
                 </Style>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- IMPLICIT ComboBox style — every ComboBox gets the dark theme automatically.
+         Without this, a ComboBox that forgets Style="{StaticResource DarkComboBox}"
+         falls back to WPF's built-in template, whose dropdown items draw with the
+         system control-text colour (black). Because App.xaml overrides
+         SystemColors.WindowBrushKey to a dark brush so popups aren't white, that
+         combination rendered black text on a black popup — unreadable. Making the
+         style implicit means a ComboBox added later cannot reintroduce the bug. -->
+    <Style TargetType="ComboBox" BasedOn="{StaticResource DarkComboBox}"/>
+
+    <!-- ============================================================ -->
+    <!--  TITLE-BAR CLOSE BUTTON                                      -->
+    <!-- ============================================================ -->
+    <!-- Win11 caption proportions with the familiar red hover. The glyph is a
+         vector Path, not the "✕" character, so it stays perfectly crisp and
+         evenly weighted at any DPI instead of depending on font hinting. The red
+         is a state layer faded in (same approach as the other buttons) rather
+         than a background swap, so it eases in and needs no colour animation. -->
+    <Style x:Key="CaptionCloseButton" TargetType="Button">
+        <Setter Property="Width"  Value="44"/>
+        <Setter Property="Height" Value="30"/>
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Grid>
+                        <Border x:Name="Fill" Background="#C42B1C" Opacity="0" CornerRadius="8"/>
+                        <Path x:Name="Glyph"
+                              Data="M 0,0 L 10,10 M 10,0 L 0,10"
+                              Stroke="{StaticResource TextSecondaryBrush}" StrokeThickness="1.25"
+                              StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                              HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Glyph" Property="Stroke" Value="#FFFFFF"/>
+                            <Trigger.EnterActions>
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetName="Fill"
+                                                         Storyboard.TargetProperty="Opacity"
+                                                         To="1" Duration="0:0:0.13"/>
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </Trigger.EnterActions>
+                            <Trigger.ExitActions>
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetName="Fill"
+                                                         Storyboard.TargetProperty="Opacity"
+                                                         To="0" Duration="0:0:0.13"/>
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </Trigger.ExitActions>
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter TargetName="Fill" Property="Background" Value="#A82318"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
             </Setter.Value>
         </Setter>
     </Style>
@@ -665,7 +878,7 @@
                             Background="{TemplateBinding Background}"
                             BorderBrush="{TemplateBinding BorderBrush}"
                             BorderThickness="{TemplateBinding BorderThickness}"
-                            CornerRadius="6">
+                            CornerRadius="8">
                         <ScrollViewer x:Name="PART_ContentHost" Margin="2"/>
                     </Border>
                     <ControlTemplate.Triggers>
@@ -694,7 +907,7 @@
     <!--  STATUS PILL  (small inline status badges)                   -->
     <!-- ============================================================ -->
     <Style x:Key="StatusPillGreen" TargetType="Border">
-        <Setter Property="Background" Value="#1A1F1C"/>
+        <Setter Property="Background" Value="#16231B"/>
         <Setter Property="BorderBrush" Value="{StaticResource AccentGreenBrush}"/>
         <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="CornerRadius" Value="4"/>
@@ -702,7 +915,7 @@
     </Style>
 
     <Style x:Key="StatusPillRed" TargetType="Border">
-        <Setter Property="Background" Value="#1F1819"/>
+        <Setter Property="Background" Value="#251A1C"/>
         <Setter Property="BorderBrush" Value="{StaticResource AccentRedBrush}"/>
         <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="CornerRadius" Value="4"/>

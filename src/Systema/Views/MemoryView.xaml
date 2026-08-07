@@ -41,7 +41,7 @@
                             <TextBlock Text="Memory in use" Style="{StaticResource CaptionText}"
                                        HorizontalAlignment="Right" Margin="0,0,2,3"/>
                             <Grid Width="168" Height="46">
-                                <Polygon Points="{Binding SparklineArea}" Fill="#2E5E81AC"/>
+                                <Polygon Points="{Binding SparklineArea}" Fill="#2E38BDF8"/>
                                 <Polyline Points="{Binding SparklinePoints}" Stroke="{StaticResource AccentBlueBrush}"
                                           StrokeThickness="2" StrokeLineJoin="Round"/>
                             </Grid>
@@ -194,13 +194,13 @@
                                 <Border HorizontalAlignment="Left" CornerRadius="6" Padding="8,3">
                                     <Border.Style>
                                         <Style TargetType="Border">
-                                            <Setter Property="Background" Value="#225C9C7C"/>
+                                            <Setter Property="Background" Value="#2222C55E"/>
                                             <Style.Triggers>
                                                 <DataTrigger Binding="{Binding ImpactLabel}" Value="High">
-                                                    <Setter Property="Background" Value="#22C7556B"/>
+                                                    <Setter Property="Background" Value="#22EF4444"/>
                                                 </DataTrigger>
                                                 <DataTrigger Binding="{Binding ImpactLabel}" Value="Medium">
-                                                    <Setter Property="Background" Value="#22C8A654"/>
+                                                    <Setter Property="Background" Value="#22F59E0B"/>
                                                 </DataTrigger>
                                             </Style.Triggers>
                                         </Style>

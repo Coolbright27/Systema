@@ -69,7 +69,7 @@
                         <!-- Provider-missing guidance — shown when this is a Dell but the BIOS
                              WMI provider isn't installed. Points at the lightweight provider. -->
                         <Border Visibility="{Binding ThermalNeedsProvider, Converter={StaticResource BoolToVis}}"
-                                Background="#1AC8A654" BorderBrush="{StaticResource AccentYellowBrush}"
+                                Background="#1AF59E0B" BorderBrush="{StaticResource AccentYellowBrush}"
                                 BorderThickness="1" CornerRadius="6" Padding="12,10">
                             <StackPanel>
                                 <TextBlock Text="{Binding ThermalStatus}" Style="{StaticResource CaptionText}"

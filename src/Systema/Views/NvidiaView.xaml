@@ -33,7 +33,7 @@
             </Grid>
 
             <!-- ===== REBOOT HINT ===== -->
-            <Border Margin="0,0,0,16" Padding="12,8" CornerRadius="6" Background="#1A4F8DF7"
+            <Border Margin="0,0,0,16" Padding="12,8" CornerRadius="6" Background="#1A38BDF8"
                     Visibility="{Binding ShowRebootHint, Converter={StaticResource BoolToVis}}">
                 <TextBlock TextWrapping="Wrap" Style="{StaticResource CaptionText}"
                            Foreground="{StaticResource AccentBlueBrush}"

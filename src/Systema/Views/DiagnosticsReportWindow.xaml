@@ -19,7 +19,7 @@
     </WindowChrome.WindowChrome>
 
     <Border Background="#0F0F10"
-            BorderBrush="#5E81AC"
+            BorderBrush="#38BDF8"
             BorderThickness="1">
 
         <Grid>
@@ -39,9 +39,9 @@
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                        <Ellipse Width="12" Height="12" Fill="#5E81AC" Margin="0,0,10,0">
+                        <Ellipse Width="12" Height="12" Fill="#38BDF8" Margin="0,0,10,0">
                             <Ellipse.Effect>
-                                <DropShadowEffect Color="#5E81AC" BlurRadius="8" ShadowDepth="0"/>
+                                <DropShadowEffect Color="#38BDF8" BlurRadius="8" ShadowDepth="0"/>
                             </Ellipse.Effect>
                         </Ellipse>
                         <TextBlock Text="SYSTEMA" FontWeight="Bold" FontSize="13"
@@ -113,20 +113,20 @@
                         <!-- LIVE badge -->
                         <Border Background="#071A0D" CornerRadius="4" Padding="8,4" Margin="0,0,12,0">
                             <StackPanel Orientation="Horizontal">
-                                <Ellipse Width="7" Height="7" Fill="#5C9C7C" Margin="0,0,6,0" VerticalAlignment="Center">
+                                <Ellipse Width="7" Height="7" Fill="#22C55E" Margin="0,0,6,0" VerticalAlignment="Center">
                                     <Ellipse.Effect>
-                                        <DropShadowEffect Color="#5C9C7C" BlurRadius="4" ShadowDepth="0"/>
+                                        <DropShadowEffect Color="#22C55E" BlurRadius="4" ShadowDepth="0"/>
                                     </Ellipse.Effect>
                                 </Ellipse>
                                 <TextBlock Text="LIVE" FontSize="10" FontWeight="Bold"
-                                           Foreground="#5C9C7C" VerticalAlignment="Center"/>
+                                           Foreground="#22C55E" VerticalAlignment="Center"/>
                             </StackPanel>
                         </Border>
                         <TextBlock x:Name="CountText" Text="0 entries"
                                    FontSize="12" Foreground="#6B7A99" VerticalAlignment="Center"
                                    Margin="0,0,16,0"/>
                         <TextBlock x:Name="ErrorCountText" Text="" FontSize="12"
-                                   Foreground="#C7556B" FontWeight="SemiBold"
+                                   Foreground="#EF4444" FontWeight="SemiBold"
                                    VerticalAlignment="Center"/>
                     </StackPanel>
 
@@ -140,8 +140,8 @@
                                            VerticalAlignment="Center" Margin="8,0,4,0"/>
                                 <TextBox x:Name="SearchBox" Width="170" Height="32"
                                          Background="Transparent" BorderThickness="0"
-                                         Foreground="#A8BBDD" FontSize="12" FontFamily="Segoe UI"
-                                         CaretBrush="#5E81AC" VerticalContentAlignment="Center"
+                                         Foreground="#A8BBDD" FontSize="12" FontFamily="Segoe UI Variable Text, Segoe UI"
+                                         CaretBrush="#38BDF8" VerticalContentAlignment="Center"
                                          TextChanged="Search_Changed"
                                          Padding="0,0,8,0"/>
                             </StackPanel>
@@ -246,21 +246,21 @@
                                     <!-- Warning -->
                                     <DataTrigger Binding="{Binding Level}" Value="Warning">
                                         <Setter TargetName="LevelBadge" Property="Background" Value="#2A1E00"/>
-                                        <Setter TargetName="LevelText"  Property="Foreground" Value="#C8A654"/>
+                                        <Setter TargetName="LevelText"  Property="Foreground" Value="#F59E0B"/>
                                         <Setter TargetName="MsgText"    Property="Foreground" Value="#D4B860"/>
                                     </DataTrigger>
                                     <!-- Error -->
                                     <DataTrigger Binding="{Binding Level}" Value="Error">
                                         <Setter TargetName="RowBorder"  Property="Background" Value="#160808"/>
                                         <Setter TargetName="LevelBadge" Property="Background" Value="#3A0808"/>
-                                        <Setter TargetName="LevelText"  Property="Foreground" Value="#C7556B"/>
+                                        <Setter TargetName="LevelText"  Property="Foreground" Value="#EF4444"/>
                                         <Setter TargetName="MsgText"    Property="Foreground" Value="#E05555"/>
                                     </DataTrigger>
                                     <!-- Fatal -->
                                     <DataTrigger Binding="{Binding Level}" Value="Fatal">
                                         <Setter TargetName="RowBorder"  Property="Background" Value="#220000"/>
                                         <Setter TargetName="LevelBadge" Property="Background" Value="#5A0000"/>
-                                        <Setter TargetName="LevelText"  Property="Foreground" Value="#C7556B"/>
+                                        <Setter TargetName="LevelText"  Property="Foreground" Value="#EF4444"/>
                                         <Setter TargetName="MsgText"    Property="Foreground" Value="#FF4444"/>
                                         <Setter TargetName="SrcText"    Property="Foreground" Value="#CC5555"/>
                                     </DataTrigger>
@@ -284,17 +284,17 @@
 
                     <TextBlock Grid.Column="0" VerticalAlignment="Center"
                                FontSize="11" Foreground="#374560">
-                        Refreshes every <Run Foreground="#5E81AC" FontWeight="SemiBold">2 s</Run>.
-                        Showing last <Run Foreground="#5E81AC" FontWeight="SemiBold">3 000</Run> entries.
+                        Refreshes every <Run Foreground="#38BDF8" FontWeight="SemiBold">2 s</Run>.
+                        Showing last <Run Foreground="#38BDF8" FontWeight="SemiBold">3 000</Run> entries.
                         Click any row to select · paste into Discord for support.
                     </TextBlock>
 
                     <StackPanel Grid.Column="1" Orientation="Horizontal">
                         <Button x:Name="CopyFullButton" Content="Copy Full Report"
                                 Click="CopyFullReport_Click"
-                                Background="#1A3A20" Foreground="#5C9C7C"
+                                Background="#1A3A20" Foreground="#22C55E"
                                 BorderThickness="0" Padding="16,9"
-                                Cursor="Hand" FontFamily="Segoe UI"
+                                Cursor="Hand" FontFamily="Segoe UI Variable Text, Segoe UI"
                                 FontWeight="SemiBold" FontSize="13"
                                 Margin="0,0,8,0">
                             <Button.Template>
@@ -315,7 +315,7 @@
                                 Click="CopyReport_Click"
                                 Background="#0077AA" Foreground="White"
                                 BorderThickness="0" Padding="16,9"
-                                Cursor="Hand" FontFamily="Segoe UI"
+                                Cursor="Hand" FontFamily="Segoe UI Variable Text, Segoe UI"
                                 FontWeight="SemiBold" FontSize="13"
                                 Margin="0,0,8,0">
                             <Button.Template>
@@ -336,7 +336,7 @@
                                 Click="Discord_Click"
                                 Background="#5865F2" Foreground="White"
                                 BorderThickness="0" Padding="14,9"
-                                Cursor="Hand" FontFamily="Segoe UI"
+                                Cursor="Hand" FontFamily="Segoe UI Variable Text, Segoe UI"
                                 FontWeight="SemiBold" FontSize="13"
                                 Margin="0,0,8,0">
                             <Button.Template>
@@ -357,7 +357,7 @@
                                 Click="Close_Click"
                                 Background="#262628" Foreground="#E8EAF0"
                                 BorderThickness="0" Padding="14,9"
-                                Cursor="Hand" FontFamily="Segoe UI" FontSize="13">
+                                Cursor="Hand" FontFamily="Segoe UI Variable Text, Segoe UI" FontSize="13">
                             <Button.Template>
                                 <ControlTemplate TargetType="Button">
                                     <Border Background="{TemplateBinding Background}" CornerRadius="6"

@@ -240,7 +240,7 @@
                                     <Style TargetType="Button" BasedOn="{StaticResource BatterySegment}">
                                         <Style.Triggers>
                                             <DataTrigger Binding="{Binding ActiveBatteryMode}" Value="performance">
-                                                <Setter Property="Background" Value="#3341C77A"/>
+                                                <Setter Property="Background" Value="#3322C55E"/>
                                                 <Setter Property="Foreground" Value="{StaticResource AccentGreenBrush}"/>
                                             </DataTrigger>
                                         </Style.Triggers>
@@ -252,7 +252,7 @@
                                     <Style TargetType="Button" BasedOn="{StaticResource BatterySegment}">
                                         <Style.Triggers>
                                             <DataTrigger Binding="{Binding ActiveBatteryMode}" Value="">
-                                                <Setter Property="Background" Value="#33378ADD"/>
+                                                <Setter Property="Background" Value="#3338BDF8"/>
                                                 <Setter Property="Foreground" Value="{StaticResource AccentBlueBrush}"/>
                                             </DataTrigger>
                                         </Style.Triggers>
@@ -264,7 +264,7 @@
                                     <Style TargetType="Button" BasedOn="{StaticResource BatterySegment}">
                                         <Style.Triggers>
                                             <DataTrigger Binding="{Binding ActiveBatteryMode}" Value="balanced">
-                                                <Setter Property="Background" Value="#33378ADD"/>
+                                                <Setter Property="Background" Value="#3338BDF8"/>
                                                 <Setter Property="Foreground" Value="{StaticResource AccentBlueBrush}"/>
                                             </DataTrigger>
                                         </Style.Triggers>
@@ -276,7 +276,7 @@
                                     <Style TargetType="Button" BasedOn="{StaticResource BatterySegment}">
                                         <Style.Triggers>
                                             <DataTrigger Binding="{Binding ActiveBatteryMode}" Value="max">
-                                                <Setter Property="Background" Value="#33378ADD"/>
+                                                <Setter Property="Background" Value="#3338BDF8"/>
                                                 <Setter Property="Foreground" Value="{StaticResource AccentBlueBrush}"/>
                                             </DataTrigger>
                                         </Style.Triggers>
@@ -307,7 +307,7 @@
                     </TextBlock>
 
                     <!-- AC-power notice — only when a mode is set but the cap is dormant -->
-                    <Border Background="#1AC8A654" BorderBrush="{StaticResource AccentYellowBrush}"
+                    <Border Background="#1AF59E0B" BorderBrush="{StaticResource AccentYellowBrush}"
                             BorderThickness="1" CornerRadius="6" Padding="12,8" Margin="0,12,0,0"
                             Visibility="{Binding IsOnAcWithBatteryPlanActive, Converter={StaticResource BoolToVis}}">
                         <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap"
