@@ -682,7 +682,7 @@
                             Visibility="{Binding RealtekScanned, Converter={StaticResource BoolToVis}}">
                         <StackPanel>
                             <TextBlock Style="{StaticResource CaptionText}"
-                                       Text="No Realtek bloatware found — your system is clean."
+                                       Text="No Realtek bloatware found. Your system is clean."
                                        Visibility="{Binding HasRealtekEntries,
                                            Converter={StaticResource BoolToVis},
                                            ConverterParameter=Invert}"/>

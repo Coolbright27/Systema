@@ -126,7 +126,7 @@
                     </Button.Style>
                     <StackPanel>
                         <TextBlock Text="Balanced" Style="{StaticResource HeadingSmall}"/>
-                        <TextBlock Text="Snappy — keeps the key effects." Style="{StaticResource CaptionText}"
+                        <TextBlock Text="Snappy, keeps the key effects." Style="{StaticResource CaptionText}"
                                    TextWrapping="Wrap" Margin="0,3,0,0"/>
                     </StackPanel>
                 </Button>
@@ -163,13 +163,16 @@
                         <StackPanel Grid.Column="0" Margin="0,0,24,0">
                             <TextBlock Text="Performance mode" Style="{StaticResource HeadingMedium}" Margin="0,0,0,4"/>
                             <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap">
-                                Keeps your CPU at full speed with no throttling during gaming or heavy work.
-                                Automatically restores every time you plug back in after running on battery.
+                                Stops Windows slowing your CPU down during gaming or heavy work, so it stays
+                                at full speed. Comes back on its own every time you plug in after running on battery.
                             </TextBlock>
+                            <!-- Laptop-only caution (HasBattery). Thermal throttling is a different
+                                 thing from the Windows throttling above, and on a thin laptop it can
+                                 undo the gain entirely, so say so plainly. -->
                             <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,6,0,0"
                                        Foreground="{StaticResource AccentYellowBrush}"
                                        Visibility="{Binding HasBattery, Converter={StaticResource BoolToVis}}"
-                                       Text="On a laptop, running at full speed can make it warmer and use more battery."/>
+                                       Text="On a laptop this can backfire. Full speed makes more heat, and once the chip gets too hot it throttles itself harder than it would have, so you can end up slower as well as warmer and shorter on battery. Only turn it on if your laptop cools well and sits out in the open, not on a bed, a couch, or your lap."/>
                         </StackPanel>
                         <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                             <TextBlock VerticalAlignment="Center" Margin="0,0,10,0" FontSize="13">
@@ -312,7 +315,7 @@
                             Visibility="{Binding IsOnAcWithBatteryPlanActive, Converter={StaticResource BoolToVis}}">
                         <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap"
                                    Foreground="{StaticResource AccentYellowBrush}">
-                            <Run FontWeight="SemiBold" Text="On AC — "/>
+                            <Run FontWeight="SemiBold" Text="On AC: "/>
                             <Run Text="the CPU cap is set but dormant. It activates automatically the next time you unplug."/>
                         </TextBlock>
                     </Border>
@@ -429,7 +432,7 @@
                             <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,20,0">
                                 <TextBlock Text="Show content while moving windows"
                                            Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                                <TextBlock Text="Shows the full window content while you drag it. Recommended to keep on — turning it off shows only an outline."
+                                <TextBlock Text="Shows the full window content while you drag it. Recommended to keep on. Turning it off shows only an outline."
                                            Style="{StaticResource CaptionText}" Margin="0,2,0,0"/>
                             </StackPanel>
                             <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}"

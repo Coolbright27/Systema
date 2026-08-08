@@ -436,15 +436,15 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         // the auto-update loop runs on a background thread.
         // Handlers stored as fields so Dispose() can unsubscribe them.
         _onStatusChanged = status =>
-            Application.Current?.Dispatcher.Invoke(() => UpdateStatus = status);
+            Application.Current?.Dispatcher.BeginInvoke(() => UpdateStatus = status);
         _onUpdateAvailableChanged = available =>
-            Application.Current?.Dispatcher.Invoke(() => UpdateAvailable = available);
+            Application.Current?.Dispatcher.BeginInvoke(() => UpdateAvailable = available);
         _onIsDownloadingChanged = downloading =>
-            Application.Current?.Dispatcher.Invoke(() => IsDownloadingUpdate = downloading);
+            Application.Current?.Dispatcher.BeginInvoke(() => IsDownloadingUpdate = downloading);
         _onDownloadProgressChanged = pct =>
-            Application.Current?.Dispatcher.Invoke(() => DownloadProgress = pct);
+            Application.Current?.Dispatcher.BeginInvoke(() => DownloadProgress = pct);
         _onIsReadyToInstallChanged = ready =>
-            Application.Current?.Dispatcher.Invoke(() => IsReadyToInstall = ready);
+            Application.Current?.Dispatcher.BeginInvoke(() => IsReadyToInstall = ready);
 
         _updateService.StatusChanged           += _onStatusChanged;
         _updateService.UpdateAvailableChanged  += _onUpdateAvailableChanged;

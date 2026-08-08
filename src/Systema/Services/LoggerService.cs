@@ -48,6 +48,35 @@ public class LoggerService
     private readonly object _fileLock = new();
     private static LoggerService? _instance;
 
+    // ── Disk writing: ONE dedicated thread, never the caller's ──────────────────
+    // Previously every Log() call did `Task.Run(() => { lock (_fileLock)
+    // File.AppendAllText(...); })`. With ~900 log sites that queued a ThreadPool
+    // work item per line, and each one opened, wrote and closed the file while
+    // holding a global lock. When a write stalled — most often Defender's
+    // real-time scan touching the log — those work items piled up blocked on the
+    // lock. The ThreadPool only injects ~1 extra thread per 500 ms, so it starved,
+    // and every unrelated `await Task.Run(...)` (including the UI's refresh path)
+    // stopped being scheduled. The process stayed alive with a frozen UI: exactly
+    // the "GHOST PROCESS — UI thread unresponsive" reports, always while idle,
+    // because idle is when the background loops log most.
+    //
+    // Now: callers just enqueue (lock-free, never blocks, never allocates a task)
+    // and a single background thread owns the file handle. Zero contention, one
+    // open instead of one-per-line, and a stalled disk can no longer reach the
+    // ThreadPool at all.
+    private const int MaxQueuedLines = 20000;   // ~ a few MB; drops rather than grows unbounded
+    private readonly BlockingCollection<PendingWrite> _writeQueue =
+        new(new ConcurrentQueue<PendingWrite>(), MaxQueuedLines);
+    private readonly Thread _writerThread;
+
+    /// <summary>A line destined for one of the two log files.</summary>
+    private readonly struct PendingWrite
+    {
+        public readonly string Line;
+        public readonly bool   IsChangeLog;
+        public PendingWrite(string line, bool isChangeLog) { Line = line; IsChangeLog = isChangeLog; }
+    }
+
     public static LoggerService Instance => _instance ??= new LoggerService();
 
     private LoggerService()
@@ -62,8 +91,106 @@ public class LoggerService
         // Rotate: keep last 5 sessions
         RotateLogs(logsDir);
 
+        // Trim the persistent change log ONCE per session. It used to be re-read and
+        // rewritten in full on every single LogChange call, holding the shared file
+        // lock for the whole read+write — which is what turned a burst of changes
+        // (Auto Pilot, an update, a reboot) into a pile-up behind one slow rewrite.
+        TrimChangeLog();
+
+        _writerThread = new Thread(WriterLoop)
+        {
+            IsBackground = true,          // never keeps the process alive
+            Name         = "Systema.LogWriter",
+            Priority     = ThreadPriority.BelowNormal,
+        };
+        _writerThread.Start();
+
         Log(LogLevel.Info, "Logger", $"Systema v{GetDiagVersion()} starting — {DateTime.Now:R}");
         Log(LogLevel.Info, "Logger", $"Log file: {_logPath}");
+    }
+
+    /// <summary>
+    /// Drains queued lines on ONE thread that owns both file handles. Batches whatever
+    /// is already queued into a single write so a burst costs one flush, not one per line.
+    /// </summary>
+    private void WriterLoop()
+    {
+        var batch = new StringBuilder(8192);
+        try
+        {
+            foreach (var first in _writeQueue.GetConsumingEnumerable())
+            {
+                var item = first;
+                while (true)
+                {
+                    // Group consecutive lines heading for the same file.
+                    bool isChange = item.IsChangeLog;
+                    batch.Clear();
+                    batch.Append(item.Line).Append('\n');
+
+                    while (_writeQueue.TryTake(out var next, 0))
+                    {
+                        if (next.IsChangeLog != isChange)
+                        {
+                            FlushBatch(batch, isChange);
+                            item = next;
+                            goto continueOuter;
+                        }
+                        batch.Append(next.Line).Append('\n');
+                        if (batch.Length > 32768) break;   // bound a single write
+                    }
+
+                    FlushBatch(batch, isChange);
+                    break;
+
+                continueOuter: ;
+                }
+            }
+        }
+        catch { /* never throw from the logger */ }
+        finally
+        {
+            try { FlushBatch(batch, false); } catch { }
+        }
+    }
+
+    private void FlushBatch(StringBuilder batch, bool isChangeLog)
+    {
+        if (batch.Length == 0) return;
+        try
+        {
+            // Only this thread touches the files, so no lock is needed on the hot path.
+            File.AppendAllText(isChangeLog ? _changePath : _logPath, batch.ToString(), Encoding.UTF8);
+        }
+        catch { /* disk full, file locked, whatever — logging must never break the app */ }
+        batch.Clear();
+    }
+
+    /// <summary>Caps the change log once, at startup, instead of on every write.</summary>
+    private void TrimChangeLog()
+    {
+        try
+        {
+            if (!File.Exists(_changePath)) return;
+            var lines = File.ReadAllLines(_changePath);
+            if (lines.Length <= MaxChangeLines) return;
+            File.WriteAllLines(_changePath, lines[^MaxChangeLines..]);
+        }
+        catch { }
+    }
+
+    /// <summary>
+    /// Flushes anything still queued. Call on shutdown so the last lines — usually the
+    /// most interesting ones — are not lost when the background writer is torn down.
+    /// </summary>
+    public void Shutdown()
+    {
+        try
+        {
+            _writeQueue.CompleteAdding();
+            _writerThread.Join(TimeSpan.FromSeconds(2));
+        }
+        catch { }
     }
 
     public IReadOnlyCollection<LogEntry> RecentEntries => _ring.ToArray();
@@ -81,23 +208,9 @@ public class LoggerService
         try
         {
             var line = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {action}: {detail}";
-            _ = Task.Run(() =>
-            {
-                try
-                {
-                    lock (_fileLock)
-                    {
-                        var lines = File.Exists(_changePath)
-                            ? new List<string>(File.ReadAllLines(_changePath))
-                            : new List<string>();
-                        lines.Add(line);
-                        if (lines.Count > MaxChangeLines)
-                            lines = lines.GetRange(lines.Count - MaxChangeLines, MaxChangeLines);
-                        File.WriteAllLines(_changePath, lines);
-                    }
-                }
-                catch { /* never throw from logger */ }
-            });
+            // Append-only enqueue. The old version re-read and rewrote the WHOLE file
+            // per call under the shared lock; trimming now happens once at startup.
+            _writeQueue.TryAdd(new PendingWrite(line, isChangeLog: true));
         }
         catch { /* never throw from logger */ }
     }
@@ -115,8 +228,10 @@ public class LoggerService
             if (!_ring.TryDequeue(out _)) break; // nothing left to remove
         }
 
-        // Write to file (non-blocking fire-and-forget — failures are silent)
-        _ = Task.Run(() => WriteToFile(entry));
+        // Hand the line to the writer thread. TryAdd never blocks: if the queue is
+        // somehow saturated the line is dropped rather than stalling the caller —
+        // losing a log line is always better than freezing the app that emits it.
+        _writeQueue.TryAdd(new PendingWrite(entry.ToString(), isChangeLog: false));
     }
 
     public void Info(string source, string message) => Log(LogLevel.Info, source, message);
@@ -422,17 +537,8 @@ public class LoggerService
         catch { return "Unknown"; }
     }
 
-    private void WriteToFile(LogEntry entry)
-    {
-        try
-        {
-            lock (_fileLock)
-            {
-                File.AppendAllText(_logPath, entry.ToString() + Environment.NewLine, Encoding.UTF8);
-            }
-        }
-        catch { /* never throw from logger */ }
-    }
+    // WriteToFile was removed — the writer thread (WriterLoop/FlushBatch) owns all
+    // disk writes now. Nothing should append to the log files from a caller thread.
 
     private void RotateLogs(string logsDir)
     {

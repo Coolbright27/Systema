@@ -3,7 +3,7 @@
 ; ============================================================
 
 #define MyAppName "Systema"
-#define MyAppVersion "0.7.256"
+#define MyAppVersion "0.7.266"
 #define MyAppPublisher "Systema"
 #define MyAppURL "https://github.com/systema-app"
 #define MyAppExeName "Systema.exe"
@@ -139,6 +139,17 @@ Filename: "{app}\{#MyAppExeName}"; Parameters: "--cleanup"; RunOnceId: "SystemaC
 // the USER to add an exclusion manually from their own elevated PowerShell —
 // NOT for our unsigned binary to do it for them.
 // ════════════════════════════════════════════════════════════════════════════
+
+// NOTE ON A DARK WIZARD (tried and reverted in 0.7.259)
+// Recolouring the wizard's controls from [Code] does NOT work. Setting .Color and
+// .Font.Color darkens the form, panels and edit fields, but TNewCheckListBox (the
+// Tasks/Components page) draws its own item text in a hardcoded dark colour, so
+// the entries stayed black on a black box — unreadable. Native buttons and the
+// progress bar are drawn by the Windows theme engine and ignore .Color too. The
+// result was half-themed and worse than the stock wizard.
+// The only clean route is Inno's own WizardStyleFile / WizardStyleFileDynamicDark,
+// which need a .vsf VCL style file that Inno does not ship. Don't retry the
+// [Code] approach.
 
 // Check Windows version. Minimum supported: Windows 10.
 // A friendly welcome notice is shown in interactive mode so users who hit the

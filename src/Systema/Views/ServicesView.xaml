@@ -2,39 +2,10 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:conv="clr-namespace:Systema.Core.Converters"
-             xmlns:models="clr-namespace:Systema.Models"
              Background="Transparent">
 
     <UserControl.Resources>
         <conv:BoolToVisibilityConverter x:Key="BoolToVis"/>
-
-        <!-- One segment of the Off · Manual · On control. Inactive = muted text on a
-             transparent pill; the active state is applied per-button via a ColorState
-             DataTrigger (it sets Background + Foreground), which the template surfaces
-             through TemplateBinding. -->
-        <Style x:Key="SegmentButton" TargetType="Button">
-            <Setter Property="Cursor"     Value="Hand"/>
-            <Setter Property="FontSize"   Value="12"/>
-            <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
-            <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="Padding"    Value="15,5"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="bd" Background="{TemplateBinding Background}"
-                                CornerRadius="7" Padding="{TemplateBinding Padding}">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="bd" Property="Background" Value="#22FFFFFF"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
 
         <!-- Dims a section while Auto-Pilot manages it. -->
         <Style x:Key="ManagedSection" TargetType="StackPanel">
@@ -74,52 +45,20 @@
 
             <!-- Header -->
             <TextBlock Text="Cleanup &amp; Privacy" Style="{StaticResource HeadingLarge}"/>
-            <TextBlock Text="A quick read on what's running in the background, with one-click cleanup and plain-language categories."
+            <TextBlock Text="Stop background services you don't need, and stop Windows collecting data about you."
                        Style="{StaticResource CaptionText}" Margin="0,4,0,20"/>
 
             <!-- ════════════════ OVERVIEW (dashboard) ════════════════ -->
             <StackPanel Visibility="{Binding IsOverview, Converter={StaticResource BoolToVis}}">
 
-                <!-- Status tiles -->
-                <Grid Margin="0,0,0,20">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="12"/>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="12"/>
-                        <ColumnDefinition Width="*"/>
-                    </Grid.ColumnDefinitions>
-
-                    <Border Grid.Column="0" Background="{StaticResource BgSurfaceBrush}" CornerRadius="12" Padding="16,14">
-                        <StackPanel>
-                            <TextBlock Text="Background tasks" Style="{StaticResource CaptionText}"/>
-                            <TextBlock Text="{Binding TotalBackgroundTasks}" FontSize="26" FontWeight="SemiBold"
-                                       Foreground="{StaticResource TextPrimaryBrush}"/>
-                        </StackPanel>
-                    </Border>
-
-                    <Border Grid.Column="2" Background="{StaticResource BgSurfaceBrush}" CornerRadius="12" Padding="16,14">
-                        <StackPanel>
-                            <TextBlock Text="Recommended off" Style="{StaticResource CaptionText}"/>
-                            <TextBlock Text="{Binding RecommendedOffCount}" FontSize="26" FontWeight="SemiBold"
-                                       Foreground="{StaticResource AccentYellowBrush}"/>
-                        </StackPanel>
-                    </Border>
-
-                    <Border Grid.Column="4" Background="{StaticResource BgSurfaceBrush}" CornerRadius="12" Padding="16,14">
-                        <StackPanel>
-                            <TextBlock Text="Already optimized" Style="{StaticResource CaptionText}"/>
-                            <TextBlock Text="{Binding AlreadyOptimizedCount}" FontSize="26" FontWeight="SemiBold"
-                                       Foreground="{StaticResource AccentGreenBrush}"/>
-                        </StackPanel>
-                    </Border>
-                </Grid>
 
                 <!-- Recommended-cleanup card — single on/off toggle (drives the same
-                     PrivacyCleanupApplied state the Dashboard reads). -->
-                <Border CornerRadius="14" Padding="20,18" Margin="0,0,0,24"
+                     PrivacyCleanupApplied state the Dashboard reads).
+                     Both action cards now carry the SAME border weight: the old 2px accent
+                     ring here implied this one mattered more, which was never true. -->
+                <Border CornerRadius="12" Padding="20,18" Margin="0,0,0,14"
                         Background="{StaticResource BgCardBrush}"
-                        BorderBrush="{StaticResource AccentBlueBrush}" BorderThickness="2">
+                        BorderBrush="{StaticResource BorderBrush}" BorderThickness="1">
                     <StackPanel Style="{StaticResource ManagedSection}">
                         <Grid>
                             <Grid.ColumnDefinitions>
@@ -166,8 +105,10 @@
                     </StackPanel>
                 </Border>
 
-                <!-- No Telemetry Pro — kills ALL Windows telemetry (policy + services + tasks). -->
-                <Border CornerRadius="14" Padding="20,18" Margin="0,0,0,24"
+                <!-- No Telemetry Pro — kills ALL Windows telemetry (policy + services + tasks).
+                     The plain summary leads; the channel-by-channel detail moved behind a
+                     disclosure so the card is scannable instead of a 60-word paragraph. -->
+                <Border CornerRadius="12" Padding="20,18" Margin="0,0,0,24"
                         Background="{StaticResource BgCardBrush}"
                         BorderBrush="{StaticResource BorderBrush}" BorderThickness="1">
                     <StackPanel Style="{StaticResource ManagedSection}">
@@ -178,12 +119,86 @@
                             </Grid.ColumnDefinitions>
                             <StackPanel Grid.Column="0" Margin="0,0,18,0">
                                 <TextBlock Text="No Telemetry Pro" Style="{StaticResource HeadingSmall}"/>
-                                <TextBlock Text="Turns off every Windows telemetry channel at once, as far as your edition allows. It sets the do not collect policies, disables the telemetry services (DiagTrack, error reporting, diagnostics hub), switches off the telemetry scheduled tasks, and stops typing, handwriting, and app inventory collection. Pro and Education get the fuller policy set. Fully reversible."
+                                <TextBlock Text="Stops Windows collecting and sending data about how you use your PC. Fully reversible."
                                            Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,5,0,0"/>
                             </StackPanel>
                             <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}" VerticalAlignment="Center"
                                       IsChecked="{Binding NoTelemetryPro}"/>
                         </Grid>
+
+                        <!-- What this turns off (disclosure) -->
+                        <Button Command="{Binding ToggleTelemetryDetailsCommand}" Style="{StaticResource ExpanderButton}"
+                                HorizontalContentAlignment="Left" Margin="0,10,0,0">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock FontSize="12.5" Foreground="{StaticResource AccentBlueBrush}"
+                                           VerticalAlignment="Center">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Text" Value="What this turns off"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding TelemetryDetailsExpanded}" Value="True">
+                                                    <Setter Property="Text" Value="Hide details"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                                <TextBlock FontSize="10" Margin="7,0,0,0" VerticalAlignment="Center"
+                                           Foreground="{StaticResource TextSecondaryBrush}">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Text" Value="&#x25BC;"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding TelemetryDetailsExpanded}" Value="True">
+                                                    <Setter Property="Text" Value="&#x25B2;"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </StackPanel>
+                        </Button>
+
+                        <StackPanel Margin="0,8,0,0"
+                                    Visibility="{Binding TelemetryDetailsExpanded, Converter={StaticResource BoolToVis}}">
+                            <StackPanel.RenderTransform>
+                                <TranslateTransform Y="0"/>
+                            </StackPanel.RenderTransform>
+                            <StackPanel.Style>
+                                <Style TargetType="StackPanel">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding TelemetryDetailsExpanded}" Value="True">
+                                            <DataTrigger.EnterActions>
+                                                <BeginStoryboard>
+                                                    <Storyboard>
+                                                        <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                                                                         From="0" To="1" Duration="0:0:0.18"/>
+                                                        <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)"
+                                                                         From="-6" To="0" Duration="0:0:0.18">
+                                                            <DoubleAnimation.EasingFunction>
+                                                                <CubicEase EasingMode="EaseOut"/>
+                                                            </DoubleAnimation.EasingFunction>
+                                                        </DoubleAnimation>
+                                                    </Storyboard>
+                                                </BeginStoryboard>
+                                            </DataTrigger.EnterActions>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </StackPanel.Style>
+                            <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap"
+                                       Text="&#x2022;  The &quot;do not collect&quot; policies, as far as your Windows edition allows"/>
+                            <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,4,0,0"
+                                       Text="&#x2022;  The telemetry services: DiagTrack, error reporting, and the diagnostics hub"/>
+                            <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,4,0,0"
+                                       Text="&#x2022;  The scheduled tasks that upload diagnostic data"/>
+                            <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,4,0,0"
+                                       Text="&#x2022;  Typing, handwriting, and app inventory collection"/>
+                            <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,8,0,0"
+                                       Foreground="{StaticResource TextTertiaryBrush}"
+                                       Text="Windows Pro and Education get the fuller policy set."/>
+                        </StackPanel>
+
                         <StackPanel Orientation="Horizontal" Margin="0,12,0,0"
                                     Visibility="{Binding HasNoTelemetryStatus, Converter={StaticResource BoolToVis}}">
                             <Ellipse Width="9" Height="9" VerticalAlignment="Center" Margin="0,0,7,0">
@@ -203,8 +218,11 @@
                     </StackPanel>
                 </Border>
 
-                <!-- Category cards (Privacy & data removed — the Recommended cleanup toggle covers it). -->
-                <TextBlock Text="Browse by category" Style="{StaticResource HeadingMedium}" Margin="2,0,0,12"/>
+                <!-- Both cards hand off to a Windows tool, so the heading says so. "Browse by
+                     category" described an in-app drill-down that no longer exists. -->
+                <TextBlock Text="Manage in Windows" Style="{StaticResource HeadingMedium}" Margin="2,0,0,4"/>
+                <TextBlock Text="For anything beyond the toggles above, these open the tools Windows provides."
+                           Style="{StaticResource CaptionText}" Margin="2,0,0,12"/>
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>
@@ -212,8 +230,11 @@
                         <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
 
+                    <!-- Opens Windows' own Services console (services.msc) rather than an
+                         in-app list, so per-service changes happen in the tool Windows
+                         actually owns. -->
                     <Button Grid.Column="0" Style="{StaticResource CategoryCardButton}"
-                            Command="{Binding OpenCategoryCommand}" CommandParameter="performance">
+                            Command="{Binding OpenServicesMscCommand}">
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
@@ -221,9 +242,9 @@
                             </Grid.ColumnDefinitions>
                             <StackPanel Grid.Column="0" Margin="0,0,8,0">
                                 <TextBlock Text="Services" Style="{StaticResource HeadingSmall}"/>
-                                <TextBlock Text="{Binding PerformanceCategorySubtitle}" Style="{StaticResource CaptionText}" Margin="0,2,0,0"/>
+                                <TextBlock Text="Open the Windows Services app" Style="{StaticResource CaptionText}" Margin="0,2,0,0"/>
                             </StackPanel>
-                            <TextBlock Grid.Column="1" Text="&#x203A;" FontSize="20" VerticalAlignment="Center"
+                            <TextBlock Grid.Column="1" Text="&#x2197;" FontSize="16" VerticalAlignment="Center"
                                        Foreground="{StaticResource TextSecondaryBrush}"/>
                         </Grid>
                     </Button>
@@ -247,114 +268,6 @@
                 </Grid>
             </StackPanel>
 
-            <!-- ════════════════ PERFORMANCE detail (services) ════════════════ -->
-            <StackPanel Visibility="{Binding IsPerformanceCategory, Converter={StaticResource BoolToVis}}">
-                <Button Content="&#x2190; Back" Command="{Binding BackToOverviewCommand}"
-                        Style="{StaticResource GhostButton}" HorizontalAlignment="Left" Margin="0,0,0,14"/>
-                <TextBlock Text="Services" Style="{StaticResource HeadingMedium}" Margin="2,0,0,2"/>
-                <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="2,0,0,10"
-                           Text="Background services Windows runs for you. Each one explains what it does — pick how it starts:"/>
-                <StackPanel Orientation="Horizontal" Margin="2,0,0,16">
-                    <Ellipse Width="9" Height="9" Fill="{StaticResource AccentRedBrush}" VerticalAlignment="Center" Margin="0,0,5,0"/>
-                    <TextBlock Text="Off — not using resources" Style="{StaticResource CaptionText}" Margin="0,0,16,0"/>
-                    <Ellipse Width="9" Height="9" Fill="{StaticResource AccentYellowBrush}" VerticalAlignment="Center" Margin="0,0,5,0"/>
-                    <TextBlock Text="Manual — starts only when needed" Style="{StaticResource CaptionText}" Margin="0,0,16,0"/>
-                    <Ellipse Width="9" Height="9" Fill="{StaticResource AccentGreenBrush}" VerticalAlignment="Center" Margin="0,0,5,0"/>
-                    <TextBlock Text="On — running" Style="{StaticResource CaptionText}"/>
-                </StackPanel>
-
-                <StackPanel Style="{StaticResource ManagedSection}">
-                    <Border Style="{StaticResource Card}" Padding="0">
-                        <ItemsControl ItemsSource="{Binding Services}">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <Border Padding="16,12" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1">
-                                        <Grid>
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="*"/>
-                                                <ColumnDefinition Width="Auto"/>
-                                            </Grid.ColumnDefinitions>
-                                            <StackPanel Grid.Column="0" Margin="0,0,16,0" VerticalAlignment="Center">
-                                                <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
-                                                    <TextBlock Text="{Binding DisplayName}" Style="{StaticResource BodyText}"
-                                                               FontWeight="SemiBold" VerticalAlignment="Center"/>
-                                                    <Border CornerRadius="6" Padding="7,1" Margin="8,0,0,0" VerticalAlignment="Center"
-                                                            Background="#2238BDF8"
-                                                            Visibility="{Binding IsRecommended, Converter={StaticResource BoolToVis}}">
-                                                        <TextBlock Text="Recommended" FontSize="11" FontWeight="SemiBold"
-                                                                   Foreground="{StaticResource AccentBlueBrush}"/>
-                                                    </Border>
-                                                </StackPanel>
-                                                <!-- What it does (+ optional caution note in italic). -->
-                                                <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" MaxWidth="560"
-                                                           HorizontalAlignment="Left">
-                                                    <Run Text="{Binding Description, Mode=OneWay}"/><Run Text=" "/><Run
-                                                        Text="{Binding Tooltip, Mode=OneWay}"
-                                                        Foreground="{StaticResource AccentYellowBrush}" FontStyle="Italic"/>
-                                                </TextBlock>
-                                            </StackPanel>
-
-                                            <!-- Off · Manual · On segmented control. The active segment is
-                                                 highlighted by the service's current start type (ColorState). -->
-                                            <Border Grid.Column="1" VerticalAlignment="Center" CornerRadius="9" Padding="3"
-                                                    Background="{StaticResource BgSurfaceBrush}"
-                                                    BorderBrush="{StaticResource BorderBrush}" BorderThickness="1">
-                                                <StackPanel Orientation="Horizontal">
-                                                    <Button Content="Off"
-                                                            Command="{Binding DataContext.DisableServiceCommand,
-                                                                RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                            CommandParameter="{Binding}">
-                                                        <Button.Style>
-                                                            <Style TargetType="Button" BasedOn="{StaticResource SegmentButton}">
-                                                                <Style.Triggers>
-                                                                    <DataTrigger Binding="{Binding ColorState}" Value="{x:Static models:ServiceColorState.Red}">
-                                                                        <Setter Property="Background" Value="#33EF4444"/>
-                                                                        <Setter Property="Foreground" Value="{StaticResource AccentRedBrush}"/>
-                                                                    </DataTrigger>
-                                                                </Style.Triggers>
-                                                            </Style>
-                                                        </Button.Style>
-                                                    </Button>
-                                                    <Button Content="Manual"
-                                                            Command="{Binding DataContext.SetManualCommand,
-                                                                RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                            CommandParameter="{Binding}">
-                                                        <Button.Style>
-                                                            <Style TargetType="Button" BasedOn="{StaticResource SegmentButton}">
-                                                                <Style.Triggers>
-                                                                    <DataTrigger Binding="{Binding ColorState}" Value="{x:Static models:ServiceColorState.Yellow}">
-                                                                        <Setter Property="Background" Value="#33F59E0B"/>
-                                                                        <Setter Property="Foreground" Value="{StaticResource AccentYellowBrush}"/>
-                                                                    </DataTrigger>
-                                                                </Style.Triggers>
-                                                            </Style>
-                                                        </Button.Style>
-                                                    </Button>
-                                                    <Button Content="On"
-                                                            Command="{Binding DataContext.EnableServiceCommand,
-                                                                RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                            CommandParameter="{Binding}">
-                                                        <Button.Style>
-                                                            <Style TargetType="Button" BasedOn="{StaticResource SegmentButton}">
-                                                                <Style.Triggers>
-                                                                    <DataTrigger Binding="{Binding ColorState}" Value="{x:Static models:ServiceColorState.Green}">
-                                                                        <Setter Property="Background" Value="#3322C55E"/>
-                                                                        <Setter Property="Foreground" Value="{StaticResource AccentGreenBrush}"/>
-                                                                    </DataTrigger>
-                                                                </Style.Triggers>
-                                                            </Style>
-                                                        </Button.Style>
-                                                    </Button>
-                                                </StackPanel>
-                                            </Border>
-                                        </Grid>
-                                    </Border>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                    </Border>
-                </StackPanel>
-            </StackPanel>
 
             <!-- Footer (always visible) -->
             <Grid Margin="0,20,0,0">

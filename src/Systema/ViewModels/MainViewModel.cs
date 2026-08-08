@@ -134,19 +134,41 @@ public partial class MainViewModel : ObservableObject, IDisposable
         _ = SafeRefreshAsync();
     }
 
+    // True while the window is hidden to tray. Focus changes must not restart the
+    // timer in that state (a hidden window still raises Deactivated).
+    private bool _trayOnly;
+
     public void SetFocused(bool focused)
     {
+        if (_trayOnly) return;
         _refreshTimer.Interval = focused ? FocusedInterval : UnfocusedInterval;
     }
 
     /// <summary>
-    /// Called when the window is hidden to tray. Slows the refresh timer to 30 s
-    /// so CPU is not wasted refreshing UI that the user cannot see.
-    /// Call SetFocused(false) when the window is restored to resume normal pacing.
+    /// Called when the window is hidden to tray, and again when it is restored.
+    ///
+    /// Hidden → the refresh timer is STOPPED outright, not just slowed. It used to keep
+    /// ticking every 30 s, re-running the active tab's WMI queries, service enumeration
+    /// and registry reads to update a window nobody can see. For a tool that spends most
+    /// of its life in the tray that is pure waste, and it kept a periodic failure surface
+    /// alive around the clock — the ghost-hang reports all happened while idle.
+    ///
+    /// Restored → the timer restarts and refreshes once immediately, so the UI is current
+    /// the moment it appears rather than up to an interval stale.
     /// </summary>
     public void SetTrayOnly(bool trayOnly)
     {
-        _refreshTimer.Interval = trayOnly ? TrayOnlyInterval : UnfocusedInterval;
+        _trayOnly = trayOnly;
+        if (trayOnly)
+        {
+            _refreshTimer.Stop();
+        }
+        else
+        {
+            _refreshTimer.Interval = UnfocusedInterval;
+            _refreshTimer.Start();
+            _ = SafeRefreshAsync();   // repaint immediately instead of waiting a tick
+        }
     }
 
     private async Task SafeRefreshAsync()

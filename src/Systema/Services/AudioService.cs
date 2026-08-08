@@ -624,7 +624,9 @@ public class AudioService
     internal static readonly string[] VendorAudioServices =
     {
         "WavesSysSvc",               // Waves Audio Services (MaxxAudio)
+        "WavesSysSvc64",             // same service, 64-bit naming used by some OEM builds
         "WavesAudioService",         // Waves Audio Universal Services
+        "MaxxAudioAnalytics",        // Dell MaxxAudio telemetry/companion service
         "RtkAudioUniversalService",  // Realtek Audio Universal Service (UAD effects / console)
         "RtkAudioService",           // Realtek Audio Service (older naming)
         "NahimicService",            // Nahimic audio enhancement
@@ -758,14 +760,14 @@ public class AudioService
     // core Windows audio are NEVER killed.
     internal static readonly string[] VendorAudioRunEntries =
     {
-        "WavesSvc", "WavesGUI", "MaxxAudioPro",                          // Waves
+        "WavesSvc", "WavesSvc64", "WavesGUI", "MaxxAudioPro", "MaxxAudioProUI",   // Waves / MaxxAudio
         "RtkAudUService", "RtHDVCpl", "RAVCpl64", "RtkNGUI64", "FMAPP",  // Realtek
         "NahimicSvc", "Nahimic",                                        // Nahimic
     };
     // Process names of those agents to stop immediately, so "off" takes effect this session too.
     internal static readonly string[] VendorAudioAgentProcesses =
     {
-        "WavesSvc64", "WavesSvc", "MaxxAudioPro",
+        "WavesSvc64", "WavesSvc", "WavesSysSvc64", "MaxxAudioPro", "MaxxAudioProUI",
         "RtkAudUService64", "RtkAudUService", "RAVCpl64", "RtHDVCpl", "RtkNGUI64", "FMAPP",
         "NahimicSvc",
     };

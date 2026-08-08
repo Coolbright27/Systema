@@ -17,6 +17,7 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
 
+
 namespace Systema.Services;
 
 /// <summary>
@@ -64,6 +65,99 @@ public sealed class TrayService : IDisposable
     /// App.xaml.cs wires this to GameBoosterService.Enable/DisableManualBoostAsync.
     /// </summary>
     public event Action? ToggleBoostRequested;
+
+    /// <summary>Fired when the user toggles the Task Sleep engine from the tray menu.</summary>
+    public event Action? ToggleTaskSleepRequested;
+
+    /// <summary>Fired when the user picks "Check for updates" from the tray menu.</summary>
+    public event Action? CheckForUpdatesRequested;
+
+    /// <summary>Fired with "balanced" / "performance" from the Power plan submenu.</summary>
+    public event Action<string>? PowerPlanRequested;
+
+    /// <summary>
+    /// Fired just before the menu is shown, so the caller can refresh the toggle states.
+    /// Doing it here rather than on a timer means no background work for a menu nobody has opened.
+    /// </summary>
+    public event Action? MenuOpening;
+
+    // Task Sleep item — caption/checkmark refreshed by UpdateTaskSleepMenuState().
+    private ToolStripMenuItem? _sleepItem;
+
+    // ── Dark menu theming ──────────────────────────────────────────────────────
+    // The tray menu is WinForms, so it renders in the OS light style by default and
+    // clashes with the app. Two things are needed to make it read as ours: a colour
+    // table (the stock one paints a light IMAGE MARGIN gutter down the left edge,
+    // which is the giveaway even after the background is darkened) and a renderer
+    // that forces text/arrow colours, since ProfessionalRenderer would otherwise use
+    // system colours for disabled items.
+    private sealed class SystemaMenuColors : ProfessionalColorTable
+    {
+        private static readonly System.Drawing.Color Card     = System.Drawing.Color.FromArgb(0x1E, 0x22, 0x27);
+        private static readonly System.Drawing.Color Border   = System.Drawing.Color.FromArgb(0x2E, 0x34, 0x3B);
+        private static readonly System.Drawing.Color Hover    = System.Drawing.Color.FromArgb(0x2A, 0x31, 0x3A);
+
+        public override System.Drawing.Color ToolStripDropDownBackground        => Card;
+        public override System.Drawing.Color MenuBorder                         => Border;
+        public override System.Drawing.Color MenuItemBorder                     => Hover;
+        public override System.Drawing.Color MenuItemSelected                   => Hover;
+        public override System.Drawing.Color MenuItemSelectedGradientBegin      => Hover;
+        public override System.Drawing.Color MenuItemSelectedGradientEnd        => Hover;
+        public override System.Drawing.Color MenuItemPressedGradientBegin       => Hover;
+        public override System.Drawing.Color MenuItemPressedGradientMiddle      => Hover;
+        public override System.Drawing.Color MenuItemPressedGradientEnd         => Hover;
+        // Kill the light left gutter.
+        public override System.Drawing.Color ImageMarginGradientBegin           => Card;
+        public override System.Drawing.Color ImageMarginGradientMiddle          => Card;
+        public override System.Drawing.Color ImageMarginGradientEnd             => Card;
+        public override System.Drawing.Color ImageMarginRevealedGradientBegin   => Card;
+        public override System.Drawing.Color ImageMarginRevealedGradientMiddle  => Card;
+        public override System.Drawing.Color ImageMarginRevealedGradientEnd     => Card;
+        public override System.Drawing.Color SeparatorDark                      => Border;
+        public override System.Drawing.Color SeparatorLight                     => Border;
+        public override System.Drawing.Color CheckBackground                    => System.Drawing.Color.FromArgb(0x24, 0x3A, 0x47);
+        public override System.Drawing.Color CheckSelectedBackground            => System.Drawing.Color.FromArgb(0x2B, 0x45, 0x55);
+        public override System.Drawing.Color CheckPressedBackground             => System.Drawing.Color.FromArgb(0x2B, 0x45, 0x55);
+        public override System.Drawing.Color ToolStripBorder                    => Border;
+    }
+
+    private sealed class SystemaMenuRenderer : ToolStripProfessionalRenderer
+    {
+        private static readonly System.Drawing.Color TextPrimary = System.Drawing.Color.FromArgb(0xF3, 0xF5, 0xF7);
+        private static readonly System.Drawing.Color TextDim     = System.Drawing.Color.FromArgb(0x88, 0x91, 0x9C);
+        private static readonly System.Drawing.Color Accent      = System.Drawing.Color.FromArgb(0x38, 0xBD, 0xF8);
+
+        public SystemaMenuRenderer() : base(new SystemaMenuColors()) { RoundedEdges = false; }
+
+        protected override void OnRenderItemText(ToolStripItemTextRenderEventArgs e)
+        {
+            // Disabled items (Exit stays enabled; this covers any future dimmed entry) and
+            // the right-aligned status hints both read as secondary text.
+            e.TextColor = e.Item.Enabled ? TextPrimary : TextDim;
+            base.OnRenderItemText(e);
+        }
+
+        protected override void OnRenderArrow(ToolStripArrowRenderEventArgs e)
+        {
+            e.ArrowColor = TextDim;          // submenu chevron
+            base.OnRenderArrow(e);
+        }
+
+        protected override void OnRenderItemCheck(ToolStripItemImageRenderEventArgs e)
+        {
+            // Tint the checkmark to the single accent instead of the system blue.
+            using var pen = new Pen(Accent, 1.8f);
+            var r = e.ImageRectangle;
+            int cx = r.Left + r.Width / 2, cy = r.Top + r.Height / 2;
+            e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            e.Graphics.DrawLines(pen, new[]
+            {
+                new PointF(cx - 4f, cy),
+                new PointF(cx - 1f, cy + 3.2f),
+                new PointF(cx + 4.5f, cy - 3.6f),
+            });
+        }
+    }
 
     // ── Constructor ────────────────────────────────────────────────────────────
     public TrayService()
@@ -188,7 +282,14 @@ public sealed class TrayService : IDisposable
 
     private ContextMenuStrip BuildContextMenu()
     {
-        var menu = new ContextMenuStrip();
+        var menu = new ContextMenuStrip
+        {
+            Renderer     = new SystemaMenuRenderer(),
+            BackColor    = System.Drawing.Color.FromArgb(0x1E, 0x22, 0x27),
+            ForeColor    = System.Drawing.Color.FromArgb(0xF3, 0xF5, 0xF7),
+            ShowCheckMargin = false,   // the image margin already hosts the checkmark
+            ShowImageMargin = true,    // keep it: without it, Checked items draw nothing
+        };
 
         var openItem = new ToolStripMenuItem("Open Systema");
         // Create a bold font and track it explicitly — WinForms does not dispose fonts set on menu items,
@@ -203,15 +304,66 @@ public sealed class TrayService : IDisposable
         _boostItem = new ToolStripMenuItem("Start Game Boost");
         _boostItem.Click += (_, _) => ToggleBoostRequested?.Invoke();
 
-        var exitItem = new ToolStripMenuItem("Exit");
+        // Task Sleep engine. The napped count rides in ShortcutKeyDisplayString, which
+        // WinForms right-aligns for free — no custom drawing needed for the status hint.
+        _sleepItem = new ToolStripMenuItem("Task Sleep");
+        _sleepItem.Click += (_, _) => ToggleTaskSleepRequested?.Invoke();
+
+        var powerItem = new ToolStripMenuItem("Power plan");
+        // Only the two plans PowerPlanService actually implements.
+        foreach (var (label, key) in new[]
+                 {
+                     ("Balanced",         "balanced"),
+                     ("High performance", "performance"),
+                 })
+        {
+            var planKey = key;
+            var sub = new ToolStripMenuItem(label);
+            sub.Click += (_, _) => PowerPlanRequested?.Invoke(planKey);
+            powerItem.DropDownItems.Add(sub);
+        }
+        // The submenu is its own ToolStrip, so it needs the renderer too or it opens light.
+        powerItem.DropDown.Renderer  = new SystemaMenuRenderer();
+        powerItem.DropDown.BackColor = System.Drawing.Color.FromArgb(0x1E, 0x22, 0x27);
+        powerItem.DropDown.ForeColor = System.Drawing.Color.FromArgb(0xF3, 0xF5, 0xF7);
+
+        var updateItem = new ToolStripMenuItem("Check for updates");
+        updateItem.Click += (_, _) => CheckForUpdatesRequested?.Invoke();
+
+        var exitItem = new ToolStripMenuItem("Exit Systema");
         exitItem.Click += (_, _) => ExitRequested?.Invoke();
 
         menu.Items.Add(openItem);
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(_boostItem);
+        menu.Items.Add(_sleepItem);
+        menu.Items.Add(new ToolStripSeparator());
+        menu.Items.Add(powerItem);
+        menu.Items.Add(updateItem);
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(exitItem);
+
+        menu.Opening += (_, _) => MenuOpening?.Invoke();
         return menu;
+    }
+
+    /// <summary>
+    /// Refreshes the Task Sleep row (checkmark + right-aligned on/off hint).
+    /// The engine exposes no live "napped count", so the hint states the engine state rather
+    /// than inventing a number — a wrong count would be worse than no count.
+    /// </summary>
+    public void UpdateTaskSleepMenuState(bool engineOn)
+    {
+        if (_sleepItem == null) return;
+        void Apply()
+        {
+            _sleepItem.Checked = engineOn;
+            _sleepItem.ShortcutKeyDisplayString = engineOn ? "on" : "off";
+        }
+        if (_notifyIcon.ContextMenuStrip is { } cms && cms.InvokeRequired)
+            cms.BeginInvoke((Action)Apply);
+        else
+            Apply();
     }
 
     private static Icon LoadIcon()

@@ -154,6 +154,11 @@ public class ServiceAndAudioLogicTests
         {
             "WavesSysSvc", "WavesAudioService", "RtkAudioUniversalService",
             "RtkAudioService", "NahimicService", "IntelAudioService",
+            // Waves/MaxxAudio naming variants seen on other OEM builds. WavesSysSvc64 is the
+            // same Waves Audio Service under a 64-bit name; MaxxAudioAnalytics is Dell's
+            // MaxxAudio companion/telemetry service. Both are enhancement-layer only — neither
+            // carries the audio path, so stopping them cannot silence a device.
+            "WavesSysSvc64", "MaxxAudioAnalytics",
         };
         foreach (var svc in AudioService.VendorAudioServices)
             Assert.Contains(svc, allowed);

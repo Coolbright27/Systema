@@ -48,7 +48,7 @@
                                             <Setter Property="Foreground" Value="{StaticResource AccentGreenBrush}"/>
                                         </Style>
                                     </TextBlock.Style>
-                                    <Run Text="Boosting — "/><Run Text="{Binding ActiveGameName, Mode=OneWay}"/>
+                                    <Run Text="Boosting: "/><Run Text="{Binding ActiveGameName, Mode=OneWay}"/>
                                 </TextBlock>
                                 <!-- Sub-line: games detected · check interval -->
                                 <StackPanel Orientation="Horizontal" Margin="0,3,0,0">
@@ -140,7 +140,7 @@
                             </Grid.ColumnDefinitions>
                             <StackPanel Grid.Column="0">
                                 <TextBlock Text="Boost options" Style="{StaticResource HeadingMedium}"/>
-                                <TextBlock Text="What gets applied while a game runs — memory, power, GPU, sleep, and battery."
+                                <TextBlock Text="What gets applied while a game runs: memory, power, GPU, sleep, and battery."
                                            Style="{StaticResource CaptionText}" Margin="0,3,0,0"/>
                             </StackPanel>
                             <TextBlock Grid.Column="1" VerticalAlignment="Center" Margin="12,0,0,0"
@@ -208,7 +208,7 @@
                             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                             <StackPanel Grid.Column="0" Margin="0,0,24,0" VerticalAlignment="Center">
                                 <TextBlock Text="Pause indexing during games" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                                <TextBlock Text="Pauses the Windows Search indexer while a game is boosting to free up disk I/O, then resumes it after. The search service keeps running — it's paused, not stopped. On by default."
+                                <TextBlock Text="Pauses the Windows Search indexer while a game is boosting to free up disk I/O, then resumes it after. The search service keeps running, it is only paused, not stopped. On by default."
                                            Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,2,0,0"/>
                             </StackPanel>
                             <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}"

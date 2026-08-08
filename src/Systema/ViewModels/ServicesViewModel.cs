@@ -119,6 +119,11 @@ public partial class ServicesViewModel : ObservableObject, IAutoRefreshable, IDi
         OnPropertyChanged(nameof(ExtrasCategorySubtitle));
     }
 
+    // "What this turns off" disclosure on the telemetry card — the plain summary reads
+    // first, the channel-by-channel detail is there for anyone who wants it.
+    [ObservableProperty] private bool _telemetryDetailsExpanded;
+    [RelayCommand] private void ToggleTelemetryDetails() => TelemetryDetailsExpanded = !TelemetryDetailsExpanded;
+
     // ── Category drill-down ─────────────────────────────────────────────────────
     // "" = dashboard overview; "privacy" / "performance" / "extras" = detail view.
     [ObservableProperty] private string _selectedCategory = string.Empty;
@@ -227,7 +232,20 @@ public partial class ServicesViewModel : ObservableObject, IAutoRefreshable, IDi
             _gameBooster.GamesInstalledChanged -= OnGamesInstalledChanged;
     }
 
-    public Task RefreshAsync() => DoRefreshAsync();
+    // Throttle for the PERIODIC (timer) refresh only. A full pass enumerates every service
+    // through ServiceController and re-reads the telemetry policy keys — far too heavy to
+    // repeat every second for state that changes only when something is toggled. Anything
+    // that actually changes state (the Refresh button, and each toggle handler) calls
+    // DoRefreshAsync directly and is never throttled, so the UI still updates instantly.
+    private DateTime _lastFullRefreshUtc = DateTime.MinValue;
+    private static readonly TimeSpan PeriodicRefreshMinInterval = TimeSpan.FromSeconds(15);
+
+    public Task RefreshAsync()
+    {
+        if (DateTime.UtcNow - _lastFullRefreshUtc < PeriodicRefreshMinInterval)
+            return Task.CompletedTask;
+        return DoRefreshAsync();
+    }
 
     [RelayCommand]
     private Task RefreshCommandAsync() => DoRefreshAsync();
@@ -267,6 +285,7 @@ public partial class ServicesViewModel : ObservableObject, IAutoRefreshable, IDi
         finally
         {
             IsLoading = false;
+            _lastFullRefreshUtc = DateTime.UtcNow;   // gates the periodic path above
             Interlocked.Exchange(ref _isRefreshing, 0);
         }
     }
@@ -617,6 +636,7 @@ public partial class ServicesViewModel : ObservableObject, IAutoRefreshable, IDi
             StatusMessage = $"Couldn't open Windows Features: {ex.Message}";
         }
     }
+
 
     [RelayCommand]
     private async Task DisableOptionalFeatureAsync(string featureName)

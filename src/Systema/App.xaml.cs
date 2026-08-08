@@ -35,6 +35,8 @@
 //   Core/CrashGuard.cs     — sentinel-file crash detection; watchdog heartbeat every tick
 // ════════════════════════════════════════════════════════════════════════════
 
+using System.Security.AccessControl;
+using System.Security.Principal;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Threading;
@@ -250,6 +252,15 @@ public partial class App : Application
                             Log.Warn("App", "Running instance alive but show-window signal not found — exiting without surfacing it");
                         }
                     }
+                    // Called out separately from the generic catch: this is what a DACL mismatch
+                    // looks like (the event exists but this process may not open it), and it is
+                    // the one failure that leaves the user with no way in except the tray icon.
+                    catch (UnauthorizedAccessException ex)
+                    {
+                        Log.Warn("App",
+                            "Show-window signal exists but access was denied — the running instance was started " +
+                            $"by a different/elevated context, so its window could not be surfaced: {ex.Message}");
+                    }
                     catch (Exception ex) { Log.Warn("App", $"Could not signal running instance to show: {ex.Message}"); }
                 }
                 else
@@ -272,7 +283,26 @@ public partial class App : Application
         // didn't register at boot — a plain relaunch now opens Systema instead of silently exiting.
         try
         {
-            _showWindowSignal = new EventWaitHandle(false, EventResetMode.AutoReset, ShowWindowEventName);
+            // Create the signal with an EXPLICIT DACL. Systema runs elevated, and a kernel object
+            // created by an elevated process gets a default DACL that a lower-integrity process
+            // cannot open — TryOpenExisting throws UnauthorizedAccessException rather than simply
+            // returning false. Any launch that is not elevated (a shortcut whose UAC prompt was
+            // declined, a shell handler, a future non-admin build) could therefore never surface
+            // the running window. Granting Authenticated Users modify+synchronize removes that
+            // failure mode entirely; the event only ever carries "show your window", so it is not
+            // a privileged capability.
+            var signalSecurity = new EventWaitHandleSecurity();
+            signalSecurity.AddAccessRule(new EventWaitHandleAccessRule(
+                new SecurityIdentifier(WellKnownSidType.AuthenticatedUserSid, null),
+                EventWaitHandleRights.Modify | EventWaitHandleRights.Synchronize,
+                AccessControlType.Allow));
+
+            _showWindowSignal = EventWaitHandleAcl.Create(
+                initialState: false,
+                mode: EventResetMode.AutoReset,
+                name: ShowWindowEventName,
+                createdNew: out _,
+                eventSecurity: signalSecurity);
             var waiter = new System.Threading.Thread(() =>
             {
                 while (true)
@@ -638,6 +668,48 @@ public partial class App : Application
             // Reflect whatever state we start in (e.g. relaunched mid-boost).
             _trayService.UpdateBoostMenuState(gameboosterService.BoostActive);
 
+            // ── Task Sleep row: toggle the engine and show the live napped count ──
+            _trayService.ToggleTaskSleepRequested += () =>
+            {
+                try
+                {
+                    taskSleepVm.IsEnabled = !taskSleepVm.IsEnabled;
+                    _trayService?.UpdateTaskSleepMenuState(taskSleepVm.IsEnabled);
+                }
+                catch (Exception ex) { Log.Warn("App", $"Tray Task Sleep toggle failed: {ex.Message}"); }
+            };
+            _trayService.UpdateTaskSleepMenuState(taskSleepVm.IsEnabled);
+
+            // Task Sleep can also be toggled from the window, so re-read the state as the menu
+            // opens rather than polling — no background work for a menu nobody has opened.
+            _trayService.MenuOpening += () =>
+                _trayService?.UpdateTaskSleepMenuState(taskSleepVm.IsEnabled);
+
+            // ── Power plan submenu ──
+            _trayService.PowerPlanRequested += plan =>
+            {
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        if (plan == "performance") await powerPlanService.SetHighPerformanceAsync();
+                        else                       await powerPlanService.SetBalancedAsync();
+                        Log.Info("App", $"Power plan changed from the tray menu: {plan}");
+                    }
+                    catch (Exception ex) { Log.Warn("App", $"Tray power-plan change failed: {ex.Message}"); }
+                });
+            };
+
+            // ── Check for updates ──
+            _trayService.CheckForUpdatesRequested += () =>
+            {
+                _ = Task.Run(async () =>
+                {
+                    try { await _updateService!.CheckNowAsync(); }
+                    catch (Exception ex) { Log.Warn("App", $"Tray update check failed: {ex.Message}"); }
+                });
+            };
+
             // Start background game monitoring (passes tray ref for balloon notifications)
             gameboosterService.StartMonitoring(_trayService);
 
@@ -963,6 +1035,9 @@ public partial class App : Application
         _mainVm?.Dispose();
         _trayService?.Dispose();
         Log.Info("App", $"Systema exiting with code {e.ApplicationExitCode}");
+        // Logging is asynchronous now (a background writer thread owns the file), so
+        // drain the queue before the process goes away or these final lines are lost.
+        Log.Shutdown();
         base.OnExit(e);
     }
 
