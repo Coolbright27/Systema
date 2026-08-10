@@ -44,6 +44,26 @@ public class GraphicsTweaksService
     //  1 — Multi-Plane Overlay (MPO)
     // ════════════════════════════════════════════════════════════════════════
 
+    /// <summary>
+    /// True when an NVIDIA GPU is present, in which case MPO must never be disabled automatically.
+    ///
+    /// Disabling Multi-Plane Overlay is Microsoft's documented fix for driver flicker/stutter, and
+    /// it is a fine default on AMD and Intel. On NVIDIA it is not: MPO is how the driver hands a
+    /// borderless game an Independent Flip. Take it away and DWM composites instead, the game's own
+    /// VSync setting stops controlling presentation, and you get tearing that no in-game toggle can
+    /// fix. Auto-Pilot applied it unconditionally, which is what broke VSync on this user's NVIDIA
+    /// machine (OverlayTestMode=5, confirmed 2026-08-09), and it kept coming back because the
+    /// startup seed adopted it as "user intent" and reinforcement re-applied it after driver updates.
+    ///
+    /// The manual toggle in the Graphics tab is unaffected — an explicit choice stays the user's.
+    /// This only stops Systema from making that choice FOR them.
+    /// </summary>
+    public bool IsMpoAutoDisableUnsafe()
+    {
+        try { return new NvidiaGpuService().DetectNvidiaAdapters().Count > 0; }
+        catch { return false; }   // can't tell — behave as before rather than silently skipping
+    }
+
     /// <summary>True when MPO is disabled (OverlayTestMode = 5).</summary>
     public bool IsMpoDisabled()
     {
@@ -541,7 +561,10 @@ public class GraphicsTweaksService
         {
             if (!autoPilotActive)
             {
-                if (mpoDisabled && !IsMpoDisabled())
+                // Never re-assert a disabled MPO on NVIDIA. Reinforcement is why the tearing came
+                // back after every driver update: Windows resets OverlayTestMode, Systema put it
+                // straight back, and the user had no way to make the fix stick.
+                if (mpoDisabled && !IsMpoDisabled() && !IsMpoAutoDisableUnsafe())
                     Log.Info("GraphicsTweaks", $"MPO reinforced on drift: {SetMpoDisabled(true).Message}");
                 if (tdrExtended && !IsTdrDelayExtended())
                     Log.Info("GraphicsTweaks", $"TdrDelay reinforced on drift: {SetTdrDelayExtended(true).Message}");

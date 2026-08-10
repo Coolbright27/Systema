@@ -583,7 +583,11 @@ public partial class App : Application
             // of Windows' own settings, so we don't want to adopt a plain default as "intent").
             if (!settingsService.GraphicsIntentSeeded)
             {
-                if (graphicsTweaks.IsMpoDisabled())      settingsService.GraphicsMpoDisabled     = true;
+                // NOT on NVIDIA: a disabled MPO there is almost certainly Systema's own doing
+                // (Auto-Pilot applied it unconditionally until 0.7.278), and adopting it as
+                // "user intent" is what made reinforcement keep restoring a broken VSync path.
+                if (graphicsTweaks.IsMpoDisabled() && !graphicsTweaks.IsMpoAutoDisableUnsafe())
+                    settingsService.GraphicsMpoDisabled = true;
                 if (graphicsTweaks.IsTdrDelayExtended()) settingsService.GraphicsTdrExtended     = true;
                 if (graphicsTweaks.IsGameDvrDisabled())  settingsService.GraphicsGameDvrDisabled = true;
                 settingsService.GraphicsIntentSeeded = true;

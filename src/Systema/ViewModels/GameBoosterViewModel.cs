@@ -1,16 +1,17 @@
 // ════════════════════════════════════════════════════════════════════════════
-// GameBoosterViewModel.cs  ·  Game auto-detection and per-game boost toggle
+// GameBoosterViewModel.cs  ·  Backs the Game Booster tab
 // ════════════════════════════════════════════════════════════════════════════
 //
-// Shows the list of known game processes from GameBoosterService, lets the user
-// enable or disable boost mode per game, and monitors for running game processes
-// to reflect live boost state. User preferences (auto-boost on/off) are persisted
-// via SettingsService. Implements IAutoRefreshable.
+// Three things: the master auto-boost switch, the manual boost switch, and the
+// list of options describing what a boost actually does. Every option persists the
+// moment it changes (see PersistBoostOptions) — the tab has no Save button.
+// Live boost state is mirrored from GameBoosterService events. Implements
+// IAutoRefreshable.
 //
 // RELATED FILES
-//   GameBoosterService.cs     — auto-detection logic, service kill list, boost apply
-//   SettingsService.cs        — persists auto-boost enabled preference
-//   Views/GameBoosterView.xaml — game list, boost toggle, active-game indicator
+//   GameBoosterService.cs      — game detection and everything a boost applies/restores
+//   SettingsService.cs         — persists every option below
+//   Views/GameBoosterView.xaml — the tab itself
 // ════════════════════════════════════════════════════════════════════════════
 
 using System.Collections.ObjectModel;
@@ -49,9 +50,6 @@ public partial class GameBoosterViewModel : ObservableObject, IAutoRefreshable, 
     [ObservableProperty] private bool   _gamesInstalled;
     [ObservableProperty] private int    _checkIntervalMinutes = 2;
 
-    // Kill list as structured items
-    [ObservableProperty] private ObservableCollection<KillListEntry>    _killListItems     = new();
-
     // ── Master switch ─────────────────────────────────────────────────────────
     [ObservableProperty] private bool _gameBoosterEnabled;
 
@@ -68,7 +66,6 @@ public partial class GameBoosterViewModel : ObservableObject, IAutoRefreshable, 
     [ObservableProperty] private bool _disableWifiOnEthernet;
     [ObservableProperty] private bool _disableBluetoothOnBoost;
     [ObservableProperty] private bool _preventSleepOnBoost;
-    [ObservableProperty] private bool _disableSearchIndexingOnBoost;
 
     // ── Battery Pause (vendor-specific charge control) ────────────────────────
     [ObservableProperty] private bool   _pauseChargingOnBoost;
@@ -77,15 +74,23 @@ public partial class GameBoosterViewModel : ObservableObject, IAutoRefreshable, 
     /// <summary>True when a battery is detected — hides the entire section on desktops.</summary>
     [ObservableProperty] private bool   _isBatteryPresent = true; // default true so section shows during detection
 
-    /// <summary>
-    /// True when both the High Performance power plan boost AND Battery Optimization are
-    /// active simultaneously. These two settings conflict: during a game session the High
-    /// Performance plan overrides whatever power limits Battery Optimization set, leading
-    /// to unpredictable CPU/battery behaviour on AC-connected laptops.
-    /// Used by GameBoosterView.xaml to show an inline warning beneath the toggle.
-    /// </summary>
-    public bool IsHighPerfConflictActive =>
-        HighPerfPowerPlan && _settings.BatteryOptimizationMode != "";
+    // ── Live session (the boosting card) ───────────────────────────────────────
+    // Derived from what the service already did — nothing here applies anything.
+    [ObservableProperty] private string _sessionElapsedText = "";
+
+    private void RefreshSessionInfo()
+    {
+        if (!_gameBooster.BoostActive || _gameBooster.BoostStartedAt is not { } started)
+        {
+            SessionElapsedText = "";
+            return;
+        }
+
+        var span = DateTime.UtcNow - started;
+        SessionElapsedText = span.TotalHours >= 1
+            ? $"{(int)span.TotalHours}h {span.Minutes}m"
+            : span.TotalMinutes >= 1 ? $"{(int)span.TotalMinutes} min" : "just started";
+    }
 
     /// <summary>Persists and applies the master switch immediately — no Save click needed.</summary>
     partial void OnGameBoosterEnabledChanged(bool value)
@@ -96,45 +101,80 @@ public partial class GameBoosterViewModel : ObservableObject, IAutoRefreshable, 
         StatusMessage = value ? "Game Booster enabled." : "Game Booster disabled — no games will be detected.";
     }
 
-    // Recompute the conflict flag whenever the High Perf toggle changes so the warning
-    // banner in the UI appears/disappears immediately without a round-trip to settings.
-    partial void OnHighPerfPowerPlanChanged(bool value)
+    partial void OnHighPerfPowerPlanChanged(bool value) => PersistBoostOptions();
+
+    // ── Auto-persist ──────────────────────────────────────────────────────────
+    // The tab has no Save button any more. Every switch writes through the moment it
+    // flips, like the rest of the app — the old two-Save-button layout was how a
+    // flipped toggle could be lost by navigating away.
+
+    /// <summary>Suppresses write-back while LoadSettings is populating the properties.</summary>
+    private bool _loadingSettings;
+
+    private void PersistBoostOptions()
     {
-        OnPropertyChanged(nameof(IsHighPerfConflictActive));
+        if (_loadingSettings) return;
+
+        _settings.GameBoosterFreeMemory            = FreeMemoryOnBoost;
+        _settings.GameBoosterSuppressNotifications = SuppressNotifications;
+        _settings.GameBoosterHighPerfPowerPlan     = HighPerfPowerPlan;
+        _settings.GameBoosterDisableGameBar        = DisableGameBar;
+        _settings.GameBoosterGpuProfile            = GpuProfileOnBoost;
+        _settings.GameBoosterPauseIndexing         = PauseIndexing;
+        _settings.GameBoosterDisableNagle          = DisableNagleOnBoost;
+        _settings.GameBoosterFlushDns              = FlushDnsOnBoost;
+        _settings.GameBoosterNicPowerSaving        = NicPowerSavingOnBoost;
+        _settings.GameBoosterDisableWifiOnEthernet = DisableWifiOnEthernet;
+        _settings.GameBoosterDisableBluetooth      = DisableBluetoothOnBoost;
+        _settings.GameBoosterPreventSleep          = PreventSleepOnBoost;
+        _settings.GameBoosterPauseCharging         = PauseChargingOnBoost;
     }
 
-    // ── Expander state ─────────────────────────────────────────────────────────
-    [ObservableProperty] private bool _showServiceSettings;
-    [RelayCommand] private void ToggleServiceSettings() => ShowServiceSettings = !ShowServiceSettings;
+    partial void OnFreeMemoryOnBoostChanged(bool value)            => PersistBoostOptions();
+    partial void OnSuppressNotificationsChanged(bool value)        => PersistBoostOptions();
+    partial void OnDisableGameBarChanged(bool value)               => PersistBoostOptions();
+    partial void OnGpuProfileOnBoostChanged(bool value)            => PersistBoostOptions();
+    partial void OnPauseIndexingChanged(bool value)                => PersistBoostOptions();
+    partial void OnDisableNagleOnBoostChanged(bool value)          => PersistBoostOptions();
+    partial void OnFlushDnsOnBoostChanged(bool value)              => PersistBoostOptions();
+    partial void OnNicPowerSavingOnBoostChanged(bool value)        => PersistBoostOptions();
+    partial void OnDisableWifiOnEthernetChanged(bool value)        => PersistBoostOptions();
+    partial void OnDisableBluetoothOnBoostChanged(bool value)      => PersistBoostOptions();
+    partial void OnPreventSleepOnBoostChanged(bool value)          => PersistBoostOptions();
+    partial void OnPauseChargingOnBoostChanged(bool value)         => PersistBoostOptions();
 
-    // ── Accordion sections (Design C) — collapsed by default ──
-    [ObservableProperty] private bool _showBoostOptions;
-    [ObservableProperty] private bool _showDetection;
-    [RelayCommand] private void ToggleBoostOptions() => ShowBoostOptions = !ShowBoostOptions;
-    [RelayCommand] private void ToggleDetection()    => ShowDetection    = !ShowDetection;
-
-    // ── Well-known service descriptions ──────────────────────────────────────
-    private static readonly Dictionary<string, string> KnownDescriptions =
-        new(StringComparer.OrdinalIgnoreCase)
+    partial void OnCheckIntervalMinutesChanged(int value)
     {
-        { "Spooler",           "Print Spooler — manages printer jobs" },
-        { "Fax",               "Fax service — send/receive faxes" },
-        { "TabletInputService","Touch keyboard & handwriting panel" },
-        { "WSearch",           "Windows Search indexing service" },
-        { "SysMain",           "SuperFetch — preloads apps into RAM" },
-        { "DiagTrack",         "Connected User Experiences & Telemetry" },
-        { "WerSvc",            "Windows Error Reporting service" },
-        { "MapsBroker",        "Downloaded Maps Manager" },
-        { "RemoteRegistry",    "Allows remote registry editing" },
-        { "XboxGipSvc",        "Xbox Accessory Management service" },
-        { "xbgm",              "Xbox Game Monitoring service" },
-        { "XblAuthManager",    "Xbox Live authentication manager" },
-        { "XblGameSave",       "Xbox Live game save service" },
-        { "XboxNetApiSvc",     "Xbox Live networking service" },
-        { "lfsvc",             "Geolocation service" },
-        { "WbioSrvc",          "Windows Biometric service" },
-        { "RetailDemo",        "Retail Demo offline content" },
-    };
+        if (_loadingSettings) return;
+        if (value < 1 || value > 60) return;   // ignore half-typed values from the text box
+        _settings.GameCheckIntervalMinutes = value;
+        _gameBooster.UpdateCheckInterval(value);
+    }
+
+    /// <summary>Backs the one collapsed "Advanced" section at the bottom of the tab.</summary>
+    [ObservableProperty] private bool _showDetection;
+    /// <summary>
+    /// "Stop boosting" on the live session card. Calls the service DIRECTLY instead of flipping
+    /// <see cref="ManualBoostEnabled"/>: an auto-started boost leaves that toggle false, so setting
+    /// it false again raises no PropertyChanged and the callback would never run — the same dead-UI
+    /// trap documented on OnManualBoostEnabledChanged. DisableManualBoostAsync also records which
+    /// game was opted out of, so the monitor doesn't simply re-boost it on the next tick.
+    /// </summary>
+    [RelayCommand]
+    private async Task StopBoostAsync()
+    {
+        StatusMessage = "Stopping boost…";
+        await _gameBooster.DisableManualBoostAsync();
+        // Keep the manual toggle visually in sync without re-entering the callback.
+        _suppressManualBoostSideEffect = true;
+        ManualBoostEnabled = false;
+        _suppressManualBoostSideEffect = false;
+        BoostActive = _gameBooster.BoostActive;
+        RefreshSessionInfo();
+        StatusMessage = "Boost stopped. Services and settings restored.";
+    }
+
+    [RelayCommand] private void ToggleDetection() => ShowDetection = !ShowDetection;
 
     public GameBoosterViewModel(GameBoosterService gameBooster, SettingsService settings)
     {
@@ -226,6 +266,7 @@ public partial class GameBoosterViewModel : ObservableObject, IAutoRefreshable, 
 #pragma warning restore MVVMTK0034
 
         BoostActive = _gameBooster.BoostActive;
+        RefreshSessionInfo();
         // Sync the toggle from the service WITHOUT triggering OnManualBoostEnabledChanged —
         // a background refresh tick is not a user click and must not call the service.
         _suppressManualBoostSideEffect = true;
@@ -335,87 +376,15 @@ public partial class GameBoosterViewModel : ObservableObject, IAutoRefreshable, 
         }
     }
 
-    [RelayCommand]
-    private void SaveSettings()
-    {
-        _settings.GameCheckIntervalMinutes = CheckIntervalMinutes;
-        _gameBooster.UpdateCheckInterval(CheckIntervalMinutes);
-
-        var lines = KillListItems.Select(i => i.ServiceName)
-                                  .Where(s => !string.IsNullOrWhiteSpace(s))
-                                  .ToList();
-
-        _settings.GameBoosterKillList = lines.Count > 0 ? lines : null;
-
-        // Boost options
-        _settings.GameBoosterFreeMemory            = FreeMemoryOnBoost;
-        _settings.GameBoosterSuppressNotifications = SuppressNotifications;
-        _settings.GameBoosterHighPerfPowerPlan     = HighPerfPowerPlan;
-        _settings.GameBoosterDisableGameBar        = DisableGameBar;
-        _settings.GameBoosterGpuProfile            = GpuProfileOnBoost;
-        _settings.GameBoosterPauseIndexing         = PauseIndexing;
-        _settings.GameBoosterDisableNagle          = DisableNagleOnBoost;
-        _settings.GameBoosterFlushDns              = FlushDnsOnBoost;
-        _settings.GameBoosterNicPowerSaving        = NicPowerSavingOnBoost;
-        _settings.GameBoosterDisableWifiOnEthernet = DisableWifiOnEthernet;
-        _settings.GameBoosterDisableBluetooth      = DisableBluetoothOnBoost;
-        _settings.GameBoosterPreventSleep          = PreventSleepOnBoost;
-        _settings.GameBoosterDisableSearchIndexing = DisableSearchIndexingOnBoost;
-        _settings.GameBoosterPauseCharging         = PauseChargingOnBoost;
-
-        StatusMessage = "Settings saved.";
-        _log.Info("GameBoosterViewModel", $"Settings saved — interval={CheckIntervalMinutes}min, killList={lines.Count} entries");
-    }
-
-    [RelayCommand]
-    private void ResetKillList()
-    {
-        _settings.GameBoosterKillList = null;
-        LoadSettings();
-        StatusMessage = "Kill list reset to defaults.";
-    }
-
-    [RelayCommand]
-    private void OpenServicePicker()
-    {
-        var dialog = new ServicePickerDialog
-        {
-            Owner            = Application.Current?.MainWindow,
-            ExistingServices = new HashSet<string>(
-                KillListItems.Select(i => i.ServiceName), StringComparer.OrdinalIgnoreCase)
-        };
-
-        if (dialog.ShowDialog() != true) return;
-
-        int added = 0;
-        foreach (var name in dialog.SelectedServices)
-        {
-            if (KillListItems.Any(i => i.ServiceName.Equals(name, StringComparison.OrdinalIgnoreCase)))
-                continue;
-            KillListItems.Add(new KillListEntry
-            {
-                ServiceName = name,
-                Description = KnownDescriptions.TryGetValue(name, out var desc) ? desc : "Windows service"
-            });
-            added++;
-        }
-
-        StatusMessage = added > 0
-            ? $"Added {added} service(s) to kill list. Click Save Settings to persist."
-            : "No new services added.";
-    }
-
-    [RelayCommand]
-    private void RemoveKillService(KillListEntry entry)
-    {
-        KillListItems.Remove(entry);
-        StatusMessage = $"Removed {entry.ServiceName} from kill list. Click Save Settings to persist.";
-    }
-
     // ── Private helpers ───────────────────────────────────────────────────────
 
     private void LoadSettings()
     {
+        // Guard the auto-persist write-back: without this, setting the first property
+        // would flush the remaining (still-default) properties over the saved values.
+        _loadingSettings = true;
+        try
+        {
         // Load all values via the public property setters first.
         CheckIntervalMinutes    = _settings.GameCheckIntervalMinutes;
         GamesInstalled          = _gameBooster.GamesInstalled;
@@ -433,7 +402,6 @@ public partial class GameBoosterViewModel : ObservableObject, IAutoRefreshable, 
         DisableWifiOnEthernet   = _settings.GameBoosterDisableWifiOnEthernet;
         DisableBluetoothOnBoost = _settings.GameBoosterDisableBluetooth;
         PreventSleepOnBoost     = _settings.GameBoosterPreventSleep;
-        DisableSearchIndexingOnBoost = _settings.GameBoosterDisableSearchIndexing;
         PauseChargingOnBoost    = _settings.GameBoosterPauseCharging;
         GameBoosterEnabled      = _settings.GameBoosterEnabled;
 
@@ -459,21 +427,10 @@ public partial class GameBoosterViewModel : ObservableObject, IAutoRefreshable, 
         OnPropertyChanged(nameof(DisableWifiOnEthernet));
         OnPropertyChanged(nameof(DisableBluetoothOnBoost));
         OnPropertyChanged(nameof(PreventSleepOnBoost));
-        OnPropertyChanged(nameof(DisableSearchIndexingOnBoost));
         OnPropertyChanged(nameof(PauseChargingOnBoost));
         OnPropertyChanged(nameof(GameBoosterEnabled));
-        OnPropertyChanged(nameof(IsHighPerfConflictActive));
-
-        var killList = _gameBooster.GetKillList();
-        KillListItems.Clear();
-        foreach (var name in killList)
-        {
-            KillListItems.Add(new KillListEntry
-            {
-                ServiceName = name,
-                Description = KnownDescriptions.TryGetValue(name, out var desc) ? desc : "Windows service"
-            });
         }
+        finally { _loadingSettings = false; }
     }
 
     private void OnAutoPilotModeChanged(object? sender, EventArgs e) =>

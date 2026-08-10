@@ -32,7 +32,6 @@ public class TaskSleepSettings
     /// When true, child processes of a napped app are also napped automatically.
     /// Off by default.
     /// </summary>
-    public bool NapChildrenEnabled { get; set; } = false;
 
     // ── CPU Thresholds ────────────────────────────────────────────────────────
     // NOTE: high-CPU "off-screen" napping was removed — nap decisions are visibility + time based.

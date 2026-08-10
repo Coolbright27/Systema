@@ -40,16 +40,29 @@ public sealed class GameBoosterService : IDisposable
     private readonly BatteryPauseService   _batteryPause;
 
     private DispatcherTimer? _gameCheckTimer;
+    // Fast foreground poll (see FastForegroundGameCheck). The slow timer above stays as the safety
+    // net for anything the foreground path can't see — a borderless game that never takes focus,
+    // an anti-cheat launching before its game, or a title that exits without a focus change.
+    private DispatcherTimer? _fastGameTimer;
+    private string? _lastForegroundName;
     private TrayService?     _tray;
 
     // ── State ──────────────────────────────────────────────────────────────────
     private bool _boostActive;
     private bool _manualBoostActive;
+    // Game the user explicitly switched boost OFF for. Auto-boost stays suppressed for the rest of
+    // THAT game's session, then re-arms on its own: the monitor clears this as soon as the detected
+    // game changes or the game exits, so the next session boosts normally without the user having to
+    // remember anything. Turning boost back on manually also clears it.
+    private string? _autoBoostSuppressedFor;
     private DateTime _manualBoostStartedAt;
     private DispatcherTimer? _manualBoostTimeoutTimer;
     private readonly List<string> _killedServices  = new();
     private readonly object _lock = new();
     private string? _boostedProcessName;
+    /// <summary>True when the active boost is for a real, named game process whose priority we
+    /// raised — so DeactivateBoost knows to restore it without re-parsing the display name.</summary>
+    private bool _boostedRealGame;
     // pid → the process's CPU priority class BEFORE we boosted it, so RestoreGameProcess
     // hands back the real original instead of blindly forcing Normal. A game launched at
     // (say) High by its launcher, or already adjusted by another tool, would otherwise be
@@ -292,6 +305,14 @@ public sealed class GameBoosterService : IDisposable
     public bool GamesInstalled        { get; private set; }
     public string? ActiveGameName     { get; private set; }
 
+    // ── Session reporting ──────────────────────────────────────────────────────
+    // Purely observational: these describe what ActivateBoost already did, so the tab can show a
+    // real session (game, elapsed, what got applied) instead of a status string. Nothing here
+    // changes behaviour.
+    public DateTime? BoostStartedAt { get; private set; }
+    /// <summary>Current battery %, or null on a desktop / when it can't be read.</summary>
+    public int? BatteryPercent => _batteryPause.GetBatteryPercent();
+
     // ── Events ─────────────────────────────────────────────────────────────────
     public event Action<string>? BoostActivated;   // passes game name
     public event Action?         BoostDeactivated;
@@ -299,14 +320,14 @@ public sealed class GameBoosterService : IDisposable
     public event Action?         ManualBoostTimedOut;
 
     // ── Well-known game executables ────────────────────────────────────────────
-    private static readonly string[] KnownGameProcesses =
+    // A HashSet, not an array: this is probed once per running process on every detection
+    // pass, so an O(1) lookup beats walking ~40 strings each time.
+    private static readonly HashSet<string> KnownGameProcesses = new(StringComparer.OrdinalIgnoreCase)
     {
         // Roblox
         "RobloxPlayerBeta", "RobloxPlayer",
-        // Fortnite
-        "FortniteClient-Win64-Shipping",
-        // Minecraft
-        "javaw",             // Minecraft Java Edition (also modded packs)
+        // Minecraft (the Java edition is handled by TitleQualifiedGames below, because its
+        // process name on its own is not enough to call it a game)
         "Minecraft.Windows", // Minecraft Bedrock
         // CS2 / CS:GO
         "csgo", "cs2",
@@ -315,7 +336,7 @@ public sealed class GameBoosterService : IDisposable
         // Tom Clancy's
         "RainbowSix",        // Rainbow Six Siege
         // Valorant / League
-        "valorant", "VALORANT-Win64-Shipping",
+        "valorant",
         "LeagueOfLegends",
         // Escape From Tarkov
         "EscapeFromTarkov",
@@ -342,10 +363,33 @@ public sealed class GameBoosterService : IDisposable
         "AoE2DE",            // Age of Empires 2 DE
         // Racing
         "ForzaHorizon5",
-        "AC2-Win64-Shipping",// Assetto Corsa Competizione
         // Other popular titles
         "Warframe.x64", "Warframe",
         "dota2",
+    };
+
+    /// <summary>
+    /// Suffixes that identify a packaged game build rather than one specific title.
+    /// Unreal Engine ships every game as "&lt;Name&gt;-Win64-Shipping", so one entry here covers
+    /// Fortnite, Valorant, Assetto Corsa Competizione and several hundred titles that would
+    /// otherwise each need a line above (and would each be missed until someone added one).
+    /// </summary>
+    private static readonly string[] KnownGameSuffixes =
+    {
+        "-Win64-Shipping",
+        "-Win32-Shipping",
+        "-WinGDK-Shipping",  // Game Pass / Microsoft Store packaging
+    };
+
+    /// <summary>
+    /// Processes that are only a game when the window title says so.
+    /// "javaw" is Minecraft Java — and also IntelliJ, Ghidra, JDownloader and every other Java
+    /// desktop app. Boosting (switching the power plan, killing Wi-Fi) because an IDE is open is
+    /// a worse failure than being slow to notice Minecraft, so the title has to confirm it.
+    /// </summary>
+    private static readonly (string Process, string TitleContains)[] TitleQualifiedGames =
+    {
+        ("javaw", "Minecraft"),
     };
 
     // ── Well-known game install paths / registry keys ──────────────────────────
@@ -398,117 +442,6 @@ public sealed class GameBoosterService : IDisposable
         "ESEAClient",    // ESEA             (CS2 competitive platform)
     };
 
-    // ── Default services to kill during boost ─────────────────────────────────
-    private static readonly string[] DefaultKillList =
-    {
-        // ── Background downloads / updates ────────────────────────────────────
-        "BITS",              // Background Intelligent Transfer — stops all background downloads
-        "DoSvc",             // Delivery Optimization — stops Windows P2P update bandwidth
-        "wuauserv",          // Windows Update — prevents mid-game update scans & downloads
-        "WaaSMedicSvc",      // Windows Update Medic — update health watchdog
-        "UsoSvc",            // Update Orchestrator — schedules and stages updates
-        "InstallService",    // Microsoft Store Install Service — app install background work
-
-        // ── Search & indexing ─────────────────────────────────────────────────
-        "WSearch",           // Windows Search — indexer I/O spikes
-        "MicrosoftSearchInBing", // Bing search in Start menu
-
-        // ── Telemetry & diagnostics ───────────────────────────────────────────
-        "DiagTrack",         // Connected User Experiences & Telemetry
-        "WerSvc",            // Windows Error Reporting — queues crash reports
-        "wlidsvc",           // Microsoft Account Sign-in Assistant — phone-home telemetry
-        "WdiServiceHost",    // Diagnostic Service Host — background diagnostics
-        "PcaSvc",            // Program Compatibility Assistant — CPU on every app launch
-        "DPS",               // Diagnostic Policy Service — monitors system health
-
-        // ── Print & scan ─────────────────────────────────────────────────────
-        "Spooler",           // Print Spooler — large service, not needed while gaming
-        "Fax",               // Fax service
-        "PrintNotify",       // Printer Extensions and Notifications
-        "stisvc",            // Windows Image Acquisition (WIA) — scanner service
-
-        // ── Memory manager ────────────────────────────────────────────────────
-        "SysMain",           // Superfetch — prefetches apps into RAM, competes with game
-
-        // ── Network noise ─────────────────────────────────────────────────────
-        "ssdpsrv",           // SSDP Discovery — constant LAN UPnP scanning
-        "upnphost",          // UPnP Device Host
-        "fdPHost",           // Function Discovery Provider Host — network device scanning
-        "FDResPub",          // Function Discovery Resource Publication — broadcasts PC on LAN
-        "lmhosts",           // TCP/IP NetBIOS Helper — legacy NBT lookups
-        "p2pimsvc",          // Peer Networking Identity Manager — P2P overhead
-        "PNRPsvc",           // Peer Name Resolution Protocol — P2P name resolution
-        "PNRPAutoReg",       // PNRP Machine Name Publication — P2P broadcasting
-        "TrkWks",            // Distributed Link Tracking Client — LAN link tracking
-
-        // ── Sync & cloud ──────────────────────────────────────────────────────
-        "CDPSvc",            // Connected Devices Platform — syncs phone, clipboard, timeline
-        "MapsBroker",        // Downloaded Maps Manager — background map tile downloads
-
-        // ── Notifications ─────────────────────────────────────────────────────
-        "WpnService",        // Windows Push Notification System Service — queues toasts
-        "PushToInstall",     // Windows PushToInstall Service
-
-        // ── Hardware / peripheral services not needed while gaming ────────────
-        "TabletInputService",// Touch keyboard / handwriting panel
-        "WbioSrvc",          // Windows Biometric Service — fingerprint / face recognition
-        "SCardSvr",          // Smart Card — only for corporate CAC/PIV cards
-        "ScDeviceEnum",      // Smart Card Device Enumeration
-        "icssvc",            // Windows Mobile Hotspot Service — mobile hotspot management
-        "PhoneSvc",          // Phone Service — CellCore radio management
-        "RmSvc",             // Radio Management Service — manages radios (restored after boost)
-
-        // ── Location & sensors ────────────────────────────────────────────────
-        "lfsvc",             // Geolocation Service
-        "SensorService",     // Sensor Service — orientation, proximity, ambient light
-        "SensrSvc",          // Sensor Monitoring Service
-        "SensorDataService", // Sensor Data Service
-
-        // ── Misc background services ──────────────────────────────────────────
-        "RetailDemo",        // Retail Demo Experience Service
-        // NOTE: Xbox services (XblGameSave, XboxNetApiSvc, XblAuthManager, xbgm) were
-        // removed from the kill list — xbgm hooks the running game's presentation layer
-        // and the Xbox Game Bar stack shares D3D/DWM hooks that, when yanked mid-session,
-        // can destabilise the flip queue and break VSync on NVIDIA. Keep them running.
-        "WMPNetworkSvc",     // Windows Media Player Network Sharing
-        "NcaSvc",            // Network Connectivity Assistant
-        "StorSvc",           // Storage Service — background storage maintenance
-        "DusmSvc",           // Data Usage Subscription Manager
-        "NgcSvc",            // Microsoft Passport Container (Windows Hello)
-        "NgcCtnrSvc",        // Microsoft Passport in the Container
-        "RemoteRegistry",    // Remote Registry — security risk, not needed gaming
-        "RpcLocator",        // Remote Procedure Call Locator — legacy, unused on modern Windows
-        "TapiSrv",           // Telephony — legacy TAPI, old modem applications
-        "ShellHWDetection",  // Shell Hardware Detection — autoplay for USB/optical drives
-        "WMPNetworkSvc",     // Windows Media Player Network Sharing (duplicate guard OK)
-
-        // ── Remote access (not needed while gaming locally) ───────────────────
-        "TermService",       // Remote Desktop Services — RDP host server
-        "SessionEnv",        // Remote Desktop Configuration — RDP session setup
-        "UmRdpService",      // Remote Desktop Device Redirector — RDP device mapping
-        "WinRM",             // Windows Remote Management — remote PS / WMI access
-
-        // ── Backup & diagnostics ──────────────────────────────────────────────
-        "SDRSVC",            // Windows Backup — backup scheduling and management
-        "wbengine",          // Block Level Backup Engine — active backup I/O
-        "WdiSystemHost",     // Diagnostic System Host — diagnostic scenario runner
-        "WdiServiceHost",    // Diagnostic Service Host — WDI scenario host (duplicate guard OK)
-
-        // ── NFC / payments ─────────────────────────────────────────────────────
-        "WalletService",         // Wallet Service — NFC passes and contactless payments
-        "SEMgrSvc",              // Payments and NFC/SE Manager — secure element
-        // NOTE: MixedRealityOpenXRSvc and spectrum were removed from the kill list —
-        // both hold active D3D/GPU resources (OpenXR runtime + Perception spatial mapping)
-        // and tearing down the OpenXR runtime mid-session is known to disturb the
-        // display flip queue on NVIDIA. Don't kill GPU-consuming services.
-
-        // ── Misc low-value background workers ────────────────────────────────
-        "wisvc",             // Windows Insider Service — Insider preview notifications
-        "AppMgmt",           // Application Management — MSI Group Policy installs
-        "CscService",        // Offline Files — corporate file-sync cache manager
-        "TokenBroker",       // Web Account Manager — background web-auth token refresh
-    };
-
     // ── Constructor ────────────────────────────────────────────────────────────
 
     public GameBoosterService(ServiceControlService serviceControl, SettingsService settings,
@@ -555,6 +488,15 @@ public sealed class GameBoosterService : IDisposable
         _gameCheckTimer.Tick += (_, _) => _ = RunOnLargeStackAsync(CheckRunningGames);
         _gameCheckTimer.Start();
 
+        // Fast path: boost now starts/stops within seconds of a game taking or losing the screen,
+        // instead of waiting out the slow timer.
+        _fastGameTimer = new DispatcherTimer(DispatcherPriority.Background)
+        {
+            Interval = TimeSpan.FromSeconds(4)
+        };
+        _fastGameTimer.Tick += (_, _) => FastForegroundGameCheck();
+        _fastGameTimer.Start();
+
         _log.Info("GameBoosterService", $"Monitoring started (interval: {_settings.GameCheckIntervalMinutes} min)");
     }
 
@@ -580,6 +522,9 @@ public sealed class GameBoosterService : IDisposable
         if (!_settings.GameBoosterEnabled) return; // master switch
         _manualBoostActive = true;
         _manualBoostStartedAt = DateTime.UtcNow;
+        // Turning it back on cancels an opt-out from earlier in this game's session, so auto-boost
+        // behaves normally again straight away.
+        lock (_lock) _autoBoostSuppressedFor = null;
 
         if (!_boostActive)
         {
@@ -587,7 +532,10 @@ public sealed class GameBoosterService : IDisposable
             // processes — must NOT run on the UI thread or it will freeze the window.
             Action? postLockAction = await Task.Run(() =>
             {
-                lock (_lock) return ActivateBoost("Manual Boost");
+                // IsKnownGame: false — "Manual Boost" is a label, not a process, so BoostGameProcess
+                // must not go hunting for one (it used to, and enumerated every process to find
+                // nothing).
+                lock (_lock) return ActivateBoost(new GameMatch("Manual Boost", IsKnownGame: false));
             }).ConfigureAwait(true); // resume on UI thread for the DispatcherTimer below
             postLockAction?.Invoke();
         }
@@ -629,6 +577,7 @@ public sealed class GameBoosterService : IDisposable
 
         // Stop the check timer so it cannot try to re-activate while we're restoring
         _gameCheckTimer?.Stop();
+        _fastGameTimer?.Stop();
         _manualBoostActive = false;
         _manualBoostTimeoutTimer?.Stop();
         _manualBoostTimeoutTimer = null;
@@ -660,8 +609,17 @@ public sealed class GameBoosterService : IDisposable
         {
             Action? postLockAction = await Task.Run(() =>
             {
-                if (FindRunningGame() != null) return null; // real game still running — don't deactivate
-                lock (_lock) return DeactivateBoost();
+                // Turning boost off is an explicit instruction, so honour it even while a game is
+                // running. This used to bail out (`if (FindRunningGame() != null) return null;`),
+                // which meant the tray toggle silently did nothing during an auto-started session —
+                // boost stayed on and the menu flipped back. Remember which game the user opted out
+                // of so the monitor doesn't just switch it straight back on a tick later.
+                string? running = FindRunningGame()?.Name;
+                lock (_lock)
+                {
+                    _autoBoostSuppressedFor = running;   // null when no game — nothing to suppress
+                    return DeactivateBoost();
+                }
             }).ConfigureAwait(true);
             postLockAction?.Invoke();
         }
@@ -695,10 +653,6 @@ public sealed class GameBoosterService : IDisposable
         _log.Info("GameBoosterService", $"Game Booster master switch → {(enabled ? "ON" : "OFF")}");
     }
 
-    /// <summary>Returns the effective kill list (user overrides or default).</summary>
-    public List<string> GetKillList() => _settings.GameBoosterKillList ?? new List<string>(DefaultKillList);
-    public void SetKillList(List<string> list) => _settings.GameBoosterKillList = list;
-
     /// <summary>
     /// Public entry-point for Settings → Reset All Settings to force the VSync-critical
     /// registry repair (SystemResponsiveness normalization) without waiting for the next
@@ -707,6 +661,16 @@ public sealed class GameBoosterService : IDisposable
     public void RepairRegistryNow() => RepairVSyncCriticalRegistryValues();
 
     // ── Game Detection ─────────────────────────────────────────────────────────
+
+    /// <summary>Display name used when anti-cheat proves a game is running but can't name it.</summary>
+    private const string UnknownGameName = "Unknown Game (Anti-Cheat detected)";
+
+    /// <summary>
+    /// What detection found. <paramref name="IsKnownGame"/> is false for the anti-cheat fallback
+    /// and for manual boost, where <paramref name="Name"/> is a label rather than a process — so
+    /// nothing downstream has to infer that by reading the string.
+    /// </summary>
+    private readonly record struct GameMatch(string Name, bool IsKnownGame);
 
     public bool ScanForInstalledGames()
     {
@@ -750,22 +714,21 @@ public sealed class GameBoosterService : IDisposable
 
     private static bool CheckAntiCheatPresent()
     {
+        var procs = Array.Empty<Process>();
         try
         {
-            var procs = Process.GetProcesses();
+            procs = Process.GetProcesses();
             foreach (var proc in procs)
             {
-                try
-                {
-                    foreach (var ac in AntiCheatProcesses)
-                        if (proc.ProcessName.Contains(ac, StringComparison.OrdinalIgnoreCase))
-                            return true;
-                }
+                try { if (IsAntiCheatProcess(proc.ProcessName)) return true; }
                 catch { }
-                finally { proc.Dispose(); }
             }
         }
         catch { }
+        finally
+        {
+            foreach (var proc in procs) { try { proc.Dispose(); } catch { } }
+        }
         return false;
     }
 
@@ -780,19 +743,33 @@ public sealed class GameBoosterService : IDisposable
             // FindRunningGame runs outside the lock (Process.GetProcesses is expensive),
             // but the shouldActivate/shouldDeactivate decision is made inside the lock
             // to avoid racing with ActivateBoost/DeactivateBoost from concurrent callers.
-            string? detectedGame = FindRunningGame();
+            GameMatch? detected  = FindRunningGame();
+            string? detectedGame = detected?.Name;
 
             // Events and tray calls are captured as actions and fired OUTSIDE the lock
             // to prevent deadlocks if UI event handlers call back into this service.
             Action? postLockAction = null;
             lock (_lock)
             {
-                bool shouldActivate = detectedGame != null && !_boostActive;
+                // Re-arm the moment the session the user opted out of is over: a different game,
+                // or no game at all, means the suppression no longer applies.
+                if (_autoBoostSuppressedFor != null &&
+                    !string.Equals(detectedGame, _autoBoostSuppressedFor, StringComparison.OrdinalIgnoreCase))
+                {
+                    _log.Info("GameBoosterService",
+                        $"Auto-boost re-armed — '{_autoBoostSuppressedFor}' session ended");
+                    _autoBoostSuppressedFor = null;
+                }
+
+                bool suppressed = detectedGame != null &&
+                    string.Equals(detectedGame, _autoBoostSuppressedFor, StringComparison.OrdinalIgnoreCase);
+
+                bool shouldActivate = detectedGame != null && !_boostActive && !suppressed;
                 // Never auto-deactivate while manual boost is on — user controls it explicitly
                 bool shouldDeactivate = detectedGame == null && _boostActive && !_manualBoostActive;
 
                 if (shouldActivate)
-                    postLockAction = ActivateBoost(detectedGame!);
+                    postLockAction = ActivateBoost(detected!.Value);
                 else if (shouldDeactivate)
                     postLockAction = DeactivateBoost();
             }
@@ -804,63 +781,160 @@ public sealed class GameBoosterService : IDisposable
         }
     }
 
-    private static string? FindRunningGame()
+    /// <summary>
+    /// True when a process name alone identifies a game. Shared by the fast foreground check and
+    /// the full pass so the two can never disagree about what counts as a game.
+    /// </summary>
+    private static bool IsKnownGameProcess(string processName)
+    {
+        if (string.IsNullOrEmpty(processName)) return false;
+        if (KnownGameProcesses.Contains(processName)) return true;
+
+        foreach (var suffix in KnownGameSuffixes)
+            if (processName.EndsWith(suffix, StringComparison.OrdinalIgnoreCase)) return true;
+
+        return false;
+    }
+
+    /// <summary>True when the name is one that needs its window title checked (see TitleQualifiedGames).</summary>
+    private static bool IsTitleQualifiedCandidate(string processName)
+    {
+        foreach (var (name, _) in TitleQualifiedGames)
+            if (processName.Equals(name, StringComparison.OrdinalIgnoreCase)) return true;
+        return false;
+    }
+
+    /// <summary>Confirms a title-qualified candidate by reading its main window title.</summary>
+    private static bool IsTitleQualifiedGame(Process proc)
+    {
+        foreach (var (name, titleFragment) in TitleQualifiedGames)
+        {
+            if (!proc.ProcessName.Equals(name, StringComparison.OrdinalIgnoreCase)) continue;
+            try { return proc.MainWindowTitle.Contains(titleFragment, StringComparison.OrdinalIgnoreCase); }
+            catch { return false; }
+        }
+        return false;
+    }
+
+    /// <summary>True when the process name looks like a known anti-cheat (substring, so
+    /// "EasyAntiCheat_EOS" matches "EasyAntiCheat").</summary>
+    private static bool IsAntiCheatProcess(string processName)
+    {
+        foreach (var ac in AntiCheatProcesses)
+            if (processName.Contains(ac, StringComparison.OrdinalIgnoreCase)) return true;
+        return false;
+    }
+
+    /// <summary>
+    /// Cheap foreground check, run every few seconds. The full CheckRunningGames pass calls
+    /// Process.GetProcesses() and cannot run at this rate, so it stayed on a 2-minute timer —
+    /// which meant boost could arrive two minutes into a match and linger two minutes after it.
+    ///
+    /// This costs one window handle, one PID and one process name, and only does anything when the
+    /// FOREGROUND APP CHANGES, which is the natural trigger for both "a game came up" and "the game
+    /// went away". When it sees a transition worth acting on it hands off to the real pass, so all
+    /// activation/deactivation logic (and its locking) stays in exactly one place.
+    /// </summary>
+    private void FastForegroundGameCheck()
+    {
+        if (!_settings.GameBoosterEnabled) return;
+        try
+        {
+            var (fgPid, fgName) = GetForegroundProcess();
+            if (fgPid == 0) return;
+
+            if (string.Equals(fgName, _lastForegroundName, StringComparison.OrdinalIgnoreCase))
+                return;                                          // nothing changed — stay cheap
+            _lastForegroundName = fgName;
+
+            // Title-qualified names (javaw) count as "maybe" here; the full pass reads the window
+            // title to decide. Being generous costs one extra full pass, being strict would mean
+            // Minecraft waits out the slow timer.
+            bool fgIsGame = IsKnownGameProcess(fgName) || IsTitleQualifiedCandidate(fgName);
+
+            // A game just came to the front and we're not boosting → confirm on the full pass.
+            // Not boosting anything here directly: the suppression list, anti-cheat detection and
+            // on-screen checks all live in CheckRunningGames and must not be duplicated.
+            if (!_boostActive && fgIsGame)
+            {
+                _ = RunOnLargeStackAsync(CheckRunningGames);
+                return;
+            }
+
+            // We're boosting and the user moved to something that isn't the game → let the full
+            // pass decide whether the game actually exited (alt-tabbing must NOT drop the boost).
+            if (_boostActive && !fgIsGame)
+                _ = RunOnLargeStackAsync(CheckRunningGames);
+        }
+        catch { /* detection must never throw into the timer */ }
+    }
+
+    /// <summary>
+    /// Answers one question: is a game on screen right now, and what is it called?
+    ///
+    /// The ordering is deliberate:
+    ///   1. the FOREGROUND process, when it is a game — what the user is actually playing
+    ///   2. any other on-screen game — a game on a second monitor, or a launcher in front of it
+    ///   3. anti-cheat running plus a real app in front — a game we can't name but can still boost
+    ///
+    /// This used to be a single loop that returned whichever process Windows happened to enumerate
+    /// first, with the anti-cheat check nested INSIDE that loop. With Vanguard, EAC or BattlEye
+    /// installed, the anti-cheat service usually came first, so a perfectly recognisable game got
+    /// reported as "Unknown Game" — and because ActivateBoost decided whether to raise the game's
+    /// priority by substring-matching that display name, the main thing the boost does was silently
+    /// skipped. <see cref="GameMatch"/> now carries that fact explicitly instead of encoding it in
+    /// prose. The anti-cheat scan is also no longer re-run (with a foreground lookup) per process.
+    /// </summary>
+    private static GameMatch? FindRunningGame()
     {
         try
         {
             // Only boost a game that's actually ON SCREEN — a minimized game shouldn't trigger
             // (or hold) boost. Uses the same EnumWindows + IsIconic / IsWindowVisible detection
             // Task Sleep already ships, so no new API surface is introduced.
-            var onScreenPids = GetOnScreenPids();
+            var onScreenPids  = GetOnScreenPids();
+            var (fgPid, fgName) = GetForegroundProcess();
+
+            GameMatch? onScreenGame = null;
+            bool antiCheatRunning   = false;
 
             var procs = Process.GetProcesses();
-            foreach (var proc in procs)
+            try
             {
-                try
+                foreach (var proc in procs)
                 {
-                    bool onScreen = onScreenPids.Contains(proc.Id);
-                    if (onScreen)
+                    try
                     {
-                        foreach (var game in KnownGameProcesses)
-                        {
-                            if (game.StartsWith("*") && game.EndsWith("*"))
-                            {
-                                // *fragment* → contains match
-                                var frag = game[1..^1];
-                                if (proc.ProcessName.Contains(frag, StringComparison.OrdinalIgnoreCase))
-                                    return proc.ProcessName;
-                            }
-                            else if (game.StartsWith("*"))
-                            {
-                                // *suffix → ends-with match
-                                var suffix = game[1..];
-                                if (proc.ProcessName.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
-                                    return proc.ProcessName;
-                            }
-                            else if (game.EndsWith("*"))
-                            {
-                                // prefix* → starts-with match
-                                var prefix = game[..^1];
-                                if (proc.ProcessName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
-                                    return proc.ProcessName;
-                            }
-                            else if (proc.ProcessName.Equals(game, StringComparison.OrdinalIgnoreCase))
-                            {
-                                return game;
-                            }
-                        }
-                    }
+                        // Anti-cheat can be a background service with no window, so this is checked
+                        // for every process — but only as a fallback, and only once each.
+                        if (!antiCheatRunning && IsAntiCheatProcess(proc.ProcessName))
+                            antiCheatRunning = true;
 
-                    // Anti-cheat as a proxy for an (unknown) game — but only when a real app is
-                    // on screen (foreground isn't the desktop), so it won't boost while the user
-                    // sits on the desktop with everything minimized.
-                    foreach (var ac in AntiCheatProcesses)
-                        if (proc.ProcessName.Contains(ac, StringComparison.OrdinalIgnoreCase) && IsRealAppForeground())
-                            return "Unknown Game (Anti-Cheat detected)";
+                        if (!onScreenPids.Contains(proc.Id)) continue;
+                        if (!IsKnownGameProcess(proc.ProcessName) && !IsTitleQualifiedGame(proc)) continue;
+
+                        // The game the user is looking at wins outright — stop here.
+                        if (proc.Id == fgPid) return new GameMatch(proc.ProcessName, IsKnownGame: true);
+
+                        // Otherwise remember it and keep looking for a foreground match.
+                        onScreenGame ??= new GameMatch(proc.ProcessName, IsKnownGame: true);
+                    }
+                    catch { }
                 }
-                catch { }
-                finally { proc.Dispose(); }
             }
+            finally
+            {
+                foreach (var proc in procs) { try { proc.Dispose(); } catch { } }
+            }
+
+            if (onScreenGame != null) return onScreenGame;
+
+            // Nothing recognisable on screen. Anti-cheat running with a real app in front is still
+            // a game session worth boosting, we just can't name it. Gated on the foreground not
+            // being the shell so it won't boost while the user sits on the desktop.
+            if (antiCheatRunning && fgPid != 0 &&
+                !fgName.Equals("explorer", StringComparison.OrdinalIgnoreCase))
+                return new GameMatch(UnknownGameName, IsKnownGame: false);
         }
         catch { }
         return null;
@@ -902,20 +976,24 @@ public sealed class GameBoosterService : IDisposable
         return pids;
     }
 
-    /// <summary>True when a real (non-shell) app owns the foreground window. Gates the anti-cheat
-    /// proxy so it won't boost while the desktop is showing with everything minimized.</summary>
-    private static bool IsRealAppForeground()
+    /// <summary>
+    /// The PID and process name of whatever owns the foreground window, or (0, "") if that can't
+    /// be determined. One helper for what used to be three near-identical copies of this same
+    /// GetForegroundWindow → GetWindowThreadProcessId → GetProcessById dance.
+    /// The old version also leaked a Process handle per call by never disposing it.
+    /// </summary>
+    private static (int Pid, string Name) GetForegroundProcess()
     {
         try
         {
             IntPtr hwnd = GetForegroundWindow();
-            if (hwnd == IntPtr.Zero) return false;
+            if (hwnd == IntPtr.Zero) return (0, "");
             GetWindowThreadProcessId(hwnd, out uint pid);
-            if (pid == 0) return false;
-            try { return !Process.GetProcessById((int)pid).ProcessName.Equals("explorer", StringComparison.OrdinalIgnoreCase); }
-            catch { return true; }
+            if (pid == 0) return (0, "");
+            using var proc = Process.GetProcessById((int)pid);
+            return ((int)pid, proc.ProcessName);
         }
-        catch { return false; }
+        catch { return (0, ""); }
     }
 
     // ── Boost Activation ──────────────────────────────────────────────────────
@@ -925,9 +1003,17 @@ public sealed class GameBoosterService : IDisposable
     /// Returns an <see cref="Action"/> containing UI event and tray notifications that must be
     /// invoked AFTER releasing the lock to prevent deadlocks with UI event handlers.
     /// </summary>
-    private Action? ActivateBoost(string gameName)
+    private Action? ActivateBoost(GameMatch match)
     {
+        // Applying a boost is the busiest second of Systema's life and it lands while a game is
+        // launching. Ghost Mode has us at Idle priority, which stretched this to nine seconds and
+        // starved the UI heartbeat into a false crash report. Take Normal priority for the duration.
+        using var priority = _tray?.BorrowNormalPriority();
+
+        string gameName = match.Name;
+        _boostedRealGame = match.IsKnownGame;
         _boostActive   = true;
+        BoostStartedAt = DateTime.UtcNow;
         ActiveGameName = gameName;
         _killedServices.Clear();
 
@@ -940,10 +1026,9 @@ public sealed class GameBoosterService : IDisposable
         // services paused by an OLDER Systema build still get restored on upgrade.
         CrashGuard.Mark($"Game Boost active for {gameName} (background services are no longer paused)");
 
-        // Boost game process priority (skip anti-cheat/unknown placeholders)
-        bool isRealGame = !gameName.Contains("Anti-Cheat", StringComparison.OrdinalIgnoreCase)
-                       && !gameName.Contains("Unknown Game", StringComparison.OrdinalIgnoreCase);
-        if (isRealGame)
+        // Boost game process priority. Skipped for the anti-cheat fallback and for manual boost,
+        // where the name is a label and there is no process by that name to find.
+        if (match.IsKnownGame)
             BoostGameProcess(gameName);
 
         // WAL (write-ahead log) pattern: read all pre-boost originals into _saved* fields
@@ -973,7 +1058,9 @@ public sealed class GameBoosterService : IDisposable
                 BoostActivated?.Invoke(capturedGameName);
             _tray?.SetTooltip($"Systema — Boosting: {capturedGameName}");
             _tray?.ShowBalloon("Game Boost Active",
-                $"Boosting for {capturedGameName}. Non-essential services suspended.",
+                // Service pausing was removed in June 2026; the old wording claimed something
+                // that no longer happens.
+                $"Boosting {capturedGameName}. Everything goes back to normal when you quit.",
                 System.Windows.Forms.ToolTipIcon.Info);
         };
     }
@@ -985,17 +1072,19 @@ public sealed class GameBoosterService : IDisposable
     /// </summary>
     private Action? DeactivateBoost()
     {
-        // Restore game process priority before clearing state
-        if (ActiveGameName != null)
-        {
-            bool isRealGame = !ActiveGameName.Contains("Anti-Cheat", StringComparison.OrdinalIgnoreCase)
-                           && !ActiveGameName.Contains("Unknown Game", StringComparison.OrdinalIgnoreCase);
-            if (isRealGame)
-                RestoreGameProcess(ActiveGameName);
-        }
+        // Same reasoning as ActivateBoost: restoring the power plan, the Dell charge thresholds
+        // and the network settings is real work that shouldn't crawl at Idle priority.
+        using var priority = _tray?.BorrowNormalPriority();
 
+        // Restore game process priority before clearing state. Mirrors the flag ActivateBoost
+        // raised the priority on, so the two can't disagree about what was boosted.
+        if (ActiveGameName != null && _boostedRealGame)
+            RestoreGameProcess(ActiveGameName);
+
+        _boostedRealGame = false;
         _boostActive   = false;
         ActiveGameName = null;
+        BoostStartedAt = null;
 
         // Restore new boost options before restoring services
         RestoreBoostOptions();
@@ -2097,16 +2186,23 @@ public sealed class GameBoosterService : IDisposable
 
                     var savedAck   = iKey.GetValue("TcpAckFrequency");
                     var savedDelay = iKey.GetValue("TCPNoDelay");
+                    // TcpDelAckTicks was missing, which is why this only half-worked:
+                    // TcpAckFrequency=1 stops ACKs being batched by COUNT, but Windows still
+                    // holds an ACK for the delayed-ACK TIMER (200 ms by default) until this is 0.
+                    // Both have to be set or the delay you were trying to remove is still there.
+                    var savedTicks = iKey.GetValue("TcpDelAckTicks");
                     iKey.SetValue("TcpAckFrequency", 1, RegistryValueKind.DWord);
                     iKey.SetValue("TCPNoDelay",      1, RegistryValueKind.DWord);
+                    iKey.SetValue("TcpDelAckTicks",  0, RegistryValueKind.DWord);
                     _nagleRestore.Add((path, "TcpAckFrequency", savedAck));
                     _nagleRestore.Add((path, "TCPNoDelay",      savedDelay));
+                    _nagleRestore.Add((path, "TcpDelAckTicks",  savedTicks));
                 }
                 catch { }
             }
 
             _log.Info("GameBoosterService",
-                $"Nagle disabled on {_nagleRestore.Count / 2} TCP adapter(s)");
+                $"Nagle disabled on {_nagleRestore.Count / 3} TCP adapter(s)");
         }
         catch (Exception ex) { _log.Warn("GameBoosterService", $"ApplyDisableNagle: {ex.Message}"); }
     }
@@ -2516,6 +2612,7 @@ public sealed class GameBoosterService : IDisposable
     public void Dispose()
     {
         _gameCheckTimer?.Stop();
+        _fastGameTimer?.Stop();
         _manualBoostTimeoutTimer?.Stop();
 
         if (_boostActive)

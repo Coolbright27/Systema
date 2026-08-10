@@ -239,6 +239,59 @@ public sealed class TrayService : IDisposable
         }
     }
 
+    // ── Temporary priority borrow ─────────────────────────────────────────────
+    // Ghost Mode parks the process at IDLE_PRIORITY_CLASS, which is right for sitting in the
+    // tray doing nothing and wrong for the one moment that matters: applying a game boost.
+    // A boost fires exactly when the machine is busiest (a game is launching), so at Idle
+    // priority its registry reads, power-plan switch and Dell BIOS WMI calls stretched from
+    // well under a second to nine, and the UI heartbeat starved long enough for the crash
+    // watchdog to file a false "UI THREAD FREEZE" report.
+    //
+    // Callers borrow Normal priority for the duration of that work and give it straight back.
+    // Refcounted, because an activate and a deactivate can overlap.
+    private int _priorityBorrows;
+
+    /// <summary>
+    /// Runs the caller at Normal priority even while Ghost Mode is active, restoring Idle when
+    /// the returned handle is disposed. Returns null when there is nothing to restore.
+    /// </summary>
+    public IDisposable? BorrowNormalPriority()
+    {
+        if (!_isGhostMode) return null;
+
+        try
+        {
+            if (Interlocked.Increment(ref _priorityBorrows) == 1)
+                SetPriorityClass(GetCurrentProcess(), NORMAL_PRIORITY_CLASS);
+        }
+        catch { /* priority is an optimisation, never fail the caller over it */ }
+
+        return new PriorityBorrow(this);
+    }
+
+    private void ReturnBorrowedPriority()
+    {
+        try
+        {
+            // Only drop back to Idle if Ghost Mode is still on — the window may have been
+            // restored while we held the borrow, and that must win.
+            if (Interlocked.Decrement(ref _priorityBorrows) == 0 && _isGhostMode)
+                SetPriorityClass(GetCurrentProcess(), IDLE_PRIORITY_CLASS);
+        }
+        catch { }
+    }
+
+    private sealed class PriorityBorrow : IDisposable
+    {
+        private TrayService? _owner;
+        public PriorityBorrow(TrayService owner) => _owner = owner;
+        public void Dispose()
+        {
+            var owner = Interlocked.Exchange(ref _owner, null);
+            owner?.ReturnBorrowedPriority();
+        }
+    }
+
     /// <summary>Show a balloon tip notification from the tray icon.</summary>
     public void ShowBalloon(string title, string message, ToolTipIcon icon = ToolTipIcon.Info, int timeout = 4000)
     {

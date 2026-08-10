@@ -1375,25 +1375,10 @@
 
                     <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,0,0,16"/>
 
-                    <!-- Nap child processes -->
-                    <Grid Margin="0,0,0,16">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" Margin="0,0,24,0">
-                            <TextBlock Text="Include helper processes"
-                                       Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                            <TextBlock Text="When an app is put to sleep, also sleep processes it launched. Frees more resources but some apps may not handle this well."
-                                       Style="{StaticResource CaptionText}"
-                                       Foreground="{StaticResource TextSecondaryBrush}"
-                                       TextWrapping="Wrap" Margin="0,3,0,0"/>
-                        </StackPanel>
-                        <CheckBox Grid.Column="1"
-                                  IsChecked="{Binding NapChildrenEnabled, Mode=TwoWay}"
-                                  Style="{StaticResource ToggleSwitch}"
-                                  VerticalAlignment="Top"/>
-                    </Grid>
+                    <!-- "Include helper processes" was removed: it never controlled whether helpers
+                         were slept (the child-nap sweep always runs), only whether their CPU caps
+                         tracked the parent through a brief wake — which is now unconditional. -->
+
 
                     <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,0,0,16"/>
 

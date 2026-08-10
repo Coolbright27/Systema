@@ -506,15 +506,22 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
 
                 // 14. Disable MPO — steadier frame timing on systems with poor MPO
                 //     driver integration (fixes flicker / stutter). Restart to apply.
-                bool mpoOk = _graphics.IsMpoDisabled();
+                //     Skipped entirely on NVIDIA, where it breaks VSync (see IsMpoAutoDisableUnsafe).
+                //     There it becomes the opposite item: MPO must be ON.
+                bool mpoUnsafe = _graphics.IsMpoAutoDisableUnsafe();
+                bool mpoOk     = mpoUnsafe ? !_graphics.IsMpoDisabled() : _graphics.IsMpoDisabled();
                 if (!mpoOk) pending++;
                 items.Add(new AutoPilotItem
                 {
-                    Label  = "Disable MPO",
+                    Label  = mpoUnsafe ? "Keep Multi-Plane Overlay on" : "Disable MPO",
                     IsDone = mpoOk,
-                    Detail = mpoOk
-                        ? "Multi-Plane Overlay disabled — steadier frame timing"
-                        : "Enabled (default) — click Optimize to disable (restart to apply)",
+                    Detail = mpoUnsafe
+                        ? (mpoOk
+                            ? "On — NVIDIA needs it for VSync and Independent Flip"
+                            : "Off — this breaks VSync on NVIDIA. Click Optimize to turn it back on (restart to apply)")
+                        : (mpoOk
+                            ? "Multi-Plane Overlay disabled — steadier frame timing"
+                            : "Enabled (default) — click Optimize to disable (restart to apply)"),
                 });
 
                 // 15. Extend GPU recovery timeout (TdrDelay) — fewer "driver stopped
@@ -837,7 +844,23 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
 
             // 14. Disable MPO — steadier frame timing where the GPU driver integrates
             // Multi-Plane Overlay poorly. Takes effect on the next restart.
-            if (!_graphics.IsMpoDisabled())
+            //
+            // NOT ON NVIDIA. NVIDIA's VSync and Independent Flip are built on MPO; turning it off
+            // there causes tearing that no in-game VSync toggle can fix. Auto-Pilot used to apply
+            // this on every machine, which is exactly how it broke VSync. Auto-Pilot owns this
+            // value, so on NVIDIA it now restores MPO rather than merely skipping it — otherwise
+            // the machines it already broke would stay broken.
+            if (_graphics.IsMpoAutoDisableUnsafe())
+            {
+                if (_graphics.IsMpoDisabled())
+                {
+                    _graphics.SetMpoDisabled(false);
+                    _settings.GraphicsMpoDisabled = false;
+                    _log.Info("DashboardViewModel",
+                        "MPO restored (Auto-Pilot) — NVIDIA GPU present, disabling it breaks VSync and Independent Flip");
+                }
+            }
+            else if (!_graphics.IsMpoDisabled())
             {
                 _graphics.SetMpoDisabled(true);
                 _log.Info("DashboardViewModel", "MPO disabled (Auto-Pilot)");
@@ -966,8 +989,12 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
         ["Launch Boost"] = ("Speed up app launches",
             "Gives apps a quick priority boost the moment they launch so they open faster, then hands control back to Windows.",
             () => { if (!_taskSleepVm.IsEnabled || !_taskSleepVm.LaunchBoostEnabled) _taskSleepVm.EnableLaunchBoost(); return Task.CompletedTask; }),
+        // NVIDIA counterpart of "Disable MPO" — same registry value, opposite direction.
+        ["Keep Multi-Plane Overlay on"] = ("Turn Multi-Plane Overlay back on",
+            "Your NVIDIA card uses Multi-Plane Overlay to hand games a direct path to the screen. With it turned off, Windows composites the frames instead, your game's own VSync setting stops having any effect, and you get tearing. Turning it back on restores normal VSync. An older version of Systema turned this off on every PC, including NVIDIA ones, which was a mistake. Takes effect after a restart.",
+            () => { if (_graphics.IsMpoDisabled()) { _graphics.SetMpoDisabled(false); _settings.GraphicsMpoDisabled = false; } return Task.CompletedTask; }),
         ["Disable MPO"] = ("Disable Multi-Plane Overlay",
-            "Some GPU drivers handle Multi-Plane Overlay poorly, which causes flicker, stutter, and uneven frame pacing, so turning it off is Microsoft's own fix and usually steadies frames. Tradeoff: NVIDIA's VSync and Independent Flip rely on MPO, so on some NVIDIA setups disabling it can cause screen tearing. If you see tearing, re-enable MPO from the Graphics tab. Takes effect after a restart.",
+            "Some GPU drivers handle Multi-Plane Overlay poorly, which causes flicker, stutter, and uneven frame pacing, so turning it off is Microsoft's own fix and usually steadies frames. Takes effect after a restart.",
             () => { if (!_graphics.IsMpoDisabled()) _graphics.SetMpoDisabled(true); return Task.CompletedTask; }),
         ["Extend GPU recovery timeout"] = ("Extend the GPU recovery timeout",
             "Gives the GPU a moment longer to recover from a hang before Windows resets the driver, which avoids black screens under heavy load.",

@@ -628,6 +628,19 @@ public sealed class TaskSleepService : IDisposable
     private const uint PROCESS_POWER_THROTTLING_CURRENT_VERSION = 1;
     private const uint PROCESS_POWER_THROTTLING_EXECUTION_SPEED = 0x1;
 
+    // Tells Windows to IGNORE this process's timer-resolution request while it's napped.
+    // EXECUTION_SPEED above controls how FAST a napped process runs; this controls how often
+    // it WAKES THE CPU. Apps like browsers, Discord and Spotify call timeBeginPeriod(1), which
+    // drags the CPU out of idle ~1000x/second even at 0% CPU — one of the biggest "warm and
+    // draining while doing nothing" causes on a laptop, and invisible to every CPU-based signal
+    // the nap engine acts on. Reducing wakeups lets the package reach deep C-states, which saves
+    // more power than merely slowing a busy core down.
+    private const uint PROCESS_POWER_THROTTLING_IGNORE_TIMER_RESOLUTION = 0x4;
+
+    // Both levers are applied together on nap and cleared together on wake.
+    private const uint NapPowerThrottlingMask =
+        PROCESS_POWER_THROTTLING_EXECUTION_SPEED | PROCESS_POWER_THROTTLING_IGNORE_TIMER_RESOLUTION;
+
     // ── Constructor / Settings ─────────────────────────────────────────────────
 
     public TaskSleepService(TaskSleepSettings settings)
@@ -1596,7 +1609,7 @@ public sealed class TaskSleepService : IDisposable
                         AddEvent(rn ?? proc.ProcessName, proc.Id, "Re-napping", "brief wake ended");
 
                         // Re-tighten any children that loosened with this parent.
-                        if (s.NapChildrenEnabled && s.NappedCpuCapEnabled)
+                        if (s.NappedCpuCapEnabled)
                             SetNapChildCaps(proc.Id, s.NappedCpuCapPercent);
 
                         // Nap memory compression: the brief wake faulted pages back in; push them
@@ -1647,7 +1660,7 @@ public sealed class TaskSleepService : IDisposable
                         AddEvent(tn ?? proc.ProcessName, proc.Id, "Tray Re-nap", "brief wake ended");
 
                         // Re-tighten any children that loosened with this parent.
-                        if (s.NapChildrenEnabled && s.NappedCpuCapEnabled)
+                        if (s.NappedCpuCapEnabled)
                             SetNapChildCaps(proc.Id, s.NappedCpuCapPercent);
 
                         // Nap memory compression: see the matching minimize-nap branch above.
@@ -1952,10 +1965,20 @@ public sealed class TaskSleepService : IDisposable
         //     they're correctly skipped (their children are handled via SetNapChildCaps).
         //     Runs unconditionally so a hidden app's tree stays fully napped as it spawns
         //     new renderers — the "nap all of it" half of the atomic nap/restore.
+        // Built once — ResolveAppRootPid needs to look processes up per ascent step.
+        var byIdForRoot = new Dictionary<int, Process>();
+        foreach (var p in all) { try { byIdForRoot[p.Id] = p; } catch { } }
+
         foreach (int parentPid in _throttledPids.Keys.ToList())
         {
             if (!_napBuckets.Is(parentPid, NapReason.Minimized) && !_napBuckets.Is(parentPid, NapReason.Tray)) continue;
-            NapChildProcesses(parentPid, all, parentMap, protectedPids, audioPids, s, rules);
+
+            // Re-root at the app's TOP process rather than at whichever process owns the window,
+            // so a parent and its sibling helpers go down with it (see ResolveAppRootPid).
+            int appRoot = ResolveAppRootPid(parentPid, parentMap, byIdForRoot,
+                                            visibleOnMonitorPids, (int)foregroundPid);
+            NapChildProcesses(appRoot, all, parentMap, protectedPids, audioPids, s, rules,
+                              includeRoot: appRoot != parentPid, ownerPid: parentPid);
         }
 
         // 7. Re-enforce: re-apply throttle if a process raised its own priority back
@@ -2465,7 +2488,7 @@ public sealed class TaskSleepService : IDisposable
         if (TryState(pid, out var dsBw)) dsBw.DeepSleepTrimmed = false;
 
         // Children napped alongside this parent get the same loosened cap for the window.
-        if (s.NapChildrenEnabled && s.NappedCpuCapEnabled && s.BriefWakeCpuCapPercent > 0)
+        if (s.NappedCpuCapEnabled && s.BriefWakeCpuCapPercent > 0)
             SetNapChildCaps(pid, s.BriefWakeCpuCapPercent);
     }
 
@@ -3292,10 +3315,53 @@ public sealed class TaskSleepService : IDisposable
     /// if foreground-protected, playing audio, whitelisted, or already napped. Restored
     /// together via <see cref="RestoreNapChildren"/> and the full-app wake sweep.
     /// </summary>
+    /// <summary>
+    /// Walks UP from the window-owning process to the top-most process that still belongs to the
+    /// same app, and returns it (or the pid itself when it is already the root).
+    ///
+    /// Why: the nap tree used to be rooted at whichever process owns the window, and every walk
+    /// went DOWNWARD from there. That is correct only when the window owner is also the app's top
+    /// process. Steam is the common counter-example — steam.exe spawns steamwebhelper.exe and the
+    /// helper owns the window — so napping walked down from the helper and left steam.exe and its
+    /// sibling helpers running at full speed. That is the "app sleeps but not all of it" bug.
+    ///
+    /// Ascent is deliberately paranoid. It stops at anything the user can see, anything the OS
+    /// owns, or anything we could not throttle anyway, so it can never climb into the shell:
+    /// explorer.exe is in the system whitelist and most user apps are launched by it.
+    /// </summary>
+    private int ResolveAppRootPid(int pid, Dictionary<int, int> parentMap,
+        Dictionary<int, Process> byId, HashSet<int> visiblePids, int foregroundPid)
+    {
+        int cur = pid;
+        for (int depth = 0; depth < 4; depth++)          // bounded: never chase a long chain
+        {
+            if (!parentMap.TryGetValue(cur, out int parent)) break;
+            if (parent <= 4 || parent == OwnPid || parent == cur) break;
+            if (!byId.TryGetValue(parent, out var pproc)) break;      // parent already exited
+            // Never ascend into something on screen or in front of the user.
+            if (parent == foregroundPid || visiblePids.Contains(parent)) break;
+            // Never ascend into the OS: shell, Windows binaries, elevated, or service accounts.
+            if (IsSystemProcess(pproc) || IsWindowsSystemBinary(parent) ||
+                IsElevatedOrSystemProcess(parent) || IsServiceAccount(parent)) break;
+            cur = parent;
+        }
+        return cur;
+    }
+
+    /// <param name="parentPid">Where to WALK the tree from (the app root).</param>
+    /// <param name="ownerPid">
+    /// Who OWNS the resulting naps — defaults to parentPid. These differ once the tree is
+    /// re-rooted upward: discovery starts at the app root, but every napped member is still
+    /// tagged to the window-owning process, because that is the pid carrying the Minimized/Tray
+    /// reason and therefore the one whose restore (and the orphan sweep in 6c) releases them.
+    /// Tagging them to the root instead would strand the root and its siblings napped forever,
+    /// since nothing ever un-naps the root directly.
+    /// </param>
     private void NapChildProcesses(int parentPid, Process[] all, Dictionary<int, int> parentMap,
         HashSet<int> protectedPids, HashSet<int> audioPids, TaskSleepSettings s,
-        Dictionary<string, TaskSleepAppRule> rules)
+        Dictionary<string, TaskSleepAppRule> rules, bool includeRoot = false, int? ownerPid = null)
     {
+        int owner = ownerPid ?? parentPid;
         // Build parent → children once, then BFS the whole subtree under parentPid.
         var childrenOf = new Dictionary<int, List<int>>();
         foreach (var kv in parentMap)
@@ -3313,6 +3379,9 @@ public sealed class TaskSleepService : IDisposable
                 foreach (int k in kids)
                     if (descendants.Add(k)) queue.Enqueue(k);
         }
+        // When the tree was re-rooted upward, the root itself is part of the app and must nap too.
+        // It still passes through ShouldSkip/TryThrottle below, so every existing guard applies.
+        if (includeRoot) descendants.Add(parentPid);
         if (descendants.Count == 0) return;
 
         var byId = new Dictionary<int, Process>();
@@ -3322,6 +3391,7 @@ public sealed class TaskSleepService : IDisposable
         {
             try
             {
+                if (childId == owner) continue;                      // the owner is napped already
                 if (_throttledPids.ContainsKey(childId)) continue;
                 if (!byId.TryGetValue(childId, out var child)) continue;
                 if (ShouldSkip(child, protectedPids, s, rules, audioPids)) continue;
@@ -3329,7 +3399,7 @@ public sealed class TaskSleepService : IDisposable
                 if (TryThrottle(child, s, rules, forceMaxThrottle: true))
                 {
                     var childSt = StateFor(child.Id);
-                    childSt.NapChildParent = parentPid;
+                    childSt.NapChildParent = owner;
                     childSt.NapSince ??= DateTime.UtcNow; // deep-sleep timer
                     double childCpu = childSt.LastCpuPercent ?? 0;
                     childSt.CpuAtThrottle = childCpu;
@@ -4060,8 +4130,8 @@ public sealed class TaskSleepService : IDisposable
             var state = new PROCESS_POWER_THROTTLING_STATE
             {
                 Version     = PROCESS_POWER_THROTTLING_CURRENT_VERSION,
-                ControlMask = enable ? PROCESS_POWER_THROTTLING_EXECUTION_SPEED : 0,
-                StateMask   = enable ? PROCESS_POWER_THROTTLING_EXECUTION_SPEED : 0
+                ControlMask = enable ? NapPowerThrottlingMask : 0,
+                StateMask   = enable ? NapPowerThrottlingMask : 0
             };
 
             int size = Marshal.SizeOf<PROCESS_POWER_THROTTLING_STATE>();

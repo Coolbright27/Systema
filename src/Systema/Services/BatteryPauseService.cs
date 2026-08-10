@@ -1,6 +1,6 @@
-﻿// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// BatteryPauseService.cs  Â·  Vendor-specific battery charging control
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+﻿// ════════════════════════════════════════════════════════════════════════════
+// BatteryPauseService.cs  ·  Vendor-specific battery charging control
+// ════════════════════════════════════════════════════════════════════════════
 //
 // Tells supported laptops to pause or limit battery charging while a Game Boost
 // session is active. On laptops with undersized AC adapters (most gaming and
@@ -12,11 +12,11 @@
 // vendor exposes it differently. This service tries multiple approaches in
 // priority order and uses the first one that works on the current device.
 //
-// METHOD MATRIX (probed in order â€” first match wins)
-//   1. Dell modern         root\dcim\sysman\biosattributes â–¸ BIOSAttributeInterface
+// METHOD MATRIX (probed in order — first match wins)
+//   1. Dell modern         root\dcim\sysman\biosattributes ▸ BIOSAttributeInterface
 //                          (loaded by DellTechHub / SupportAssist on 2018+ Dell business)
-//   2. Dell legacy         root\dcim\sysman â–¸ DCIM_BIOSService.SetBIOSAttributes
-//                          (loaded by Dell Command | Configure / Monitor â€” pre-2022 path)
+//   2. Dell legacy         root\dcim\sysman ▸ DCIM_BIOSService.SetBIOSAttributes
+//                          (loaded by Dell Command | Configure / Monitor — pre-2022 path)
 //
 // CRASH SAFETY
 //   On pause we capture (Method, OriginalMode, Vendor) into BatteryPauseSnapshot.
@@ -31,7 +31,7 @@
 //   Uses only System.Management (signed Microsoft package) and System.Diagnostics
 //   for powercfg. No process injection, driver loading, shellexec of unknown
 //   binaries, or obfuscation. Comments are technical, not adversarial.
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ════════════════════════════════════════════════════════════════════════════
 
 using System.Management;
 
@@ -92,7 +92,7 @@ public sealed class BatteryPauseService
     /// <summary>Stable identifier of the method that won the probe (or empty).</summary>
     public string              ActiveMethodName => _activeMethod?.Name ?? "";
 
-    // â”€â”€ Public API â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Public API ─────────────────────────────────────────────────────────────
 
     /// <summary>
     /// Probes hardware + every vendor / universal hook. Caches the result.
@@ -107,7 +107,7 @@ public sealed class BatteryPauseService
             if (!HasBattery())
             {
                 _support       = BatteryPauseSupport.NotALaptop;
-                _statusMessage = "This is a desktop (or no battery is present) â€” Battery Pause is not applicable.";
+                _statusMessage = "This is a desktop (or no battery is present) — Battery Pause is not applicable.";
                 _log.Info("BatteryPauseService", "Detection: no battery present");
                 return _support;
             }
@@ -157,7 +157,7 @@ public sealed class BatteryPauseService
         catch (Exception ex)
         {
             _support       = BatteryPauseSupport.UnsupportedVendor;
-            _statusMessage = "Battery Pause: hardware detection failed â€” feature unavailable on this device.";
+            _statusMessage = "Battery Pause: hardware detection failed — feature unavailable on this device.";
             _log.Warn("BatteryPauseService", $"Detection failed: {ex.Message}");
         }
 
@@ -196,7 +196,7 @@ public sealed class BatteryPauseService
     {
         if (_support != BatteryPauseSupport.Supported || _activeMethod == null)
         {
-            _log.Info("BatteryPauseService", $"Pause skipped â€” support={_support} method={_activeMethod?.Name ?? "<none>"}");
+            _log.Info("BatteryPauseService", $"Pause skipped — support={_support} method={_activeMethod?.Name ?? "<none>"}");
             return null;
         }
 
@@ -236,7 +236,7 @@ public sealed class BatteryPauseService
         try
         {
             // Look up the method by stable name. This makes recovery work even after
-            // the user replaced the laptop OS or upgraded Systema across versions â€”
+            // the user replaced the laptop OS or upgraded Systema across versions —
             // we route by the persisted method ID, not by current detection state.
             IBatteryPauseMethod? m = _methods.Find(x =>
                 string.Equals(x.Name, snapshot.Method, StringComparison.OrdinalIgnoreCase));
@@ -244,7 +244,7 @@ public sealed class BatteryPauseService
             if (m == null)
             {
                 _log.Warn("BatteryPauseService",
-                    $"Resume: snapshot method '{snapshot.Method}' not in registry â€” skipping");
+                    $"Resume: snapshot method '{snapshot.Method}' not in registry — skipping");
                 return;
             }
 
@@ -258,7 +258,7 @@ public sealed class BatteryPauseService
         }
     }
 
-    // â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Helpers ────────────────────────────────────────────────────────────────
 
     private static bool HasBattery()
     {
@@ -291,9 +291,9 @@ public sealed class BatteryPauseService
         string.IsNullOrEmpty(_vendor) ? "this laptop"
             : string.IsNullOrEmpty(_model) ? _vendor : $"{_vendor} {_model}";
 
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ════════════════════════════════════════════════════════════════════════════
     // Method registry
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ════════════════════════════════════════════════════════════════════════════
 
     /// <summary>Internal contract for one charge-control approach.</summary>
     private interface IBatteryPauseMethod
@@ -312,12 +312,12 @@ public sealed class BatteryPauseService
         void Resume(string? originalMode);
     }
 
-    // â”€â”€ Method 1: Dell modern (root\dcim\sysman\biosattributes) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Method 1: Dell modern (root\dcim\sysman\biosattributes) ────────────────
     //
     // Newer Dell business / gaming laptops (post-2018) expose BIOS settings via
     // EnumerationAttribute / IntegerAttribute classes in this namespace. The
     // Dell Client BIOS WMI provider is loaded by SupportAssist + DellTechHub +
-    // MyDell (any of them is sufficient â€” Dell Command|Configure is no longer
+    // MyDell (any of them is sufficient — Dell Command|Configure is no longer
     // required as of MyDell's release). Write happens via BIOSAttributeInterface.SetAttribute.
     //
     // Setting "PrimaryBattChargeCfg" values: "Standard", "Express", "PrimAcUse"
@@ -346,10 +346,10 @@ public sealed class BatteryPauseService
                 using var iface = new ManagementClass(Ns, "BIOSAttributeInterface", null);
                 _ = iface.GetMethodParameters("SetAttribute"); // throws if class/namespace missing
 
-                // Read PrimaryBattChargeCfg â€” log its current value and all PossibleValues
+                // Read PrimaryBattChargeCfg — log its current value and all PossibleValues
                 // so we can see if "Custom" is a valid option on this specific BIOS version.
                 // Diagnostic-only: log current value and PossibleValues if available.
-                // We do NOT gate on this â€” some Dell BIOS versions don't expose
+                // We do NOT gate on this — some Dell BIOS versions don't expose
                 // EnumerationAttribute but SetAttribute still works fine.
                 try
                 {
@@ -430,7 +430,7 @@ public sealed class BatteryPauseService
         {
             _log.Info("BatteryPauseService", "Dell Pause: attempting Custom mode (start=50, stop=55)");
 
-            // â”€â”€ Strategy A: combined "Custom:50:55" â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+            // ── Strategy A: combined "Custom:50:55" ──────────────────────────────
             // Dell CCTK sets custom charging as --PrimaryBattChargeCfg=Custom:50:55.
             // Some BIOS versions accept this same format via WMI SetAttribute,
             // atomically setting mode + thresholds in one call.
@@ -439,15 +439,15 @@ public sealed class BatteryPauseService
                 _log.Info("BatteryPauseService", "Dell Pause: Strategy A (combined) succeeded");
                 return true;
             }
-            _log.Info("BatteryPauseService", "Dell Pause: Strategy A (combined) rejected â€” trying separate attributes");
+            _log.Info("BatteryPauseService", "Dell Pause: Strategy A (combined) rejected — trying separate attributes");
 
-            // â”€â”€ Strategy B: thresholds first, then mode â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+            // ── Strategy B: thresholds first, then mode ───────────────────────────
             // BIOS validates CustomChargeStart/Stop at the moment Custom mode is
             // activated, so the integers must be written before the enum switch.
             bool startOk = SetAttr("CustomChargeStart", "50");
             bool stopOk  = SetAttr("CustomChargeStop",  "55");
             _log.Info("BatteryPauseService",
-                $"Dell Pause: Strategy B thresholds â€” start={startOk}, stop={stopOk}");
+                $"Dell Pause: Strategy B thresholds — start={startOk}, stop={stopOk}");
 
             if (!startOk || !stopOk)
             {
@@ -459,12 +459,12 @@ public sealed class BatteryPauseService
 
             bool modeOk = SetAttr(AttrName, "Custom");
             _log.Info("BatteryPauseService",
-                $"Dell Pause: Strategy B mode switch â€” PrimaryBattChargeCfg=Custom â†’ {(modeOk ? "OK" : "FAILED")}");
+                $"Dell Pause: Strategy B mode switch — PrimaryBattChargeCfg=Custom → {(modeOk ? "OK" : "FAILED")}");
 
             // Verify what the BIOS reports after the write.
             var verify = ReadEnumAttr(AttrName);
             _log.Info("BatteryPauseService",
-                $"Dell Pause: post-write read â†’ PrimaryBattChargeCfg='{verify ?? "(null)"}'");
+                $"Dell Pause: post-write read → PrimaryBattChargeCfg='{verify ?? "(null)"}'");
 
             return modeOk;
         }
@@ -541,11 +541,11 @@ public sealed class BatteryPauseService
                         if (rc == 0)
                         {
                             _log.Info("BatteryPauseService",
-                                $"Dell SetAttr({attributeName}={value}) â†’ OK");
+                                $"Dell SetAttr({attributeName}={value}) → OK");
                             return true;
                         }
                         _log.Warn("BatteryPauseService",
-                            $"Dell SetAttr({attributeName}={value}) â†’ rc={rc}");
+                            $"Dell SetAttr({attributeName}={value}) → rc={rc}");
                         return false;
                     }
                 }
@@ -559,11 +559,11 @@ public sealed class BatteryPauseService
         }
     }
 
-    // â”€â”€ Method 2: Dell legacy (root\dcim\sysman) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Method 2: Dell legacy (root\dcim\sysman) ───────────────────────────────
     //
     // Older Dell systems (with Dell Command | Configure or Dell Command | Monitor)
     // expose the same setting via the older DCIM_* class hierarchy and the
-    // DCIM_BIOSService.SetBIOSAttributes method. Same attribute name â€” just
+    // DCIM_BIOSService.SetBIOSAttributes method. Same attribute name — just
     // different plumbing.  SetBIOSAttributes accepts arrays so we batch Custom +
     // threshold writes in one call.
 
@@ -615,7 +615,7 @@ public sealed class BatteryPauseService
 
         public bool Pause(int thresholdHint)
         {
-            // Thresholds first in the array â€” BIOS validates them at the moment
+            // Thresholds first in the array — BIOS validates them at the moment
             // Custom mode is activated, so they must already be present.
             return Set(
                 new[] { "CustomChargeStart", "CustomChargeStop", AttrName },

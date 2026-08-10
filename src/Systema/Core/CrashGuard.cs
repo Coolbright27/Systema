@@ -72,6 +72,7 @@ public static class CrashGuard
 
     // How long the UI may be unresponsive before we treat it as a hang and restart.
     private const int UiHangRestartSeconds  = 40;   // UI beat at least once, then stopped
+    private const int UiHangRestartSecondsDeprioritised = 150; // same, but while at Idle priority
     private const int StartupHangSeconds    = 90;   // UI never beat (startup wedged)
     private const int RestartLoopGuardSeconds = 120; // don't auto-restart more than once / 2 min
     // A watchdog iteration normally takes ~3-5 s. If one suddenly took far longer, the wall clock
@@ -79,6 +80,9 @@ public static class CrashGuard
     // That gap must NOT be counted as a UI hang; doing so is what relaunched Systema after every
     // sleep (and orphaned its naps). On detection we give the just-resumed UI a fresh beat window.
     private const int SuspendDetectSeconds  = 30;
+    // Extra rope for a heartbeat that stalls while the process is at Idle priority (Ghost Mode).
+    // See ConfirmFreeze — CPU starvation under game load is not a crash.
+    private const int DeprioritisedGraceSeconds = 25;
 
     // ── Startup check ───────────────────────────────────────────────────────
 
@@ -286,7 +290,7 @@ public static class CrashGuard
                 {
                     // Wait one more cycle to be sure it's not just a slow GC pause
                     Thread.Sleep(2_000);
-                    if (!_uiAlive && _activeBreadcrumb != null)
+                    if (!_uiAlive && _activeBreadcrumb != null && ConfirmFreeze())
                     {
                         WriteCrashReport(
                             "UI THREAD FREEZE / CRASH DETECTED",
@@ -314,6 +318,45 @@ public static class CrashGuard
         }
     }
 
+    /// <summary>
+    /// Second opinion before calling a stalled heartbeat a crash.
+    ///
+    /// Ghost Mode drops the WHOLE process to IDLE_PRIORITY_CLASS and trims its working set.
+    /// When a game launches it saturates every core and the disk, and an idle-priority thread
+    /// can simply fail to be scheduled for well over five seconds while its pages fault back in.
+    /// That is starvation, not a crash — but to this watchdog the two looked identical, which is
+    /// why boosting a game reliably produced a "UI THREAD FREEZE" report on a machine where
+    /// nothing had actually gone wrong (three of them on 2026-08-09 alone, one per boost).
+    ///
+    /// So when the process is deliberately deprioritised, give it a much longer rope and only
+    /// report if the heartbeat never comes back at all. A genuinely dead UI thread still gets
+    /// reported, just <see cref="DeprioritisedGraceSeconds"/> later.
+    /// </summary>
+    private static bool ConfirmFreeze()
+    {
+        if (!IsProcessDeprioritised()) return true;   // normal priority — 5 s really is a freeze
+
+        for (int i = 0; i < DeprioritisedGraceSeconds; i++)
+        {
+            Thread.Sleep(1_000);
+            if (!_running) return false;
+            if (_uiAlive || _activeBreadcrumb == null) return false;  // it caught up — not a freeze
+        }
+        return true;
+    }
+
+    /// <summary>True while Ghost Mode (or anything else) has us below Normal priority.</summary>
+    private static bool IsProcessDeprioritised()
+    {
+        try
+        {
+            var priority = System.Diagnostics.Process.GetCurrentProcess().PriorityClass;
+            return priority == System.Diagnostics.ProcessPriorityClass.Idle
+                || priority == System.Diagnostics.ProcessPriorityClass.BelowNormal;
+        }
+        catch { return false; }
+    }
+
     // ── Ghost-process auto-restart ──────────────────────────────────────────
 
     private static void CheckForGhostHangAndRestart()
@@ -328,7 +371,12 @@ public static class CrashGuard
         if (beat != 0)
         {
             // UI beat at least once, then stopped → runtime hang.
-            hung = (now - new DateTime(beat, DateTimeKind.Utc)).TotalSeconds > UiHangRestartSeconds;
+            // At Idle priority under heavy load (Ghost Mode while a game loads) a long stall is
+            // expected, and relaunching mid-session is far more disruptive than waiting: it drops
+            // the active boost and orphans whatever Task Sleep had napped. Wait much longer before
+            // deciding the process is genuinely wedged.
+            int limit = IsProcessDeprioritised() ? UiHangRestartSecondsDeprioritised : UiHangRestartSeconds;
+            hung = (now - new DateTime(beat, DateTimeKind.Utc)).TotalSeconds > limit;
             kind = "runtime UI hang";
         }
         else

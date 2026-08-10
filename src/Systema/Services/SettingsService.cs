@@ -48,27 +48,8 @@ public class SettingsService
         set => WriteInt(nameof(GameCheckIntervalMinutes), Math.Max(1, value));
     }
 
-    /// <summary>
-    /// JSON-serialised list of service names to kill during a game session.
-    /// Null means "use the built-in default list".
-    /// </summary>
-    public List<string>? GameBoosterKillList
-    {
-        get
-        {
-            var json = ReadString(nameof(GameBoosterKillList), defaultValue: null);
-            if (json == null) return null;
-            try { return JsonSerializer.Deserialize<List<string>>(json); }
-            catch { return null; }
-        }
-        set
-        {
-            if (value == null)
-                DeleteValue(nameof(GameBoosterKillList));
-            else
-                WriteString(nameof(GameBoosterKillList), JsonSerializer.Serialize(value));
-        }
-    }
+    // GameBoosterKillList was removed along with the rest of the service-pausing feature
+    // (dropped 2026-06). Any value left in the registry from an older build is simply ignored.
 
     /// <summary>When true the user has manually chosen Xbox service state — auto-logic won't override.</summary>
     public bool XboxServicesUserOverride
@@ -443,17 +424,8 @@ public class SettingsService
         set => WriteBool(nameof(GameBoosterPreventSleep), value);
     }
 
-    /// <summary>
-    /// Disable Windows Search Indexing (WSearch) during game boost to free disk I/O
-    /// and CPU. The service is suspended AND stopped during the session and restored
-    /// when the game exits — unless it was already disabled before the boost.
-    /// Default: true (on).
-    /// </summary>
-    public bool GameBoosterDisableSearchIndexing
-    {
-        get => ReadBool(nameof(GameBoosterDisableSearchIndexing), defaultValue: true);
-        set => WriteBool(nameof(GameBoosterDisableSearchIndexing), value);
-    }
+    // GameBoosterDisableSearchIndexing was removed: it duplicated GameBoosterPauseIndexing and
+    // nothing ever read it, so the toggle backing it moved a value that changed nothing.
 
     /// <summary>
     /// On supported laptops (Dell, Lenovo, …), pause or limit battery charging while a

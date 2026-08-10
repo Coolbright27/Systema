@@ -67,7 +67,6 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
     // ── Core Controls ────────────────────────────────────────────────────────
     [ObservableProperty] private bool   _isEnabled               = true;
 
-    [ObservableProperty] private bool _napChildrenEnabled     = false;
 
     // Compress napped app memory — closest Windows equivalent to macOS's
     // compressed-memory behaviour. ON by default. As soon as a process naps, trim
@@ -506,7 +505,6 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
         else       _service.Stop();
     }
 
-    partial void OnNapChildrenEnabledChanged(bool value)    => PushSettings();
     partial void OnCompressDeepSleepChanged(bool value)     => PushSettings();
 
     // ── Launch Boost ──────────────────────────────────────────────────────────
@@ -1077,7 +1075,6 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
         CompressDeepSleep       = CompressDeepSleep,
         AdaptiveTick            = true,
         // User-configurable
-        NapChildrenEnabled      = NapChildrenEnabled,
         SystemCpuTriggerPercent = SystemCpuTriggerPercent,
         ProcessCpuStopPercent   = ProcessCpuStopPercent,
         TimeOverQuotaMs         = TimeOverQuotaMs,
@@ -1142,7 +1139,6 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
             if (key == null) { _log.Warn("TaskSleepViewModel", "LoadSettings: registry key not found — using defaults"); return; }
 
             IsEnabled               = ReadBool(key, "IsEnabled",               true);
-            NapChildrenEnabled      = ReadBool(key, "NapChildrenEnabled",      false);
             // CompressDeepSleep defaults to true — existing users who never had this
             // key (upgraders from < v0.7.9) get the new default automatically; users
             // who explicitly disabled it will see their preference preserved.
@@ -1234,7 +1230,6 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
             if (key == null) { _log.Warn("TaskSleepViewModel", "SaveSettings: registry key creation failed (null)"); return; }
 
             key.SetValue("IsEnabled",               IsEnabled               ? 1 : 0, RegistryValueKind.DWord);
-            key.SetValue("NapChildrenEnabled",      NapChildrenEnabled      ? 1 : 0, RegistryValueKind.DWord);
             key.SetValue("CompressDeepSleep",       CompressDeepSleep       ? 1 : 0, RegistryValueKind.DWord);
             key.SetValue("SystemCpuTriggerPercent", SystemCpuTriggerPercent,          RegistryValueKind.DWord);
             key.SetValue("ProcessCpuStopPercent",   ProcessCpuStopPercent,            RegistryValueKind.DWord);
