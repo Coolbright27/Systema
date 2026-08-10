@@ -259,12 +259,16 @@ public static class CrashGuard
 
     private static void WatchdogLoop()
     {
-        long lastLoopTicks = DateTime.UtcNow.Ticks;
         while (_running)
         {
             try
             {
                 _uiAlive = false;
+                // Timed around the 3 s sleep ONLY, not the whole iteration. ConfirmFreeze can add
+                // up to 25 s of deliberate waiting, and measuring the full loop counted our own
+                // sleep as a wall-clock jump — so the round after a confirmed freeze was misread
+                // as a system suspend and skipped its checks.
+                long beforeSleepTicks = DateTime.UtcNow.Ticks;
                 Thread.Sleep(3_000); // give UI thread 3 seconds to heartbeat
 
                 if (!_running) return;
@@ -276,9 +280,8 @@ public static class CrashGuard
                 // and skip this round's hang checks. Without this, every sleep > ~40s makes Systema
                 // relaunch itself and hard-kill the old instance, orphaning whatever it had napped.
                 long nowTicks = DateTime.UtcNow.Ticks;
-                double loopSeconds = (nowTicks - lastLoopTicks) / (double)TimeSpan.TicksPerSecond;
-                lastLoopTicks = nowTicks;
-                if (loopSeconds > SuspendDetectSeconds)
+                double sleptSeconds = (nowTicks - beforeSleepTicks) / (double)TimeSpan.TicksPerSecond;
+                if (sleptSeconds > SuspendDetectSeconds)
                 {
                     Volatile.Write(ref _lastUiBeatTicks,   nowTicks); // treat as "UI just beat"
                     Volatile.Write(ref _processStartTicks, nowTicks); // and reset the startup-hang clock

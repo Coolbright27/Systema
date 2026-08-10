@@ -820,8 +820,12 @@ public partial class App : Application
         if (_mainWindow == null)
         {
             _mainWindow = new MainWindow(_mainVm);
-            // NOTE: We never let the window truly close — Close button & Minimize both
-            // call Hide(). The window is fully destroyed only on ExplicitShutdown().
+            // MainWindow.OnClosing turns every close into a hide, so this should only ever fire
+            // on a real exit. Belt and braces: a closed WPF Window can never be shown again, so
+            // if anything does manage to close it, drop the reference and build a fresh one on
+            // the next request rather than throwing "Cannot set Visibility ... after a Window
+            // has closed" — which is precisely how this crashed for a user on 0.7.279.
+            _mainWindow.Closed += (_, _) => _mainWindow = null;
         }
 
         _trayService?.ExitGhostMode();
@@ -848,6 +852,7 @@ public partial class App : Application
         _heartbeat?.Dispose();
         _mainVm?.Dispose();
         _trayService?.Dispose();
+        if (_mainWindow != null) _mainWindow.AllowClose = true;   // the one close that is real
         _mainWindow?.Close();
         _updateService?.StopAutoUpdate();
         Shutdown(0);

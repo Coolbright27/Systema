@@ -171,15 +171,39 @@ public partial class MainWindow : Window
             DragMove();
     }
 
-    // Minimize → hide to tray (Ghost Mode is handled by App.xaml.cs via Closed event)
+    /// <summary>
+    /// Set by <see cref="App.ExplicitShutdown"/> so the one genuine close (tray → Exit) is let
+    /// through. Every other close request is turned into a hide.
+    /// </summary>
+    public bool AllowClose { get; set; }
+
     // The separate Minimize button was removed: it called Hide() + SetTrayOnly(true), i.e.
     // exactly what Close does, so the title bar offered two controls that did the same thing.
-    // Close button → hide to tray, not exit (use tray "Exit" to fully quit)
-    private void CloseButton_Click(object sender, RoutedEventArgs e)
+    // Close button → hide to tray, not exit (use tray "Exit" to fully quit).
+    private void CloseButton_Click(object sender, RoutedEventArgs e) => Close();
+
+    /// <summary>
+    /// Turns every close into a hide-to-tray, so the window object survives.
+    ///
+    /// The title bar's X used to call Hide() directly, which meant it was the ONLY close path
+    /// that behaved. Alt+F4, the taskbar's "Close window", and the system menu all go straight
+    /// to Close() and really did destroy the window — and a closed WPF Window can never be shown
+    /// again. App kept its reference, so the next "open Systema" (tray double-click, Windows
+    /// Search, a second launch) called Show() on a dead window and threw
+    /// "Cannot set Visibility or call Show ... after a Window has closed". A user hit exactly
+    /// that on 0.7.279. Routing every close through here means there is one behaviour, not two.
+    /// </summary>
+    protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
     {
-        Hide();
-        (DataContext as MainViewModel)?.SetTrayOnly(true);
-        (Application.Current as App)?.NotifyWindowHidden();
+        if (!AllowClose)
+        {
+            e.Cancel = true;
+            Hide();
+            (DataContext as MainViewModel)?.SetTrayOnly(true);
+            (Application.Current as App)?.NotifyWindowHidden();
+            return;
+        }
+        base.OnClosing(e);
     }
 
     private void Window_Activated(object sender, EventArgs e)
