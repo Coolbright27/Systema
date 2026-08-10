@@ -128,17 +128,6 @@
                     <Grid Style="{StaticResource OptRow}">
                         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                         <StackPanel Grid.Column="0" Margin="0,0,20,0">
-                            <TextBlock Text="Give games priority for CPU scheduling" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                            <TextBlock Text="Raises the priority Windows gives games for CPU time and audio. Safe for VSync."
-                                       Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,3,0,0"/>
-                        </StackPanel>
-                        <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}" VerticalAlignment="Center"
-                                  IsChecked="{Binding GpuProfileOnBoost, Mode=TwoWay}"/>
-                    </Grid>
-
-                    <Grid Style="{StaticResource OptRow}">
-                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" Margin="0,0,20,0">
                             <TextBlock Text="Keep the PC awake" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
                             <TextBlock Text="Stops the screen sleeping or locking during long cutscenes, lobbies and loading screens."
                                        Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,3,0,0"/>

@@ -229,6 +229,19 @@ public partial class VisualViewModel : ObservableObject, IAutoRefreshable, IDisp
             if (!nowOnBattery)
             {
                 // ── Plugged back in ────────────────────────────────────────────
+
+                // Not while a game boost is running. Game Booster may have switched to High
+                // Performance for the session; restoring the pre-optimization plan here undid it
+                // mid-game (seen live: the plan went back to Balanced eight seconds into a boost).
+                // Game Booster restores the plan itself when the session ends, at which point this
+                // handler is free to act again.
+                if (Systema.Core.BoostedGameRegistry.SessionActive)
+                {
+                    _log.Info("VisualViewModel",
+                              "AC power — power plan left alone, a game boost session is running");
+                    return;
+                }
+
                 if (PerformanceModeEnabled)
                 {
                     // User has Performance Mode toggled on — always restore HP,

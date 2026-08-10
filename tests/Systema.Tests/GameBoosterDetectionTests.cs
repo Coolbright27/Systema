@@ -48,23 +48,41 @@ public class GameBoosterDetectionTests
     {
         var src = Service();
         Assert.Contains("private Action? ActivateBoost(GameMatch match)", src);
-        Assert.Contains("private readonly record struct GameMatch(string Name, bool IsKnownGame)", src);
+        Assert.Contains("private readonly record struct GameMatch(string Name, bool IsKnownGame", src);
     }
 
     [Fact]
-    public void PriorityDecision_UsesTheFlag_NotSubstringMatchingTheDisplayName()
+    public void PlaceholderNamesAreNotUsedAsLogic()
     {
         var src = Service();
 
-        // The old, fragile form. If either of these comes back, a renamed placeholder string
-        // silently turns the priority boost (and its restore) into a no-op.
+        // A renamed placeholder string must never silently change behaviour. IsKnownGame carries
+        // that fact explicitly.
         Assert.DoesNotContain("gameName.Contains(\"Anti-Cheat\"", src);
         Assert.DoesNotContain("gameName.Contains(\"Unknown Game\"", src);
         Assert.DoesNotContain("ActiveGameName.Contains(\"Anti-Cheat\"", src);
         Assert.DoesNotContain("ActiveGameName.Contains(\"Unknown Game\"", src);
+        Assert.Contains("match.IsKnownGame", src);
+    }
 
-        Assert.Contains("if (match.IsKnownGame)", src);
-        Assert.Contains("_boostedRealGame", src);
+    [Fact]
+    public void SystemaNeverChangesTheGameProcessItself()
+    {
+        var src = Service();
+
+        // v0.7.281 raised the game's CPU, I/O, GPU and memory priority. Anti-cheat treats external
+        // manipulation of a protected game as tampering: Fortnite (EAC), BeamNG and Roblox all
+        // FORCE-CLOSED. That is intended behaviour on their side, not something a different API or
+        // access mask can work around, and no amount of boost is worth ending someone's session.
+        //
+        // A boost is SYSTEM-level only — power plan, indexing, network, notifications. If any of
+        // these reappear, that decision is being re-made without the crash reports that drove it.
+        Assert.DoesNotContain("BoostGameProcess", src);
+        Assert.DoesNotContain("ReassertGameBoost", src);
+        Assert.DoesNotContain("D3DKMTSetProcessSchedulingPriorityClass", src);
+        Assert.DoesNotContain("ProcessMemoryPriority", src);
+        Assert.DoesNotContain("ProcessPowerThrottling", src);
+        Assert.DoesNotContain("proc.PriorityClass = ProcessPriorityClass.High", src);
     }
 
     [Fact]
@@ -88,7 +106,8 @@ public class GameBoosterDetectionTests
     public void ForegroundGameWinsOverOtherOnScreenGames()
     {
         var src = Service();
-        Assert.Contains("if (proc.Id == fgPid) return new GameMatch(proc.ProcessName, IsKnownGame: true);", src);
+        Assert.Contains("if (proc.Id == fgPid)", src);
+        Assert.Contains("return new GameMatch(proc.ProcessName, IsKnownGame: true", src);
     }
 
     [Fact]
@@ -120,6 +139,26 @@ public class GameBoosterDetectionTests
         int listEnd   = src.IndexOf("};", listStart, System.StringComparison.Ordinal);
         var list = src[listStart..listEnd];
         Assert.DoesNotContain("-Win64-Shipping", list);
+    }
+
+    [Fact]
+    public void ARecognisedGameIsNamedEvenWhenItIsNotOnScreen()
+    {
+        var src = Service();
+
+        // A fullscreen game MINIMISES when you alt-tab, so "not on screen" is the normal state
+        // whenever the user looks at anything else — including Systema itself. Reporting
+        // "Unknown Game (Anti-Cheat detected)" in that situation was actively harmful: the
+        // placeholder carries IsKnownGame: false, which skips the per-process priority boost.
+        // Observed live with Fortnite: detected, named "Unknown", never boosted.
+        Assert.Contains("offScreenGame", src);
+        Assert.Contains("if (antiCheatRunning && offScreenGame != null)", src);
+
+        // The named result must be preferred over the placeholder.
+        int named       = src.IndexOf("if (antiCheatRunning && offScreenGame != null)", System.StringComparison.Ordinal);
+        int placeholder = src.IndexOf("return new GameMatch(UnknownGameName", System.StringComparison.Ordinal);
+        Assert.True(named > 0 && placeholder > named,
+            "the named off-screen game must be returned before falling back to Unknown Game");
     }
 
     [Fact]

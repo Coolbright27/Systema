@@ -342,7 +342,11 @@ public class SettingsService
     /// </summary>
     public bool GameBoosterGpuProfile
     {
-        get => ReadBool(nameof(GameBoosterGpuProfile), defaultValue: false);
+        // Defaults ON. This is the single most valuable thing a boost does, and before v0.7.281
+        // the process priority raise ran unconditionally — the toggle only gated the MMCSS
+        // profile. Gating the priority raise behind a setting that defaulted to false meant a
+        // game was detected and then nothing happened to it.
+        get => ReadBool(nameof(GameBoosterGpuProfile), defaultValue: true);
         set => WriteBool(nameof(GameBoosterGpuProfile), value);
     }
 

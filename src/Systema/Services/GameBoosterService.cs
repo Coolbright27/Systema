@@ -63,12 +63,13 @@ public sealed class GameBoosterService : IDisposable
     /// <summary>True when the active boost is for a real, named game process whose priority we
     /// raised — so DeactivateBoost knows to restore it without re-parsing the display name.</summary>
     private bool _boostedRealGame;
+    /// <summary>The match the active boost was started for — keeps the session alive across alt-tab.</summary>
+    private GameMatch? _activeMatch;
     // pid → the process's CPU priority class BEFORE we boosted it, so RestoreGameProcess
     // hands back the real original instead of blindly forcing Normal. A game launched at
     // (say) High by its launcher, or already adjusted by another tool, would otherwise be
     // demoted to Normal when the boost ends — the same "lost original priority" bug the
     // Task Sleep / Launch Boost path had.
-    private readonly Dictionary<int, ProcessPriorityClass> _gameOriginalPriority = new();
 
     // ── P/Invoke: Sleep prevention (kernel32) ─────────────────────────────────
     // SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED) — same call video
@@ -87,8 +88,6 @@ public sealed class GameBoosterService : IDisposable
         IntPtr processHandle, int processInformationClass,
         ref int processInformation, int processInformationLength);
 
-    private const int ProcessIoPriority = 33;
-    private const int IoPriorityHigh   = 3;
     private const int IoPriorityNormal = 2;
 
     // ── P/Invoke: Working set trim (for free-memory-on-boost) ─────────────────
@@ -125,23 +124,34 @@ public sealed class GameBoosterService : IDisposable
     private void EnsureDebugPrivilege()
     {
         if (_debugPrivilegeEnabled) return;
+        _debugPrivilegeEnabled = EnablePrivilege("SeDebugPrivilege");
+        if (!_debugPrivilegeEnabled)
+            _log.Warn("GameBoosterService", "SeDebugPrivilege not granted (indexer pause may not work)");
+    }
+
+    /// <summary>Turns on one named privilege in our own token. True when it actually took.</summary>
+    private bool EnablePrivilege(string privilegeName)
+    {
         try
         {
-            if (!OpenProcessToken(GetCurrentProcess(), TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY, out IntPtr token)) return;
+            if (!OpenProcessToken(GetCurrentProcess(), TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY, out IntPtr token))
+                return false;
             try
             {
-                if (LookupPrivilegeValue(null, "SeDebugPrivilege", out LUID luid))
-                {
-                    var tp = new TOKEN_PRIVILEGES { Count = 1, Luid = luid, Attributes = SE_PRIVILEGE_ENABLED };
-                    AdjustTokenPrivileges(token, false, ref tp, 0, IntPtr.Zero, IntPtr.Zero);
-                    // AdjustTokenPrivileges returns true even on partial success — verify via last error.
-                    _debugPrivilegeEnabled = Marshal.GetLastWin32Error() == 0;
-                    if (!_debugPrivilegeEnabled) _log.Warn("GameBoosterService", "SeDebugPrivilege not granted (indexer pause may not work)");
-                }
+                if (!LookupPrivilegeValue(null, privilegeName, out LUID luid)) return false;
+
+                var tp = new TOKEN_PRIVILEGES { Count = 1, Luid = luid, Attributes = SE_PRIVILEGE_ENABLED };
+                AdjustTokenPrivileges(token, false, ref tp, 0, IntPtr.Zero, IntPtr.Zero);
+                // AdjustTokenPrivileges returns true even on partial success — verify via last error.
+                return Marshal.GetLastWin32Error() == 0;
             }
             finally { CloseHandle(token); }
         }
-        catch (Exception ex) { _log.Warn("GameBoosterService", $"EnsureDebugPrivilege failed: {ex.Message}"); }
+        catch (Exception ex)
+        {
+            _log.Warn("GameBoosterService", $"EnablePrivilege({privilegeName}) failed: {ex.Message}");
+            return false;
+        }
     }
 
     // Flush modified pages + purge standby list to maximise immediately-free RAM.
@@ -186,6 +196,8 @@ public sealed class GameBoosterService : IDisposable
     private const uint MemoryPurgeStandbyList      = 2; // evict standby list → free
 
     private const uint PROCESS_SET_INFORMATION   = 0x0200;
+    /// <summary>Enough to read a protected process's basics; PROCESS_QUERY_INFORMATION is not.</summary>
+    private const uint PROCESS_QUERY_LIMITED_INFORMATION = 0x1000;
     // EmptyWorkingSet and SetProcessWorkingSetSize require BOTH of the rights
     // below (per psapi.dll docs). Using PROCESS_SET_INFORMATION alone made every
     // call silently fail with ERROR_ACCESS_DENIED — the loop still incremented
@@ -366,6 +378,68 @@ public sealed class GameBoosterService : IDisposable
         // Other popular titles
         "Warframe.x64", "Warframe",
         "dota2",
+        // Driving / sim
+        "BeamNG.drive.x64", "BeamNG.drive",
+        "ForzaHorizon4", "ForzaMotorsport",
+        "AssettoCorsa", "acs",
+        "DirtRally2",
+        "eurotrucks2", "amtrucks",   // Euro Truck Simulator 2 / American Truck Simulator
+        "MudRunner", "SnowRunner",
+        // Shooters
+        "cod",                        // modern Call of Duty launcher exe
+        "BF2042", "bf1", "bf4",
+        "destiny2",
+        "helldivers2",
+        "TheFinals",
+        "PayDay3",
+        "Warthunder", "aces",         // War Thunder
+        // Survival / sandbox
+        "DayZ_x64",
+        "arma3_x64", "ArmaReforger",
+        "Palworld",
+        "Valheim",
+        "ProjectZomboid64",
+        "7DaysToDie",
+        "SonsOfTheForest",
+        "Stationeers",
+        "factorio",
+        "SpaceEngineers",
+        "NMS",                        // No Man's Sky
+        // RPG / action
+        "RDR2",
+        "Diablo IV",
+        "PathOfExile_x64", "PathOfExileSteam", "PathOfExile", "PathOfExile_x64Steam",
+        "sekiro", "DarkSoulsIII", "armoredcore6",
+        "MonsterHunterWorld", "MonsterHunterWilds", "MonsterHunterRise",
+        "nier automata", "SpaceMarine2",
+        // Co-op / party
+        "Lethal Company",
+        "Phasmophobia",
+        "REPO",
+        "Among Us",
+        "Content Warning",
+        "Risk of Rain 2",
+        // Racing / sports
+        "RocketLeague",
+        "FC25", "FC24",               // EA Sports FC
+        "NBA2K25",
+        // Gacha / anime
+        "GenshinImpact", "YuanShen",
+        "StarRail",
+        "ZenlessZoneZero",
+        // Strategy / management
+        "Cities2",
+        "Civ6", "Civ7",
+        "Stellaris", "hoi4", "eu4", "ck3",
+        "RimWorld", "RimWorldWin64",
+        // Other
+        "HaloInfinite",
+        "SeaOfThieves",
+        "TS4_x64",                    // The Sims 4
+        "Stardew Valley",
+        "balatro",
+        "VampireSurvivors",
+        "WorldOfTanks", "WorldOfWarships",
     };
 
     /// <summary>
@@ -451,6 +525,7 @@ public sealed class GameBoosterService : IDisposable
         _settings       = settings;
         _processLasso   = processLasso;
         _batteryPause   = batteryPause;
+
     }
 
     /// <summary>
@@ -532,9 +607,7 @@ public sealed class GameBoosterService : IDisposable
             // processes — must NOT run on the UI thread or it will freeze the window.
             Action? postLockAction = await Task.Run(() =>
             {
-                // IsKnownGame: false — "Manual Boost" is a label, not a process, so BoostGameProcess
-                // must not go hunting for one (it used to, and enumerated every process to find
-                // nothing).
+                // IsKnownGame: false — "Manual Boost" is a label, not a process name.
                 lock (_lock) return ActivateBoost(new GameMatch("Manual Boost", IsKnownGame: false));
             }).ConfigureAwait(true); // resume on UI thread for the DispatcherTimer below
             postLockAction?.Invoke();
@@ -669,8 +742,13 @@ public sealed class GameBoosterService : IDisposable
     /// What detection found. <paramref name="IsKnownGame"/> is false for the anti-cheat fallback
     /// and for manual boost, where <paramref name="Name"/> is a label rather than a process — so
     /// nothing downstream has to infer that by reading the string.
+    ///
+    /// <paramref name="Pid"/> is the exact process that matched (0 when there isn't one). The
+    /// boost used to throw this away and re-look-up by name, which was fragile in both directions:
+    /// for Minecraft it meant boosting EVERY javaw on the machine including an open IDE, and if
+    /// the name lookup came back empty the game was detected and then silently never boosted.
     /// </summary>
-    private readonly record struct GameMatch(string Name, bool IsKnownGame);
+    private readonly record struct GameMatch(string Name, bool IsKnownGame, int Pid = 0);
 
     public bool ScanForInstalledGames()
     {
@@ -743,7 +821,21 @@ public sealed class GameBoosterService : IDisposable
             // FindRunningGame runs outside the lock (Process.GetProcesses is expensive),
             // but the shouldActivate/shouldDeactivate decision is made inside the lock
             // to avoid racing with ActivateBoost/DeactivateBoost from concurrent callers.
-            GameMatch? detected  = FindRunningGame();
+            GameMatch? detected = FindRunningGame();
+
+            // SESSION STICKINESS. Detection answers "is a game on screen right now", which is the
+            // right question for STARTING a boost and the wrong one for ending it: a fullscreen
+            // game minimises the moment you alt-tab, so the honest answer becomes "no game" while
+            // the user is very much still playing. Boost would drop, then come back when they
+            // tabbed in — churning the power plan, Wi-Fi and battery pause every time.
+            //
+            // Once a boost is running for a real, named game, the only thing that ends it is that
+            // game exiting. The anti-cheat tier in FindRunningGame already covers the alt-tab case
+            // for protected titles; this covers everything else.
+            if (detected == null && _boostActive && _activeMatch is { IsKnownGame: true } active
+                && IsProcessAlive(active.Pid))
+                detected = active;
+
             string? detectedGame = detected?.Name;
 
             // Events and tray calls are captured as actions and fired OUTSIDE the lock
@@ -796,6 +888,21 @@ public sealed class GameBoosterService : IDisposable
         return false;
     }
 
+    /// <summary>
+    /// True when this process name could be a game — either a confirmed game name or one that
+    /// needs its window title checked.
+    ///
+    /// Exposed so Launch Boost can leave games alone. The two features were both boosting the same
+    /// process and it did not merely duplicate work: Launch Boost fires the instant a process
+    /// starts, sets CPU High and GPU Realtime, and records Normal as the value to restore. Game
+    /// Booster claims the process a few seconds later and captures the ALREADY-BOOSTED state as
+    /// its own "original", so when the session ended it put the game back to High/Realtime and
+    /// left it there for the life of the process. Games belong to Game Booster; Launch Boost keeps
+    /// everything else.
+    /// </summary>
+    internal static bool IsPotentialGameProcess(string processName) =>
+        IsKnownGameProcess(processName) || IsTitleQualifiedCandidate(processName);
+
     /// <summary>True when the name is one that needs its window title checked (see TitleQualifiedGames).</summary>
     private static bool IsTitleQualifiedCandidate(string processName)
     {
@@ -814,6 +921,14 @@ public sealed class GameBoosterService : IDisposable
             catch { return false; }
         }
         return false;
+    }
+
+    /// <summary>Cheap "is this PID still around?" used to keep a session alive across alt-tab.</summary>
+    private static bool IsProcessAlive(int pid)
+    {
+        if (pid <= 0) return false;
+        try { using var p = Process.GetProcessById(pid); return !p.HasExited; }
+        catch { return false; }
     }
 
     /// <summary>True when the process name looks like a known anti-cheat (substring, so
@@ -838,6 +953,7 @@ public sealed class GameBoosterService : IDisposable
     private void FastForegroundGameCheck()
     {
         if (!_settings.GameBoosterEnabled) return;
+
         try
         {
             var (fgPid, fgName) = GetForegroundProcess();
@@ -895,8 +1011,9 @@ public sealed class GameBoosterService : IDisposable
             var onScreenPids  = GetOnScreenPids();
             var (fgPid, fgName) = GetForegroundProcess();
 
-            GameMatch? onScreenGame = null;
-            bool antiCheatRunning   = false;
+            GameMatch? onScreenGame  = null;
+            GameMatch? offScreenGame = null;
+            bool antiCheatRunning    = false;
 
             var procs = Process.GetProcesses();
             try
@@ -910,14 +1027,24 @@ public sealed class GameBoosterService : IDisposable
                         if (!antiCheatRunning && IsAntiCheatProcess(proc.ProcessName))
                             antiCheatRunning = true;
 
-                        if (!onScreenPids.Contains(proc.Id)) continue;
-                        if (!IsKnownGameProcess(proc.ProcessName) && !IsTitleQualifiedGame(proc)) continue;
+                        bool isGame = IsKnownGameProcess(proc.ProcessName) || IsTitleQualifiedGame(proc);
+
+                        if (!onScreenPids.Contains(proc.Id))
+                        {
+                            // Remember a game that is running but not currently on screen. A
+                            // fullscreen game MINIMISES when you alt-tab, so this is the normal
+                            // state whenever the user looks at anything else — including Systema.
+                            if (isGame) offScreenGame ??= new GameMatch(proc.ProcessName, IsKnownGame: true, Pid: proc.Id);
+                            continue;
+                        }
+                        if (!isGame) continue;
 
                         // The game the user is looking at wins outright — stop here.
-                        if (proc.Id == fgPid) return new GameMatch(proc.ProcessName, IsKnownGame: true);
+                        if (proc.Id == fgPid)
+                            return new GameMatch(proc.ProcessName, IsKnownGame: true, Pid: proc.Id);
 
                         // Otherwise remember it and keep looking for a foreground match.
-                        onScreenGame ??= new GameMatch(proc.ProcessName, IsKnownGame: true);
+                        onScreenGame ??= new GameMatch(proc.ProcessName, IsKnownGame: true, Pid: proc.Id);
                     }
                     catch { }
                 }
@@ -929,9 +1056,17 @@ public sealed class GameBoosterService : IDisposable
 
             if (onScreenGame != null) return onScreenGame;
 
-            // Nothing recognisable on screen. Anti-cheat running with a real app in front is still
-            // a game session worth boosting, we just can't name it. Gated on the foreground not
-            // being the shell so it won't boost while the user sits on the desktop.
+            // Nothing on screen, but a game we RECOGNISE is running and its anti-cheat is loaded.
+            // That is a live session — a fullscreen game that minimised when the user alt-tabbed.
+            // Name it. Reporting "Unknown Game" here was the bug: the placeholder carries
+            // IsKnownGame: false, which skips the priority boost entirely, so Fortnite got detected
+            // and then deliberately left alone.
+            if (antiCheatRunning && offScreenGame != null)
+                return offScreenGame;
+
+            // Anti-cheat running but nothing we recognise anywhere. Still a game session worth
+            // boosting the system for, we just can't name the process — so no per-process boost.
+            // Gated on the foreground not being the shell so it won't fire on an empty desktop.
             if (antiCheatRunning && fgPid != 0 &&
                 !fgName.Equals("explorer", StringComparison.OrdinalIgnoreCase))
                 return new GameMatch(UnknownGameName, IsKnownGame: false);
@@ -1011,8 +1146,12 @@ public sealed class GameBoosterService : IDisposable
         using var priority = _tray?.BorrowNormalPriority();
 
         string gameName = match.Name;
+        _activeMatch     = match;
         _boostedRealGame = match.IsKnownGame;
         _boostActive   = true;
+        // Announce the session before applying anything, so other features stand down for its
+        // whole duration rather than from whenever the first setting happened to land.
+        BoostedGameRegistry.SessionActive = true;
         BoostStartedAt = DateTime.UtcNow;
         ActiveGameName = gameName;
         _killedServices.Clear();
@@ -1026,10 +1165,23 @@ public sealed class GameBoosterService : IDisposable
         // services paused by an OLDER Systema build still get restored on upgrade.
         CrashGuard.Mark($"Game Boost active for {gameName} (background services are no longer paused)");
 
-        // Boost game process priority. Skipped for the anti-cheat fallback and for manual boost,
-        // where the name is a label and there is no process by that name to find.
+        // NO PER-PROCESS PRIORITY CHANGES. Systema deliberately does not touch the game process
+        // itself — not CPU priority, not I/O, not GPU, not memory, not power throttling.
+        //
+        // v0.7.281 tried it and it was actively harmful: anti-cheat treats external manipulation
+        // of a protected game as tampering. Fortnite (EAC), BeamNG and Roblox all force-closed.
+        // That is by design on their side, not a bug we can work around, and no amount of boost is
+        // worth ending the player's session. Everything a boost does now is SYSTEM-level (power
+        // plan, indexing, network, notifications) and leaves the game alone.
+        //
+        // Process Lasso's ProBalance exclusion stays: it changes Lasso's own configuration, not
+        // the game process.
         if (match.IsKnownGame)
-            BoostGameProcess(gameName);
+        {
+            _boostedProcessName = $"{gameName}.exe";
+            if (_processLasso.IsInstalled())
+                _processLasso.ExcludeFromProBalance(_boostedProcessName);
+        }
 
         // WAL (write-ahead log) pattern: read all pre-boost originals into _saved* fields
         // BEFORE making any system changes, then persist them to disk immediately.
@@ -1076,13 +1228,17 @@ public sealed class GameBoosterService : IDisposable
         // and the network settings is real work that shouldn't crawl at Idle priority.
         using var priority = _tray?.BorrowNormalPriority();
 
-        // Restore game process priority before clearing state. Mirrors the flag ActivateBoost
-        // raised the priority on, so the two can't disagree about what was boosted.
-        if (ActiveGameName != null && _boostedRealGame)
-            RestoreGameProcess(ActiveGameName);
+        // Nothing to restore on the game process — Systema never changed it. See ActivateBoost.
+        if (_boostedProcessName != null && _processLasso.IsInstalled())
+        {
+            _processLasso.RemoveProBalanceExclusion(_boostedProcessName);
+            _boostedProcessName = null;
+        }
 
         _boostedRealGame = false;
+        _activeMatch   = null;
         _boostActive   = false;
+        BoostedGameRegistry.SessionActive = false;
         ActiveGameName = null;
         BoostStartedAt = null;
 
@@ -1147,72 +1303,12 @@ public sealed class GameBoosterService : IDisposable
 
     // ── Process Priority Boost ─────────────────────────────────────────────────
 
-    private void BoostGameProcess(string gameName)
-    {
-        try
-        {
-            var procs = Process.GetProcessesByName(gameName);
-            foreach (var proc in procs)
-            {
-                try
-                {
-                    // Capture the real original priority ONCE (first boost wins), so a
-                    // re-boost of an already-High process can't record High as the value
-                    // to restore later.
-                    if (!_gameOriginalPriority.ContainsKey(proc.Id))
-                        _gameOriginalPriority[proc.Id] = proc.PriorityClass;
-                    proc.PriorityClass = ProcessPriorityClass.High;
-                    int ioPriority = IoPriorityHigh;
-                    NtSetInformationProcess(proc.Handle, ProcessIoPriority, ref ioPriority, sizeof(int));
-                    _boostedProcessName = $"{gameName}.exe";
-                    if (_processLasso.IsInstalled())
-                        _processLasso.ExcludeFromProBalance(_boostedProcessName);
-                    _log.Info("GameBoosterService", $"Priority boosted for {gameName} (High CPU + IO)");
-                }
-                catch (Exception ex)
-                {
-                    _log.Warn("GameBoosterService", $"Priority boost failed for {gameName}: {ex.Message}");
-                }
-                finally { proc.Dispose(); }
-            }
-        }
-        catch (Exception ex)
-        {
-            _log.Warn("GameBoosterService", $"BoostGameProcess error: {ex.Message}");
-        }
-    }
-
-    private void RestoreGameProcess(string gameName)
-    {
-        try
-        {
-            var procs = Process.GetProcessesByName(gameName);
-            foreach (var proc in procs)
-            {
-                try
-                {
-                    // Restore the captured original priority; fall back to Normal only if we
-                    // never recorded one (e.g. the process started mid-boost).
-                    proc.PriorityClass = _gameOriginalPriority.TryGetValue(proc.Id, out var orig)
-                        ? orig : ProcessPriorityClass.Normal;
-                    int ioPriority = IoPriorityNormal;
-                    NtSetInformationProcess(proc.Handle, ProcessIoPriority, ref ioPriority, sizeof(int));
-                }
-                catch { }
-                finally { _gameOriginalPriority.Remove(proc.Id); proc.Dispose(); }
-            }
-        }
-        catch { }
-
-        if (_boostedProcessName != null && _processLasso.IsInstalled())
-        {
-            _processLasso.RemoveProBalanceExclusion(_boostedProcessName);
-            _boostedProcessName = null;
-        }
-
-        _log.Info("GameBoosterService", $"Process priority restored for {gameName}");
-    }
-
+    /// <summary>
+    /// Raises everything Windows lets us raise on the game itself.
+    /// <paramref name="pid"/> is the process detection actually matched; it is used in preference
+    /// to a name lookup, which both over-reaches (every javaw on the machine, IDE included) and
+    /// can come back empty and leave a detected game unboosted.
+    /// </summary>
     // ── New Boost Options ─────────────────────────────────────────────────────
 
     private void ApplyBoostOptions(string gameName)

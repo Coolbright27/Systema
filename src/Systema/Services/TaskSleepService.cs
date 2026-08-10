@@ -4892,6 +4892,7 @@ public sealed class TaskSleepService : IDisposable
     {
         expiry = default;
 
+
         // INHERIT: ride the parent's active session window (whole-tree, one shared duration).
         lock (_launchBoostLock)
         {
@@ -5017,6 +5018,7 @@ public sealed class TaskSleepService : IDisposable
             if (!claimed) return;   // someone else already booked this PID — don't touch priority
 
             if (s.LaunchBoostCpu)               SetPriorityClass(h, HIGH_PRIORITY_CLASS);
+
             if (s.LaunchBoostIo)                SetIoPriorityLevel(h, IO_PRIORITY_HIGH);
             if (s.LaunchBoostDisableEfficiency) SetEfficiencyMode(h, false);
 
