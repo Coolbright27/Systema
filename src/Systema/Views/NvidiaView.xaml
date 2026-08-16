@@ -6,6 +6,16 @@
 
     <UserControl.Resources>
         <conv:BoolToVisibilityConverter x:Key="BoolToVis"/>
+
+        <!-- Mode name plus a short hint, same shape as the Dell thermal selector. -->
+        <DataTemplate x:Key="PowerModeItemTemplate">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="{Binding Label}" VerticalAlignment="Center"/>
+                <TextBlock Text="{Binding Note, StringFormat='({0})'}"
+                           FontSize="10" Margin="6,0,0,0" VerticalAlignment="Center"
+                           Foreground="{StaticResource TextSecondaryBrush}"/>
+            </StackPanel>
+        </DataTemplate>
     </UserControl.Resources>
 
     <ScrollViewer VerticalScrollBarVisibility="Auto">
@@ -73,6 +83,74 @@
                                 Command="{Binding ResetSettingCommand}" CommandParameter="PowerManagement"/>
                     </StackPanel>
                 </Grid>
+            </Border>
+
+            <!-- ===== POWER MANAGEMENT MODE ===== -->
+            <Border Style="{StaticResource Card}" Margin="0,0,0,20">
+                <StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                        <TextBlock Text="Power management mode" Style="{StaticResource HeadingMedium}"/>
+                        <!-- Hover for a second and the tooltip explains what the tag means. The
+                             delay keeps it from flashing up while the pointer crosses the card. -->
+                        <Border Background="#1A38BDF8" CornerRadius="4" Padding="6,1" Margin="8,1,0,0"
+                                VerticalAlignment="Center"
+                                ToolTipService.InitialShowDelay="1000"
+                                ToolTipService.ShowDuration="12000">
+                            <Border.ToolTip>
+                                <ToolTip>
+                                    <TextBlock TextWrapping="Wrap" MaxWidth="300"
+                                               Text="This one is experimental and still being tested. It might change, or be removed in a future update."/>
+                                </ToolTip>
+                            </Border.ToolTip>
+                            <TextBlock Text="EXPERIMENTAL" FontSize="9" FontWeight="SemiBold"
+                                       Foreground="{StaticResource AccentBlueBrush}"/>
+                        </Border>
+                    </StackPanel>
+                    <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" MaxWidth="620" Margin="0,0,0,14">
+                        The same dropdown as Power management mode in the NVIDIA app's global settings. Optimal power
+                        lets the card drop its clocks whenever it can, Normal leaves the decision to the driver, and
+                        Prefer maximum performance holds full clocks all the time.
+                        <Run FontStyle="Italic">Applies straight away, no restart needed.</Run>
+                    </TextBlock>
+
+                    <!-- Plugged in / desktop -->
+                    <Grid Margin="0,0,0,12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="270"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,16,0">
+                            <TextBlock Text="When plugged in" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
+                            <TextBlock Text="Used on AC power, and always on a desktop."
+                                       Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,2,0,0"/>
+                        </StackPanel>
+                        <ComboBox Grid.Column="1" VerticalAlignment="Center"
+                                  Style="{StaticResource DarkComboBox}"
+                                  ItemsSource="{Binding PowerModeOptions}"
+                                  ItemTemplate="{StaticResource PowerModeItemTemplate}"
+                                  SelectedValuePath="Value"
+                                  SelectedValue="{Binding PowerModeAc, Mode=TwoWay}"/>
+                    </Grid>
+
+                    <!-- On battery — laptops only -->
+                    <Grid Visibility="{Binding IsLaptop, Converter={StaticResource BoolToVis}}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="270"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,16,0">
+                            <TextBlock Text="On battery" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
+                            <TextBlock Text="Used when you're unplugged. Optimal power is usually the right pick here, since full clocks on battery mostly make heat and drain runtime."
+                                       Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,2,0,0"/>
+                        </StackPanel>
+                        <ComboBox Grid.Column="1" VerticalAlignment="Center"
+                                  Style="{StaticResource DarkComboBox}"
+                                  ItemsSource="{Binding PowerModeOptions}"
+                                  ItemTemplate="{StaticResource PowerModeItemTemplate}"
+                                  SelectedValuePath="Value"
+                                  SelectedValue="{Binding PowerModeBattery, Mode=TwoWay}"/>
+                    </Grid>
+                </StackPanel>
             </Border>
 
             <!-- ===== MAX FRAME RATE (FPS CAP) ===== -->

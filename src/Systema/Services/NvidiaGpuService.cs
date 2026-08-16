@@ -313,6 +313,12 @@ public class NvidiaGpuService
             : r;
     }
 
+    // NOTE: "Power management mode" (the dropdown in the NVIDIA app's global settings) is NOT
+    // here. It is a driver PROFILE setting — PREFERRED_PSTATE, written through NVAPI DRS in
+    // NvapiService — and it applies immediately with no restart. The PowerMizer values above are
+    // a separate, older registry mechanism that needs a reboot. Don't add a second power-mode
+    // control here; they would fight.
+
     public TweakResult RevertAll(IReadOnlyList<NvidiaAdapter> adapters)
     {
         var targets = WriteTargets(adapters);

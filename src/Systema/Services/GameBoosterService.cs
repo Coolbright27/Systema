@@ -65,6 +65,12 @@ public sealed class GameBoosterService : IDisposable
     private bool _boostedRealGame;
     /// <summary>The match the active boost was started for — keeps the session alive across alt-tab.</summary>
     private GameMatch? _activeMatch;
+    /// <summary>
+    /// Longest an auto-started boost may run. Real sessions get long, so this is deliberately
+    /// generous — it exists to catch detection latching onto something that is not a game, not to
+    /// interrupt anyone. Manual boost has its own 6-hour timeout.
+    /// </summary>
+    private static readonly TimeSpan MaxAutoBoostDuration = TimeSpan.FromHours(12);
     // pid → the process's CPU priority class BEFORE we boosted it, so RestoreGameProcess
     // hands back the real original instead of blindly forcing Normal. A game launched at
     // (say) High by its launcher, or already adjusted by another tool, would otherwise be
@@ -334,7 +340,7 @@ public sealed class GameBoosterService : IDisposable
     // ── Well-known game executables ────────────────────────────────────────────
     // A HashSet, not an array: this is probed once per running process on every detection
     // pass, so an O(1) lookup beats walking ~40 strings each time.
-    private static readonly HashSet<string> KnownGameProcesses = new(StringComparer.OrdinalIgnoreCase)
+    private static readonly HashSet<string> GameNames = new(StringComparer.OrdinalIgnoreCase)
     {
         // Roblox
         "RobloxPlayerBeta", "RobloxPlayer",
@@ -448,7 +454,7 @@ public sealed class GameBoosterService : IDisposable
     /// Fortnite, Valorant, Assetto Corsa Competizione and several hundred titles that would
     /// otherwise each need a line above (and would each be missed until someone added one).
     /// </summary>
-    private static readonly string[] KnownGameSuffixes =
+    private static readonly string[] GameSuffixes =
     {
         "-Win64-Shipping",
         "-Win32-Shipping",
@@ -466,21 +472,8 @@ public sealed class GameBoosterService : IDisposable
         ("javaw", "Minecraft"),
     };
 
-    // ── Well-known game install paths / registry keys ──────────────────────────
-    private static readonly string[] GameInstallRegistryKeys =
-    {
-        @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Roblox",
-        @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Epic Games Launcher",
-        @"SOFTWARE\Valve\Steam",
-        @"SOFTWARE\WOW6432Node\Valve\Steam",
-        @"SOFTWARE\Mojang\InstalledProducts\Minecraft Launcher",
-        @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Minecraft Launcher",
-        @"SOFTWARE\Microsoft\XboxApp",
-        @"SOFTWARE\Riot Games\League of Legends",
-        @"SOFTWARE\Riot Games\VALORANT",
-    };
 
-    private static readonly string[] GameInstallFolders =
+    private static readonly string[] GameLauncherFolders =
     {
         @"C:\Program Files (x86)\Roblox",
         @"C:\Program Files\Roblox",
@@ -494,14 +487,14 @@ public sealed class GameBoosterService : IDisposable
     // ── Anti-cheat / engine detection ─────────────────────────────────────────
     //
     // Used by FindRunningGame() to detect a gaming session via anti-cheat proxy
-    // (when the game exe itself isn't in KnownGameProcesses).
+    // (when the game exe itself isn't in GameNames).
     //
     // ALSO used by ApplyBoostOptions() to skip these processes during working-set
     // trim — kernel-mode AC drivers (Vanguard, EAC, BattlEye, etc.) can intercept
     // per-process memory API calls (OpenProcess, EmptyWorkingSet) and react with an
     // unrecoverable AccessViolation that terminates our process, or flag Systema in
     // the AC's telemetry and trigger a game ban. Never call memory trim APIs on them.
-    private static readonly string[] AntiCheatProcesses =
+    private static readonly string[] AntiCheatNames =
     {
         "vgc",           // Valorant Vanguard (kernel service, always running)
         "EasyAntiCheat", // Easy Anti-Cheat  (Epic, many titles)
@@ -750,9 +743,26 @@ public sealed class GameBoosterService : IDisposable
     /// </summary>
     private readonly record struct GameMatch(string Name, bool IsKnownGame, int Pid = 0);
 
+    /// <summary>
+    /// "Does this PC have games on it?" — a DIFFERENT question from "is a game running now", and
+    /// it feeds something else entirely: ServiceControlService uses it to decide whether the Xbox
+    /// and gaming services stay enabled when privacy tweaks run. That is why it survives while the
+    /// rest of the old detection machinery is gone.
+    ///
+    /// It used to answer that three ways — a registry key list, a folder list, and a scan of every
+    /// running process looking for anti-cheat. Three mechanisms, three lists, one boolean. The
+    /// folder check alone is as good: if any of these launchers is installed, the answer is yes,
+    /// and if none of them is, no registry key was going to change the outcome.
+    /// </summary>
     public bool ScanForInstalledGames()
     {
-        bool found = CheckRegistryForGames() || CheckFolderForGames() || CheckAntiCheatPresent();
+        bool found = false;
+        foreach (var folder in GameLauncherFolders)
+        {
+            try { if (Directory.Exists(folder)) { found = true; break; } }
+            catch { }
+        }
+
         if (found != GamesInstalled)
         {
             GamesInstalled = found;
@@ -760,54 +770,6 @@ public sealed class GameBoosterService : IDisposable
             GamesInstalledChanged?.Invoke(found);
         }
         return found;
-    }
-
-    private static bool CheckRegistryForGames()
-    {
-        foreach (var key in GameInstallRegistryKeys)
-        {
-            try
-            {
-                using var reg = Registry.LocalMachine.OpenSubKey(key)
-                             ?? Registry.CurrentUser.OpenSubKey(key);
-                if (reg != null) return true;
-            }
-            catch { }
-        }
-        return false;
-    }
-
-    private static bool CheckFolderForGames()
-    {
-        foreach (var folder in GameInstallFolders)
-        {
-            try
-            {
-                if (Directory.Exists(folder)) return true;
-            }
-            catch { }
-        }
-        return false;
-    }
-
-    private static bool CheckAntiCheatPresent()
-    {
-        var procs = Array.Empty<Process>();
-        try
-        {
-            procs = Process.GetProcesses();
-            foreach (var proc in procs)
-            {
-                try { if (IsAntiCheatProcess(proc.ProcessName)) return true; }
-                catch { }
-            }
-        }
-        catch { }
-        finally
-        {
-            foreach (var proc in procs) { try { proc.Dispose(); } catch { } }
-        }
-        return false;
     }
 
     // ── Running Game Detection ─────────────────────────────────────────────────
@@ -834,7 +796,25 @@ public sealed class GameBoosterService : IDisposable
             // for protected titles; this covers everything else.
             if (detected == null && _boostActive && _activeMatch is { IsKnownGame: true } active
                 && IsProcessAlive(active.Pid))
-                detected = active;
+            {
+                // ...but "the process is alive" is not the same as "you are still playing". A
+                // helper can outlive the game (an Epic overlay renderer kept a boost running for
+                // 19 hours after Fortnite closed). The detection fix for that specific process is
+                // in NotAGameFragments; this cap is the backstop, so the next mis-detection ends
+                // itself instead of waiting to be noticed.
+                if (BoostStartedAt is { } startedAt &&
+                    DateTime.UtcNow - startedAt > MaxAutoBoostDuration)
+                {
+                    _log.Warn("GameBoosterService",
+                              $"Boost for '{active.Name}' has run {(DateTime.UtcNow - startedAt).TotalHours:0.#}h, " +
+                              $"past the {MaxAutoBoostDuration.TotalHours:0}h limit — ending it. The process is " +
+                              "still running but this is almost certainly not a live game session.");
+                }
+                else
+                {
+                    detected = active;
+                }
+            }
 
             string? detectedGame = detected?.Name;
 
@@ -873,54 +853,84 @@ public sealed class GameBoosterService : IDisposable
         }
     }
 
+
     /// <summary>
-    /// True when a process name alone identifies a game. Shared by the fast foreground check and
-    /// the full pass so the two can never disagree about what counts as a game.
+    /// Unreal's "-Shipping" suffix also catches the ENGINE'S OWN helper processes. They are not
+    /// games, and they routinely OUTLIVE the game you were playing.
+    ///
+    /// This is the case that bit: Fortnite was closed, its Epic Online Services overlay renderer
+    /// (EOSOverlayRenderer-Win64-Shipping) stayed resident, and because it satisfied both the
+    /// suffix match and the "process is still alive" session rule, the boost ran for 19 hours
+    /// against something nobody was playing.
+    ///
+    /// Checked against the SUFFIX match only — the exact-name list above is hand-curated, so a
+    /// real game called "…Launcher" would still be honoured if someone added it deliberately.
     /// </summary>
-    private static bool IsKnownGameProcess(string processName)
+    private static readonly string[] NotAGameFragments =
+    {
+        "Overlay",      // EOSOverlayRenderer — the 19-hour boost
+        "CrashReport",  // CrashReportClient ships with every Unreal title
+        "Launcher",
+        "Helper",
+        "Updater",
+        "Installer",
+        "Setup",
+        "Redist",
+        "Benchmark",
+        "Editor",       // UnrealEditor — developing a game is not playing one
+        "Server",       // dedicated servers — hosting is not playing
+    };
+    // ── Is this process a game? ──────────────────────────────────────────────
+    //
+    // Two questions, two methods, and that is the whole matcher:
+    //   LooksLikeGame(name)  — name only. Cheap enough for the every-few-seconds poll.
+    //   IsGame(process)      — the same check plus a window-title confirmation for the handful
+    //                          of names that are ambiguous on their own.
+    //
+    // It used to be four methods that each answered a slightly different question, and the fast
+    // path and the full pass called different combinations of them — which is how a name could be
+    // a game to one caller and not the other.
+
+    /// <summary>True when the process NAME alone is enough to call it a game (or a candidate that
+    /// needs its title checked — see <see cref="IsGame"/>).</summary>
+    private static bool LooksLikeGame(string processName)
     {
         if (string.IsNullOrEmpty(processName)) return false;
-        if (KnownGameProcesses.Contains(processName)) return true;
+        if (GameNames.Contains(processName)) return true;
 
-        foreach (var suffix in KnownGameSuffixes)
-            if (processName.EndsWith(suffix, StringComparison.OrdinalIgnoreCase)) return true;
+        foreach (var suffix in GameSuffixes)
+        {
+            if (!processName.EndsWith(suffix, StringComparison.OrdinalIgnoreCase)) continue;
+
+            // An engine suffix is weak evidence: the engine's own helpers carry it too, and they
+            // outlive the game. See NotAGameFragments.
+            foreach (var fragment in NotAGameFragments)
+                if (processName.Contains(fragment, StringComparison.OrdinalIgnoreCase)) return false;
+            return true;
+        }
+
+        foreach (var (name, _) in TitleQualifiedGames)
+            if (processName.Equals(name, StringComparison.OrdinalIgnoreCase)) return true;
 
         return false;
     }
 
     /// <summary>
-    /// True when this process name could be a game — either a confirmed game name or one that
-    /// needs its window title checked.
-    ///
-    /// Exposed so Launch Boost can leave games alone. The two features were both boosting the same
-    /// process and it did not merely duplicate work: Launch Boost fires the instant a process
-    /// starts, sets CPU High and GPU Realtime, and records Normal as the value to restore. Game
-    /// Booster claims the process a few seconds later and captures the ALREADY-BOOSTED state as
-    /// its own "original", so when the session ended it put the game back to High/Realtime and
-    /// left it there for the life of the process. Games belong to Game Booster; Launch Boost keeps
-    /// everything else.
+    /// The authoritative check. Same as <see cref="LooksLikeGame"/>, plus the window-title
+    /// confirmation for names that are shared with non-games ("javaw" is Minecraft AND every other
+    /// Java app, so boosting on the name alone meant an open IDE triggered a boost).
     /// </summary>
-    internal static bool IsPotentialGameProcess(string processName) =>
-        IsKnownGameProcess(processName) || IsTitleQualifiedCandidate(processName);
-
-    /// <summary>True when the name is one that needs its window title checked (see TitleQualifiedGames).</summary>
-    private static bool IsTitleQualifiedCandidate(string processName)
+    private static bool IsGame(Process proc)
     {
-        foreach (var (name, _) in TitleQualifiedGames)
-            if (processName.Equals(name, StringComparison.OrdinalIgnoreCase)) return true;
-        return false;
-    }
+        if (!LooksLikeGame(proc.ProcessName)) return false;
 
-    /// <summary>Confirms a title-qualified candidate by reading its main window title.</summary>
-    private static bool IsTitleQualifiedGame(Process proc)
-    {
         foreach (var (name, titleFragment) in TitleQualifiedGames)
         {
             if (!proc.ProcessName.Equals(name, StringComparison.OrdinalIgnoreCase)) continue;
             try { return proc.MainWindowTitle.Contains(titleFragment, StringComparison.OrdinalIgnoreCase); }
             catch { return false; }
         }
-        return false;
+        return true;
     }
 
     /// <summary>Cheap "is this PID still around?" used to keep a session alive across alt-tab.</summary>
@@ -931,15 +941,16 @@ public sealed class GameBoosterService : IDisposable
         catch { return false; }
     }
 
-    /// <summary>True when the process name looks like a known anti-cheat (substring, so
-    /// "EasyAntiCheat_EOS" matches "EasyAntiCheat").</summary>
-    private static bool IsAntiCheatProcess(string processName)
+    /// <summary>
+    /// True when the name looks like a known anti-cheat. Substring, so "EasyAntiCheat_EOS" matches
+    /// "EasyAntiCheat" and Vanguard's "vgc" matches wherever it appears.
+    /// </summary>
+    private static bool IsAntiCheat(string processName)
     {
-        foreach (var ac in AntiCheatProcesses)
+        foreach (var ac in AntiCheatNames)
             if (processName.Contains(ac, StringComparison.OrdinalIgnoreCase)) return true;
         return false;
     }
-
     /// <summary>
     /// Cheap foreground check, run every few seconds. The full CheckRunningGames pass calls
     /// Process.GetProcesses() and cannot run at this rate, so it stayed on a 2-minute timer —
@@ -966,7 +977,7 @@ public sealed class GameBoosterService : IDisposable
             // Title-qualified names (javaw) count as "maybe" here; the full pass reads the window
             // title to decide. Being generous costs one extra full pass, being strict would mean
             // Minecraft waits out the slow timer.
-            bool fgIsGame = IsKnownGameProcess(fgName) || IsTitleQualifiedCandidate(fgName);
+            bool fgIsGame = LooksLikeGame(fgName);
 
             // A game just came to the front and we're not boosting → confirm on the full pass.
             // Not boosting anything here directly: the suppression list, anti-cheat detection and
@@ -1005,15 +1016,16 @@ public sealed class GameBoosterService : IDisposable
     {
         try
         {
-            // Only boost a game that's actually ON SCREEN — a minimized game shouldn't trigger
-            // (or hold) boost. Uses the same EnumWindows + IsIconic / IsWindowVisible detection
-            // Task Sleep already ships, so no new API surface is introduced.
-            var onScreenPids  = GetOnScreenPids();
+            var onScreenPids    = GetOnScreenPids();
             var (fgPid, fgName) = GetForegroundProcess();
 
-            GameMatch? onScreenGame  = null;
-            GameMatch? offScreenGame = null;
-            bool antiCheatRunning    = false;
+            // One pass, three buckets. Sorting as we go and deciding afterwards is easier to
+            // follow than the old shape, where the decision was smeared across early-returns and
+            // conditional assignments inside the loop.
+            GameMatch? foreground = null;   // the game you are looking at
+            GameMatch? visible    = null;   // a game with a window on screen
+            GameMatch? running    = null;   // a game that is open but not showing
+            bool antiCheat        = false;  // a known anti-cheat is loaded
 
             var procs = Process.GetProcesses();
             try
@@ -1022,29 +1034,15 @@ public sealed class GameBoosterService : IDisposable
                 {
                     try
                     {
-                        // Anti-cheat can be a background service with no window, so this is checked
-                        // for every process — but only as a fallback, and only once each.
-                        if (!antiCheatRunning && IsAntiCheatProcess(proc.ProcessName))
-                            antiCheatRunning = true;
+                        // Anti-cheat is usually a windowless service, so it is checked for every
+                        // process and never competes with a real game for the answer.
+                        if (!antiCheat && IsAntiCheat(proc.ProcessName)) { antiCheat = true; continue; }
+                        if (!IsGame(proc)) continue;
 
-                        bool isGame = IsKnownGameProcess(proc.ProcessName) || IsTitleQualifiedGame(proc);
-
-                        if (!onScreenPids.Contains(proc.Id))
-                        {
-                            // Remember a game that is running but not currently on screen. A
-                            // fullscreen game MINIMISES when you alt-tab, so this is the normal
-                            // state whenever the user looks at anything else — including Systema.
-                            if (isGame) offScreenGame ??= new GameMatch(proc.ProcessName, IsKnownGame: true, Pid: proc.Id);
-                            continue;
-                        }
-                        if (!isGame) continue;
-
-                        // The game the user is looking at wins outright — stop here.
-                        if (proc.Id == fgPid)
-                            return new GameMatch(proc.ProcessName, IsKnownGame: true, Pid: proc.Id);
-
-                        // Otherwise remember it and keep looking for a foreground match.
-                        onScreenGame ??= new GameMatch(proc.ProcessName, IsKnownGame: true, Pid: proc.Id);
+                        var match = new GameMatch(proc.ProcessName, IsKnownGame: true, Pid: proc.Id);
+                        if (proc.Id == fgPid)                   foreground ??= match;
+                        else if (onScreenPids.Contains(proc.Id)) visible   ??= match;
+                        else                                     running   ??= match;
                     }
                     catch { }
                 }
@@ -1054,20 +1052,18 @@ public sealed class GameBoosterService : IDisposable
                 foreach (var proc in procs) { try { proc.Dispose(); } catch { } }
             }
 
-            if (onScreenGame != null) return onScreenGame;
-
-            // Nothing on screen, but a game we RECOGNISE is running and its anti-cheat is loaded.
-            // That is a live session — a fullscreen game that minimised when the user alt-tabbed.
-            // Name it. Reporting "Unknown Game" here was the bug: the placeholder carries
-            // IsKnownGame: false, which skips the priority boost entirely, so Fortnite got detected
-            // and then deliberately left alone.
-            if (antiCheatRunning && offScreenGame != null)
-                return offScreenGame;
-
-            // Anti-cheat running but nothing we recognise anywhere. Still a game session worth
-            // boosting the system for, we just can't name the process — so no per-process boost.
-            // Gated on the foreground not being the shell so it won't fire on an empty desktop.
-            if (antiCheatRunning && fgPid != 0 &&
+            // The rules, in order, stated once:
+            //  1. You are looking at a game.
+            //  2. A game is on screen (second monitor, or a launcher in front of it).
+            //  3. A game is open but hidden AND its anti-cheat is loaded. A fullscreen game
+            //     minimises the moment you alt-tab, so "hidden" is the normal state whenever the
+            //     user looks at anything else — including Systema.
+            //  4. Anti-cheat is loaded and a real app is in front, but we recognise nothing. Still
+            //     a session worth boosting the system for; we just cannot name it.
+            if (foreground != null) return foreground;
+            if (visible    != null) return visible;
+            if (antiCheat && running != null) return running;
+            if (antiCheat && fgPid != 0 &&
                 !fgName.Equals("explorer", StringComparison.OrdinalIgnoreCase))
                 return new GameMatch(UnknownGameName, IsKnownGame: false);
         }
@@ -1379,7 +1375,7 @@ public sealed class GameBoosterService : IDisposable
                         // EmptyWorkingSet on their handles and react with an unrecoverable
                         // AccessViolationException that terminates the whole process, or
                         // flag Systema as a threat and cause a game ban.
-                        if (Array.Exists(AntiCheatProcesses, ac =>
+                        if (Array.Exists(AntiCheatNames, ac =>
                             proc.ProcessName.Contains(ac, StringComparison.OrdinalIgnoreCase)))
                         {
                             skipped++;

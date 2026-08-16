@@ -7,6 +7,7 @@
 // PRESENT adapter only (see NvidiaGpuService). Mirrors IntelGpuViewModel's pattern.
 // ════════════════════════════════════════════════════════════════════════════
 
+using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using System.Runtime.InteropServices;
@@ -14,6 +15,9 @@ using Systema.Core;
 using Systema.Services;
 
 namespace Systema.ViewModels;
+
+/// <summary>One entry in the power management mode dropdown.</summary>
+public sealed record PowerModeOption(uint Value, string Label, string Note);
 
 public partial class NvidiaGpuViewModel : ObservableObject, IDisposable, IAutoRefreshable
 {
@@ -61,6 +65,17 @@ public partial class NvidiaGpuViewModel : ObservableObject, IDisposable, IAutoRe
         _reapplyAfterDriverUpdate = _settings.NvidiaGpuReapplyEnabled;
         LoadFromRegistry();
         LoadFpsCap();
+
+        // The driver holds ONE global power mode, so a separate battery choice only exists if we
+        // swap it when the plug goes in or out. PowerModeChanged fires on exactly that.
+        if (IsLaptop)
+        {
+            _powerModeChanged = (_, e) =>
+            {
+                if (e.Mode == Microsoft.Win32.PowerModes.StatusChange) ApplyModeForCurrentPowerSource();
+            };
+            Microsoft.Win32.SystemEvents.PowerModeChanged += _powerModeChanged;
+        }
     }
 
     [RelayCommand]
@@ -118,9 +133,179 @@ public partial class NvidiaGpuViewModel : ObservableObject, IDisposable, IAutoRe
             bool maxPerf = _service.IsMaxPerformance(_adapters[0].FullPath);
             PowerSavingOn = !maxPerf;
             PowerSavingDetected = maxPerf ? OffText : OnText;
+
+            LoadPowerModes();
+
             StatusMessage = $"Loaded current settings for {AdapterName}.";
         }
         finally { _loading = false; }
+    }
+
+    // ── Power management mode (NVAPI PREFERRED_PSTATE) ───────────────────────
+    //
+    // The same dropdown as the NVIDIA app's global settings. It is a driver PROFILE setting and
+    // applies IMMEDIATELY — no restart — which is the whole reason a separate battery choice is
+    // possible: the driver keeps ONE global value, so Systema swaps it when the power source
+    // changes rather than storing two values in the driver.
+
+    private readonly PowerPlanService _power = new();
+    public bool IsLaptop { get; } = new PowerPlanService().HasBattery();
+
+    // Every mode NVIDIA defines, in the app's order. Naming and values confirmed on hardware:
+    // 0 is Adaptive (0.7.284 wrongly labelled it "Optimal power"), 2 is the driver default the
+    // app calls Normal, 1 is Prefer maximum performance.
+    //
+    // This is the CANDIDATE list. What the user actually sees is filtered to whatever the
+    // installed driver reports as available — see LoadPowerModes.
+    // THE NVIDIA APP'S OWN LIST, IN ITS OWN ORDER, WITH ITS OWN LABELS.
+    //
+    // Verified against the Power management mode dropdown in the NVIDIA app (T1200, 2026-08-12):
+    //
+    //     Optimal power                         → 5
+    //     Prefer maximum performance            → 1
+    //     Adaptive                              → 0
+    //     NVIDIA driver-controlled (Default)    → 2
+    //     Prefer consistent performance         → 3
+    //
+    // Value 4 (PREFER_MIN in NVAPI's headers) is deliberately absent — NVIDIA defines it but does
+    // not offer it in the UI, so neither do we.
+    //
+    // Why this list is hardcoded rather than queried: NVAPI cannot report it. Probing a live
+    // driver showed EnumAvailableSettingValues returns -160 for EVERY setting (Power management
+    // mode, Frame Rate Limiter and Vertical Sync alike), and SetSetting accepts any value 0-8
+    // without validation. The NVIDIA app builds its dropdown from its own resources. See the note
+    // in NvapiService for the full probe results.
+    private static readonly PowerModeOption[] AllPowerModes =
+    {
+        new(NvapiService.PStateOptimalPower,   "Optimal power",
+            "lowest power, drops clocks hardest"),
+        new(NvapiService.PStateMaxPerf,        "Prefer maximum performance",
+            "holds full clocks"),
+        new(NvapiService.PStateAdaptive,       "Adaptive",
+            "clocks follow the load"),
+        new(NvapiService.PStateDriverManaged,  "NVIDIA driver-controlled (Default)",
+            "the driver decides"),
+        new(NvapiService.PStateConsistentPerf, "Prefer consistent performance",
+            "steadier clocks, less boosting"),
+    };
+
+    /// <summary>Only the modes this GPU and driver actually offer.</summary>
+    public ObservableCollection<PowerModeOption> PowerModeOptions { get; } = new();
+
+    [ObservableProperty] private uint _powerModeAc      = NvapiService.PStateDriverManaged;
+    [ObservableProperty] private uint _powerModeBattery = NvapiService.PStateDriverManaged;
+
+    /// <summary>
+    /// Reads the driver's CURRENT mode and shows it for whichever source the machine is on right
+    /// now. On a fresh install that is the machine's real state, not a value Systema invented —
+    /// the other source falls back to a saved choice if one exists, or to the same live value.
+    /// </summary>
+    private void LoadPowerModes()
+    {
+        uint live = _nvapi.GetPowerMode(out bool settingPresent);
+        bool onBattery = IsLaptop && _power.IsOnBattery();
+
+        // Pre-Turing cards don't get "NVIDIA driver-controlled" or "Prefer consistent performance"
+        // — NVIDIA's own app gates those on Turing and newer (see NvapiService.GetGpuArchitecture
+        // for how that was established). Unknown architecture keeps the full list: showing an
+        // extra mode is a smaller failure than hiding one the user actually has.
+        uint arch = _nvapi.GetGpuArchitecture();
+        bool turingPlus = arch == 0 || arch >= NvapiService.ArchTuring;
+
+        var shown = (turingPlus
+                ? AllPowerModes
+                : AllPowerModes.Where(m => m.Value != NvapiService.PStateDriverManaged
+                                        && m.Value != NvapiService.PStateConsistentPerf))
+            .ToList();
+
+        // Whatever the card is ACTUALLY set to must be selectable — the driver accepts values
+        // outside NVIDIA's own enum, so a machine can genuinely be sitting on one and a blank box
+        // would be worse. But only for a value read from the driver: on a GTX 1060 the "setting
+        // not present" fallback was 2, this branch re-added 2, and the Turing gate that had just
+        // excluded it was silently undone. A default is not evidence of anything.
+        if (settingPresent && shown.All(m => m.Value != live))
+        {
+            var known = AllPowerModes.FirstOrDefault(m => m.Value == live);
+            shown.Add(known ?? new PowerModeOption(live, $"Mode {live}", "reported by your driver"));
+            _log.Warn("NvidiaGpuViewModel",
+                      $"Driver is on mode {live}, which is not in the list for this GPU " +
+                      $"(arch 0x{arch:X}) — adding it so the current state stays visible");
+        }
+
+        // Only rebuild when the list ACTUALLY changed. Clearing a collection a ComboBox is bound
+        // to nulls its selection, and that null writes straight back through the TwoWay binding —
+        // which is what made "Re-detect" look like it reset the power mode.
+        if (!PowerModeOptions.Select(o => o.Value).SequenceEqual(shown.Select(o => o.Value)))
+        {
+            PowerModeOptions.Clear();
+            foreach (var m in shown) PowerModeOptions.Add(m);
+        }
+
+        // DESKTOP: one mode, and the driver is the only source of truth — mirror it. Nothing
+        // re-applies it afterwards (the power-source watcher is laptop-only), so picking a mode
+        // here simply sets it once and that is the end of it.
+        //
+        // LAPTOP: two saved choices. Show the driver's value for the source we are ON, because
+        // that IS the live state, and the SAVED choice for the other, which cannot be observed
+        // right now. Reading `live` into both would overwrite the user's choice for the other
+        // power source every time this ran — including on every Re-detect.
+        if (!IsLaptop)
+        {
+            PowerModeAc = live;
+        }
+        else if (onBattery)
+        {
+            PowerModeBattery = live;
+            PowerModeAc      = ParseSavedMode(_settings.NvidiaPowerModeAc, live);
+        }
+        else
+        {
+            PowerModeAc      = live;
+            PowerModeBattery = ParseSavedMode(_settings.NvidiaPowerModeBattery, live);
+        }
+
+        // Everything needed to action a "my NVIDIA app shows a different list" report without
+        // another round of guessing: the card, its architecture, the driver, and what we chose to
+        // show. NVIDIA gates this list themselves and we are mirroring their rule, so a mismatch
+        // is a data point about their rule, not a bug we can reason our way to.
+        _log.Info("NvidiaGpuViewModel",
+                  $"Power modes — GPU='{AdapterName}' arch=0x{arch:X} driver={_nvapi.GetDriverVersion()} " +
+                  $"turingPlus={turingPlus} shown=[{string.Join(", ", shown.Select(m => $"{m.Value}:{m.Label}"))}] " +
+                  $"live={live} AC={PowerModeAc} battery={PowerModeBattery} onBattery={onBattery}");
+    }
+
+    private static uint ParseSavedMode(string saved, uint fallback) =>
+        uint.TryParse(saved, out uint v) ? v : fallback;
+
+    partial void OnPowerModeAcChanged(uint value)
+    {
+        if (_loading) return;
+        _settings.NvidiaPowerModeAc = value.ToString();
+        if (!IsLaptop || !_power.IsOnBattery())
+            Apply(_nvapi.SetPowerMode(value), "GPU power management mode");
+    }
+
+    partial void OnPowerModeBatteryChanged(uint value)
+    {
+        if (_loading) return;
+        _settings.NvidiaPowerModeBattery = value.ToString();
+        if (IsLaptop && _power.IsOnBattery())
+            Apply(_nvapi.SetPowerMode(value), "GPU power management mode");
+    }
+
+    /// <summary>
+    /// Applies the mode that matches the power source we just moved to. The driver holds one
+    /// global value, so "a different mode on battery" only exists because we swap it here.
+    /// </summary>
+    private void ApplyModeForCurrentPowerSource()
+    {
+        if (!IsNvidiaPresent) return;
+        uint want = (IsLaptop && _power.IsOnBattery()) ? PowerModeBattery : PowerModeAc;
+        if (_nvapi.GetPowerMode() == want) return;   // already right — don't churn the driver
+
+        var r = _nvapi.SetPowerMode(want);
+        _log.Info("NvidiaGpuViewModel",
+                  $"Power source changed — applied pstate {want}: {r.Message}");
     }
 
     partial void OnPowerSavingOnChanged(bool value)
@@ -272,5 +457,14 @@ public partial class NvidiaGpuViewModel : ObservableObject, IDisposable, IAutoRe
         public uint   dmICMMethod, dmICMIntent, dmMediaType, dmDitherType, dmReserved1, dmReserved2, dmPanningWidth, dmPanningHeight;
     }
 
-    public void Dispose() { }
+    private Microsoft.Win32.PowerModeChangedEventHandler? _powerModeChanged;
+
+    public void Dispose()
+    {
+        if (_powerModeChanged != null)
+        {
+            Microsoft.Win32.SystemEvents.PowerModeChanged -= _powerModeChanged;
+            _powerModeChanged = null;
+        }
+    }
 }

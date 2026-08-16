@@ -51,6 +51,23 @@ public class SettingsService
     // GameBoosterKillList was removed along with the rest of the service-pausing feature
     // (dropped 2026-06). Any value left in the registry from an older build is simply ignored.
 
+    /// <summary>
+    /// Chosen NVIDIA power management mode per power source ("Optimal" / "Adaptive" /
+    /// "MaxPerformance"). Empty means "never chosen" — the UI then shows whatever the driver
+    /// registry actually holds rather than assuming a default.
+    /// </summary>
+    public string NvidiaPowerModeAc
+    {
+        get => ReadString(nameof(NvidiaPowerModeAc), defaultValue: "") ?? "";
+        set => WriteString(nameof(NvidiaPowerModeAc), value);
+    }
+
+    public string NvidiaPowerModeBattery
+    {
+        get => ReadString(nameof(NvidiaPowerModeBattery), defaultValue: "") ?? "";
+        set => WriteString(nameof(NvidiaPowerModeBattery), value);
+    }
+
     /// <summary>When true the user has manually chosen Xbox service state — auto-logic won't override.</summary>
     public bool XboxServicesUserOverride
     {

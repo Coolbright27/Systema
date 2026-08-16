@@ -634,6 +634,20 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
                                        IsDone = _nvidiaGpu.IsMaxPerformance(nvAdapters[0].FullPath) });
             }
 
+            // NVIDIA DESKTOPS ONLY: set the driver's Power management mode to Prefer maximum
+            // performance. This is the NVIDIA app's own setting (DRS PREFERRED_PSTATE), applied
+            // live with no restart, and it is SEPARATE from the PowerMizer registry item above.
+            // Desktops have the cooling and the mains power to hold full clocks; on a laptop the
+            // same change mostly makes heat and drains the battery, so it stays desktop-only.
+            // Recommended-only, deliberately NOT in the Apply-all pass — holding full clocks
+            // around the clock is a trade the user should opt into, not something Auto-Pilot does
+            // to them.
+            if (!_powerPlan.HasBattery() && _nvapi.IsAvailable())
+            {
+                extras.Add(new() { Label = "NVIDIA power mode: maximum performance",
+                                   IsDone = _nvapi.GetPowerMode() == NvapiService.PStateMaxPerf });
+            }
+
             // INTEL iGPU (ALL machines, laptop and desktop): recommend the Max Performance Power
             // Policy so the integrated graphics hold full clocks instead of the driver's power-saving
             // default. Writes ONLY the single documented PowerPolicy flag (=2), which Reset removes —
@@ -1038,6 +1052,9 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
                     if (a.Count > 0) { var pp = _intelGpu.ResolveFeature(a[0].FullPath, new[] { IntelGpuService.PowerPolicy });
                                        _intelGpu.WriteValue(a, pp.Name ?? IntelGpuService.PowerPolicy, 2); }
                     return Task.CompletedTask; }),
+        ["NVIDIA power mode: maximum performance"] = ("Set the NVIDIA power mode to maximum performance",
+            "This is the Power management mode setting from the NVIDIA app, and it's separate from the PowerMizer one above. Prefer maximum performance keeps the graphics card at its full clock speeds instead of dropping them whenever it thinks it can, which removes the brief moment where it has to spin back up and makes frame timing steadier. Cons: it uses more power sitting idle and runs warmer, so it's only suggested on desktops where you have the cooling for it and aren't running off a battery. It applies straight away with no restart, and you can change it any time on the Nvidia Graphics tab.",
+            () => { _nvapi.SetPowerMode(NvapiService.PStateMaxPerf); return Task.CompletedTask; }),
         ["GPU max performance"] = ("Set the NVIDIA GPU to maximum performance",
             "By default the NVIDIA GPU idles its clocks down to save power (PowerMizer). On a desktop you have the power and cooling headroom to skip that, so this holds the GPU at full clocks for the best and most consistent performance. Cons: it draws a little more power at idle, and it's not recommended on laptops (there it can cause thermal throttling), which is why this only shows on desktops. Takes effect after a restart.",
             () => { var a = _nvidiaGpu.DetectNvidiaAdapters(); if (a.Count > 0) { _nvidiaGpu.SetPowerSaving(a, on: false); _settings.NvidiaGpuPreferMaxPerformance = true; } return Task.CompletedTask; }),

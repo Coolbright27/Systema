@@ -2073,6 +2073,29 @@ public sealed class TaskSleepService : IDisposable
                     {
                         UpdateCpuCap(pid, Math.Clamp(s.NappedCpuCapPercent, 1, 100));
                     }
+
+                    // ── Reinforcement: re-assert E-core affinity ───────────────────
+                    // Priority and the kernel CPU cap were both re-asserted every tick, but
+                    // affinity never was. Plenty of apps call SetProcessAffinityMask on
+                    // themselves — when they spin up worker pools, on config reload, or as a
+                    // multi-process app launching a new child — and doing so silently undoes
+                    // the E-core confinement while the process still counts as fully napped.
+                    // That is the "sometimes not everything ends up on the E-cores" case: it
+                    // WAS moved, then drifted back, and nothing put it there again.
+                    //
+                    // Only for pids we actually moved (_originalAffinities holds the value we
+                    // captured), so this can never confine a process Systema never touched.
+                    if (_throttledPids.ContainsKey(pid) && _originalAffinities.ContainsKey(pid))
+                    {
+                        UIntPtr wantMask = GetOrDetectECoreMask(s.DetectECores);
+                        if (wantMask != UIntPtr.Zero &&
+                            GetProcessAffinityMask(h, out UIntPtr nowMask, out _) &&
+                            nowMask != wantMask)
+                        {
+                            SetProcessAffinityMask(h, wantMask);
+                            AddEvent(nm ?? $"PID {pid}", pid, "Re-enforced", "affinity drifted off the E-cores");
+                        }
+                    }
                 }
                 catch (Exception ex) { _log.Warn("TaskSleepService", $"Re-enforce failed for PID {pid}: {ex.Message}"); }
                 finally { CloseHandle(h); }
@@ -2253,7 +2276,10 @@ public sealed class TaskSleepService : IDisposable
             bool   lowerCpu    = forceMaxThrottle || s.LowerCpuPriority;
             bool   lowerIo     = forceMaxThrottle || s.LowerIoPriority;
             bool   lowerMem    = forceMaxThrottle || s.LowerMemoryPriority;
-            bool   moveToECores = forceMaxThrottle ? (s.MoveToECores && s.DetectECores) : s.MoveToECores;
+            // Both branches came out the same: the non-force branch omitted DetectECores, but
+            // GetOrDetectECoreMask gates on it anyway, so the ternary only looked like it meant
+            // something. One expression, one meaning.
+            bool   moveToECores = s.MoveToECores && s.DetectECores;
             bool   effMode     = forceMaxThrottle || s.EnableEfficiencyMode;
             // Soft nap: use lighter throttle classes when user requests it (not for force-max)
             uint   cpuClass    = (!forceMaxThrottle && s.SoftNapEnabled) ? BELOW_NORMAL_PRIORITY_CLASS : IDLE_PRIORITY_CLASS;

@@ -96,7 +96,7 @@ public class GameBoosterDetectionTests
         Assert.DoesNotContain("proc.ProcessName.Contains(ac, StringComparison.OrdinalIgnoreCase) && IsRealAppForeground()", src);
 
         // The fallback must sit after the loop, gated on nothing having been found on screen.
-        int loopEnd  = src.IndexOf("if (onScreenGame != null) return onScreenGame;", System.StringComparison.Ordinal);
+        int loopEnd  = src.IndexOf("if (visible    != null) return visible;", System.StringComparison.Ordinal);
         int fallback = src.IndexOf("return new GameMatch(UnknownGameName, IsKnownGame: false);", System.StringComparison.Ordinal);
         Assert.True(loopEnd > 0, "expected the on-screen result to be returned before the anti-cheat fallback");
         Assert.True(fallback > loopEnd, "anti-cheat fallback must come AFTER the full on-screen scan");
@@ -106,8 +106,8 @@ public class GameBoosterDetectionTests
     public void ForegroundGameWinsOverOtherOnScreenGames()
     {
         var src = Service();
-        Assert.Contains("if (proc.Id == fgPid)", src);
-        Assert.Contains("return new GameMatch(proc.ProcessName, IsKnownGame: true", src);
+        Assert.Contains("if (proc.Id == fgPid)                   foreground ??= match;", src);
+        Assert.Contains("if (foreground != null) return foreground;", src);
     }
 
     [Fact]
@@ -115,9 +115,9 @@ public class GameBoosterDetectionTests
     {
         var src = Service();
 
-        int listStart = src.IndexOf("KnownGameProcesses = new(StringComparer.OrdinalIgnoreCase)", System.StringComparison.Ordinal);
+        int listStart = src.IndexOf("GameNames = new(StringComparer.OrdinalIgnoreCase)", System.StringComparison.Ordinal);
         int listEnd   = src.IndexOf("};", listStart, System.StringComparison.Ordinal);
-        Assert.True(listStart > 0 && listEnd > listStart, "could not locate the KnownGameProcesses initialiser");
+        Assert.True(listStart > 0 && listEnd > listStart, "could not locate the GameNames initialiser");
 
         var list = src[listStart..listEnd];
         Assert.DoesNotContain("\"javaw\"", list);
@@ -131,11 +131,11 @@ public class GameBoosterDetectionTests
     {
         var src = Service();
         Assert.Contains("\"-Win64-Shipping\"", src);
-        Assert.Contains("IsKnownGameProcess", src);
+        Assert.Contains("LooksLikeGame", src);
 
         // The per-title Unreal entries are redundant once the suffix exists; keeping them around
         // is how the list drifts back into being a maintenance burden.
-        int listStart = src.IndexOf("KnownGameProcesses = new(StringComparer.OrdinalIgnoreCase)", System.StringComparison.Ordinal);
+        int listStart = src.IndexOf("GameNames = new(StringComparer.OrdinalIgnoreCase)", System.StringComparison.Ordinal);
         int listEnd   = src.IndexOf("};", listStart, System.StringComparison.Ordinal);
         var list = src[listStart..listEnd];
         Assert.DoesNotContain("-Win64-Shipping", list);
@@ -151,11 +151,11 @@ public class GameBoosterDetectionTests
         // "Unknown Game (Anti-Cheat detected)" in that situation was actively harmful: the
         // placeholder carries IsKnownGame: false, which skips the per-process priority boost.
         // Observed live with Fortnite: detected, named "Unknown", never boosted.
-        Assert.Contains("offScreenGame", src);
-        Assert.Contains("if (antiCheatRunning && offScreenGame != null)", src);
+        Assert.Contains("GameMatch? running    = null;", src);
+        Assert.Contains("if (antiCheat && running != null) return running;", src);
 
         // The named result must be preferred over the placeholder.
-        int named       = src.IndexOf("if (antiCheatRunning && offScreenGame != null)", System.StringComparison.Ordinal);
+        int named       = src.IndexOf("if (antiCheat && running != null) return running;", System.StringComparison.Ordinal);
         int placeholder = src.IndexOf("return new GameMatch(UnknownGameName", System.StringComparison.Ordinal);
         Assert.True(named > 0 && placeholder > named,
             "the named off-screen game must be returned before falling back to Unknown Game");
@@ -182,5 +182,41 @@ public class GameBoosterDetectionTests
 
         // And the tray balloon must not claim it still happens.
         Assert.DoesNotContain("Non-essential services suspended", src);
+    }
+
+    [Fact]
+    public void EngineHelperProcessesAreNotTreatedAsGames()
+    {
+        var src = Service();
+
+        // Unreal's "-Shipping" suffix catches the engine's OWN helpers, which outlive the game.
+        // EOSOverlayRenderer-Win64-Shipping kept a boost running for 19 HOURS after Fortnite
+        // closed: it satisfied the suffix match, and then the "process is still alive" session
+        // rule kept it alive indefinitely.
+        Assert.Contains("NotAGameFragments", src);
+        Assert.Contains("\"Overlay\"", src);
+        Assert.Contains("\"CrashReport\"", src);
+
+        // The rejection must happen INSIDE the suffix branch — applying it to the hand-curated
+        // exact-name list too would silently drop deliberately added titles.
+        int matcher = src.IndexOf("private static bool LooksLikeGame", System.StringComparison.Ordinal);
+        int exact   = src.IndexOf("GameNames.Contains(processName)", matcher, System.StringComparison.Ordinal);
+        int deny    = src.IndexOf("NotAGameFragments", matcher, System.StringComparison.Ordinal);
+        Assert.True(deny > exact, "the denylist must not gate the curated exact-name list");
+    }
+
+    [Fact]
+    public void AnAutoBoostCannotRunForever()
+    {
+        var src = Service();
+
+        // Backstop for the next mis-detection: "the process is alive" is not "you are playing".
+        Assert.Contains("MaxAutoBoostDuration", src);
+        Assert.Contains("TimeSpan.FromHours(12)", src);
+
+        // And it has to be checked in the stickiness branch, which is what kept the boost alive.
+        int sticky = src.IndexOf("SESSION STICKINESS", System.StringComparison.Ordinal);
+        Assert.True(src.IndexOf("MaxAutoBoostDuration", sticky, System.StringComparison.Ordinal) > 0,
+            "the cap must gate session stickiness, not just exist");
     }
 }
