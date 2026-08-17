@@ -2157,6 +2157,30 @@ public sealed class GameBoosterService : IDisposable
 
     private const int IoPriorityVeryLow = 0;
 
+    // SearchIndexer.exe is the service host, but the actual crawling — opening every file and
+    // running IFilters over its contents — happens in SearchProtocolHost.exe and SearchFilterHost.exe,
+    // which it spawns as children. Throttling only the parent leaves the process doing nearly all of
+    // the disk reads running at full speed, which is the I/O a game is competing with.
+    //
+    // SearchHost.exe is deliberately NOT here. That is the Start menu's search box, not indexing;
+    // slowing it down would make Start feel broken for no gain.
+    //
+    // The workers are transient (spawned and torn down constantly), so only the long-lived
+    // SearchIndexer has its original values captured. Workers are restored to Normal, which is
+    // what they are always started at.
+    private static readonly string[] IndexerProcessNames =
+        { "SearchIndexer", "SearchProtocolHost", "SearchFilterHost" };
+
+    private static IEnumerable<Process> IndexerProcesses()
+    {
+        foreach (string name in IndexerProcessNames)
+        {
+            Process[] found;
+            try { found = Process.GetProcessesByName(name); } catch { continue; }
+            foreach (var p in found) yield return p;
+        }
+    }
+
     private void PauseIndexing()
     {
         if (_indexingPaused) return;
@@ -2165,12 +2189,14 @@ public sealed class GameBoosterService : IDisposable
             EnsureDebugPrivilege();   // SearchIndexer runs as SYSTEM — needed or the open is denied
             bool any = false;
             string readBack = "";
-            foreach (var p in Process.GetProcessesByName("SearchIndexer"))
+            foreach (var p in IndexerProcesses())
             {
                 try
                 {
                     // Remember what it was so a restore puts back the real value, not a guess.
-                    try { _indexerOriginalPriority ??= p.PriorityClass; } catch { }
+                    // Only for the long-lived host; the workers come and go and are always Normal.
+                    bool isHost = p.ProcessName.Equals("SearchIndexer", StringComparison.OrdinalIgnoreCase);
+                    if (isHost) { try { _indexerOriginalPriority ??= p.PriorityClass; } catch { } }
 
                     try { p.PriorityClass = ProcessPriorityClass.Idle; any = true; } catch { }
 
@@ -2180,7 +2206,7 @@ public sealed class GameBoosterService : IDisposable
                     {
                         try
                         {
-                            _indexerOriginalMemory ??= GetProcessMemoryPriority(h);
+                            if (isHost) _indexerOriginalMemory ??= GetProcessMemoryPriority(h);
 
                             int io = IoPriorityVeryLow;
                             NtSetInformationProcess(h, ProcessIoPriority, ref io, sizeof(int));
@@ -2190,7 +2216,7 @@ public sealed class GameBoosterService : IDisposable
                             // Read it straight back off the live process so the log states what the
                             // OS actually accepted, not what we asked for.
                             try { p.Refresh(); } catch { }
-                            readBack = DescribeIndexerState(p, h);
+                            readBack += (readBack.Length > 0 ? " | " : "") + p.ProcessName + " " + DescribeIndexerState(p, h);
                             any = true;
                         }
                         finally { CloseHandle(h); }
@@ -2219,11 +2245,17 @@ public sealed class GameBoosterService : IDisposable
         try
         {
             EnsureDebugPrivilege();
-            foreach (var p in Process.GetProcessesByName("SearchIndexer"))
+            foreach (var p in IndexerProcesses())
             {
                 try
                 {
-                    try { p.PriorityClass = _indexerOriginalPriority ?? ProcessPriorityClass.Normal; } catch { }
+                    bool isHost = p.ProcessName.Equals("SearchIndexer", StringComparison.OrdinalIgnoreCase);
+                    try
+                    {
+                        p.PriorityClass = isHost ? (_indexerOriginalPriority ?? ProcessPriorityClass.Normal)
+                                                 : ProcessPriorityClass.Normal;
+                    }
+                    catch { }
 
                     IntPtr h = OpenProcess(PROCESS_SET_INFORMATION | PROCESS_QUERY_LIMITED_INFORMATION,
                                            false, p.Id);
@@ -2233,7 +2265,8 @@ public sealed class GameBoosterService : IDisposable
                         {
                             int io = IoPriorityNormal;
                             NtSetInformationProcess(h, ProcessIoPriority, ref io, sizeof(int));
-                            SetProcessMemoryPriority(h, _indexerOriginalMemory ?? MemoryPriorityNormal);
+                            SetProcessMemoryPriority(h, isHost ? (_indexerOriginalMemory ?? MemoryPriorityNormal)
+                                                              : MemoryPriorityNormal);
                             SetProcessEcoQoS(h, on: false);
                         }
                         finally { CloseHandle(h); }

@@ -68,4 +68,19 @@ public class SearchIndexerThrottleTests
         Assert.Contains("_indexerOriginalPriority ??= p.PriorityClass", src);
         Assert.Contains("_indexerOriginalPriority ?? ProcessPriorityClass.Normal", src);
     }
+
+    // The indexer service host spawns SearchProtocolHost/SearchFilterHost to do the actual file
+    // crawling. Throttling only the parent leaves the process doing the disk reads at full speed.
+    [Fact]
+    public void ThrottleCoversTheIndexerWorkerProcesses()
+    {
+        var src = Service();
+        Assert.Contains("SearchProtocolHost", src);
+        Assert.Contains("SearchFilterHost", src);
+
+        // SearchHost.exe is the Start menu search box, not indexing. Slowing it makes Start feel
+        // broken, so it must never be swept in with the indexer.
+        Assert.DoesNotContain("\"SearchHost\"", src);
+    }
+
 }
