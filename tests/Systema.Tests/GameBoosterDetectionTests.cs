@@ -80,10 +80,37 @@ public class GameBoosterDetectionTests
         Assert.DoesNotContain("BoostGameProcess", src);
         Assert.DoesNotContain("ReassertGameBoost", src);
         Assert.DoesNotContain("D3DKMTSetProcessSchedulingPriorityClass", src);
-        Assert.DoesNotContain("ProcessMemoryPriority", src);
-        Assert.DoesNotContain("ProcessPowerThrottling", src);
         Assert.DoesNotContain("proc.PriorityClass = ProcessPriorityClass.High", src);
+
+        // NOTE: EcoQoS (ProcessPowerThrottling) and memory priority ARE used, but only to THROTTLE
+        // Windows' search indexer during a boost. That is a background service Systema owns the
+        // decision for, not the game. The ban above is specifically on touching the GAME process.
+        Assert.DoesNotContain("SetProcessEcoQoS(gameHandle", src);
+        Assert.DoesNotContain("SetProcessMemoryPriority(gameHandle", src);
+
+        // Enforce that literally: every call site of the memory-priority helper has to live inside
+        // PauseIndexing or ResumeIndexing. A string ban would just get deleted the next time it got
+        // in the way; this stays true only while the behaviour is actually correct.
+        int pause  = src.IndexOf("private void PauseIndexing", StringComparison.Ordinal);
+        int resume = src.IndexOf("private void ResumeIndexing", StringComparison.Ordinal);
+        Assert.True(pause > 0 && resume > 0, "PauseIndexing/ResumeIndexing not found");
+
+        int indexingStart = Math.Min(pause, resume);
+        int indexingEnd   = Math.Max(pause, resume) + 2500;   // both methods are well under this
+
+        for (int i = src.IndexOf("SetProcessMemoryPriority(", StringComparison.Ordinal); i >= 0;
+                 i = src.IndexOf("SetProcessMemoryPriority(", i + 1, StringComparison.Ordinal))
+        {
+            bool isDeclaration = src.LastIndexOf("private static void", i, StringComparison.Ordinal) is int d
+                                 && d > 0 && i - d < 40;
+            if (isDeclaration) continue;
+
+            Assert.True(i >= indexingStart && i <= indexingEnd,
+                        "Memory priority is being set outside the search-indexer throttle. It must " +
+                        "never be applied to a game process: anti-cheat force-closes the game.");
+        }
     }
+
 
     [Fact]
     public void AntiCheatIsAFallback_NotCheckedPerProcessAgainstTheForeground()

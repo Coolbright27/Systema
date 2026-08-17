@@ -2136,6 +2136,27 @@ public sealed class GameBoosterService : IDisposable
     private const uint PROCESS_SUSPEND_RESUME = 0x0800;
     private bool _indexingPaused;
 
+    // ── Search indexing: THROTTLE it, never freeze it ────────────────────────
+    //
+    // This used to call NtSuspendProcess on SearchIndexer.exe. That is a freeze, not a pause, and
+    // SearchIndexer hosts the Windows Search RPC and COM endpoints. Any app making a SYNCHRONOUS
+    // call into Windows Search — the Shell property system, a file picker, a screen-source picker
+    // fetching shell thumbnails — did not get a slow answer, it got NO answer until the boost
+    // ended. Reported live: Spotify stopped working and Discord screen share would not start
+    // whenever a boost was running.
+    //
+    // Throttling instead gets the same benefit without the hazard: at Idle priority with very low
+    // I/O and EcoQoS on, the indexer makes effectively no progress while a game has the machine,
+    // but it stays responsive and answers callers immediately. Indexing is disk-bound, so the I/O
+    // priority is doing most of the work here.
+    //
+    // (Windows does expose a real pause — ISearchCatalogManager::PauseCatalog — but it is COM
+    // interop for the same practical result, and a paused catalog still has to be resumed by us.
+    // Throttling degrades gracefully: if Systema dies mid-boost the worst case is an indexer
+    // running at Idle until it next restarts, rather than one left frozen or paused forever.)
+
+    private const int IoPriorityVeryLow = 0;
+
     private void PauseIndexing()
     {
         if (_indexingPaused) return;
@@ -2143,17 +2164,52 @@ public sealed class GameBoosterService : IDisposable
         {
             EnsureDebugPrivilege();   // SearchIndexer runs as SYSTEM — needed or the open is denied
             bool any = false;
+            string readBack = "";
             foreach (var p in Process.GetProcessesByName("SearchIndexer"))
             {
                 try
                 {
-                    IntPtr h = OpenProcess(PROCESS_SUSPEND_RESUME, false, p.Id);
-                    if (h != IntPtr.Zero) { NtSuspendProcess(h); CloseHandle(h); any = true; }
+                    // Remember what it was so a restore puts back the real value, not a guess.
+                    try { _indexerOriginalPriority ??= p.PriorityClass; } catch { }
+
+                    try { p.PriorityClass = ProcessPriorityClass.Idle; any = true; } catch { }
+
+                    IntPtr h = OpenProcess(PROCESS_SET_INFORMATION | PROCESS_QUERY_LIMITED_INFORMATION,
+                                           false, p.Id);
+                    if (h != IntPtr.Zero)
+                    {
+                        try
+                        {
+                            _indexerOriginalMemory ??= GetProcessMemoryPriority(h);
+
+                            int io = IoPriorityVeryLow;
+                            NtSetInformationProcess(h, ProcessIoPriority, ref io, sizeof(int));
+                            SetProcessMemoryPriority(h, MemoryPriorityLow);
+                            SetProcessEcoQoS(h, on: true);
+
+                            // Read it straight back off the live process so the log states what the
+                            // OS actually accepted, not what we asked for.
+                            try { p.Refresh(); } catch { }
+                            readBack = DescribeIndexerState(p, h);
+                            any = true;
+                        }
+                        finally { CloseHandle(h); }
+                    }
                 }
                 catch { }
                 finally { p.Dispose(); }
             }
-            if (any) { _indexingPaused = true; _log.Info("GameBoosterService", "Search indexing paused (SearchIndexer suspended — WSearch service still running)"); }
+            if (any)
+            {
+                _indexingPaused = true;
+                _log.Info("GameBoosterService", "Search indexing throttled, verified live: " + readBack);
+            }
+            else
+            {
+                _log.Warn("GameBoosterService",
+                          "Search indexing NOT throttled — could not open SearchIndexer (it runs as SYSTEM; " +
+                          "Systema must be elevated)");
+            }
         }
         catch (Exception ex) { _log.Warn("GameBoosterService", $"PauseIndexing failed: {ex.Message}"); }
     }
@@ -2162,22 +2218,154 @@ public sealed class GameBoosterService : IDisposable
     {
         try
         {
-            EnsureDebugPrivilege();   // also needed to re-open the SYSTEM-owned indexer to resume it
+            EnsureDebugPrivilege();
             foreach (var p in Process.GetProcessesByName("SearchIndexer"))
             {
                 try
                 {
-                    IntPtr h = OpenProcess(PROCESS_SUSPEND_RESUME, false, p.Id);
-                    if (h != IntPtr.Zero) { NtResumeProcess(h); CloseHandle(h); }
+                    try { p.PriorityClass = _indexerOriginalPriority ?? ProcessPriorityClass.Normal; } catch { }
+
+                    IntPtr h = OpenProcess(PROCESS_SET_INFORMATION | PROCESS_QUERY_LIMITED_INFORMATION,
+                                           false, p.Id);
+                    if (h != IntPtr.Zero)
+                    {
+                        try
+                        {
+                            int io = IoPriorityNormal;
+                            NtSetInformationProcess(h, ProcessIoPriority, ref io, sizeof(int));
+                            SetProcessMemoryPriority(h, _indexerOriginalMemory ?? MemoryPriorityNormal);
+                            SetProcessEcoQoS(h, on: false);
+                        }
+                        finally { CloseHandle(h); }
+                    }
+
+                    // Belt and braces: older builds SUSPENDED the indexer. If one of those was
+                    // killed mid-boost the process is still frozen, and only a resume frees it.
+                    IntPtr hr = OpenProcess(PROCESS_SUSPEND_RESUME, false, p.Id);
+                    if (hr != IntPtr.Zero) { try { NtResumeProcess(hr); } finally { CloseHandle(hr); } }
                 }
                 catch { }
                 finally { p.Dispose(); }
             }
-            if (_indexingPaused) _log.Info("GameBoosterService", "Search indexing resumed");
+            if (_indexingPaused) _log.Info("GameBoosterService", "Search indexing restored");
             _indexingPaused = false;
+            _indexerOriginalPriority = null;
+            _indexerOriginalMemory   = null;
         }
         catch (Exception ex) { _log.Warn("GameBoosterService", $"ResumeIndexing failed: {ex.Message}"); }
     }
+
+    /// <summary>Turns EcoQoS (efficiency mode) on or off for an already-open process handle.</summary>
+    private static void SetProcessEcoQoS(IntPtr handle, bool on)
+    {
+        try
+        {
+            var state = new PROCESS_POWER_THROTTLING_STATE
+            {
+                Version     = 1,
+                ControlMask = on ? 0x1u : 0u,   // PROCESS_POWER_THROTTLING_EXECUTION_SPEED
+                StateMask   = on ? 0x1u : 0u,
+            };
+            SetProcessInformation(handle, 4 /* ProcessPowerThrottling */, ref state,
+                                  (uint)Marshal.SizeOf<PROCESS_POWER_THROTTLING_STATE>());
+        }
+        catch { }
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct PROCESS_POWER_THROTTLING_STATE { public uint Version, ControlMask, StateMask; }
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool SetProcessInformation(
+        IntPtr hProcess, int informationClass, ref PROCESS_POWER_THROTTLING_STATE info, uint size);
+
+    private const int ProcessIoPriority = 33;
+    private ProcessPriorityClass? _indexerOriginalPriority;
+
+    /// <summary>
+    /// Lowers or restores a process's PAGE priority. Indexing walks huge numbers of files and
+    /// fills the standby list with pages nobody else wants; at low page priority those pages are
+    /// the first evicted under pressure, so the game keeps the RAM instead of the indexer's cache.
+    /// </summary>
+    private static void SetProcessMemoryPriority(IntPtr handle, uint priority)
+    {
+        try
+        {
+            var info = new MEMORY_PRIORITY_INFORMATION { MemoryPriority = priority };
+            SetProcessInformation(handle, ProcessMemoryPriorityClass, ref info,
+                                  (uint)Marshal.SizeOf<MEMORY_PRIORITY_INFORMATION>());
+        }
+        catch { }
+    }
+
+    private static uint? GetProcessMemoryPriority(IntPtr handle)
+    {
+        try
+        {
+            var info = new MEMORY_PRIORITY_INFORMATION();
+            return GetProcessInformation(handle, ProcessMemoryPriorityClass, ref info,
+                                         (uint)Marshal.SizeOf<MEMORY_PRIORITY_INFORMATION>())
+                ? info.MemoryPriority : null;
+        }
+        catch { return null; }
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MEMORY_PRIORITY_INFORMATION { public uint MemoryPriority; }
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool SetProcessInformation(
+        IntPtr hProcess, int informationClass, ref MEMORY_PRIORITY_INFORMATION info, uint size);
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool GetProcessInformation(
+        IntPtr hProcess, int informationClass, ref MEMORY_PRIORITY_INFORMATION info, uint size);
+
+    private const int  ProcessMemoryPriorityClass = 0;   // PROCESS_INFORMATION_CLASS
+    private const uint MemoryPriorityLow    = 2;
+    private const uint MemoryPriorityNormal = 5;
+    private uint? _indexerOriginalMemory;
+
+    /// <summary>
+    /// Reads back what actually stuck and returns it for the log. Claiming "throttled" without
+    /// checking is how the I/O priority silently did nothing for weeks — the call was made, the
+    /// status was discarded, and the log said success either way.
+    /// </summary>
+    private static string DescribeIndexerState(Process proc, IntPtr handle)
+    {
+        string cpu = "?";
+        try { cpu = proc.PriorityClass.ToString(); } catch { }
+
+        int io = -1;
+        try { NtQueryInformationProcess(handle, ProcessIoPriority, ref io, sizeof(int), IntPtr.Zero); } catch { }
+        string ioName = io switch { 0 => "VeryLow", 1 => "Low", 2 => "Normal", 3 => "High", _ => "?" };
+
+        string mem = GetProcessMemoryPriority(handle) switch
+        {
+            1 => "VeryLow", 2 => "Low", 3 => "Medium", 4 => "BelowNormal", 5 => "Normal", _ => "?"
+        };
+
+        string eco = "?";
+        try
+        {
+            var state = new PROCESS_POWER_THROTTLING_STATE { Version = 1 };
+            if (GetProcessInformation(handle, ProcessPowerThrottlingClass, ref state,
+                                      (uint)Marshal.SizeOf<PROCESS_POWER_THROTTLING_STATE>()))
+                eco = (state.StateMask & 0x1) != 0 ? "on" : "off";
+        }
+        catch { }
+
+        return $"CPU={cpu} IO={ioName} RAM={mem} EcoQoS={eco}";
+    }
+
+    [DllImport("ntdll.dll")]
+    private static extern int NtQueryInformationProcess(
+        IntPtr handle, int infoClass, ref int info, int length, IntPtr returnLength);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool GetProcessInformation(
+        IntPtr hProcess, int informationClass, ref PROCESS_POWER_THROTTLING_STATE info, uint size);
+
+    private const int ProcessPowerThrottlingClass = 4;
 
     // ·· Sleep Prevention ······················································
 

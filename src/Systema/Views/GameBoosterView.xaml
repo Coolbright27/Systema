@@ -140,7 +140,7 @@
                         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                         <StackPanel Grid.Column="0" Margin="0,0,20,0">
                             <TextBlock Text="Pause search indexing" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                            <TextBlock Text="Windows scans your files in the background and it uses the disk. This pauses it while you play and starts it again after."
+                            <TextBlock Text="Windows scans your files in the background and it uses the disk. This slows it right down while you play so it stops competing for the drive, then puts it back to normal after."
                                        Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,3,0,0"/>
                         </StackPanel>
                         <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}" VerticalAlignment="Center"
