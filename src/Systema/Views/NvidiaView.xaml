@@ -113,6 +113,22 @@
                         <Run FontStyle="Italic">Applies straight away, no restart needed.</Run>
                     </TextBlock>
 
+                    <!-- Laptops only. On a thin chassis the fastest setting is often the slowest one:
+                         holding full clocks makes heat the cooler cannot shift, the card throttles, and
+                         the user ends up below where Optimal power would have left them. -->
+                    <Border Margin="0,0,0,14" Padding="12,8" CornerRadius="6" Background="#1AF59E0B"
+                            Visibility="{Binding IsLaptop, Converter={StaticResource BoolToVis}}">
+                        <TextBlock TextWrapping="Wrap" MaxWidth="620"
+                                   Style="{StaticResource CaptionText}"
+                                   Foreground="{StaticResource AccentYellowBrush}">
+                            On a laptop, more power does not always mean more speed. Holding full clocks makes
+                            a lot of heat, and once the chassis gets hot the card throttles itself to cool down,
+                            so you can end up slower than Optimal power would have been. Save Prefer maximum
+                            performance for laptops that cool well and have room to breathe. On a bed, a couch,
+                            or a cramped desk, the gentler settings usually run faster.
+                        </TextBlock>
+                    </Border>
+
                     <!-- Plugged in / desktop -->
                     <Grid Margin="0,0,0,12">
                         <Grid.ColumnDefinitions>
