@@ -588,6 +588,14 @@ public sealed class GameBoosterService : IDisposable
     public async Task EnableManualBoostAsync()
     {
         if (!_settings.GameBoosterEnabled) return; // master switch
+
+        // Re-apply the indexer throttle before anything else. The workers doing the actual file
+        // crawling are transient, so one application at boost start does not hold for a whole
+        // session — see PauseIndexing(reassert).
+        if (_boostActive && _indexingPaused && _settings.GameBoosterPauseIndexing)
+        {
+            try { PauseIndexing(reassert: true); } catch { }
+        }
         _manualBoostActive = true;
         _manualBoostStartedAt = DateTime.UtcNow;
         // Turning it back on cancels an opt-out from earlier in this game's session, so auto-boost
@@ -2181,13 +2189,20 @@ public sealed class GameBoosterService : IDisposable
         }
     }
 
-    private void PauseIndexing()
+    /// <param name="reassert">
+    /// Re-apply to processes that appeared since the boost started. SearchProtocolHost and
+    /// SearchFilterHost are spawned and torn down constantly while a crawl runs. A child inherits
+    /// its parent's Idle CPU class and EcoQoS state, but NOT its I/O or memory priority, so a
+    /// worker that appears mid-boost would do its disk reads at full priority for the rest of the
+    /// session. Skips capturing originals (already captured) and stays quiet unless it finds drift.
+    /// </param>
+    private void PauseIndexing(bool reassert = false)
     {
-        if (_indexingPaused) return;
+        if (_indexingPaused && !reassert) return;
         try
         {
             EnsureDebugPrivilege();   // SearchIndexer runs as SYSTEM — needed or the open is denied
-            bool any = false;
+            bool any = false, drift = false;
             string readBack = "";
             foreach (var p in IndexerProcesses())
             {
@@ -2196,7 +2211,10 @@ public sealed class GameBoosterService : IDisposable
                     // Remember what it was so a restore puts back the real value, not a guess.
                     // Only for the long-lived host; the workers come and go and are always Normal.
                     bool isHost = p.ProcessName.Equals("SearchIndexer", StringComparison.OrdinalIgnoreCase);
-                    if (isHost) { try { _indexerOriginalPriority ??= p.PriorityClass; } catch { } }
+                    if (isHost && !reassert) { try { _indexerOriginalPriority ??= p.PriorityClass; } catch { } }
+
+                    // Only worth logging a re-assert that actually corrected something.
+                    try { if (p.PriorityClass != ProcessPriorityClass.Idle) drift = true; } catch { }
 
                     try { p.PriorityClass = ProcessPriorityClass.Idle; any = true; } catch { }
 
@@ -2206,7 +2224,7 @@ public sealed class GameBoosterService : IDisposable
                     {
                         try
                         {
-                            if (isHost) _indexerOriginalMemory ??= GetProcessMemoryPriority(h);
+                            if (isHost && !reassert) _indexerOriginalMemory ??= GetProcessMemoryPriority(h);
 
                             int io = IoPriorityVeryLow;
                             NtSetInformationProcess(h, ProcessIoPriority, ref io, sizeof(int));
@@ -2228,8 +2246,13 @@ public sealed class GameBoosterService : IDisposable
             if (any)
             {
                 _indexingPaused = true;
-                _log.Info("GameBoosterService", "Search indexing throttled, verified live: " + readBack);
+                if (!reassert)
+                    _log.Info("GameBoosterService", "Search indexing throttled, verified live: " + readBack);
+                else if (drift)
+                    _log.Info("GameBoosterService",
+                              "Search indexing re-throttled (new indexer worker appeared): " + readBack);
             }
+            else if (reassert) { /* nothing running to throttle; not an error */ }
             else
             {
                 _log.Warn("GameBoosterService",

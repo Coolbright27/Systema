@@ -36,8 +36,8 @@ public class SearchIndexerThrottleTests
     {
         var src = Service();
 
-        int pause = src.IndexOf("private void PauseIndexing()", System.StringComparison.Ordinal);
-        int end   = src.IndexOf("private void ResumeIndexing()", System.StringComparison.Ordinal);
+        int pause = src.IndexOf("private void PauseIndexing(", System.StringComparison.Ordinal);
+        int end   = src.IndexOf("private void ResumeIndexing(", System.StringComparison.Ordinal);
         Assert.True(pause > 0 && end > pause, "could not locate PauseIndexing");
 
         var body = src[pause..end];
@@ -48,6 +48,7 @@ public class SearchIndexerThrottleTests
         Assert.Contains("ProcessPriorityClass.Idle", body);
         Assert.Contains("IoPriorityVeryLow", body);
         Assert.Contains("SetProcessEcoQoS(h, on: true)", body);
+        Assert.Contains("SetProcessMemoryPriority(h, MemoryPriorityLow)", body);
     }
 
     [Fact]
@@ -81,6 +82,20 @@ public class SearchIndexerThrottleTests
         // SearchHost.exe is the Start menu search box, not indexing. Slowing it makes Start feel
         // broken, so it must never be swept in with the indexer.
         Assert.DoesNotContain("\"SearchHost\"", src);
+    }
+
+    // Indexer workers are transient: SearchProtocolHost/SearchFilterHost spawn and exit
+    // constantly during a crawl. Children inherit the parent's Idle CPU class and EcoQoS but NOT
+    // its I/O or memory priority, so applying the throttle once at boost start is not enough.
+    [Fact]
+    public void ThrottleIsReassertedWhileTheBoostRuns()
+    {
+        var src = Service();
+        Assert.Contains("PauseIndexing(bool reassert", src);
+        Assert.Contains("reassert: true", src);
+
+        // The re-assert has to bypass the _indexingPaused early-return or it is a no-op.
+        Assert.Contains("if (_indexingPaused && !reassert) return;", src);
     }
 
 }
