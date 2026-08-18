@@ -98,4 +98,19 @@ public class SearchIndexerThrottleTests
         Assert.Contains("if (_indexingPaused && !reassert) return;", src);
     }
 
+    // Restoring a hardcoded value is a guess. Windows runs Search as a background service, so
+    // assuming Normal on the way out could leave the indexer doing MORE disk I/O after a boost
+    // than before one. Whatever we lower, we capture first.
+    [Fact]
+    public void OriginalIndexerPrioritiesAreCapturedNotAssumed()
+    {
+        var src = Service();
+        Assert.Contains("_indexerOriginalPriority", src);
+        Assert.Contains("_indexerOriginalMemory", src);
+        Assert.Contains("_indexerOriginalIo", src);
+
+        // ...and actually used on the way back out, not just captured and forgotten.
+        Assert.Contains("_indexerOriginalIo ?? IoPriorityNormal", src);
+    }
+
 }

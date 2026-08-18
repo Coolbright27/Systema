@@ -2224,7 +2224,15 @@ public sealed class GameBoosterService : IDisposable
                     {
                         try
                         {
-                            if (isHost && !reassert) _indexerOriginalMemory ??= GetProcessMemoryPriority(h);
+                            if (isHost && !reassert)
+                            {
+                                _indexerOriginalMemory ??= GetProcessMemoryPriority(h);
+
+                                int wasIo = -1;
+                                if (NtQueryInformationProcess(h, ProcessIoPriority, ref wasIo,
+                                                              sizeof(int), IntPtr.Zero) == 0 && wasIo >= 0)
+                                    _indexerOriginalIo ??= wasIo;
+                            }
 
                             int io = IoPriorityVeryLow;
                             NtSetInformationProcess(h, ProcessIoPriority, ref io, sizeof(int));
@@ -2286,7 +2294,7 @@ public sealed class GameBoosterService : IDisposable
                     {
                         try
                         {
-                            int io = IoPriorityNormal;
+                            int io = isHost ? (_indexerOriginalIo ?? IoPriorityNormal) : IoPriorityNormal;
                             NtSetInformationProcess(h, ProcessIoPriority, ref io, sizeof(int));
                             SetProcessMemoryPriority(h, isHost ? (_indexerOriginalMemory ?? MemoryPriorityNormal)
                                                               : MemoryPriorityNormal);
@@ -2307,6 +2315,7 @@ public sealed class GameBoosterService : IDisposable
             _indexingPaused = false;
             _indexerOriginalPriority = null;
             _indexerOriginalMemory   = null;
+            _indexerOriginalIo       = null;
         }
         catch (Exception ex) { _log.Warn("GameBoosterService", $"ResumeIndexing failed: {ex.Message}"); }
     }
@@ -2337,6 +2346,13 @@ public sealed class GameBoosterService : IDisposable
 
     private const int ProcessIoPriority = 33;
     private ProcessPriorityClass? _indexerOriginalPriority;
+
+    /// <summary>
+    /// The indexer's I/O priority before we touched it. Captured rather than assumed: Windows runs
+    /// Search as a background service, so restoring a hardcoded Normal could leave it doing MORE
+    /// disk I/O after a boost than it did before one, which is the opposite of the point.
+    /// </summary>
+    private int? _indexerOriginalIo;
 
     /// <summary>
     /// Lowers or restores a process's PAGE priority. Indexing walks huge numbers of files and
