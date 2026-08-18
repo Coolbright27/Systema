@@ -78,15 +78,20 @@ public sealed class GameBoosterService : IDisposable
     // Task Sleep / Launch Boost path had.
 
     // ── P/Invoke: Sleep prevention (kernel32) ─────────────────────────────────
-    // SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED) — same call video
-    // players use to stop the machine sleeping mid-playback. ES_CONTINUOUS makes the
-    // request persistent (survives thread death) until explicitly cleared by calling
-    // SetThreadExecutionState(ES_CONTINUOUS) with no other flags.
+    // Kept only as a FALLBACK for machines where PowerCreateRequest is refused, and it must be
+    // called from a long-lived thread (the dispatcher) if it is used at all.
+    //
+    // A comment here used to claim ES_CONTINUOUS made the request "persistent (survives thread
+    // death)". That is wrong, and it is the reason "Keep the PC awake" never worked: ES_CONTINUOUS
+    // means the request stands until cleared INSTEAD of being a one-shot nudge of the idle timer,
+    // but the state is still owned by the calling THREAD and Windows drops it the moment that
+    // thread exits. The real work happens in ApplyPreventSleep via a power request.
     [DllImport("kernel32.dll")]
     private static extern uint SetThreadExecutionState(uint esFlags);
 
     private const uint ES_CONTINUOUS      = 0x80000000;
     private const uint ES_SYSTEM_REQUIRED = 0x00000001;
+    private const uint ES_DISPLAY_REQUIRED = 0x00000002;
 
     // ── P/Invoke: IO priority ──────────────────────────────────────────────────
     [DllImport("ntdll.dll")]
@@ -2440,23 +2445,124 @@ public sealed class GameBoosterService : IDisposable
     private const int ProcessPowerThrottlingClass = 4;
 
     // ·· Sleep Prevention ······················································
+    //
+    // This used to be a bare SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED).
+    // Two things were wrong with it, and together they meant the toggle did nothing at all:
+    //
+    //   1. The execution state is per-THREAD, and Windows clears it when the thread that set
+    //      it exits. ApplyBoostOptions runs on a RunOnLargeStackAsync worker, which is a brand
+    //      new Thread that finishes moments later, so the flag died with it every time.
+    //   2. It only ever asked for ES_SYSTEM_REQUIRED. The toggle promises to stop the SCREEN
+    //      sleeping or locking, which needs the display request as well.
+    //
+    // Power requests are the modern replacement and fix both: they are scoped to a HANDLE the
+    // process holds rather than to a thread, so thread churn cannot drop them. They also show
+    // up in `powercfg /requests`, which means this is verifiable from outside Systema instead
+    // of being taken on trust.
+
+    private IntPtr _powerRequest = IntPtr.Zero;
+
+    private const int PowerRequestDisplayRequired = 0;
+    private const int PowerRequestSystemRequired  = 1;
+    private const int PowerRequestContextSimpleString = 0x1;
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct REASON_CONTEXT
+    {
+        public uint   Version;
+        public uint   Flags;
+        public IntPtr SimpleReasonString;
+    }
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern IntPtr PowerCreateRequest(ref REASON_CONTEXT context);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool PowerSetRequest(IntPtr powerRequest, int requestType);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool PowerClearRequest(IntPtr powerRequest, int requestType);
 
     private void ApplyPreventSleep()
     {
-        // ES_CONTINUOUS | ES_SYSTEM_REQUIRED: keep the machine awake for the duration
-        // of the boost session. The monitor timer would normally let Windows decide when
-        // to sleep; this overrides that for the game session only.
-        SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED);
-        _sleepPrevented = true;
-        _log.Info("GameBoosterService", "Sleep prevention active — system will not sleep while gaming");
+        if (_sleepPrevented) return;
+
+        IntPtr reason = IntPtr.Zero;
+        try
+        {
+            // The reason string is what `powercfg /requests` prints back, so make it say
+            // which app is holding the machine awake and why.
+            reason = Marshal.StringToHGlobalUni("Systema: game boost active");
+            var ctx = new REASON_CONTEXT
+            {
+                Version            = 0,
+                Flags              = PowerRequestContextSimpleString,
+                SimpleReasonString = reason,
+            };
+
+            _powerRequest = PowerCreateRequest(ref ctx);
+            if (_powerRequest != IntPtr.Zero && _powerRequest != new IntPtr(-1))
+            {
+                bool sys  = PowerSetRequest(_powerRequest, PowerRequestSystemRequired);
+                bool disp = PowerSetRequest(_powerRequest, PowerRequestDisplayRequired);
+                if (sys || disp)
+                {
+                    _sleepPrevented = true;
+                    _log.Info("GameBoosterService",
+                              $"Sleep prevention active (system={sys} display={disp}) — visible in powercfg /requests");
+                    return;
+                }
+
+                // Created but neither request took: drop the handle rather than leak it.
+                CloseHandle(_powerRequest);
+                _powerRequest = IntPtr.Zero;
+            }
+        }
+        catch (Exception ex) { _log.Warn("GameBoosterService", $"Power request failed: {ex.Message}"); }
+        finally { if (reason != IntPtr.Zero) Marshal.FreeHGlobal(reason); }
+
+        // Fallback for anything that refuses the power request. The UI thread lives for the
+        // whole app, so unlike a worker thread it can actually hold an execution state.
+        try
+        {
+            var dispatcher = System.Windows.Application.Current?.Dispatcher;
+            if (dispatcher != null)
+            {
+                dispatcher.Invoke(() =>
+                    SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_DISPLAY_REQUIRED));
+                _sleepPrevented = true;
+                _log.Info("GameBoosterService", "Sleep prevention active (execution state on the UI thread)");
+            }
+            else
+            {
+                _log.Warn("GameBoosterService", "Sleep prevention UNAVAILABLE — no power request and no dispatcher");
+            }
+        }
+        catch (Exception ex) { _log.Warn("GameBoosterService", $"Sleep prevention failed: {ex.Message}"); }
     }
 
     private void RestorePreventSleep()
     {
         if (!_sleepPrevented) return;
-        // ES_CONTINUOUS alone clears all previous SYSTEM_REQUIRED flags, restoring
-        // whatever sleep timeout the user had configured in Power Options.
-        SetThreadExecutionState(ES_CONTINUOUS);
+
+        try
+        {
+            if (_powerRequest != IntPtr.Zero)
+            {
+                PowerClearRequest(_powerRequest, PowerRequestSystemRequired);
+                PowerClearRequest(_powerRequest, PowerRequestDisplayRequired);
+                CloseHandle(_powerRequest);
+                _powerRequest = IntPtr.Zero;
+            }
+            else
+            {
+                // Clear on the same thread that set it, or the call does nothing.
+                System.Windows.Application.Current?.Dispatcher.Invoke(
+                    () => SetThreadExecutionState(ES_CONTINUOUS));
+            }
+        }
+        catch (Exception ex) { _log.Warn("GameBoosterService", $"RestorePreventSleep failed: {ex.Message}"); }
+
         _sleepPrevented = false;
         _log.Info("GameBoosterService", "Sleep prevention cleared — normal sleep timeouts restored");
     }
