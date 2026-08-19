@@ -243,10 +243,14 @@
                                 </Border>
                             </StackPanel>
                             <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap">
-                                Parks as many idle CPU cores as Windows allows and lets the ones still
-                                awake clock all the way down, so the machine draws less power and runs
-                                cooler when it is not busy. Cores come straight back the moment
-                                something needs them. Re-applied at every boot and every app start.
+                                Puts idle CPU cores to sleep and lets the ones still awake clock all
+                                the way down, so the machine draws less power and runs cooler when it
+                                is not busy. Sleeping cores also sit in their lowest power state
+                                instead of idling high. On chips with performance and efficiency
+                                cores it parks the power-hungry ones first and keeps an efficiency
+                                core free, so light work stays on the cheap cores. Everything comes
+                                straight back the moment you need it. Re-applied at every boot, every
+                                app start, and whenever your power plan changes.
                             </TextBlock>
                         </StackPanel>
 
@@ -260,11 +264,11 @@
                     <TextBlock Margin="0,2,0,0">
                         <TextBlock.Style>
                             <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionText}">
-                                <Setter Property="Text" Value="Status: OFF  —  Core efficiency is not enforced"/>
+                                <Setter Property="Text" Value="Status: OFF  ·  Windows decides when to sleep cores"/>
                                 <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
                                 <Style.Triggers>
                                     <DataTrigger Binding="{Binding CoreParkingEnforced}" Value="True">
-                                        <Setter Property="Text" Value="Status: ON ✓  —  Core efficiency is active and persists on restart"/>
+                                        <Setter Property="Text" Value="Status: ON ✓  ·  Active, and re-applied after restarts and power plan changes"/>
                                         <Setter Property="Foreground" Value="{StaticResource AccentGreenBrush}"/>
                                     </DataTrigger>
                                 </Style.Triggers>

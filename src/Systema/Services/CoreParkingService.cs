@@ -381,6 +381,78 @@ public class CoreParkingService
 
     /// <summary>
     /// Re-applies the core-parking values to the live power scheme without
+
+    // ── Power-plan change re-enforcement ──────────────────────────────────────
+    //
+    // Everything is written through powercfg against SCHEME_CURRENT, which means the values live
+    // on the plan that was active when they were applied. Switch plans and the new one is
+    // unconfigured: parking silently reverts to Windows' defaults until the next app start.
+    //
+    // That happens more often than it sounds. Unplugging can switch plans on its own, Systema's
+    // own Max Life battery mode deliberately switches to Power Saver, and vendor utilities
+    // (Dell, Lenovo, Armoury Crate) swap plans on power-source changes. Applying at startup and
+    // boot only was not enough.
+    //
+    // Two triggers, because neither catches everything: PowerModeChanged fires promptly on
+    // plug/unplug but not when other software swaps plans on AC, and the poll catches those. The
+    // poll is one registry read, so a short interval costs nothing.
+
+    private System.Threading.Timer? _planWatch;
+    private string _lastSeenScheme = "";
+    private Func<bool>? _isEnabled;
+    private bool _watchStarted;
+
+    /// <summary>
+    /// Starts watching for power-plan changes and re-applies the parking values when one happens.
+    /// <paramref name="isEnabled"/> is checked each time so the watch goes quiet when the feature
+    /// is switched off, without needing to be torn down.
+    /// </summary>
+    public void StartPlanWatch(Func<bool> isEnabled)
+    {
+        if (_watchStarted) return;
+        _watchStarted   = true;
+        _isEnabled      = isEnabled;
+        _lastSeenScheme = ActiveSchemeGuid();
+
+        try { Microsoft.Win32.SystemEvents.PowerModeChanged += OnPowerModeChanged; }
+        catch (Exception ex) { _log.Warn("CoreParkingService", $"PowerModeChanged hook failed: {ex.Message}"); }
+
+        _planWatch = new System.Threading.Timer(
+            _ => CheckPlanChanged("poll"), null, TimeSpan.FromSeconds(15), TimeSpan.FromSeconds(15));
+
+        _log.Info("CoreParkingService", "Watching for power-plan changes to re-enforce parking.");
+    }
+
+    private void OnPowerModeChanged(object? sender, Microsoft.Win32.PowerModeChangedEventArgs e)
+    {
+        // A plug/unplug often switches the plan, but Windows does it a moment AFTER the event,
+        // so sampling immediately would still see the old plan.
+        if (e.Mode != Microsoft.Win32.PowerModes.StatusChange) return;
+        _ = Task.Run(async () =>
+        {
+            await Task.Delay(3000);
+            CheckPlanChanged("power source changed");
+        });
+    }
+
+    private void CheckPlanChanged(string reason)
+    {
+        try
+        {
+            if (_isEnabled?.Invoke() != true) return;
+
+            string now = ActiveSchemeGuid();
+            if (string.Equals(now, _lastSeenScheme, StringComparison.OrdinalIgnoreCase)) return;
+
+            _lastSeenScheme = now;
+            _log.Info("CoreParkingService", $"Power plan changed ({reason}) — re-applying parking to the new plan.");
+            ApplyCoreParking(minCoresPercent: 0);
+        }
+        catch (Exception ex) { _log.Warn("CoreParkingService", $"Plan-change re-apply failed: {ex.Message}"); }
+    }
+
+    /// <summary>
+    /// Re-applies the core-parking values to the live power scheme without
     /// recreating the scheduled task. Called on every app startup (after a short
     /// delay) when the setting is enabled, because the ONSTART scheduled task runs
     /// as SYSTEM against SYSTEM's active scheme — which often differs from the

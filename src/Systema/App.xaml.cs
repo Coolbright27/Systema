@@ -434,6 +434,14 @@ public partial class App : Application
                 });
             }
 
+            // Applying at startup and boot is not enough on its own: every value is written to
+            // the ACTIVE plan, so switching plans lands on an unconfigured one and parking quietly
+            // reverts. Unplugging can switch plans, Max Life switches to Power Saver deliberately,
+            // and vendor utilities swap them too. This re-applies whenever the plan changes.
+            // Started unconditionally: it checks the setting on every tick, so it costs nothing
+            // while the feature is off and needs no restart if it is switched on later.
+            coreParkingService.StartPlanWatch(() => settingsService.CoreParkingEnabled);
+
             // ── Windows 11 nag reinforcement ──
             // Disable Suggestions defaults ON, so on first run this applies it; on
             // every later launch it re-asserts the HKCU values a feature update may
