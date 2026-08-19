@@ -115,6 +115,48 @@ public class CoreParkingTests
         Assert.Contains("CpParkedPerfStateGuid", src[decl..(decl + 500)]);
     }
 
+    // Off does NOT mean "Windows default" for min cores. Balanced ships AC=100, and 100 means
+    // nothing is ever parked while plugged in. 5 keeps light parking instead of none.
+    [Fact]
+    public void TurningItOffLeavesMinCoresAtFivePercent()
+    {
+        var src = Service();
+        Assert.Contains("MinCoresWhenDisabled       = 5", src);
+
+        int off = src.IndexOf("DisableForcedCoreParking", StringComparison.Ordinal);
+        Assert.True(off > 0);
+        Assert.Contains("SetMinCoresEverywhere(MinCoresWhenDisabled)", src[off..(off + 1500)]);
+    }
+
+    // Both AC and DC, on the active plan and every scheme.
+    [Fact]
+    public void MinCoresIsWrittenForBothAcAndDcEverywhere()
+    {
+        var src = Service();
+        int m = src.IndexOf("public static void SetMinCoresEverywhere", StringComparison.Ordinal);
+        Assert.True(m > 0);
+
+        var body = src[m..(m + 2000)];
+        Assert.Contains("setacvalueindex", body);
+        Assert.Contains("setdcvalueindex", body);
+        Assert.Contains("SCHEME_CURRENT", body);      // the active plan
+        Assert.Contains("GetSubKeyNames", body);      // ...and all of them
+    }
+
+    // Max Life is a battery mode, not a parking mode, so it has to drive min cores itself
+    // rather than depending on the Core Efficiency toggle being on.
+    [Fact]
+    public void MaxBatteryLifeParksIndependentlyOfTheCoreEfficiencyToggle()
+    {
+        var vm = Read("src", "Systema", "ViewModels", "VisualViewModel.cs");
+
+        // Every Max Life path must set it, not just the button.
+        int calls = 0;
+        for (int i = vm.IndexOf("SetMinCoresEverywhere(0)", StringComparison.Ordinal); i >= 0;
+                 i = vm.IndexOf("SetMinCoresEverywhere(0)", i + 1, StringComparison.Ordinal)) calls++;
+        Assert.True(calls >= 2, "expected every Max Life path to park; found " + calls);
+    }
+
 }
 
 internal static class PathExt

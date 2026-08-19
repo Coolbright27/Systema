@@ -83,6 +83,15 @@ public class CoreParkingService
     private const string CpParkedPerfStateClass1Guid = "447235c7-6a8d-4cc0-8e24-9eaf70b96e2c";
     private const int    ParkedPerfDeepest           = 1;
 
+    // What min cores goes back to when Core Efficiency is switched OFF.
+    //
+    // NOTE: this is a deliberate choice, not the Windows default. Balanced actually ships
+    // min cores at AC=100 / DC=10, and AC=100 means no core is ever parked while plugged in.
+    // 5 leaves light parking in place instead of switching parking off entirely, which is the
+    // requested off-state. Every OTHER setting still reverts to its true Windows default by
+    // having its override deleted.
+    private const int    MinCoresWhenDisabled       = 5;
+
     /// <summary>
     /// Every setting Systema writes, paired with the value it gets, so apply and remove cannot
     /// drift apart. Most take the shared floor; parked performance state takes its own enum.
@@ -192,16 +201,20 @@ public class CoreParkingService
     {
         try
         {
-            // Remove Systema's overrides from all power schemes so Windows
-            // goes back to its built-in CPMINCORES default.
+            // Drop every override so each setting falls back to its real Windows default.
             int cleaned = RemoveCoreParkingOverrides();
+
+            // ...then put min cores back at 5, deliberately NOT the Windows default. Balanced
+            // ships AC=100, and 100 means nothing is ever parked while plugged in. 5 leaves
+            // light parking in place instead of switching parking off altogether.
+            SetMinCoresEverywhere(MinCoresWhenDisabled);
 
             // Also reset the active scheme via powercfg to apply immediately
             RunPowercfg("/setactive SCHEME_CURRENT");
 
             DeleteScheduledTask();
 
-            string msg = $"Core parking enforcement removed — Windows defaults restored across {cleaned} scheme(s). Startup task removed.";
+            string msg = $"Core parking enforcement removed across {cleaned} scheme(s). Min cores back to {MinCoresWhenDisabled}%, everything else back to Windows defaults. Startup task removed.";
             return TweakResult.Ok(msg);
         }
         catch (Exception ex)
@@ -368,6 +381,42 @@ public class CoreParkingService
     /// Calls powercfg to apply the setting to the active scheme immediately.
     /// </summary>
     /// <summary>Writes one AC/DC power-setting pair into one scheme. Silent on the protected
+    /// schemes Win11 ships by the hundred; the caller already reports those in aggregate.</summary>
+
+    /// <summary>
+    /// Writes min cores (AC and DC, both efficiency classes) to <paramref name="percent"/> across
+    /// every writable scheme AND the active one. Used by the OFF path, and by Max Life battery mode,
+    /// which drives it to 0 independently of whether Core Efficiency is switched on.
+    /// </summary>
+    public static void SetMinCoresEverywhere(int percent)
+    {
+        try
+        {
+            using var schemesKey = Registry.LocalMachine.OpenSubKey(PowerSchemesRoot, writable: false);
+            if (schemesKey != null)
+            {
+                foreach (string schemeGuid in schemesKey.GetSubKeyNames())
+                {
+                    WriteSchemeValue(schemeGuid, CpMinCoresGuid, percent);
+                    WriteSchemeValue(schemeGuid, CpMinCoresClass1Guid, percent);
+                }
+            }
+
+            // The active plan explicitly, so it takes effect without waiting for a scheme switch.
+            foreach (string guid in new[] { CpMinCoresGuid, CpMinCoresClass1Guid })
+            {
+                RunPowercfg($"/setacvalueindex SCHEME_CURRENT {ProcessorPowerSubGroupGuid} {guid} {percent}");
+                RunPowercfg($"/setdcvalueindex SCHEME_CURRENT {ProcessorPowerSubGroupGuid} {guid} {percent}");
+            }
+            RunPowercfg("/setactive SCHEME_CURRENT");
+
+            LoggerService.Instance.Info("CoreParkingService", $"Min cores set to {percent}% (AC and DC) on the active plan and all schemes.");
+        }
+        catch (Exception ex)
+        {
+            LoggerService.Instance.Warn("CoreParkingService", $"SetMinCoresEverywhere({percent}) failed: {ex.Message}");
+        }
+    }
     /// schemes Win11 ships by the hundred; the caller already reports those in aggregate.</summary>
     private static void WriteSchemeValue(string schemeGuid, string settingGuid, int value)
     {

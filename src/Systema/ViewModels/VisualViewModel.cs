@@ -836,7 +836,12 @@ public partial class VisualViewModel : ObservableObject, IAutoRefreshable, IDisp
                 await _powerPlanService.RemoveBatteryCpuCapAsync();
                 return await _powerPlanService.SetHighPerformanceAsync();
             case "max":
-                return await _powerPlanService.SetMaxBatteryLifeAsync();
+            {
+                var maxResult = await _powerPlanService.SetMaxBatteryLifeAsync();
+                // Same as the button path: Max Life implies deepest parking on its own.
+                await RunOnLargeStackAsync(() => Systema.Services.CoreParkingService.SetMinCoresEverywhere(0));
+                return maxResult;
+            }
             default:
                 return await _powerPlanService.SetBalancedOnBatteryAsync();
         }
@@ -922,6 +927,11 @@ public partial class VisualViewModel : ObservableObject, IAutoRefreshable, IDisp
             _settings.PlanBeforeOptimization = _planBeforeOpt;
 
             var result = await _powerPlanService.SetMaxBatteryLifeAsync();
+
+            // Max Life parks as hard as the machine allows, whether or not Core Efficiency is on.
+            // Runs AFTER the plan switch: SetMaxBatteryLifeAsync changes the active scheme, so
+            // writing min cores first would land on the plan being switched away from.
+            await RunOnLargeStackAsync(() => Systema.Services.CoreParkingService.SetMinCoresEverywhere(0));
             ActivePowerPlan = await RunOnLargeStackAsync(() => _powerPlanService.GetActivePlan());
             if (result.Success)
             {
