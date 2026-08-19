@@ -201,8 +201,13 @@ public class CoreParkingService
     {
         try
         {
-            // Drop every override so each setting falls back to its real Windows default.
+            // Best effort: the registry deletes are refused on this OS, but they are harmless and
+            // would be the cleanest route if a future Windows ever permits them.
             int cleaned = RemoveCoreParkingOverrides();
+
+            // The route that actually works. powercfg holds the privilege direct registry writes
+            // do not, so every setting is written back to its Windows default explicitly.
+            RestoreDefaultsViaPowercfg();
 
             // ...then put min cores back at 5, deliberately NOT the Windows default. Balanced
             // ships AC=100, and 100 means nothing is ever parked while plugged in. 5 leaves
@@ -450,6 +455,78 @@ public class CoreParkingService
             LoggerService.Instance.Warn("CoreParkingService",
                 $"ApplyViaPowercfg failed: {ex.Message}");
         }
+    }
+
+
+    // Windows' own per-scheme defaults live here, and this key IS readable even though the
+    // PowerSchemes keys are not writable. That asymmetry is the whole reason removal has to go
+    // through powercfg: we can read what the default should be, but we cannot delete the override
+    // ourselves.
+    private const string PowerSettingsRoot =
+        @"SYSTEM\CurrentControlSet\Control\Power\PowerSettings";
+
+    private const string BalancedSchemeGuid = "381b4222-f694-41f0-9685-ff5bb260df2e";
+
+    /// <summary>The GUID of the scheme currently active, read straight from the registry.</summary>
+    private static string ActiveSchemeGuid()
+    {
+        try
+        {
+            using var k = Registry.LocalMachine.OpenSubKey(PowerSchemesRoot, writable: false);
+            return k?.GetValue("ActivePowerScheme") as string ?? BalancedSchemeGuid;
+        }
+        catch { return BalancedSchemeGuid; }
+    }
+
+    /// <summary>Windows' shipped default for one setting under one scheme, or null if none.</summary>
+    private static int? WindowsDefault(string settingGuid, string schemeGuid, bool ac)
+    {
+        try
+        {
+            string path = $@"{PowerSettingsRoot}\{ProcessorPowerSubGroupGuid}\{settingGuid}\DefaultPowerSchemeValues\{schemeGuid}";
+            using var k = Registry.LocalMachine.OpenSubKey(path, writable: false);
+            return k?.GetValue(ac ? "ACSettingIndex" : "DCSettingIndex") as int?;
+        }
+        catch { return null; }
+    }
+
+    /// <summary>
+    /// Puts every setting back to Windows' own default THROUGH POWERCFG.
+    ///
+    /// Deleting the registry override is the obvious way to restore a default, and it is what this
+    /// used to do, but writes to PowerSchemes are refused even from an elevated process: the live
+    /// log showed "Requested registry access is not allowed" on all 2020 schemes. So the deletes
+    /// silently failed and the clock floor and parked P-state stayed pinned after a disable.
+    /// powercfg holds the privilege we do not, so we look the default up and write it back.
+    ///
+    /// Min cores is excluded: the caller sets it to MinCoresWhenDisabled instead, which is a
+    /// deliberate 5% rather than Windows' AC=100 (100 means nothing ever parks on AC).
+    /// </summary>
+    private static void RestoreDefaultsViaPowercfg()
+    {
+        string active = ActiveSchemeGuid();
+        int restored = 0, unknown = 0;
+
+        foreach (var (guid, _) in ParkingSettings(0))
+        {
+            if (guid == CpMinCoresGuid || guid == CpMinCoresClass1Guid) continue;
+
+            int? ac = WindowsDefault(guid, active, ac: true)  ?? WindowsDefault(guid, BalancedSchemeGuid, ac: true);
+            int? dc = WindowsDefault(guid, active, ac: false) ?? WindowsDefault(guid, BalancedSchemeGuid, ac: false);
+
+            // No documented default means Systema should not invent one. Leaving the value alone
+            // is safer than guessing, and is logged so it is visible rather than silent.
+            if (ac == null && dc == null) { unknown++; continue; }
+
+            if (ac != null) RunPowercfg($"/setacvalueindex SCHEME_CURRENT {ProcessorPowerSubGroupGuid} {guid} {ac}");
+            if (dc != null) RunPowercfg($"/setdcvalueindex SCHEME_CURRENT {ProcessorPowerSubGroupGuid} {guid} {dc}");
+            restored++;
+        }
+
+        RunPowercfg("/setactive SCHEME_CURRENT");
+        LoggerService.Instance.Info("CoreParkingService",
+            $"Restored {restored} setting(s) to Windows defaults via powercfg" +
+            (unknown > 0 ? $"; {unknown} had no documented default and were left as-is." : "."));
     }
 
     private static void RunPowercfg(string args)

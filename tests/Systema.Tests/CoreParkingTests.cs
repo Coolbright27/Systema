@@ -157,6 +157,44 @@ public class CoreParkingTests
         Assert.True(calls >= 2, "expected every Max Life path to park; found " + calls);
     }
 
+    // Deleting the registry override looks like the way to restore a default, but writes to
+    // PowerSchemes are refused even elevated ("Requested registry access is not allowed" on all
+    // 2020 schemes in the live log). The deletes silently failed, so the clock floor and parked
+    // P-state stayed pinned after a disable. Restoration has to go through powercfg.
+    [Fact]
+    public void DisableRestoresDefaultsThroughPowercfgNotRegistryDeletes()
+    {
+        var src = Service();
+        Assert.Contains("RestoreDefaultsViaPowercfg", src);
+
+        int off = src.IndexOf("DisableForcedCoreParking", StringComparison.Ordinal);
+        Assert.Contains("RestoreDefaultsViaPowercfg();", src[off..(off + 2000)]);
+
+        int m = src.IndexOf("private static void RestoreDefaultsViaPowercfg", StringComparison.Ordinal);
+        Assert.True(m > 0);
+        var body = src[m..(m + 2500)];
+
+        // Reads the real default rather than inventing one, and writes both rails.
+        Assert.Contains("WindowsDefault(", body);
+        Assert.Contains("setacvalueindex", body);
+        Assert.Contains("setdcvalueindex", body);
+    }
+
+    // Every setting apply touches must be restorable, or "off" leaves something behind.
+    [Fact]
+    public void RestorationCoversEverySettingApplyWrites()
+    {
+        var src = Service();
+        int m = src.IndexOf("private static void RestoreDefaultsViaPowercfg", StringComparison.Ordinal);
+        var body = src[m..(m + 2500)];
+
+        // It iterates the same list apply uses, rather than a hand-copied subset that can drift.
+        Assert.Contains("ParkingSettings(", body);
+
+        // Min cores is the one deliberate exception: the caller sets it to 5 instead.
+        Assert.Contains("MinCoresWhenDisabled", src);
+    }
+
 }
 
 internal static class PathExt
