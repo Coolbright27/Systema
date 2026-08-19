@@ -140,6 +140,21 @@ public partial class App : Application
         // ── Uninstall cleanup mode ──────────────────────────────────────────────
         // Triggered by Inno Setup [UninstallRun]: Systema.exe --cleanup
         // Runs BEFORE the installer deletes files so all services are available.
+        // Boot-time re-enforcement, invoked by the SystemaCoreParking scheduled task.
+        // Headless: no mutex, no UI, no CrashGuard. The task used to run a hardcoded powercfg
+        // string, which drifted from the code as soon as the setting list grew; routing it
+        // through the service means the task can never enforce a stale value again.
+        if (e.Args.Contains("--reapply-parking"))
+        {
+            Log.Info("App", "=== --reapply-parking: re-enforcing core parking at boot ===");
+            if (AdminCheckService.IsAdmin())
+                new CoreParkingService().ReapplyCoreParkingAsync().GetAwaiter().GetResult();
+            else
+                Log.Warn("App", "Core parking re-apply skipped — not running as administrator");
+            Shutdown(0);
+            return;
+        }
+
         // Skips single-instance mutex, CrashGuard, UI, and everything else.
         if (e.Args.Contains("--cleanup"))
         {

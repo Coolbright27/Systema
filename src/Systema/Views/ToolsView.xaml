@@ -243,8 +243,10 @@
                                 </Border>
                             </StackPanel>
                             <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap">
-                                Lets Windows park idle CPU cores so active cores can run faster and produce less heat.
-                                Persists across restarts via a scheduled task.
+                                Parks as many idle CPU cores as Windows allows and lets the ones still
+                                awake clock all the way down, so the machine draws less power and runs
+                                cooler when it is not busy. Cores come straight back the moment
+                                something needs them. Re-applied at every boot and every app start.
                             </TextBlock>
                         </StackPanel>
 

@@ -51,6 +51,33 @@ public class CoreParkingService
     // Core parking minimum cores setting
     private const string CpMinCoresGuid = "0cc5b647-c1df-4637-891a-dec35c318583";
 
+    // Second efficiency class (E-cores on hybrid chips). Windows keeps a SEPARATE min-cores
+    // floor for it, so setting only the first one leaves the E-cores pinned awake on exactly
+    // the machines that benefit most from parking them. Absent on non-hybrid CPUs, where the
+    // write simply creates a key Windows ignores.
+    private const string CpMinCoresClass1Guid = "0cc5b647-c1df-4637-891a-dec35c318584";
+
+    // "Latency sensitivity hint min unparked cores/packages" — the pool Windows holds unparked
+    // and READY to service latency hints. Left at its default it quietly re-floats cores that
+    // min-cores just released, which is why min-cores alone does not park as deeply as expected.
+    private const string CpLatencyHintMinUnparkedGuid = "616cdaa5-695e-4545-97ad-97dc2d1bdd88";
+    private const string CpLatencyHintMinUnparkedClass1Guid = "616cdaa5-695e-4545-97ad-97dc2d1bdd89";
+
+    // Minimum processor state — what ParkControl calls "frequency scaling". Parking decides how
+    // many cores are awake; this decides how far the awake ones may clock DOWN. Windows ships
+    // Balanced at 5%, which holds a floor under the clocks and blunts the parking work. At 0 the
+    // cores are free to drop to their lowest state.
+    private const string ProcThrottleMinGuid       = "893dee8e-2bef-41e0-89c6-b55d0929964c";
+    private const string ProcThrottleMinClass1Guid = "893dee8e-2bef-41e0-89c6-b55d0929964d";
+
+    /// <summary>Every setting Systema drives to the floor, so apply and remove cannot drift apart.</summary>
+    private static readonly string[] ParkingSettingGuids =
+    {
+        CpMinCoresGuid, CpMinCoresClass1Guid,
+        CpLatencyHintMinUnparkedGuid, CpLatencyHintMinUnparkedClass1Guid,
+        ProcThrottleMinGuid, ProcThrottleMinClass1Guid,
+    };
+
     private const string PowerSchemesRoot =
         @"SYSTEM\CurrentControlSet\Control\Power\User\PowerSchemes";
 
@@ -104,7 +131,7 @@ public class CoreParkingService
     {
         try
         {
-            int schemesUpdated = ApplyCoreParking(minCoresPercent: 10);
+            int schemesUpdated = ApplyCoreParking(minCoresPercent: 0);
 
             TweakResult taskResult = CreateScheduledTask();
 
@@ -167,7 +194,7 @@ public class CoreParkingService
     {
         try
         {
-            int n = ApplyCoreParking(minCoresPercent: 10);
+            int n = ApplyCoreParking(minCoresPercent: 0);
             _log.Info("CoreParkingService", $"Core parking re-applied on startup ({n} scheme(s)).");
         }
         catch (Exception ex)
@@ -211,6 +238,15 @@ public class CoreParkingService
                     settingKey.SetValue("ACSettingIndex", minCoresPercent, RegistryValueKind.DWord);
                     settingKey.SetValue("DCSettingIndex", minCoresPercent, RegistryValueKind.DWord);
                     updated++;
+
+                    // Same floor for the E-core class, the ready/latency-hint pool and the clock
+                    // floor. Min-cores alone does not park deeply: the other knobs re-float or
+                    // hold up the very cores it just released.
+                    foreach (string g in ParkingSettingGuids)
+                    {
+                        if (g == CpMinCoresGuid) continue;   // written directly above
+                        WriteSchemeValue(schemeGuid, g, minCoresPercent);
+                    }
                 }
                 // Hidden Windows power schemes (the long list of GUIDs under
                 // SYSTEM\…\PowerSchemes\) are owned by TrustedInstaller and can't
@@ -263,17 +299,24 @@ public class CoreParkingService
 
             foreach (string schemeGuid in schemesKey.GetSubKeyNames())
             {
-                string settingPath =
-                    $@"{PowerSchemesRoot}\{schemeGuid}\{ProcessorPowerSubGroupGuid}\{CpMinCoresGuid}";
 
                 try
                 {
-                    using var settingKey = Registry.LocalMachine.OpenSubKey(settingPath, writable: true);
-                    if (settingKey == null) continue;
+                    // Remove every setting apply touches. Cleaning only min-cores left the clock
+                    // floor and the latency-hint pool pinned at 0 forever after a disable.
+                    bool any = false;
+                    foreach (string guid in ParkingSettingGuids)
+                    {
+                        string path =
+                            $@"{PowerSchemesRoot}\{schemeGuid}\{ProcessorPowerSubGroupGuid}\{guid}";
+                        using var settingKey = Registry.LocalMachine.OpenSubKey(path, writable: true);
+                        if (settingKey == null) continue;
 
-                    settingKey.DeleteValue("ACSettingIndex", throwOnMissingValue: false);
-                    settingKey.DeleteValue("DCSettingIndex", throwOnMissingValue: false);
-                    cleaned++;
+                        settingKey.DeleteValue("ACSettingIndex", throwOnMissingValue: false);
+                        settingKey.DeleteValue("DCSettingIndex", throwOnMissingValue: false);
+                        any = true;
+                    }
+                    if (any) cleaned++;
                 }
                 catch (Exception ex)
                 {
@@ -293,16 +336,34 @@ public class CoreParkingService
     /// <summary>
     /// Calls powercfg to apply the setting to the active scheme immediately.
     /// </summary>
+    /// <summary>Writes one AC/DC power-setting pair into one scheme. Silent on the protected
+    /// schemes Win11 ships by the hundred; the caller already reports those in aggregate.</summary>
+    private static void WriteSchemeValue(string schemeGuid, string settingGuid, int value)
+    {
+        try
+        {
+            string path = "{PowerSchemesRoot}{schemeGuid}{ProcessorPowerSubGroupGuid}{settingGuid}";
+            using var key = Registry.LocalMachine.CreateSubKey(path, writable: true);
+            if (key == null) return;
+            key.SetValue("ACSettingIndex", value, RegistryValueKind.DWord);
+            key.SetValue("DCSettingIndex", value, RegistryValueKind.DWord);
+        }
+        catch { /* protected scheme, or setting absent on this CPU */ }
+    }
+
     private static void ApplyViaPowercfg(int minCoresPercent)
     {
         try
         {
             string percentStr = minCoresPercent.ToString();
 
-            RunPowercfg(
-                $"/setacvalueindex SCHEME_CURRENT SUB_PROCESSOR CPMINCORES {percentStr}");
-            RunPowercfg(
-                $"/setdcvalueindex SCHEME_CURRENT SUB_PROCESSOR CPMINCORES {percentStr}");
+            // Addressed by GUID, not alias: only CPMINCORES has a powercfg alias. The E-core
+            // floor, the latency-hint pool and the clock floor have none.
+            foreach (string guid in ParkingSettingGuids)
+            {
+                RunPowercfg($"/setacvalueindex SCHEME_CURRENT {ProcessorPowerSubGroupGuid} {guid} {percentStr}");
+                RunPowercfg($"/setdcvalueindex SCHEME_CURRENT {ProcessorPowerSubGroupGuid} {guid} {percentStr}");
+            }
             RunPowercfg("/setactive SCHEME_CURRENT");
         }
         catch (Exception ex)
@@ -338,14 +399,13 @@ public class CoreParkingService
     {
         try
         {
-            // The task action runs powercfg to enforce the AC and DC parking values and
-            // then re-activates the current scheme so the change takes effect immediately.
-            // Note: no inner quotes around the cmd /c body — powercfg args have no spaces
-            // and inner quotes would prematurely close the schtasks /TR quoted string.
-            const string taskAction =
-                "cmd /c powercfg /setacvalueindex SCHEME_CURRENT SUB_PROCESSOR CPMINCORES 10 " +
-                "&& powercfg /setdcvalueindex SCHEME_CURRENT SUB_PROCESSOR CPMINCORES 10 " +
-                "&& powercfg /setactive SCHEME_CURRENT";
+            // The task re-invokes Systema itself rather than chaining powercfg calls. Six settings
+            // across AC and DC is twelve invocations, which overruns the schtasks /TR length limit,
+            // and a hardcoded command string silently drifts from the code the moment the setting
+            // list changes. It did exactly that: the task was still writing CPMINCORES 10 by name
+            // after the values moved.
+            string exe = Environment.ProcessPath ?? "";
+            string taskAction = $"\\\"{exe}\\\" --reapply-parking";
 
             var psi = new ProcessStartInfo
             {
