@@ -20,7 +20,10 @@
 //   ToolsViewModel.cs  — Core Parking toggle button on the Tools tab
 // ════════════════════════════════════════════════════════════════════════════
 
+using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using Microsoft.Win32;
 using Systema.Core;
@@ -117,6 +120,92 @@ public class CoreParkingService
 
     private static bool? _isHybridCache;
 
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool GetLogicalProcessorInformationEx(
+        int relationship, IntPtr buffer, ref uint returnedLength);
+
+    /// <summary>
+    /// Logical processors in the LOWEST efficiency class, i.e. the E-cores. 0 on a homogeneous CPU.
+    /// Per Microsoft, a higher efficiency class means greater performance and less efficiency, so
+    /// the lowest class is the efficient tier.
+    /// </summary>
+    private static int CountEcoreLogicalProcessors()
+    {
+        try
+        {
+            const int RelationProcessorCore = 0;
+            uint size = 0;
+            GetLogicalProcessorInformationEx(RelationProcessorCore, IntPtr.Zero, ref size);
+            if (size == 0) return 0;
+
+            IntPtr buf = Marshal.AllocHGlobal((int)size);
+            try
+            {
+                if (!GetLogicalProcessorInformationEx(RelationProcessorCore, buf, ref size)) return 0;
+
+                // SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX (x64):
+                //   +0 DWORD Relationship, +4 DWORD Size, +8 PROCESSOR_RELATIONSHIP
+                //   PROCESSOR_RELATIONSHIP: +0 BYTE Flags, +1 BYTE EfficiencyClass,
+                //                           +22 WORD GroupCount, +24 GROUP_AFFINITY (Mask first)
+                var cores = new List<(byte cls, ulong mask)>();
+                int offset = 0;
+                while (offset + 8 <= (int)size)
+                {
+                    int  rel     = Marshal.ReadInt32(buf, offset);
+                    uint recSize = (uint)Marshal.ReadInt32(buf, offset + 4);
+                    if (recSize == 0) break;
+
+                    if (rel == RelationProcessorCore)
+                    {
+                        byte cls  = Marshal.ReadByte(buf, offset + 8 + 1);
+                        ulong m   = (ulong)Marshal.ReadInt64(buf, offset + 8 + 24);
+                        cores.Add((cls, m));
+                    }
+                    offset += (int)recSize;
+                }
+
+                if (cores.Count == 0) return 0;
+                byte lowest = cores.Min(c => c.cls);
+                if (lowest == cores.Max(c => c.cls)) return 0;   // homogeneous
+
+                int logical = 0;
+                foreach (var (cls, m) in cores)
+                    if (cls == lowest) logical += System.Numerics.BitOperations.PopCount(m);
+                return logical;
+            }
+            finally { Marshal.FreeHGlobal(buf); }
+        }
+        catch (Exception ex)
+        {
+            LoggerService.Instance.Warn("CoreParkingService", $"E-core count failed: {ex.Message}");
+            return 0;
+        }
+    }
+
+    /// <summary>
+    /// The min-cores percentage for the E-core class: the SMALLEST value that still leaves one
+    /// core schedulable. A fixed percentage does not scale, which is the whole problem: 10% is
+    /// about one core on an 8-E-core chip but two on a 16-E-core one and three on a 32, reserving
+    /// more capacity the bigger the CPU gets, for no benefit. Computing it from the actual count
+    /// pins the reserve at one core on every chip.
+    ///
+    /// Rounded UP so the floor survives even if Windows truncates rather than rounds when turning
+    /// the percentage into a core count.
+    ///
+    /// Assumes the per-class percentage is of that class's cores, which is the sensible reading
+    /// given Windows keeps a separate setting per class.
+    /// </summary>
+    private static int HybridEcoreFloorPercent()
+    {
+        int n = CountEcoreLogicalProcessors();
+        if (n <= 0) return 0;
+
+        int pct = (int)Math.Ceiling(100.0 / n);
+        LoggerService.Instance.Info("CoreParkingService",
+            $"{n} E-core logical processor(s); reserving {pct}% (~1 core) so light work has somewhere cheap to land.");
+        return Math.Clamp(pct, 1, 100);
+    }
     /// <summary>True when the CPU exposes more than one efficiency class (P-cores + E-cores).</summary>
     private static bool IsHybridCpu()
     {
@@ -154,7 +243,7 @@ public class CoreParkingService
         // Class 0 is the E-cores on a hybrid chip. Parking those pushes background work onto
         // P-cores, which costs MORE power for the same work, so they keep a slice awake.
         // On non-hybrid every core is class 0 and there is no cheap tier to protect.
-        int class0 = (floorPercent == 0 && IsHybridCpu()) ? HybridEcoreMinCores : floorPercent;
+        int class0 = (floorPercent == 0 && IsHybridCpu()) ? HybridEcoreFloorPercent() : floorPercent;
 
         return new[]
         {

@@ -203,7 +203,7 @@ public class CoreParkingTests
     public void HybridKeepsSomeEcoresAwakeWhilePcoresParkFreely()
     {
         var src = Service();
-        Assert.Contains("HybridEcoreMinCores", src);
+        Assert.Contains("HybridEcoreFloorPercent", src);
         Assert.Contains("IsHybridCpu", src);
 
         int m = src.IndexOf("ParkingSettings(int floorPercent)", StringComparison.Ordinal);
@@ -211,13 +211,30 @@ public class CoreParkingTests
         var body = src[m..(m + 1400)];
 
         // Class 0 gets the hybrid-aware value; class 1 always gets the full floor.
-        Assert.Contains("IsHybridCpu()) ? HybridEcoreMinCores : floorPercent", body);
+        Assert.Contains("IsHybridCpu()) ? HybridEcoreFloorPercent() : floorPercent", body);
         Assert.Contains("(CpMinCoresClass1Guid,               floorPercent)", body);
 
         // Non-hybrid must be unaffected: every core is class 0 there.
         Assert.Contains("floorPercent == 0 && IsHybridCpu()", body);
     }
 
+    // A FIXED percentage does not scale: 10% is about one E-core on an 8-E-core chip, two on a
+    // 16-E-core one, three on a 32. The reserve should be one core on every chip, so it is
+    // computed from the real count and rounded UP, which survives Windows truncating rather
+    // than rounding when it turns the percentage into a core count.
+    [Fact]
+    public void TheEcoreReserveIsOneCoreRegardlessOfCoreCount()
+    {
+        var src = Service();
+        Assert.Contains("CountEcoreLogicalProcessors", src);
+
+        int m = src.IndexOf("private static int HybridEcoreFloorPercent", StringComparison.Ordinal);
+        Assert.True(m > 0);
+        var body = src[m..(m + 900)];
+
+        Assert.Contains("Math.Ceiling(100.0 / n)", body);   // scales with the chip
+        Assert.Contains("if (n <= 0) return 0;", body);     // homogeneous CPU keeps the plain floor
+    }
 }
 
 internal static class PathExt
