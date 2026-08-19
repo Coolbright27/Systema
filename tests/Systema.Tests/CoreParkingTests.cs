@@ -195,6 +195,29 @@ public class CoreParkingTests
         Assert.Contains("MinCoresWhenDisabled", src);
     }
 
+    // Windows ships min cores asymmetric on hybrid: class 0 (E-cores) AC=100, class 1 (P-cores)
+    // AC=0. Keep the cheap cores available, park the expensive ones. Driving BOTH to 0 parks the
+    // E-cores too, so background work lands on a P-core instead and draws MORE power for the same
+    // work. The floor stays small (10, about one core on an 8-E-core chip) so the rest still park.
+    [Fact]
+    public void HybridKeepsSomeEcoresAwakeWhilePcoresParkFreely()
+    {
+        var src = Service();
+        Assert.Contains("HybridEcoreMinCores", src);
+        Assert.Contains("IsHybridCpu", src);
+
+        int m = src.IndexOf("ParkingSettings(int floorPercent)", StringComparison.Ordinal);
+        Assert.True(m > 0);
+        var body = src[m..(m + 1400)];
+
+        // Class 0 gets the hybrid-aware value; class 1 always gets the full floor.
+        Assert.Contains("IsHybridCpu()) ? HybridEcoreMinCores : floorPercent", body);
+        Assert.Contains("(CpMinCoresClass1Guid,               floorPercent)", body);
+
+        // Non-hybrid must be unaffected: every core is class 0 there.
+        Assert.Contains("floorPercent == 0 && IsHybridCpu()", body);
+    }
+
 }
 
 internal static class PathExt

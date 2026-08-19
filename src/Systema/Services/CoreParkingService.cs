@@ -94,13 +94,71 @@ public class CoreParkingService
     // having its override deleted.
     private const int    MinCoresWhenDisabled       = 5;
 
+
+    // ── Hybrid policy ─────────────────────────────────────────────────────────
+    //
+    // Windows' own defaults for min cores are deliberately ASYMMETRIC on hybrid chips:
+    //     class 0 (E-cores) AC=100  → keep them all awake
+    //     class 1 (P-cores) AC=0    → let them all park
+    //
+    // That is the power-optimal arrangement, and it is worth copying rather than overriding.
+    // Parking the E-cores does not save power: background work still has to run somewhere, and
+    // with no E-core available it lands on a P-core, which draws far more for the same work. So
+    // driving BOTH classes to 0 produces more heat, not less.
+    //
+    // On hybrid we therefore keep a slice of E-cores awake and let every P-core park. 10 is
+    // Microsoft's own battery-side default for this setting, so it is a blessed value for "park
+    // hard but keep a little capacity", and on a typical 8-E-core chip it leaves about one core
+    // available to absorb background work.
+    //
+    // On a NON-hybrid CPU every core is class 0, there is no cheap tier to preserve, and the
+    // floor goes to 0 as before.
+    private const int HybridEcoreMinCores = 10;
+
+    private static bool? _isHybridCache;
+
+    /// <summary>True when the CPU exposes more than one efficiency class (P-cores + E-cores).</summary>
+    private static bool IsHybridCpu()
+    {
+        if (_isHybridCache is { } cached) return cached;
+
+        bool hybrid = false;
+        try
+        {
+            using var searcher = new System.Management.ManagementObjectSearcher(
+                "SELECT NumberOfEfficiencyClasses FROM Win32_Processor");
+            foreach (System.Management.ManagementObject cpu in searcher.Get())
+            {
+                // Absent on older Windows/CPUs, which is itself the "not hybrid" answer.
+                var v = cpu["NumberOfEfficiencyClasses"];
+                if (v != null && Convert.ToUInt32(v) > 1) { hybrid = true; break; }
+            }
+        }
+        catch (Exception ex)
+        {
+            LoggerService.Instance.Warn("CoreParkingService", $"Hybrid detection failed, assuming non-hybrid: {ex.Message}");
+        }
+
+        _isHybridCache = hybrid;
+        LoggerService.Instance.Info("CoreParkingService",
+            hybrid ? "Hybrid CPU detected — keeping some E-cores awake so work does not spill onto P-cores."
+                   : "Non-hybrid CPU — all cores share one parking floor.");
+        return hybrid;
+    }
     /// <summary>
     /// Every setting Systema writes, paired with the value it gets, so apply and remove cannot
     /// drift apart. Most take the shared floor; parked performance state takes its own enum.
     /// </summary>
-    private static (string Guid, int Value)[] ParkingSettings(int floorPercent) => new[]
+    private static (string Guid, int Value)[] ParkingSettings(int floorPercent)
     {
-        (CpMinCoresGuid,                     floorPercent),
+        // Class 0 is the E-cores on a hybrid chip. Parking those pushes background work onto
+        // P-cores, which costs MORE power for the same work, so they keep a slice awake.
+        // On non-hybrid every core is class 0 and there is no cheap tier to protect.
+        int class0 = (floorPercent == 0 && IsHybridCpu()) ? HybridEcoreMinCores : floorPercent;
+
+        return new[]
+        {
+        (CpMinCoresGuid,                     class0),
         (CpMinCoresClass1Guid,               floorPercent),
         (CpLatencyHintMinUnparkedGuid,       floorPercent),
         (CpLatencyHintMinUnparkedClass1Guid, floorPercent),
@@ -108,7 +166,8 @@ public class CoreParkingService
         (ProcThrottleMinClass1Guid,          floorPercent),
         (CpParkedPerfStateGuid,              ParkedPerfDeepest),
         (CpParkedPerfStateClass1Guid,        ParkedPerfDeepest),
-    };
+        };
+    }
 
     /// <summary>Same set, for removal, where the values do not matter.</summary>
     private static readonly string[] ParkingSettingGuids =
@@ -305,8 +364,12 @@ public class CoreParkingService
                 // has 200+ of them and the resulting log was ~350 warnings per
                 // Auto-Pilot run that drowned out actually useful messages. We
                 // count them silently and emit a single summary line at the end.
-                catch (UnauthorizedAccessException)            { skippedProtected++; }
-                catch (System.Security.SecurityException)      { skippedProtected++; }
+                // PowerSchemes is not writable even elevated, so on most machines EVERY scheme is
+                // refused. Bailing on the first refusal instead of grinding through the rest
+                // matters: this box has 2020 schemes and the doomed loop cost about six seconds
+                // on every boot and app start to accomplish nothing. powercfg does the real work.
+                catch (UnauthorizedAccessException)            { skippedProtected++; if (updated == 0) break; }
+                catch (System.Security.SecurityException)      { skippedProtected++; if (updated == 0) break; }
                 catch (Exception ex)
                 {
                     otherFailures++;
@@ -318,7 +381,7 @@ public class CoreParkingService
 
             if (skippedProtected > 0)
                 LoggerService.Instance.Info("CoreParkingService",
-                    $"Skipped {skippedProtected} TrustedInstaller-protected power scheme(s) — expected on Win11.");
+                    $"Registry path refused after {skippedProtected} scheme(s), expected; powercfg applies the values.");
             if (otherFailures > 3)
                 LoggerService.Instance.Warn("CoreParkingService",
                     $"+{otherFailures - 3} additional scheme-write failures suppressed.");
