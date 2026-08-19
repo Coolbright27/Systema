@@ -51,10 +51,12 @@ public class CoreParkingService
     // Core parking minimum cores setting
     private const string CpMinCoresGuid = "0cc5b647-c1df-4637-891a-dec35c318583";
 
-    // Second efficiency class (E-cores on hybrid chips). Windows keeps a SEPARATE min-cores
-    // floor for it, so setting only the first one leaves the E-cores pinned awake on exactly
-    // the machines that benefit most from parking them. Absent on non-hybrid CPUs, where the
-    // write simply creates a key Windows ignores.
+    // Efficiency class 1. Per Microsoft: a HIGHER efficiency class means greater performance and
+    // less efficiency, so class 1 is the P-cores and class 0 (the base setting above) is the
+    // E-cores. Windows keeps a SEPARATE min-cores floor per class, so setting only the base
+    // one leaves the P-cores pinned awake on exactly the machines that benefit most from
+    // parking them. Absent on non-hybrid CPUs, where the write simply creates a key Windows
+    // ignores.
     private const string CpMinCoresClass1Guid = "0cc5b647-c1df-4637-891a-dec35c318584";
 
     // "Latency sensitivity hint min unparked cores/packages" — the pool Windows holds unparked
@@ -287,7 +289,7 @@ public class CoreParkingService
                     settingKey.SetValue("DCSettingIndex", minCoresPercent, RegistryValueKind.DWord);
                     updated++;
 
-                    // Same floor for the E-core class, the ready/latency-hint pool and the clock
+                    // Same floor for the other efficiency class, the ready/latency-hint pool and the clock
                     // floor, plus the deepest parked P-state. Min-cores alone does not park
                     // deeply: the other knobs re-float or hold up the cores it just released,
                     // and without the parked P-state the parked ones can still idle high.
@@ -440,7 +442,7 @@ public class CoreParkingService
     {
         try
         {
-            // Addressed by GUID, not alias: only CPMINCORES has a powercfg alias. The E-core
+            // Addressed by GUID, not alias: only CPMINCORES has a powercfg alias. The per-class
             // floor, the latency-hint pool, the clock floor and the parked P-state have none.
             foreach (var (guid, value) in ParkingSettings(minCoresPercent))
             {
