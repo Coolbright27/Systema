@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.IO;
 using Xunit;
 
@@ -21,6 +22,14 @@ public class CoreParkingTests
         }
         throw new FileNotFoundException(string.Join('/', parts));
     }
+
+    private static readonly string[] AllSettingNames =
+    {
+        "CpMinCoresGuid", "CpMinCoresClass1Guid",
+        "CpLatencyHintMinUnparkedGuid", "CpLatencyHintMinUnparkedClass1Guid",
+        "ProcThrottleMinGuid", "ProcThrottleMinClass1Guid",
+        "CpParkedPerfStateGuid", "CpParkedPerfStateClass1Guid",
+    };
 
     private static string Service() => Read("src", "Systema", "Services", "CoreParkingService.cs");
     private static string App()     => Read("src", "Systema", "App.xaml.cs");
@@ -46,12 +55,25 @@ public class CoreParkingTests
     public void ApplyAndRemoveUseTheSameSettingList()
     {
         var src = Service();
-        int apply  = src.IndexOf("private static int ApplyCoreParking", StringComparison.Ordinal);
-        int remove = src.IndexOf("private static int RemoveCoreParkingOverrides", StringComparison.Ordinal);
-        Assert.True(apply > 0 && remove > 0);
 
-        Assert.Contains("ParkingSettingGuids", src[apply..(apply + 3000)]);
-        Assert.Contains("ParkingSettingGuids", src[remove..(remove + 3000)]);
+        // Apply writes (guid, value) pairs; remove only needs the guids. Different shapes, but
+        // they must name the SAME settings, or a disable leaves some of them written forever.
+        string[] Names(string declStart)
+        {
+            int i = src.IndexOf(declStart, StringComparison.Ordinal);
+            Assert.True(i > 0, declStart + " not found");
+            int open = src.IndexOf('{', i);
+            int close = src.IndexOf("};", open);
+            var block = src[open..close];
+            return AllSettingNames.Where(n => block.Contains(n, StringComparison.Ordinal))
+                                  .OrderBy(n => n).ToArray();
+        }
+
+        var applied = Names("private static (string Guid, int Value)[] ParkingSettings");
+        var removed = Names("private static readonly string[] ParkingSettingGuids");
+
+        Assert.NotEmpty(applied);
+        Assert.Equal(applied, removed);
     }
 
     // The boot task used to run a hardcoded "CPMINCORES 10" powercfg string. It kept enforcing
@@ -67,6 +89,32 @@ public class CoreParkingTests
         Assert.Contains("--reapply-parking", App());
         Assert.Contains("ReapplyCoreParkingAsync", App());
     }
+    // Parked performance state is an ENUM, not a percentage: 0 = No Preference, 1 = Deepest,
+    // 2 = Lightest. Writing the shared 0 floor here would silently mean "no preference" and do
+    // nothing at all, which is the same trap the old CPMINCORES = 0 comment warned about.
+    [Fact]
+    public void ParkedPerformanceStateUsesItsOwnEnumNotTheFloor()
+    {
+        var src = Service();
+        Assert.Contains("CpParkedPerfStateGuid", src);
+        Assert.Contains("ParkedPerfDeepest", src);
+        Assert.Contains("ParkedPerfDeepest           = 1", src);
+
+        // It must be paired with its own value, never handed the floor.
+        Assert.Contains("(CpParkedPerfStateGuid,              ParkedPerfDeepest)", src);
+        Assert.DoesNotContain("(CpParkedPerfStateGuid,              floorPercent)", src);
+    }
+
+    // Removal still has to cover it, or disabling leaves parked cores pinned to Deepest.
+    [Fact]
+    public void RemovalCoversTheParkedPerformanceState()
+    {
+        var src = Service();
+        int decl = src.IndexOf("private static readonly string[] ParkingSettingGuids", StringComparison.Ordinal);
+        Assert.True(decl > 0);
+        Assert.Contains("CpParkedPerfStateGuid", src[decl..(decl + 500)]);
+    }
+
 }
 
 internal static class PathExt

@@ -70,12 +70,42 @@ public class CoreParkingService
     private const string ProcThrottleMinGuid       = "893dee8e-2bef-41e0-89c6-b55d0929964c";
     private const string ProcThrottleMinClass1Guid = "893dee8e-2bef-41e0-89c6-b55d0929964d";
 
-    /// <summary>Every setting Systema drives to the floor, so apply and remove cannot drift apart.</summary>
+
+    // What P-state a core sits at WHILE PARKED. At default ("No Preference") a parked core can
+    // still idle high, so parking costs the OS scheduling width without collecting the power
+    // saving. Deepest costs nothing measurable: by definition the core is not running work.
+    //
+    // This is an ENUM, not a percentage: 0 = No Preference, 1 = Deepest, 2 = Lightest. Writing 0
+    // here would silently mean "no preference" and do nothing, which is the same trap the old
+    // CPMINCORES = 0 comment warned about. It therefore carries its own value rather than the
+    // shared floor.
+    private const string CpParkedPerfStateGuid       = "447235c7-6a8d-4cc0-8e24-9eaf70b96e2b";
+    private const string CpParkedPerfStateClass1Guid = "447235c7-6a8d-4cc0-8e24-9eaf70b96e2c";
+    private const int    ParkedPerfDeepest           = 1;
+
+    /// <summary>
+    /// Every setting Systema writes, paired with the value it gets, so apply and remove cannot
+    /// drift apart. Most take the shared floor; parked performance state takes its own enum.
+    /// </summary>
+    private static (string Guid, int Value)[] ParkingSettings(int floorPercent) => new[]
+    {
+        (CpMinCoresGuid,                     floorPercent),
+        (CpMinCoresClass1Guid,               floorPercent),
+        (CpLatencyHintMinUnparkedGuid,       floorPercent),
+        (CpLatencyHintMinUnparkedClass1Guid, floorPercent),
+        (ProcThrottleMinGuid,                floorPercent),
+        (ProcThrottleMinClass1Guid,          floorPercent),
+        (CpParkedPerfStateGuid,              ParkedPerfDeepest),
+        (CpParkedPerfStateClass1Guid,        ParkedPerfDeepest),
+    };
+
+    /// <summary>Same set, for removal, where the values do not matter.</summary>
     private static readonly string[] ParkingSettingGuids =
     {
         CpMinCoresGuid, CpMinCoresClass1Guid,
         CpLatencyHintMinUnparkedGuid, CpLatencyHintMinUnparkedClass1Guid,
         ProcThrottleMinGuid, ProcThrottleMinClass1Guid,
+        CpParkedPerfStateGuid, CpParkedPerfStateClass1Guid,
     };
 
     private const string PowerSchemesRoot =
@@ -240,12 +270,13 @@ public class CoreParkingService
                     updated++;
 
                     // Same floor for the E-core class, the ready/latency-hint pool and the clock
-                    // floor. Min-cores alone does not park deeply: the other knobs re-float or
-                    // hold up the very cores it just released.
-                    foreach (string g in ParkingSettingGuids)
+                    // floor, plus the deepest parked P-state. Min-cores alone does not park
+                    // deeply: the other knobs re-float or hold up the cores it just released,
+                    // and without the parked P-state the parked ones can still idle high.
+                    foreach (var (g, value) in ParkingSettings(minCoresPercent))
                     {
                         if (g == CpMinCoresGuid) continue;   // written directly above
-                        WriteSchemeValue(schemeGuid, g, minCoresPercent);
+                        WriteSchemeValue(schemeGuid, g, value);
                     }
                 }
                 // Hidden Windows power schemes (the long list of GUIDs under
@@ -355,15 +386,14 @@ public class CoreParkingService
     {
         try
         {
-            string percentStr = minCoresPercent.ToString();
-
             // Addressed by GUID, not alias: only CPMINCORES has a powercfg alias. The E-core
-            // floor, the latency-hint pool and the clock floor have none.
-            foreach (string guid in ParkingSettingGuids)
+            // floor, the latency-hint pool, the clock floor and the parked P-state have none.
+            foreach (var (guid, value) in ParkingSettings(minCoresPercent))
             {
-                RunPowercfg($"/setacvalueindex SCHEME_CURRENT {ProcessorPowerSubGroupGuid} {guid} {percentStr}");
-                RunPowercfg($"/setdcvalueindex SCHEME_CURRENT {ProcessorPowerSubGroupGuid} {guid} {percentStr}");
+                RunPowercfg($"/setacvalueindex SCHEME_CURRENT {ProcessorPowerSubGroupGuid} {guid} {value}");
+                RunPowercfg($"/setdcvalueindex SCHEME_CURRENT {ProcessorPowerSubGroupGuid} {guid} {value}");
             }
+            RunPowercfg("/setactive SCHEME_CURRENT");
             RunPowercfg("/setactive SCHEME_CURRENT");
         }
         catch (Exception ex)
