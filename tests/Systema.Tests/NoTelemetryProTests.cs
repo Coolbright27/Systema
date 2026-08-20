@@ -55,4 +55,45 @@ public class NoTelemetryProTests
         int m = src.IndexOf("private static void SetExtraTelemetryServices", StringComparison.Ordinal);
         Assert.Contains("if (key == null) continue;", src[m..(m + 2000)]);
     }
+    [Fact]
+    public void CoversTheIntelUsageReportPairAndMicrosoftInsights()
+    {
+        var src = Service();
+        int list = src.IndexOf("ExtraTelemetryServices =", StringComparison.Ordinal);
+        var block = src[list..(src.IndexOf("};", list, StringComparison.Ordinal))];
+
+        Assert.Contains("SystemUsageReportSvc", block);   // Intel System Usage Report
+        Assert.Contains("SUR QC SAM", block);             // its asset-manager companion
+        Assert.Contains("wuqisvc", block);                // Microsoft Usage and Quality Insights
+    }
+
+    // The SystemUsageReportSvc suffix is an Intel platform codename and differs by machine, so a
+    // literal match would silently miss the service on other Intel PCs.
+    [Fact]
+    public void TheUsageReportServiceIsMatchedByPrefix()
+    {
+        var src = Service();
+        Assert.Contains("EffectiveExtraTelemetryServices", src);
+
+        int m = src.IndexOf("private static IEnumerable<string> EffectiveExtraTelemetryServices", StringComparison.Ordinal);
+        Assert.True(m > 0);
+        var body = src[m..(m + 1200)];
+        Assert.Contains("StartsWith(\"SystemUsageReportSvc\"", body);
+
+        // ...and the expanded list is what actually gets used.
+        int setter = src.IndexOf("private static void SetExtraTelemetryServices", StringComparison.Ordinal);
+        Assert.Contains("EffectiveExtraTelemetryServices()", src[setter..(setter + 400)]);
+    }
+
+    // With no captured value, restore must land on Manual: a service that starts on demand is
+    // the safe unknown, never Automatic.
+    [Fact]
+    public void RestoreFallsBackToManualWhenNothingWasCaptured()
+    {
+        var src = Service();
+        int m = src.IndexOf("internal static int GetDefaultStart", StringComparison.Ordinal);
+        Assert.True(m > 0);
+        Assert.Contains(": 3", src[m..(m + 200)]);
+    }
+
 }

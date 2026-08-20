@@ -388,7 +388,6 @@ public class ServiceControlService
         // Automatic by default (2)
         ["SysMain"] = 2, ["WSearch"] = 2, ["Spooler"] = 2, ["MapsBroker"] = 2,
         ["PcaSvc"] = 2,  ["TrkWks"] = 2,  ["DiagTrack"] = 2, ["DoSvc"] = 2, ["BITS"] = 2,
-        ["DusmSvc"] = 2, ["IntelTelemetryAgent"] = 2,
         // Disabled by default (4)
         ["RemoteRegistry"] = 4, ["RemoteAccess"] = 4, ["NetTcpPortSharing"] = 4,
         // everything else → Manual (3), the safe start-on-demand default.
@@ -988,11 +987,41 @@ public class ServiceControlService
                                                       // into diagnostics reporting.
         "IntelCollectorService",                      // Intel(R) Collector Service
         "IntelTelemetryAgent",                        // Intel(R) Telemetry Agent Service
+        "SystemUsageReportSvc_QUEENCREEK",            // Intel(R) System Usage Report Service. Ships
+                                                      // RUNNING and Automatic, and is the collector
+                                                      // for Intel's Computing Improvement Program.
+        "Intel(R) SUR QC SAM",                        // Its Software Asset Manager companion. Name
+                                                      // really does contain spaces and brackets.
+        "wuqisvc",                                    // Microsoft Usage and Quality Insights
     };
+
+    /// <summary>
+    /// The list above, plus any installed variant of Intel's System Usage Report service. That
+    /// suffix is an Intel platform codename (QUEENCREEK on this hardware) and differs across
+    /// machines, so matching the literal name alone would silently miss it on other Intel PCs.
+    /// </summary>
+    private static IEnumerable<string> EffectiveExtraTelemetryServices()
+    {
+        var names = new HashSet<string>(ExtraTelemetryServices, StringComparer.OrdinalIgnoreCase);
+        try
+        {
+            foreach (var sc in ServiceController.GetServices())
+            {
+                try
+                {
+                    if (sc.ServiceName.StartsWith("SystemUsageReportSvc", StringComparison.OrdinalIgnoreCase))
+                        names.Add(sc.ServiceName);
+                }
+                finally { sc.Dispose(); }
+            }
+        }
+        catch (Exception ex) { Log.Warn("ServiceControl", $"Usage-report variant scan failed: {ex.Message}"); }
+        return names;
+    }
 
     private static void SetExtraTelemetryServices(bool disable)
     {
-        foreach (var name in ExtraTelemetryServices)
+        foreach (var name in EffectiveExtraTelemetryServices())
         {
             try
             {
