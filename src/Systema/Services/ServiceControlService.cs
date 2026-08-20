@@ -388,6 +388,7 @@ public class ServiceControlService
         // Automatic by default (2)
         ["SysMain"] = 2, ["WSearch"] = 2, ["Spooler"] = 2, ["MapsBroker"] = 2,
         ["PcaSvc"] = 2,  ["TrkWks"] = 2,  ["DiagTrack"] = 2, ["DoSvc"] = 2, ["BITS"] = 2,
+        ["DusmSvc"] = 2, ["IntelTelemetryAgent"] = 2,
         // Disabled by default (4)
         ["RemoteRegistry"] = 4, ["RemoteAccess"] = 4, ["NetTcpPortSharing"] = 4,
         // everything else → Manual (3), the safe start-on-demand default.
@@ -972,12 +973,21 @@ public class ServiceControlService
         catch { return false; }
     }
 
-    // Extra telemetry-related services No Telemetry Pro also disables. Both are demand-start and safe
-    // to disable; default Start is Manual (3), which is what a toggle-off restores them to.
+    // Extra telemetry-related services No Telemetry Pro also disables. Each one's ORIGINAL Start
+    // value is captured before it is touched and restored on toggle-off, rather than assuming a
+    // default: this list is no longer all demand-start services, and writing a flat Manual back
+    // would quietly demote the ones Windows ships as Automatic.
+    //
+    // The Intel entries are absent on AMD machines, where every call below is a harmless no-op.
     private static readonly string[] ExtraTelemetryServices =
     {
         "diagnosticshub.standardcollector.service",   // Diagnostics Hub Standard Collector
-        "WerSvc",                                      // Windows Error Reporting
+        "WerSvc",                                     // Windows Error Reporting
+        "DusmSvc",                                    // Data Usage: per-app network counters. Not
+                                                      // telemetry itself, but it feeds usage data
+                                                      // into diagnostics reporting.
+        "IntelCollectorService",                      // Intel(R) Collector Service
+        "IntelTelemetryAgent",                        // Intel(R) Telemetry Agent Service
     };
 
     private static void SetExtraTelemetryServices(bool disable)
@@ -997,7 +1007,20 @@ public class ServiceControlService
                     catch (Exception ex) { Log.Info("ServiceControl", $"Stop({name}) skipped: {ex.Message}"); }
                 }
                 using var key = Registry.LocalMachine.OpenSubKey($@"SYSTEM\CurrentControlSet\Services\{name}", writable: true);
-                key?.SetValue("Start", disable ? 4 : 3, RegistryValueKind.DWord);
+                if (key == null) continue;   // not present on this machine (Intel entries on AMD)
+
+                if (disable)
+                {
+                    // Record what it was BEFORE overwriting, so toggling off puts back the real
+                    // value instead of a flat Manual. Several of these ship as Automatic.
+                    if (key.GetValue("Start") is int current)
+                        CaptureServiceDefault(name, current);
+                    key.SetValue("Start", 4, RegistryValueKind.DWord);
+                }
+                else
+                {
+                    key.SetValue("Start", ResolveRestoreStart(name), RegistryValueKind.DWord);
+                }
             }
             catch (Exception ex) { Log.Warn("ServiceControl", $"{(disable ? "Disable" : "Restore")} service '{name}' failed: {ex.Message}"); }
         }
