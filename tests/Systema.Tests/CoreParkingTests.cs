@@ -30,6 +30,8 @@ public class CoreParkingTests
         "ProcThrottleMinGuid", "ProcThrottleMinClass1Guid",
         "CpParkedPerfStateGuid", "CpParkedPerfStateClass1Guid",
         "CpShortThreadPolicyGuid",
+        "CpBoostModeGuid", "CpEppPolicyGuid", "CpDecreasePolicyGuid",
+        "CpDecreaseTimeGuid", "CpIdleScalingGuid",
     };
 
     private static string Service() => Read("src", "Systema", "Services", "CoreParkingService.cs");
@@ -74,7 +76,7 @@ public class CoreParkingTests
                                   .OrderBy(n => n).ToArray();
         }
 
-        var applied = Names("private static (string Guid, int Value)[] ParkingSettings");
+        var applied = Names("private static (string Guid, int Ac, int Dc)[] ParkingSettings");
         var removed = Names("private static readonly string[] ParkingSettingGuids");
 
         Assert.NotEmpty(applied);
@@ -106,8 +108,8 @@ public class CoreParkingTests
         Assert.Contains("ParkedPerfDeepest           = 1", src);
 
         // It must be paired with its own value, never handed the floor.
-        Assert.Contains("(CpParkedPerfStateGuid,              ParkedPerfDeepest)", src);
-        Assert.DoesNotContain("(CpParkedPerfStateGuid,              floorPercent)", src);
+        Assert.Contains("(CpParkedPerfStateGuid,              ParkedPerfDeepest", src);
+        Assert.DoesNotContain("(CpParkedPerfStateGuid,              floorPercent,", src);
     }
 
     // Removal still has to cover it, or disabling leaves parked cores pinned to Deepest.
@@ -218,7 +220,7 @@ public class CoreParkingTests
         // Class 0 gets the hybrid-aware value; class 1 always gets the full floor.
         Assert.Contains("hybrid ? HybridEcoreFloorPercent() : floorPercent", body);
         Assert.Contains("floorPercent == 0 && IsHybridCpu()", body);
-        Assert.Contains("(CpMinCoresClass1Guid,               floorPercent)", body);
+        Assert.Contains("(CpMinCoresClass1Guid,               floorPercent,", body);
 
         // Non-hybrid must be unaffected: every core is class 0 there.
         Assert.Contains("floorPercent == 0 && IsHybridCpu()", body);
@@ -254,7 +256,7 @@ public class CoreParkingTests
         // saturated, threads queue instead of spilling to a free P-core. "Prefer" keeps the spill
         // path, which is what makes this cost no throughput.
         Assert.Contains("ShortThreadPreferEfficient = 4", src);
-        Assert.Contains("(CpShortThreadPolicyGuid, ShortThreadPreferEfficient)", src);
+        Assert.Contains("(CpShortThreadPolicyGuid, ShortThreadPreferEfficient", src);
 
         // The GENERAL heterogeneous policy must stay untouched: forcing every thread onto the
         // efficient cores would genuinely cost performance.
@@ -266,12 +268,59 @@ public class CoreParkingTests
     public void TheShortThreadPolicyIsHybridOnly()
     {
         var src = Service();
-        int m = src.IndexOf("private static (string Guid, int Value)[] ParkingSettings", StringComparison.Ordinal);
-        var body = src[m..(m + 2000)];
+        int m = src.IndexOf("ParkingSettings(int floorPercent)", StringComparison.Ordinal);
+        int end = src.IndexOf("return settings.ToArray();", m, StringComparison.Ordinal);
+        var body = src[m..end];
 
         int add = body.IndexOf("settings.Add((CpShortThreadPolicyGuid", StringComparison.Ordinal);
         Assert.True(add > 0, "short-thread policy is not conditionally added");
         Assert.Contains("if (hybrid)", body[..add]);
+    }
+    // Parking decides how many cores sleep; these decide how hard the awake ones work, which on a
+    // laptop is where most of the heat comes from.
+    [Fact]
+    public void HeatReductionSettingsAreApplied()
+    {
+        var src = Service();
+
+        // Turbo is the biggest heat source on a mobile chip. Efficient Aggressive (4) still
+        // boosts, unlike Disabled (0) or Enabled (1), so responsiveness survives.
+        Assert.Contains("BoostEfficientAggressive = 4", src);
+
+        // EPP differs by rail on purpose: unplugged leans harder on efficiency.
+        Assert.Contains("EppAc = 50", src);
+        Assert.Contains("EppDc = 70", src);
+
+        // Parking has no latency cost, only unparking does, so there is no reason to ease into it.
+        Assert.Contains("DecreaseAllPossible  = 2", src);
+        Assert.Contains("DecreaseTimeFast   = 5", src);
+        Assert.Contains("IdleScalingOn     = 1", src);
+    }
+
+    // EPP is 50 on AC and 70 on DC, so a single shared value per setting cannot express it.
+    [Fact]
+    public void SettingsCarrySeparateAcAndDcValues()
+    {
+        var src = Service();
+        Assert.Contains("(string Guid, int Ac, int Dc)[] ParkingSettings", src);
+        Assert.Contains("(CpEppPolicyGuid,       EppAc,                    EppDc)", src);
+
+        // ...and both rails are actually written, not just AC.
+        int m = src.IndexOf("private static void ApplyViaPowercfg", StringComparison.Ordinal);
+        var body = src[m..(m + 1400)];
+        Assert.Contains("{guid} {ac}", body);
+        Assert.Contains("{guid} {dc}", body);
+    }
+
+    // Max processor state and the latency-sensitivity hints cut heat by making the machine
+    // genuinely slower to respond, which is the trade this feature must not make.
+    [Fact]
+    public void TheLatencyCostingSettingsAreNotTouched()
+    {
+        var src = Service();
+        Assert.DoesNotContain("bc5038f7-23e0-4960-96da-33abaf5935ec", src);   // Maximum processor state
+        Assert.DoesNotContain("619b7505-003b-4e82-b7a6-4dd29c300971", src);   // Latency sensitivity hint perf
+        Assert.DoesNotContain("5d76a2ca-e8c0-402f-a133-2158492d58ad", src);   // Processor idle disable
     }
 }
 

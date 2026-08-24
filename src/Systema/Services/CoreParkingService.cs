@@ -255,7 +255,42 @@ public class CoreParkingService
     /// Every setting Systema writes, paired with the value it gets, so apply and remove cannot
     /// drift apart. Most take the shared floor; parked performance state takes its own enum.
     /// </summary>
-    private static (string Guid, int Value)[] ParkingSettings(int floorPercent)
+    // ── Heat-reduction settings (all CPUs) ────────────────────────────────────
+    //
+    // Parking decides how many cores sleep. These decide how hard the awake ones work, which on a
+    // laptop is where most of the heat actually comes from. Each value was chosen against the
+    // real default read off a machine, and each enum was read rather than assumed.
+
+    // Turbo is the single biggest heat source on a mobile chip. "Efficient Aggressive" still
+    // boosts, but along the CPU's efficiency-aware path instead of chasing peak clocks.
+    // 0 Disabled, 1 Enabled, 2 Aggressive (default), 3 Efficient Enabled, 4 Efficient Aggressive.
+    private const string CpBoostModeGuid        = "be337238-0d82-4146-a960-4f3749d470c7";
+    private const int    BoostEfficientAggressive = 4;
+
+    // Energy performance preference: 0 = all performance, 100 = all efficiency. Windows ships 33
+    // on AC and 50 on battery. Raising it biases toward lower voltage for the same work. This is
+    // the best heat-per-latency trade available, because Speed Shift retargets in well under a
+    // millisecond, unlike capping maximum processor state which is felt immediately.
+    private const string CpEppPolicyGuid = "36687f9e-e3a5-4dbf-b1dc-15eb381c6863";
+    private const int    EppAc = 50;
+    private const int    EppDc = 70;   // unplugged, lean harder on efficiency
+
+    // How many cores to park in one step when load drops. Default is "Ideal number of cores",
+    // which eases down. Parking has no latency cost (only UNparking does), so there is no reason
+    // to ease into it. 0 Ideal, 1 Single core, 2 All possible cores, 3 One eighth cores.
+    private const string CpDecreasePolicyGuid = "71021b41-c749-4d21-be74-a00f335d582b";
+    private const int    DecreaseAllPossible  = 2;
+
+    // How long a core must look idle before it is parked. Halved from Windows' 10.
+    private const string CpDecreaseTimeGuid = "dfd10d17-d5eb-45dd-877a-9a34ddd15c82";
+    private const int    DecreaseTimeFast   = 5;
+
+    // Scales the idle-entry thresholds with load so cores reach deeper C-states sooner.
+    // 0 Disable scaling (default), 1 Enable scaling.
+    private const string CpIdleScalingGuid = "6c2993b0-8f48-481f-bcc6-00dd2742aa06";
+    private const int    IdleScalingOn     = 1;
+
+    private static (string Guid, int Ac, int Dc)[] ParkingSettings(int floorPercent)
     {
         // Hybrid handling only applies when actually parking (floor 0), not on the disable path.
         bool hybrid = floorPercent == 0 && IsHybridCpu();
@@ -265,22 +300,28 @@ public class CoreParkingService
         // On non-hybrid every core is class 0 and there is no cheap tier to protect.
         int class0 = hybrid ? HybridEcoreFloorPercent() : floorPercent;
 
-        var settings = new List<(string Guid, int Value)>
+        var settings = new List<(string Guid, int Ac, int Dc)>
         {
-            (CpMinCoresGuid,                     class0),
-            (CpMinCoresClass1Guid,               floorPercent),
-            (CpLatencyHintMinUnparkedGuid,       floorPercent),
-            (CpLatencyHintMinUnparkedClass1Guid, floorPercent),
-            (ProcThrottleMinGuid,                floorPercent),
-            (ProcThrottleMinClass1Guid,          floorPercent),
-            (CpParkedPerfStateGuid,              ParkedPerfDeepest),
-            (CpParkedPerfStateClass1Guid,        ParkedPerfDeepest),
+            (CpMinCoresGuid,                     class0,       class0),
+            (CpMinCoresClass1Guid,               floorPercent, floorPercent),
+            (CpLatencyHintMinUnparkedGuid,       floorPercent, floorPercent),
+            (CpLatencyHintMinUnparkedClass1Guid, floorPercent, floorPercent),
+            (ProcThrottleMinGuid,                floorPercent, floorPercent),
+            (ProcThrottleMinClass1Guid,          floorPercent, floorPercent),
+            (CpParkedPerfStateGuid,              ParkedPerfDeepest, ParkedPerfDeepest),
+            (CpParkedPerfStateClass1Guid,        ParkedPerfDeepest, ParkedPerfDeepest),
+
+            (CpBoostModeGuid,       BoostEfficientAggressive, BoostEfficientAggressive),
+            (CpEppPolicyGuid,       EppAc,                    EppDc),
+            (CpDecreasePolicyGuid,  DecreaseAllPossible,      DecreaseAllPossible),
+            (CpDecreaseTimeGuid,    DecreaseTimeFast,         DecreaseTimeFast),
+            (CpIdleScalingGuid,     IdleScalingOn,            IdleScalingOn),
         };
 
         // Hybrid only. On a homogeneous CPU there is no efficient tier to prefer, so writing it
         // would be noise at best and a scheduling hint pointing nowhere at worst.
         if (hybrid)
-            settings.Add((CpShortThreadPolicyGuid, ShortThreadPreferEfficient));
+            settings.Add((CpShortThreadPolicyGuid, ShortThreadPreferEfficient, ShortThreadPreferEfficient));
 
         return settings.ToArray();
     }
@@ -293,6 +334,8 @@ public class CoreParkingService
         ProcThrottleMinGuid, ProcThrottleMinClass1Guid,
         CpParkedPerfStateGuid, CpParkedPerfStateClass1Guid,
         CpShortThreadPolicyGuid,
+        CpBoostModeGuid, CpEppPolicyGuid, CpDecreasePolicyGuid,
+        CpDecreaseTimeGuid, CpIdleScalingGuid,
     };
 
     private const string PowerSchemesRoot =
@@ -541,10 +584,10 @@ public class CoreParkingService
                     // floor, plus the deepest parked P-state. Min-cores alone does not park
                     // deeply: the other knobs re-float or hold up the cores it just released,
                     // and without the parked P-state the parked ones can still idle high.
-                    foreach (var (g, value) in ParkingSettings(minCoresPercent))
+                    foreach (var (g, ac, dc) in ParkingSettings(minCoresPercent))
                     {
                         if (g == CpMinCoresGuid) continue;   // written directly above
-                        WriteSchemeValue(schemeGuid, g, value);
+                        WriteSchemeValue(schemeGuid, g, ac, dc);
                     }
                 }
                 // Hidden Windows power schemes (the long list of GUIDs under
@@ -656,8 +699,8 @@ public class CoreParkingService
             {
                 foreach (string schemeGuid in schemesKey.GetSubKeyNames())
                 {
-                    WriteSchemeValue(schemeGuid, CpMinCoresGuid, percent);
-                    WriteSchemeValue(schemeGuid, CpMinCoresClass1Guid, percent);
+                    WriteSchemeValue(schemeGuid, CpMinCoresGuid, percent, percent);
+                    WriteSchemeValue(schemeGuid, CpMinCoresClass1Guid, percent, percent);
                 }
             }
 
@@ -677,15 +720,15 @@ public class CoreParkingService
         }
     }
     /// schemes Win11 ships by the hundred; the caller already reports those in aggregate.</summary>
-    private static void WriteSchemeValue(string schemeGuid, string settingGuid, int value)
+    private static void WriteSchemeValue(string schemeGuid, string settingGuid, int ac, int dc)
     {
         try
         {
             string path = "{PowerSchemesRoot}{schemeGuid}{ProcessorPowerSubGroupGuid}{settingGuid}";
             using var key = Registry.LocalMachine.CreateSubKey(path, writable: true);
             if (key == null) return;
-            key.SetValue("ACSettingIndex", value, RegistryValueKind.DWord);
-            key.SetValue("DCSettingIndex", value, RegistryValueKind.DWord);
+            key.SetValue("ACSettingIndex", ac, RegistryValueKind.DWord);
+            key.SetValue("DCSettingIndex", dc, RegistryValueKind.DWord);
         }
         catch { /* protected scheme, or setting absent on this CPU */ }
     }
@@ -696,10 +739,10 @@ public class CoreParkingService
         {
             // Addressed by GUID, not alias: only CPMINCORES has a powercfg alias. The per-class
             // floor, the latency-hint pool, the clock floor and the parked P-state have none.
-            foreach (var (guid, value) in ParkingSettings(minCoresPercent))
+            foreach (var (guid, ac, dc) in ParkingSettings(minCoresPercent))
             {
-                RunPowercfg($"/setacvalueindex SCHEME_CURRENT {ProcessorPowerSubGroupGuid} {guid} {value}");
-                RunPowercfg($"/setdcvalueindex SCHEME_CURRENT {ProcessorPowerSubGroupGuid} {guid} {value}");
+                RunPowercfg($"/setacvalueindex SCHEME_CURRENT {ProcessorPowerSubGroupGuid} {guid} {ac}");
+                RunPowercfg($"/setdcvalueindex SCHEME_CURRENT {ProcessorPowerSubGroupGuid} {guid} {dc}");
             }
             RunPowercfg("/setactive SCHEME_CURRENT");
             RunPowercfg("/setactive SCHEME_CURRENT");
@@ -761,7 +804,7 @@ public class CoreParkingService
         string active = ActiveSchemeGuid();
         int restored = 0, unknown = 0;
 
-        foreach (var (guid, _) in ParkingSettings(0))
+        foreach (var (guid, _, _) in ParkingSettings(0))
         {
             if (guid == CpMinCoresGuid || guid == CpMinCoresClass1Guid) continue;
 
