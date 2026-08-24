@@ -354,11 +354,14 @@ public sealed class BatteryPauseService
                 try
                 {
                     using var s = new ManagementObjectSearcher(Ns,
-                        $"SELECT CurrentValue, PossibleValues FROM EnumerationAttribute WHERE AttributeName='{AttrName}'");
+                        $"SELECT CurrentValue, PossibleValue FROM EnumerationAttribute WHERE AttributeName='{AttrName}'");
                     foreach (var item in s.Get())
                     {
                         var cur = item["CurrentValue"]?.ToString() ?? "(null)";
-                        var pv  = item["PossibleValues"] as string[] ?? Array.Empty<string>();
+                        // Singular. The class exposes PossibleValue, not PossibleValues; asking for the
+                        // plural made the whole query "Invalid query", so this diagnostic never once
+                        // produced output on any Dell machine.
+                        var pv  = item["PossibleValue"] as string[] ?? Array.Empty<string>();
                         _log.Info("BatteryPauseService",
                             $"Dell Probe: {AttrName} current='{cur}', PossibleValues=[{string.Join(", ", pv)}]");
                     }
@@ -374,7 +377,9 @@ public sealed class BatteryPauseService
                 try
                 {
                     using var si = new ManagementObjectSearcher(Ns,
-                        "SELECT AttributeName, CurrentValue, MinValue, MaxValue FROM IntegerAttribute");
+                        // LowerBound/UpperBound, not MinValue/MaxValue: those names are not on this class,
+                        // which made this query invalid too.
+                        "SELECT AttributeName, CurrentValue, LowerBound, UpperBound FROM IntegerAttribute");
                     foreach (var item in si.Get())
                     {
                         var n = item["AttributeName"]?.ToString() ?? "";
@@ -385,14 +390,19 @@ public sealed class BatteryPauseService
                             _log.Info("BatteryPauseService",
                                 $"Dell Probe: IntegerAttribute '{n}' " +
                                 $"current={item["CurrentValue"]} " +
-                                $"min={item["MinValue"]} max={item["MaxValue"]}");
+                                $"min={item["LowerBound"]} max={item["UpperBound"]}");
                         }
                     }
                 }
                 catch (Exception ex)
                 {
-                    _log.Warn("BatteryPauseService",
-                        $"Dell Probe: IntegerAttribute enum failed: {ex.Message}");
+                    // Info, not Warning. This is diagnostics only and is expected to fail on any
+                    // Dell BIOS that does not expose IntegerAttribute. Logging it as a Warning made
+                    // it the single warning in an otherwise clean session, which reads as a real
+                    // fault in a feature that is working perfectly. The sibling EnumerationAttribute
+                    // failure right above was already Info; the two now agree.
+                    _log.Info("BatteryPauseService",
+                        $"Dell Probe: IntegerAttribute enum skipped ({ex.Message})");
                 }
 
                 return BatteryPauseSupport.Supported;
