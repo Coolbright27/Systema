@@ -228,27 +228,17 @@ public class CoreParkingService
     {
         if (_isHybridCache is { } cached) return cached;
 
-        bool hybrid = false;
-        try
-        {
-            using var searcher = new System.Management.ManagementObjectSearcher(
-                "SELECT NumberOfEfficiencyClasses FROM Win32_Processor");
-            foreach (System.Management.ManagementObject cpu in searcher.Get())
-            {
-                // Absent on older Windows/CPUs, which is itself the "not hybrid" answer.
-                var v = cpu["NumberOfEfficiencyClasses"];
-                if (v != null && Convert.ToUInt32(v) > 1) { hybrid = true; break; }
-            }
-        }
-        catch (Exception ex)
-        {
-            LoggerService.Instance.Warn("CoreParkingService", $"Hybrid detection failed, assuming non-hybrid: {ex.Message}");
-        }
+        // Asks the same API that counts the E-cores rather than a separate WMI query, because
+        // the WMI route was silently broken: "SELECT NumberOfEfficiencyClasses FROM
+        // Win32_Processor" throws "Invalid query" where that property is not in the schema, so
+        // detection threw on EVERY machine, always returned false, and the hybrid handling never
+        // ran once. One source of truth now, and it is the one already proven by the E-core count.
+        bool hybrid = CountEcoreLogicalProcessors() > 0;
 
         _isHybridCache = hybrid;
         LoggerService.Instance.Info("CoreParkingService",
-            hybrid ? "Hybrid CPU detected — keeping some E-cores awake so work does not spill onto P-cores."
-                   : "Non-hybrid CPU — all cores share one parking floor.");
+            hybrid ? "Hybrid CPU detected, keeping some E-cores awake so work does not spill onto P-cores."
+                   : "Non-hybrid CPU, all cores share one parking floor.");
         return hybrid;
     }
     /// <summary>
@@ -637,7 +627,7 @@ public class CoreParkingService
     /// </summary>
     private static int RemoveCoreParkingOverrides()
     {
-        int cleaned = 0;
+        int cleaned = 0, refused = 0;
         try
         {
             using var schemesKey = Registry.LocalMachine.OpenSubKey(PowerSchemesRoot, writable: false);
@@ -664,6 +654,12 @@ public class CoreParkingService
                     }
                     if (any) cleaned++;
                 }
+                // PowerSchemes is not writable even elevated, so on most machines EVERY scheme is
+                // refused. Bail on the first refusal rather than grinding through the rest: this
+                // box has 2020 schemes and produced 2020 identical warnings per disable, burying
+                // everything else in the log. RestoreDefaultsViaPowercfg does the real work.
+                catch (UnauthorizedAccessException)       { refused++; if (cleaned == 0) break; }
+                catch (System.Security.SecurityException) { refused++; if (cleaned == 0) break; }
                 catch (Exception ex)
                 {
                     LoggerService.Instance.Warn("CoreParkingService",
@@ -675,6 +671,12 @@ public class CoreParkingService
         {
             LoggerService.Instance.Warn("CoreParkingService",
                 $"RemoveCoreParkingOverrides enumeration failed: {ex.Message}");
+        }
+
+        if (refused > 0)
+        {
+            LoggerService.Instance.Info("CoreParkingService",
+                $"Registry cleanup refused after {refused} scheme(s), expected; powercfg restores the defaults.");
         }
         return cleaned;
     }

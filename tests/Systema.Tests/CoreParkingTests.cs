@@ -322,6 +322,37 @@ public class CoreParkingTests
         Assert.DoesNotContain("619b7505-003b-4e82-b7a6-4dd29c300971", src);   // Latency sensitivity hint perf
         Assert.DoesNotContain("5d76a2ca-e8c0-402f-a133-2158492d58ad", src);   // Processor idle disable
     }
+    // Hybrid detection used "SELECT NumberOfEfficiencyClasses FROM Win32_Processor", which throws
+    // "Invalid query" where that property is not in the WMI schema. It therefore threw on every
+    // machine, always returned false, and the hybrid handling never ran once, silently, while
+    // logging a line that looked like a normal non-hybrid result.
+    [Fact]
+    public void HybridDetectionDoesNotUseTheBrokenWmiQuery()
+    {
+        var src = Service();
+        // Ban the API that would run it, not the words: the comment above the fix names the old
+        // query on purpose so nobody reintroduces it.
+        Assert.DoesNotContain("ManagementObjectSearcher", src);
+        Assert.DoesNotContain("searcher.Get()", src);
+
+        // One source of truth: the same enumeration that counts the E-cores.
+        int m = src.IndexOf("private static bool IsHybridCpu", StringComparison.Ordinal);
+        Assert.True(m > 0);
+        Assert.Contains("CountEcoreLogicalProcessors() > 0", src[m..(m + 900)]);
+    }
+
+    // 2020 schemes produced 2020 identical warnings per disable, burying every other log line.
+    [Fact]
+    public void RegistryCleanupBailsInsteadOfWarningPerScheme()
+    {
+        var src = Service();
+        int m = src.IndexOf("private static int RemoveCoreParkingOverrides", StringComparison.Ordinal);
+        Assert.True(m > 0);
+        var body = src[m..(m + 3000)];
+
+        Assert.Contains("catch (UnauthorizedAccessException)", body);
+        Assert.Contains("if (cleaned == 0) break;", body);
+    }
 }
 
 internal static class PathExt
