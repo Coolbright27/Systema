@@ -306,8 +306,8 @@ public class CoreParkingTests
         Assert.Contains("(CpEppPolicyGuid,       EppAc,                    EppDc)", src);
 
         // ...and both rails are actually written, not just AC.
-        int m = src.IndexOf("private static void ApplyViaPowercfg", StringComparison.Ordinal);
-        var body = src[m..(m + 1400)];
+        int m = src.IndexOf("private static int ApplyViaPowercfg", StringComparison.Ordinal);
+        var body = src[m..(m + 2200)];
         Assert.Contains("{guid} {ac}", body);
         Assert.Contains("{guid} {dc}", body);
     }
@@ -352,6 +352,64 @@ public class CoreParkingTests
 
         Assert.Contains("catch (UnauthorizedAccessException)", body);
         Assert.Contains("if (cleaned == 0) break;", body);
+    }
+    // Enable used to report failure when the boot task failed, even though the settings had
+    // already applied. The caller only recorded the feature as enabled on success, so the values
+    // were live while nothing tracked them: no startup re-apply, no plan-change watch.
+    [Fact]
+    public void EnableSucceedsOnSettingsNotOnTheBootTask()
+    {
+        var src = Service();
+        int m = src.IndexOf("public Task<TweakResult> EnableForcedCoreParking", StringComparison.Ordinal);
+        Assert.True(m > 0);
+        var body = src[m..(m + 1800)];
+
+        Assert.DoesNotContain("taskResult.Success ? TweakResult.Ok(msg) : TweakResult.Fail(msg)", body);
+        Assert.Contains("if (applied == 0)", body);   // the only real failure
+    }
+
+    // The registry loop is refused on every scheme, so reporting ITS count told the user
+    // "enforced on 0 power scheme(s)" straight after a successful apply.
+    [Fact]
+    public void ApplyReportsWhatPowercfgWroteNotTheRefusedRegistryCount()
+    {
+        var src = Service();
+        Assert.Contains("int applied = ApplyViaPowercfg", src);
+        Assert.Contains("private static int ApplyViaPowercfg", src);
+
+        int m = src.IndexOf("private static int ApplyCoreParking", StringComparison.Ordinal);
+        int e = src.IndexOf("private static int RemoveCoreParkingOverrides", m, StringComparison.Ordinal);
+        var body = src[m..e];
+        Assert.Contains("return applied;", body);
+        Assert.DoesNotContain("return updated;", body);
+    }
+
+    // A third-party tuner can reset the values WITHIN the plan you are already on, leaving the
+    // GUID identical. Watching only the GUID would never notice.
+    [Fact]
+    public void ValueResetsAreDetectedNotJustPlanSwitches()
+    {
+        var src = Service();
+        int m = src.IndexOf("private void CheckPlanChanged", StringComparison.Ordinal);
+        Assert.True(m > 0);
+        var body = src[m..(m + 2000)];
+
+        Assert.Contains("valuesWiped", body);
+        Assert.Contains("ReadActiveSchemeValue", body);
+    }
+
+    // On hybrid, class 1 is the P-cores and their Windows default is already 0. Writing the
+    // disabled floor of 5 there would make P-cores park LESS than on a clean machine.
+    [Fact]
+    public void DisableDoesNotRaiseThePcoreFloorAboveStock()
+    {
+        var src = Service();
+        int m = src.IndexOf("public static void SetMinCoresEverywhere", StringComparison.Ordinal);
+        Assert.True(m > 0);
+        var body = src[m..(m + 1500)];
+
+        Assert.Contains("CpMinCoresGuid", body);
+        Assert.DoesNotContain("CpMinCoresClass1Guid", body);
     }
 }
 

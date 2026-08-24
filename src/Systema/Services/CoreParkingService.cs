@@ -1,23 +1,44 @@
 // ════════════════════════════════════════════════════════════════════════════
-// CoreParkingService.cs  ·  Controls CPU core parking across all power schemes
+// CoreParkingService.cs  ·  Core Efficiency: park more cores, run the rest cooler
 // ════════════════════════════════════════════════════════════════════════════
 //
-// CPMINCORES is the key power setting: it defines the MINIMUM percentage of
-// logical cores that must remain unparked at all times.
+// This drives THIRTEEN power settings, not one, in two groups:
 //
-//   CPMINCORES = 10   → allow parking; keep at least 10 % of cores active
-//                         (Enable path — efficient/optimized parking)
-//   CPMINCORES = 100  → keep ALL cores active; no cores can be parked
-//                         (Disable path — maximum performance, no parking)
+//   Parking      how many cores sleep, how deeply, and how fast they get there:
+//                min cores (per efficiency class), the latency-hint "ready" pool,
+//                parked performance state, decrease policy and decrease time.
 //
-// Setting CPMINCORES = 0 (old disable behaviour) is wrong — it means "park
-// everything", which is MORE aggressive parking, not less.
+//   Heat         how hard the AWAKE cores work, which on a laptop is where most
+//                of the heat comes from: boost mode, energy performance
+//                preference, the clock floor, and idle threshold scaling.
 //
-// Creates a Task Scheduler startup task (Enable only) so the setting survives
-// reboots and power-plan resets by third-party tools or Windows updates.
+// HOW VALUES ACTUALLY GET WRITTEN
+//   Direct registry writes to HKLM\...\Power\User\PowerSchemes are REFUSED even
+//   from an elevated process. Every real write goes through powercfg against
+//   SCHEME_CURRENT, which holds the privilege we do not. The registry loop is
+//   kept as best effort and bails on the first refusal.
+//
+//   Because writes target the ACTIVE plan, switching plans lands on an
+//   unconfigured one. Three things re-apply: the app at startup, the
+//   SystemaCoreParking boot task, and a watch that fires on plan changes and on
+//   another tool resetting the values in place.
+//
+// ON / OFF
+//   On   every setting written to the active plan; min cores 0 (see the hybrid
+//        note in ParkingSettings, where E-cores deliberately keep a slice awake).
+//   Off  every setting restored to Windows' own per-scheme default read out of
+//        DefaultPowerSchemeValues, EXCEPT class-0 min cores which goes to 5.
+//        That is deliberate and not the Windows default: Balanced ships AC=100,
+//        and 100 means nothing ever parks while plugged in.
+//
+// A NOTE ON COMMENTS IN THIS FILE
+//   "Keep the PC awake" was broken for months because a comment here asserted
+//   something false about an API and everyone believed it. If you change what a
+//   setting does, change the comment in the same commit.
 //
 // RELATED FILES
-//   ToolsViewModel.cs  — Core Parking toggle button on the Tools tab
+//   ToolsViewModel.cs  — Core Efficiency toggle on the Tools tab
+//   VisualViewModel.cs — Max Life battery mode also drives min cores to 0
 // ════════════════════════════════════════════════════════════════════════════
 
 using System.Collections.Generic;
@@ -31,20 +52,12 @@ using Systema.Core;
 namespace Systema.Services;
 
 /// <summary>
-/// Manages CPU core parking enforcement on Windows.
+/// Core Efficiency: parks idle CPU cores and lowers what the awake ones cost.
 ///
-/// CPMINCORES controls the minimum fraction of logical cores that must remain
-/// unparked. The two states this service enforces:
-///
-///   Enable  (optimized parking)  — CPMINCORES = 10 %
-///     Allows the OS to park idle cores for power and thermal efficiency, while
-///     keeping at least 10 % of cores always active for responsiveness.
-///     A startup scheduled task keeps this value after power-plan resets.
-///
-///   Disable (force unpark)       — CPMINCORES = 100 %
-///     Forces all cores to remain active; no cores can be parked. This gives
-///     maximum single-threaded burst performance at the cost of higher idle power.
-///     The task is removed on disable; the registry value persists on its own.
+/// See the file header for the full setting list and how writes actually land.
+/// The short version: thirteen power settings, written to the ACTIVE plan through
+/// powercfg because direct registry writes are refused, and re-applied at startup,
+/// at boot, and whenever the plan changes or the values are reset by something else.
 /// </summary>
 public class CoreParkingService
 {
@@ -371,28 +384,37 @@ public class CoreParkingService
     }
 
     /// <summary>
-    /// Enables optimized core parking:
-    ///   - Sets CPMINCORES = 10 % (keep at least 10 % of cores active; OS can park the rest)
-    ///     across all user power schemes via registry and powercfg.
-    ///   - Creates (or replaces) the SystemaCoreParking scheduled task so the setting
-    ///     survives reboots and power-plan resets by third-party tools.
+    /// Turns Core Efficiency on.
+    ///
+    /// Writes every parking and heat setting to the ACTIVE plan through powercfg, then creates
+    /// the SystemaCoreParking task so it is re-applied at boot.
+    ///
+    /// Succeeds when the SETTINGS applied, not when the task did. Those are separate outcomes and
+    /// conflating them left the feature half-on: the values were live, but the caller saw a
+    /// failure, so it never recorded the feature as enabled, which meant no startup re-apply and
+    /// no plan-change watch. A missing task costs one re-apply at boot, which the app's own
+    /// startup path already covers. Silently applied-but-not-tracked is far worse.
     /// </summary>
     public Task<TweakResult> EnableForcedCoreParking() => Task.Run(() =>
     {
         try
         {
-            int schemesUpdated = ApplyCoreParking(minCoresPercent: 0);
-
+            int applied = ApplyCoreParking(minCoresPercent: 0);
             TweakResult taskResult = CreateScheduledTask();
 
-            string msg = $"Core parking enforced on {schemesUpdated} power scheme(s). " +
-                         $"Startup task: {(taskResult.Success ? "created" : taskResult.Message)}.";
+            if (applied == 0)
+                return TweakResult.Fail(
+                    "Core parking could not be applied: no settings were written to the active plan.");
 
-            // Consider success if the scheduled task was created successfully.
-            // schemesUpdated can be 0 when registry schemes aren't directly writable,
-            // but powercfg (called in ApplyCoreParking) still applies the setting
-            // to the active scheme immediately.
-            return taskResult.Success ? TweakResult.Ok(msg) : TweakResult.Fail(msg);
+            string msg = taskResult.Success
+                ? $"Core efficiency on. {applied} setting(s) applied to the active plan, re-applied at boot."
+                : $"Core efficiency on. {applied} setting(s) applied to the active plan, but the boot task " +
+                  $"could not be created ({taskResult.Message}), so it re-applies when Systema next starts.";
+
+            if (!taskResult.Success)
+                _log.Warn("CoreParkingService", $"Settings applied but boot task failed: {taskResult.Message}");
+
+            return TweakResult.Ok(msg);
         }
         catch (Exception ex)
         {
@@ -423,6 +445,11 @@ public class CoreParkingService
             // ...then put min cores back at 5, deliberately NOT the Windows default. Balanced
             // ships AC=100, and 100 means nothing is ever parked while plugged in. 5 leaves
             // light parking in place instead of switching parking off altogether.
+            //
+            // Class 0 ONLY. On a hybrid chip class 1 is the P-cores, whose Windows default is
+            // already 0 (park freely). Writing 5 there would RAISE the floor above stock and make
+            // P-cores park less after a disable than they would on a clean machine, which is the
+            // opposite of restoring. Class 1 goes through the normal default restore instead.
             SetMinCoresEverywhere(MinCoresWhenDisabled);
 
             // Also reset the active scheme via powercfg to apply immediately
@@ -503,13 +530,43 @@ public class CoreParkingService
             if (_isEnabled?.Invoke() != true) return;
 
             string now = ActiveSchemeGuid();
-            if (string.Equals(now, _lastSeenScheme, StringComparison.OrdinalIgnoreCase)) return;
+            bool planSwitched = !string.Equals(now, _lastSeenScheme, StringComparison.OrdinalIgnoreCase);
+
+            // A changed plan GUID is not the only way the values go away. A third-party tuner can
+            // reset the settings WITHIN the plan you are already on, leaving the GUID identical
+            // while the values are gone. Watching only the GUID would never notice. So also read
+            // one setting back and treat a wrong value as a reset. Min cores is the sentinel: it
+            // is the setting most likely to be stamped on by another tool.
+            bool valuesWiped = false;
+            if (!planSwitched)
+            {
+                int? live = ReadActiveSchemeValue(CpMinCoresGuid, ac: true);
+                int expected = IsHybridCpu() ? HybridEcoreFloorPercent() : 0;
+                valuesWiped = live.HasValue && live.Value != expected;
+            }
+
+            if (!planSwitched && !valuesWiped) return;
 
             _lastSeenScheme = now;
-            _log.Info("CoreParkingService", $"Power plan changed ({reason}) — re-applying parking to the new plan.");
+            _log.Info("CoreParkingService",
+                planSwitched
+                    ? $"Power plan changed ({reason}), re-applying parking to the new plan."
+                    : $"Parking values were reset by something else ({reason}), re-applying.");
             ApplyCoreParking(minCoresPercent: 0);
         }
         catch (Exception ex) { _log.Warn("CoreParkingService", $"Plan-change re-apply failed: {ex.Message}"); }
+    }
+
+    /// <summary>Reads one setting's current value from the active plan, or null if unset.</summary>
+    private static int? ReadActiveSchemeValue(string settingGuid, bool ac)
+    {
+        try
+        {
+            string path = $@"{PowerSchemesRoot}\{ActiveSchemeGuid()}\{ProcessorPowerSubGroupGuid}\{settingGuid}";
+            using var key = Registry.LocalMachine.OpenSubKey(path, writable: false);
+            return key?.GetValue(ac ? "ACSettingIndex" : "DCSettingIndex") as int?;
+        }
+        catch { return null; }
     }
 
     /// <summary>
@@ -537,8 +594,9 @@ public class CoreParkingService
     // ── Registry helpers ──────────────────────────────────────────────────────
 
     /// <summary>
-    /// Iterates every user power scheme in the registry and writes the CPMINCORES
-    /// AC and DC values. Returns the number of schemes successfully updated.
+    /// Writes every setting. Attempts the registry across all schemes (refused on current
+    /// Windows, so it bails early) and then applies to the ACTIVE plan via powercfg, which is
+    /// what actually works. Returns the number of settings written to the active plan.
     /// </summary>
     private static int ApplyCoreParking(int minCoresPercent)
     {
@@ -614,16 +672,17 @@ public class CoreParkingService
                 $"ApplyCoreParking enumeration failed: {ex.Message}");
         }
 
-        // Also apply to the currently active scheme via powercfg so changes take
-        // effect immediately without requiring a reboot.
-        ApplyViaPowercfg(minCoresPercent);
+        // The registry loop above is refused on every scheme on current Windows, so THIS is what
+        // actually applies the values, and its count is the one worth reporting.
+        int applied = ApplyViaPowercfg(minCoresPercent);
+        _ = updated;   // kept only for the refused-count logging above
 
-        return updated;
+        return applied;
     }
 
     /// <summary>
-    /// Removes Systema's CPMINCORES AC/DC overrides from all power schemes,
-    /// letting Windows fall back to its built-in defaults.
+    /// Best-effort registry cleanup across all schemes. Refused on current Windows, so it bails
+    /// on the first refusal; RestoreDefaultsViaPowercfg does the real work.
     /// </summary>
     private static int RemoveCoreParkingOverrides()
     {
@@ -702,12 +761,11 @@ public class CoreParkingService
                 foreach (string schemeGuid in schemesKey.GetSubKeyNames())
                 {
                     WriteSchemeValue(schemeGuid, CpMinCoresGuid, percent, percent);
-                    WriteSchemeValue(schemeGuid, CpMinCoresClass1Guid, percent, percent);
                 }
             }
 
             // The active plan explicitly, so it takes effect without waiting for a scheme switch.
-            foreach (string guid in new[] { CpMinCoresGuid, CpMinCoresClass1Guid })
+            foreach (string guid in new[] { CpMinCoresGuid })
             {
                 RunPowercfg($"/setacvalueindex SCHEME_CURRENT {ProcessorPowerSubGroupGuid} {guid} {percent}");
                 RunPowercfg($"/setdcvalueindex SCHEME_CURRENT {ProcessorPowerSubGroupGuid} {guid} {percent}");
@@ -735,8 +793,12 @@ public class CoreParkingService
         catch { /* protected scheme, or setting absent on this CPU */ }
     }
 
-    private static void ApplyViaPowercfg(int minCoresPercent)
+    /// <summary>Writes every setting to the ACTIVE plan and returns how many were written.
+    /// This is the count that matters: the registry loop above is refused on every scheme, so
+    /// reporting ITS total told the user "enforced on 0 power scheme(s)" after a success.</summary>
+    private static int ApplyViaPowercfg(int minCoresPercent)
     {
+        int written = 0;
         try
         {
             // Addressed by GUID, not alias: only CPMINCORES has a powercfg alias. The per-class
@@ -745,8 +807,8 @@ public class CoreParkingService
             {
                 RunPowercfg($"/setacvalueindex SCHEME_CURRENT {ProcessorPowerSubGroupGuid} {guid} {ac}");
                 RunPowercfg($"/setdcvalueindex SCHEME_CURRENT {ProcessorPowerSubGroupGuid} {guid} {dc}");
+                written++;
             }
-            RunPowercfg("/setactive SCHEME_CURRENT");
             RunPowercfg("/setactive SCHEME_CURRENT");
         }
         catch (Exception ex)
@@ -754,6 +816,7 @@ public class CoreParkingService
             LoggerService.Instance.Warn("CoreParkingService",
                 $"ApplyViaPowercfg failed: {ex.Message}");
         }
+        return written;
     }
 
 
@@ -808,7 +871,10 @@ public class CoreParkingService
 
         foreach (var (guid, _, _) in ParkingSettings(0))
         {
-            if (guid == CpMinCoresGuid || guid == CpMinCoresClass1Guid) continue;
+            // Class 0 min cores is handled by the caller (set to 5, not the Windows default).
+            // Class 1 is NOT: its default is already 0 on hybrid, so restoring it properly is
+            // both correct and better than the 5 the caller uses for class 0.
+            if (guid == CpMinCoresGuid) continue;
 
             int? ac = WindowsDefault(guid, active, ac: true)  ?? WindowsDefault(guid, BalancedSchemeGuid, ac: true);
             int? dc = WindowsDefault(guid, active, ac: false) ?? WindowsDefault(guid, BalancedSchemeGuid, ac: false);
