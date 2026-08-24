@@ -583,7 +583,7 @@ public class CoreParkingService
         try
         {
             int n = ApplyCoreParking(minCoresPercent: 0);
-            _log.Info("CoreParkingService", $"Core parking re-applied on startup ({n} scheme(s)).");
+            _log.Info("CoreParkingService", $"Core parking re-applied on startup ({n} setting(s) on the active plan).");
         }
         catch (Exception ex)
         {
