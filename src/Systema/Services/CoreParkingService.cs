@@ -88,6 +88,23 @@ public class CoreParkingService
     private const string CpParkedPerfStateClass1Guid = "447235c7-6a8d-4cc0-8e24-9eaf70b96e2c";
     private const int    ParkedPerfDeepest           = 1;
 
+    // "Heterogeneous short running thread scheduling policy". Short-running threads are the
+    // background work you want off the P-cores: send them to the efficient cores and the P-cores
+    // stay idle, which is the state parking acts on. This feeds the parking mechanism rather than
+    // being a second one.
+    //
+    // Values: 0 All processors, 1 Performant, 2 Prefer performant, 3 Efficient,
+    //         4 Prefer efficient, 5 Automatic.
+    //
+    // 4 rather than 3 deliberately. "Efficient processors" is a hard constraint, so if the E-cores
+    // are saturated threads queue instead of spilling onto a free P-core. "Prefer" keeps the spill
+    // path, which is what makes this free rather than a throughput trade.
+    //
+    // The GENERAL heterogeneous thread scheduling policy (93b8b6dc-...) is deliberately untouched:
+    // pushing every thread to the efficient cores would genuinely cost performance.
+    private const string CpShortThreadPolicyGuid    = "bae08b81-2d5e-4688-ad6a-13243356654b";
+    private const int    ShortThreadPreferEfficient = 4;
+
     // What min cores goes back to when Core Efficiency is switched OFF.
     //
     // NOTE: this is a deliberate choice, not the Windows default. Balanced actually ships
@@ -240,22 +257,32 @@ public class CoreParkingService
     /// </summary>
     private static (string Guid, int Value)[] ParkingSettings(int floorPercent)
     {
+        // Hybrid handling only applies when actually parking (floor 0), not on the disable path.
+        bool hybrid = floorPercent == 0 && IsHybridCpu();
+
         // Class 0 is the E-cores on a hybrid chip. Parking those pushes background work onto
         // P-cores, which costs MORE power for the same work, so they keep a slice awake.
         // On non-hybrid every core is class 0 and there is no cheap tier to protect.
-        int class0 = (floorPercent == 0 && IsHybridCpu()) ? HybridEcoreFloorPercent() : floorPercent;
+        int class0 = hybrid ? HybridEcoreFloorPercent() : floorPercent;
 
-        return new[]
+        var settings = new List<(string Guid, int Value)>
         {
-        (CpMinCoresGuid,                     class0),
-        (CpMinCoresClass1Guid,               floorPercent),
-        (CpLatencyHintMinUnparkedGuid,       floorPercent),
-        (CpLatencyHintMinUnparkedClass1Guid, floorPercent),
-        (ProcThrottleMinGuid,                floorPercent),
-        (ProcThrottleMinClass1Guid,          floorPercent),
-        (CpParkedPerfStateGuid,              ParkedPerfDeepest),
-        (CpParkedPerfStateClass1Guid,        ParkedPerfDeepest),
+            (CpMinCoresGuid,                     class0),
+            (CpMinCoresClass1Guid,               floorPercent),
+            (CpLatencyHintMinUnparkedGuid,       floorPercent),
+            (CpLatencyHintMinUnparkedClass1Guid, floorPercent),
+            (ProcThrottleMinGuid,                floorPercent),
+            (ProcThrottleMinClass1Guid,          floorPercent),
+            (CpParkedPerfStateGuid,              ParkedPerfDeepest),
+            (CpParkedPerfStateClass1Guid,        ParkedPerfDeepest),
         };
+
+        // Hybrid only. On a homogeneous CPU there is no efficient tier to prefer, so writing it
+        // would be noise at best and a scheduling hint pointing nowhere at worst.
+        if (hybrid)
+            settings.Add((CpShortThreadPolicyGuid, ShortThreadPreferEfficient));
+
+        return settings.ToArray();
     }
 
     /// <summary>Same set, for removal, where the values do not matter.</summary>
@@ -265,6 +292,7 @@ public class CoreParkingService
         CpLatencyHintMinUnparkedGuid, CpLatencyHintMinUnparkedClass1Guid,
         ProcThrottleMinGuid, ProcThrottleMinClass1Guid,
         CpParkedPerfStateGuid, CpParkedPerfStateClass1Guid,
+        CpShortThreadPolicyGuid,
     };
 
     private const string PowerSchemesRoot =

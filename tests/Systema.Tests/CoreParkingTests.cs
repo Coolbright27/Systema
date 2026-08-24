@@ -29,6 +29,7 @@ public class CoreParkingTests
         "CpLatencyHintMinUnparkedGuid", "CpLatencyHintMinUnparkedClass1Guid",
         "ProcThrottleMinGuid", "ProcThrottleMinClass1Guid",
         "CpParkedPerfStateGuid", "CpParkedPerfStateClass1Guid",
+        "CpShortThreadPolicyGuid",
     };
 
     private static string Service() => Read("src", "Systema", "Services", "CoreParkingService.cs");
@@ -63,7 +64,11 @@ public class CoreParkingTests
             int i = src.IndexOf(declStart, StringComparison.Ordinal);
             Assert.True(i > 0, declStart + " not found");
             int open = src.IndexOf('{', i);
-            int close = src.IndexOf("};", open);
+            // ParkingSettings adds the hybrid-only entry AFTER the initializer, so scan the whole
+            // method rather than just the braces, or a conditional setting reads as missing.
+            int close = declStart.Contains("ParkingSettings", StringComparison.Ordinal)
+                        ? src.IndexOf("return settings.ToArray();", open, StringComparison.Ordinal)
+                        : src.IndexOf("};", open, StringComparison.Ordinal);
             var block = src[open..close];
             return AllSettingNames.Where(n => block.Contains(n, StringComparison.Ordinal))
                                   .OrderBy(n => n).ToArray();
@@ -211,7 +216,8 @@ public class CoreParkingTests
         var body = src[m..(m + 1400)];
 
         // Class 0 gets the hybrid-aware value; class 1 always gets the full floor.
-        Assert.Contains("IsHybridCpu()) ? HybridEcoreFloorPercent() : floorPercent", body);
+        Assert.Contains("hybrid ? HybridEcoreFloorPercent() : floorPercent", body);
+        Assert.Contains("floorPercent == 0 && IsHybridCpu()", body);
         Assert.Contains("(CpMinCoresClass1Guid,               floorPercent)", body);
 
         // Non-hybrid must be unaffected: every core is class 0 there.
@@ -234,6 +240,38 @@ public class CoreParkingTests
 
         Assert.Contains("Math.Ceiling(100.0 / n)", body);   // scales with the chip
         Assert.Contains("if (n <= 0) return 0;", body);     // homogeneous CPU keeps the plain floor
+    }
+    // Short-running threads are the background work you want off the P-cores. Sending them to the
+    // efficient cores keeps P-cores idle, and idle is what parking acts on, so this feeds the
+    // existing mechanism rather than adding a second one.
+    [Fact]
+    public void ShortRunningThreadsArePushedToTheEfficientCores()
+    {
+        var src = Service();
+        Assert.Contains("CpShortThreadPolicyGuid", src);
+
+        // 4 = Prefer efficient, NOT 3 = Efficient. 3 is a hard constraint: with the E-cores
+        // saturated, threads queue instead of spilling to a free P-core. "Prefer" keeps the spill
+        // path, which is what makes this cost no throughput.
+        Assert.Contains("ShortThreadPreferEfficient = 4", src);
+        Assert.Contains("(CpShortThreadPolicyGuid, ShortThreadPreferEfficient)", src);
+
+        // The GENERAL heterogeneous policy must stay untouched: forcing every thread onto the
+        // efficient cores would genuinely cost performance.
+        Assert.DoesNotContain("93b8b6dc-0698-4d1c-9ee4-0644e900c85d", src);
+    }
+
+    // Meaningless on a homogeneous CPU, so it must not be written there.
+    [Fact]
+    public void TheShortThreadPolicyIsHybridOnly()
+    {
+        var src = Service();
+        int m = src.IndexOf("private static (string Guid, int Value)[] ParkingSettings", StringComparison.Ordinal);
+        var body = src[m..(m + 2000)];
+
+        int add = body.IndexOf("settings.Add((CpShortThreadPolicyGuid", StringComparison.Ordinal);
+        Assert.True(add > 0, "short-thread policy is not conditionally added");
+        Assert.Contains("if (hybrid)", body[..add]);
     }
 }
 
