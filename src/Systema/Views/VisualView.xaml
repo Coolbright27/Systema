@@ -195,7 +195,7 @@
                                     <Style TargetType="CheckBox" BasedOn="{StaticResource ToggleSwitch}">
                                         <Setter Property="ToolTip" Value="When on: High Performance plan stays active and restores automatically after charging"/>
                                         <Style.Triggers>
-                                            <DataTrigger Binding="{Binding IsAutoPilotActive}" Value="True">
+                                            <DataTrigger Binding="{Binding IsPerformanceModeAutoPiloted}" Value="True">
                                                 <Setter Property="IsEnabled" Value="False"/>
                                                 <Setter Property="Opacity"   Value="0.4"/>
                                                 <Setter Property="ToolTip"   Value="Controlled by Auto-Pilot — turn off Auto-Pilot Mode to change"/>

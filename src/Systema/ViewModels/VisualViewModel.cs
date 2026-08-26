@@ -109,6 +109,21 @@ public partial class VisualViewModel : ObservableObject, IAutoRefreshable, IDisp
     /// </summary>
     public bool IsAutoPilotActive => _settings.AutoPilotModeEnabled;
 
+    /// <summary>
+    /// True only when Auto-Pilot ACTUALLY manages Performance Mode on this machine.
+    ///
+    /// Auto-Pilot skips the power plan entirely on laptops: forcing High Performance drains the
+    /// battery, so battery power is left as a manual choice on this tab. See the two !HasBattery()
+    /// gates in DashboardViewModel (the checklist item and the apply step).
+    ///
+    /// Binding the toggle's disabled state to plain IsAutoPilotActive therefore greyed out a
+    /// control that Auto-Pilot never touches on a laptop, and told the user it was
+    /// "Controlled by Auto-Pilot" when nothing was controlling it. A lock has to follow what the
+    /// feature actually does on THIS machine, not whether the feature is switched on.
+    /// </summary>
+    public bool IsPerformanceModeAutoPiloted =>
+        _settings.AutoPilotModeEnabled && !_powerPlanService.HasBattery();
+
     partial void OnIsOnBatteryChanged(bool value) =>
         OnPropertyChanged(nameof(IsOnAcWithBatteryPlanActive));
 
@@ -302,7 +317,10 @@ public partial class VisualViewModel : ObservableObject, IAutoRefreshable, IDisp
 
     private void OnAutoPilotModeChanged(object? sender, EventArgs e) =>
         System.Windows.Application.Current?.Dispatcher.BeginInvoke(
-            () => OnPropertyChanged(nameof(IsAutoPilotActive)));
+            () => {
+                OnPropertyChanged(nameof(IsAutoPilotActive));
+                OnPropertyChanged(nameof(IsPerformanceModeAutoPiloted));
+            });
 
     public void Dispose()
     {
