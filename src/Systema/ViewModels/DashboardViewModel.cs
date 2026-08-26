@@ -1091,7 +1091,19 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
             foreach (var item in AutoPilotChecklist.Concat(_extraRecs))
             {
                 if (item.IsDone || _dismissed.Contains(item.Label)) continue;
-                if (!_recMeta.TryGetValue(item.Label, out var meta)) continue;
+
+                // INVARIANT: everything Auto-Pilot does must also appear in Suggestions.
+                // That is held together by a Label string matching across three places (the
+                // checklist, BuildRecMeta, and the dismissed set), so a one-word rename in
+                // either place drops the item out of Suggestions silently. Log it rather than
+                // continuing quietly, so the break is visible instead of invisible.
+                if (!_recMeta.TryGetValue(item.Label, out var meta))
+                {
+                    _log.Warn("DashboardViewModel",
+                              $"No suggestion metadata for '{item.Label}' - it will not appear in " +
+                              "Suggestions. Every Auto-Pilot item needs a BuildRecMeta entry.");
+                    continue;
+                }
                 Recommendations.Add(new Recommendation { Label = item.Label, Title = meta.Title, Why = meta.Why });
             }
         }
