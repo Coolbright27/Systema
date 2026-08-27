@@ -27,74 +27,124 @@ namespace Systema.Services;
 public sealed partial class TaskSleepService
 {
     // ── Process filtering ──────────────────────────────────────────────────────
+    // ── Process filtering ──────────────────────────────────────────────────────
+
+    /// <summary>Why a rule exists, which is what decides whether a setting may bypass it.</summary>
+    internal enum SkipTag
+    {
+        /// <summary>Systema itself. Napping the napper deadlocks the monitor thread.</summary>
+        Self,
+        /// <summary>Non-negotiable safety. No setting may switch these off.</summary>
+        Permanent,
+        /// <summary>True only for a while: a backoff window, or an active launch boost.</summary>
+        Transient,
+        /// <summary>The user asked for this, via a toggle or the never-nap list.</summary>
+        UserSetting,
+        /// <summary>The app is visibly or audibly in use right now.</summary>
+        Activity,
+    }
+
+    /// <summary>Everything a rule needs, so rules stay one-liners instead of taking five parameters.</summary>
+    private readonly record struct SkipContext(
+        Process Proc,
+        HashSet<int> ProtectedPids,
+        TaskSleepSettings Settings,
+        Dictionary<string, TaskSleepAppRule> Rules,
+        HashSet<int>? AudioPids);
+
+    private sealed record SkipRule(string Reason, SkipTag Tag, Func<SkipContext, bool> Applies);
+
+    private SkipRule[]? _skipRules;
+
+    /// <summary>
+    /// The skip rules, in evaluation order. FIRST MATCH WINS, which is what gives a process one
+    /// skip reason rather than several, so ORDER IS LOAD-BEARING.
+    ///
+    /// Permanent rules deliberately precede every UserSetting rule: a user toggle must never be
+    /// able to un-protect a system process, a Windows binary, a service account or an AV process.
+    /// Adding a rule means inserting it at the right point in this list rather than appending.
+    ///
+    /// Built once and cached: this runs for every process on every tick.
+    /// </summary>
+    private SkipRule[] SkipRules => _skipRules ??= new SkipRule[]
+    {
+        new("Systema itself", SkipTag.Self, c => c.Proc.Id == OwnPid),
+        new("System PID",     SkipTag.Permanent, c => c.Proc.Id <= 4),
+
+        // Repeated OpenProcess failures mean we will not win; stop burning handles retrying.
+        new("Access denied", SkipTag.Transient, IsAccessDeniedBackoff),
+
+        // ── PERMANENT SAFETY LAYERS — never bypassed, regardless of user settings ──
+
+        // Explicit whitelist of processes that must never be throttled.
+        new("System process (whitelist)", SkipTag.Permanent, c => IsSystemProcess(c.Proc)),
+
+        // Any executable under %windir%\System32 or SysWOW64. Catches Microsoft OS helpers that
+        // run in the USER session (so the service-account and elevated checks miss them) and are
+        // not in the static whitelist, e.g. wpcmon.exe. You cannot drop an arbitrary exe into
+        // System32 without admin, so a path match is a reliable "this is a Windows binary".
+        new("Windows system component", SkipTag.Permanent, c => IsWindowsSystemBinary(c.Proc.Id)),
+
+        // Admin-only processes; throttling them can corrupt system state.
+        new("Elevated/System integrity (non-bypassable)", SkipTag.Permanent,
+            c => IsElevatedOrSystemProcess(c.Proc.Id)),
+
+        // App Nap targets user applications only.
+        new("Service account (SYSTEM/LocalService/NetworkService)", SkipTag.Permanent,
+            c => IsServiceAccount(c.Proc.Id)),
+
+        // Never nap a process while its launch boost is active. The two would ping-pong every
+        // tick, and worse, the nap path captures the CURRENT priority as the value to restore
+        // later: if that is the boosted High, the process is restored to High permanently.
+        // The boost expires in <= 120 s and restores the true original, so leave it to that.
+        new("Launch Boost active", SkipTag.Transient, c => IsLaunchBoosted(c.Proc.Id)),
+
+        new("Security/AV critical", SkipTag.Permanent, c => IsSecurityCritical(c.Proc.ProcessName)),
+
+        // Earned its place by re-raising its own priority six times in 90 s. See the
+        // auto-whitelist logic in the engine.
+        new("Auto-whitelisted", SkipTag.Permanent, c => _napSuppressed.Contains(c.Proc.ProcessName)),
+
+        // ── User-configurable ──
+        new("Windows service", SkipTag.UserSetting,
+            c => c.Settings.ExcludeSystemServices && IsSystemService(c.Proc)),
+        new("Foreground", SkipTag.Activity,
+            c => c.Settings.IgnoreForeground && c.ProtectedPids.Contains(c.Proc.Id)),
+        new("Never-nap list", SkipTag.UserSetting,
+            c => c.Rules.TryGetValue(c.Proc.ProcessName, out var r) && r.IsBlacklisted),
+
+        // If a process is playing audio, using the mic, or is a known always-active app, it must
+        // never be napped by ANY path. This is the App Nap approach: strict, but aware of use.
+        new("Audio/media active", SkipTag.Activity,
+            c => c.AudioPids != null && IsAudioProtected(c.Proc.Id, c.Proc.ProcessName, c.AudioPids)),
+    };
+
+    /// <summary>Its own method because it logs once on the third failure, which a lambda cannot.</summary>
+    private bool IsAccessDeniedBackoff(SkipContext c)
+    {
+        if (!TryState(c.Proc.Id, out var st) || st.AccessDenied is not { } denied) return false;
+        if (denied.Count < 3 || (DateTime.UtcNow - denied.LastFail).TotalSeconds >= 60) return false;
+
+        if (denied.Count == 3)
+            _log.Info("TaskSleepService",
+                      $"Access-denied backoff: skipping '{c.Proc.ProcessName}' (PID {c.Proc.Id}) — denied {denied.Count}x in 60s");
+        return true;
+    }
 
     private bool ShouldSkip(
         Process proc, HashSet<int> protectedPids, TaskSleepSettings s,
         Dictionary<string, TaskSleepAppRule> rules,
         HashSet<int>? audioPids = null)
     {
-        if (proc.Id == OwnPid) { StateFor(proc.Id).SkipReason = "Systema itself"; return true; }
-        if (proc.Id <= 4) { StateFor(proc.Id).SkipReason ="System PID"; return true; }
-        if (TryState(proc.Id, out var adSt) && adSt.AccessDenied is { } denied &&
-            denied.Count >= 3 &&
-            (DateTime.UtcNow - denied.LastFail).TotalSeconds < 60)
+        var ctx = new SkipContext(proc, protectedPids, s, rules, audioPids);
+
+        foreach (var rule in SkipRules)
         {
-            if (denied.Count == 3)
-                _log.Info("TaskSleepService", $"Access-denied backoff: skipping '{proc.ProcessName}' (PID {proc.Id}) — denied {denied.Count}× in 60s");
-            StateFor(proc.Id).SkipReason ="Access denied";
-            return true;
-        }
-
-        // ── PERMANENT SAFETY LAYERS — Never bypassed, regardless of user settings ──
-        // These are non-negotiable to prevent corruption of critical OS functionality.
-
-        // 1. System process names — explicit whitelist of processes that must never be throttled.
-        //    This takes priority over ALL user settings.
-        if (IsSystemProcess(proc)) { StateFor(proc.Id).SkipReason ="System process (whitelist)"; return true; }
-
-        // 1b. Windows system components — any executable under %windir%\System32 or SysWOW64.
-        //     Catches Microsoft OS helpers that run in the USER session (so the service-account
-        //     and elevated checks miss them) and whose name isn't in the static whitelist —
-        //     e.g. wpcmon.exe (Family Safety / Parental Controls monitor). The image path is
-        //     immutable, so the result is cached per-PID. You can't drop an arbitrary exe into
-        //     System32 without admin, so a path match is a reliable "this is a Windows binary".
-        if (IsWindowsSystemBinary(proc.Id)) { StateFor(proc.Id).SkipReason = "Windows system component"; return true; }
-
-        // 2. Elevated/System integrity — ALWAYS skip, no toggle. These are admin-only
-        //    processes and throttling them can corrupt system state.
-        if (IsElevatedOrSystemProcess(proc.Id)) { StateFor(proc.Id).SkipReason ="Elevated/System integrity (non-bypassable)"; return true; }
-
-        // 2b. Service accounts (SYSTEM / LOCAL SERVICE / NETWORK SERVICE) — App Nap
-        //     targets user applications only; these are permanently excluded (rule 4).
-        if (IsServiceAccount(proc.Id)) { StateFor(proc.Id).SkipReason ="Service account (SYSTEM/LocalService/NetworkService)"; return true; }
-
-        // 2c. Launch-Boosted — never nap a process while its launch boost is active. Launch
-        //     Boost (High priority / I-O / EcoQoS-off, re-asserted every 1.5 s) and a nap
-        //     (Idle / EcoQoS / CPU cap / GPU idle, every ~2 s) would otherwise ping-pong
-        //     every tick. Worse, the nap path captures the CURRENT priority as the value to
-        //     restore later — if that's the boosted HIGH, the process is restored to High
-        //     permanently. Leaving it to the boost (which expires in ≤120 s and restores the
-        //     true original) avoids both. It becomes nap-eligible the instant the boost ends.
-        if (IsLaunchBoosted(proc.Id)) { StateFor(proc.Id).SkipReason ="Launch Boost active"; return true; }
-
-        // 3. Security-critical (AV, Defender, etc.) — ALWAYS skip, non-negotiable
-        if (IsSecurityCritical(proc.ProcessName)) { StateFor(proc.Id).SkipReason ="Security/AV critical"; return true; }
-
-        // 4. Auto-whitelisted processes (previously caused issues) — ALWAYS skip
-        if (_napSuppressed.Contains(proc.ProcessName)) { StateFor(proc.Id).SkipReason ="Auto-whitelisted"; return true; }
-
-        // ── User-configurable checks (toggleable via settings) ──
-        if (s.ExcludeSystemServices && IsSystemService(proc)) { StateFor(proc.Id).SkipReason ="Windows service"; return true; }
-        if (s.IgnoreForeground && protectedPids.Contains(proc.Id)) { StateFor(proc.Id).SkipReason ="Foreground"; return true; }
-        if (rules.TryGetValue(proc.ProcessName, out var rule) && rule.IsBlacklisted) { StateFor(proc.Id).SkipReason ="Never-nap list"; return true; }
-
-        // Global audio protection gate: if any process is actively playing audio,
-        // using the microphone, or is a known always-active app (media player, OBS),
-        // it must NEVER be napped by any path (CPU, smart, aggressive, idle, background).
-        // This is the iOS/macOS App Nap approach: strict throttling but smart about what's in use.
-        if (audioPids != null && IsAudioProtected(proc.Id, proc.ProcessName, audioPids))
-        {
-            StateFor(proc.Id).SkipReason ="Audio/media active";
+            if (!rule.Applies(ctx)) continue;
+            // Every skip sets a reason: it is what the monitor UI shows and what the CPU-CAP
+            // diagnostic reports. Returning true without one makes a process look skipped for
+            // no reason, which is how skip bugs used to hide.
+            StateFor(proc.Id).SkipReason = rule.Reason;
             return true;
         }
         return false;
