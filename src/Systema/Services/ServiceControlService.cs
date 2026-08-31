@@ -595,7 +595,13 @@ public class ServiceControlService
                     using var key = Registry.LocalMachine.OpenSubKey(
                         $@"SYSTEM\CurrentControlSet\Services\{svcName}", true);
                     if (key != null)
+                    {
+                        // Capture the real value first. Restore used to write a hardcoded default,
+                        // which meant a user who had already disabled DiagTrack got it switched
+                        // back to Automatic the first time they toggled No Telemetry Pro off.
+                        if (key.GetValue("Start") is int cur && cur != 4) CaptureServiceDefault(svcName, cur);
                         key.SetValue("Start", 4, RegistryValueKind.DWord);
+                    }
                     else
                     {
                         Log.Warn("ServiceControl", $"Cannot open registry key for telemetry service '{svcName}' — Start value not written");
@@ -778,7 +784,9 @@ public class ServiceControlService
                 {
                     using var key = Registry.LocalMachine.OpenSubKey(
                         $@"SYSTEM\CurrentControlSet\Services\{svcName}", true);
-                    key?.SetValue("Start", GetDefaultStart(svcName), RegistryValueKind.DWord);   // DiagTrack=Auto, dmwappush=Manual
+                    // The captured original if we have one, else the documented Windows default.
+                    // Never a blanket Auto: that re-enabled telemetry the user had already turned off.
+                    key?.SetValue("Start", ResolveRestoreStart(svcName), RegistryValueKind.DWord);
                 }
                 catch (Exception ex) { Log.Warn("ServiceControl", $"Could not restore telemetry service '{svcName}': {ex.Message}"); }
             }

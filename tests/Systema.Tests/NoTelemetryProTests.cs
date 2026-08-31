@@ -186,4 +186,41 @@ public class NoTelemetryProTests
 
         Assert.DoesNotContain(rows, l => l.Contains("SmartScreen", StringComparison.Ordinal));
     }
+
+    // DiagTrack and dmwappushservice were the last pair still restored to a HARDCODED default
+    // rather than the captured original, so a user who had already disabled DiagTrack got it
+    // switched back to Automatic the first time they toggled No Telemetry Pro off.
+    [Fact]
+    public void TelemetryServicesRestoreTheCapturedValue()
+    {
+        var src = Service();
+
+        int off = src.IndexOf("public async Task<TweakResult> RestoreTelemetryServicesAsync", StringComparison.Ordinal);
+        Assert.True(off > 0);
+        var restore = src[off..(off + 1400)];
+
+        Assert.Contains("ResolveRestoreStart(svcName)", restore);
+        Assert.DoesNotContain("GetDefaultStart(svcName)", restore);
+
+        // ...and the capture happens on the way in, or there is nothing to resolve.
+        int on = src.IndexOf("DisableAllTelemetryServicesAsync", StringComparison.Ordinal);
+        Assert.Contains("CaptureServiceDefault(svcName, cur)", src[on..(on + 3000)]);
+    }
+
+    // If the capture is missing or unusable, restore must fall back to the documented Windows
+    // default rather than leaving the service disabled. For DiagTrack that default is 2
+    // (Automatic), i.e. back ON, which is the safe direction: never leave something off that
+    // Windows ships on because a capture went missing.
+    [Fact]
+    public void AMissingCaptureFallsBackToTheWindowsDefault()
+    {
+        var src = Service();
+        int m = src.IndexOf("private static int ResolveRestoreStart", StringComparison.Ordinal);
+        Assert.True(m > 0);
+        var body = src[m..(m + 1200)];
+
+        Assert.Contains("return GetDefaultStart(serviceName);", body);   // the fallback
+        Assert.Contains("saved is 2 or 3", body);                        // only real values accepted
+        Assert.Contains("[\"DiagTrack\"] = 2", src);                     // and that default is ON
+    }
 }
