@@ -116,4 +116,39 @@ public class NoTelemetryProTests
         var src = Service();
         Assert.Contains(@"\Microsoft\Windows\Sustainability\SustainabilityTelemetry", src);
     }
+
+    // Restore used to run /Enable on every task unconditionally, which is not a restore: a task
+    // the user had disabled themselves came back the first time they toggled No Telemetry Pro off.
+    // The services path already captured each original Start value; tasks now match that standard.
+    [Fact]
+    public void TaskRestorePutsBackWhatTheUserHadNotABlanketEnable()
+    {
+        var src = Service();
+        Assert.Contains("CaptureTaskDefault", src);
+        Assert.Contains("TaskWasUserDisabled", src);
+        Assert.Contains("IsTaskAlreadyDisabled", src);
+
+        int m = src.IndexOf("private static void SetTelemetryTasks", StringComparison.Ordinal);
+        Assert.True(m > 0);
+        var body = src[m..(m + 2500)];
+
+        // Capture happens on the way IN, and the way OUT skips tasks that were already off.
+        Assert.Contains("CaptureTaskDefault(task, IsTaskAlreadyDisabled(task))", body);
+        Assert.Contains("TaskWasUserDisabled(task)", body);
+    }
+
+    // Reading the pipe after WaitForExit can deadlock when the buffer fills, which is the same
+    // mistake documented elsewhere in this file for schtasks calls.
+    [Fact]
+    public void TheTaskStateQueryReadsItsPipeBeforeWaiting()
+    {
+        var src = Service();
+        int m = src.IndexOf("private static bool IsTaskAlreadyDisabled", StringComparison.Ordinal);
+        Assert.True(m > 0);
+        var body = src[m..(m + 1200)];
+
+        int read = body.IndexOf("ReadToEnd()", StringComparison.Ordinal);
+        int wait = body.IndexOf("WaitForExit", StringComparison.Ordinal);
+        Assert.True(read > 0 && wait > read, "must read stdout before WaitForExit or the pipe can deadlock");
+    }
 }

@@ -870,12 +870,84 @@ public class ServiceControlService
     private static void DisableTelemetryTasks() => SetTelemetryTasks(disable: true);
 
     /// <summary>Disables or re-enables the telemetry scheduled tasks via schtasks.exe.</summary>
+    private const string TaskDefaultsKey = @"Software\Systema\TaskDefaults";   // HKCU
+
+    /// <summary>
+    /// True when a scheduled task is ALREADY disabled, read before we touch it.
+    ///
+    /// Restore used to run /Enable on every task unconditionally, which is not a restore: a task
+    /// the user had disabled themselves came back on the first time they toggled No Telemetry Pro
+    /// off. The services path already captures each original Start value and puts that exact value
+    /// back (see CaptureServiceDefault); this brings tasks up to the same standard.
+    /// </summary>
+    private static bool IsTaskAlreadyDisabled(string task)
+    {
+        try
+        {
+            var psi = new System.Diagnostics.ProcessStartInfo
+            {
+                FileName               = "schtasks.exe",
+                Arguments              = $"/Query /TN \"{task}\" /FO CSV /NH",
+                UseShellExecute        = false,
+                CreateNoWindow         = true,
+                RedirectStandardOutput = true,
+            };
+            using var proc = System.Diagnostics.Process.Start(psi);
+            if (proc == null) return false;
+
+            string output = proc.StandardOutput.ReadToEnd();   // read BEFORE waiting, or the pipe can fill and deadlock
+            proc.WaitForExit(5000);
+            return output.IndexOf("Disabled", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+        catch { return false; }
+    }
+
+    /// <summary>Records that a task was already disabled before we touched it (first value only).</summary>
+    private static void CaptureTaskDefault(string task, bool wasDisabled)
+    {
+        try
+        {
+            using var key = Registry.CurrentUser.CreateSubKey(TaskDefaultsKey, writable: true);
+            if (key != null && key.GetValue(task) == null)
+                key.SetValue(task, wasDisabled ? 1 : 0, RegistryValueKind.DWord);
+        }
+        catch (Exception ex) { Log.Warn("ServiceControl", $"CaptureTaskDefault({task}) failed: {ex.Message}"); }
+    }
+
+    /// <summary>True if this task was disabled before Systema touched it, so leave it disabled.</summary>
+    private static bool TaskWasUserDisabled(string task)
+    {
+        try
+        {
+            using var key = Registry.CurrentUser.OpenSubKey(TaskDefaultsKey, writable: true);
+            if (key?.GetValue(task) is int saved)
+            {
+                key.DeleteValue(task, throwOnMissingValue: false);
+                return saved == 1;
+            }
+        }
+        catch (Exception ex) { Log.Warn("ServiceControl", $"TaskWasUserDisabled({task}) failed: {ex.Message}"); }
+        return false;
+    }
+
     private static void SetTelemetryTasks(bool disable)
     {
         foreach (var task in TelemetryTasks)
         {
             try
             {
+                if (disable)
+                {
+                    // Record its state BEFORE changing it, so toggling off restores what the user
+                    // had rather than blanket-enabling everything.
+                    CaptureTaskDefault(task, IsTaskAlreadyDisabled(task));
+                }
+                else if (TaskWasUserDisabled(task))
+                {
+                    Log.Info("ServiceControl", $"Leaving '{task}' disabled - it was already off before Systema touched it.");
+                    continue;
+                }
+
                 var psi = new System.Diagnostics.ProcessStartInfo
                 {
                     FileName  = "schtasks.exe",
