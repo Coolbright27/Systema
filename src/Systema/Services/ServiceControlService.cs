@@ -864,6 +864,7 @@ public class ServiceControlService
         @"\Microsoft\Windows\Customer Experience Improvement Program\Consolidator",
         @"\Microsoft\Windows\Customer Experience Improvement Program\UsbCeip",
         @"\Microsoft\Windows\DiskDiagnostic\Microsoft-Windows-DiskDiagnosticDataCollector",
+        @"\Microsoft\Windows\Sustainability\SustainabilityTelemetry",
     };
 
     private static void DisableTelemetryTasks() => SetTelemetryTasks(disable: true);
@@ -917,6 +918,13 @@ public class ServiceControlService
         (true,  @"SOFTWARE\Policies\Microsoft\Windows\System",                        "PublishUserActivities",          0),
         (true,  @"SOFTWARE\Policies\Microsoft\Windows\System",                        "UploadUserActivities",           0),
         (false, @"SOFTWARE\Microsoft\Siuf\Rules",                                     "NumberOfSIUFInPeriod",           0),
+
+        // ── Vendor telemetry ──
+        // NVIDIA's documented opt-out. The telemetry itself ships as two DLLs
+        // (NvTelemetryAPI64 / NvTelemetryBridge64) loaded on demand by driver processes, with no
+        // service or scheduled task to disable, so this value is the only lever there is.
+        // 0 = opted out. Absent means "never asked", which the driver treats as opt-in.
+        (true,  @"SOFTWARE\NVIDIA Corporation\NvControlPanel2\Client",                "OptInOrOutPreference",           0),
         // Extra data-collection policies. These are Group-Policy settings: Pro / Enterprise / Education
         // honor them (a much fuller telemetry-off); Home ignores the GP-only ones, where they're harmless.
         (true,  @"SOFTWARE\Policies\Microsoft\Windows\DataCollection",                "LimitEnhancedDiagnosticDataWindowsAnalytics", 0),

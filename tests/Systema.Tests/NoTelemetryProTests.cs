@@ -96,4 +96,24 @@ public class NoTelemetryProTests
         Assert.Contains(": 3", src[m..(m + 200)]);
     }
 
+
+    // NVIDIA's telemetry ships as two DLLs loaded on demand by driver processes, with no service
+    // and no scheduled task, so the opt-out registry value is the only lever that exists. Absent
+    // means "never asked", which the driver treats as opted in.
+    [Fact]
+    public void CoversTheNvidiaTelemetryOptOut()
+    {
+        var src = Service();
+        Assert.Contains("OptInOrOutPreference", src);
+        Assert.Contains(@"SOFTWARE\NVIDIA Corporation\NvControlPanel2\Client", src);
+    }
+
+    // A Microsoft task under \Microsoft\Windows\Sustainability\, not an NVIDIA one despite turning
+    // up while auditing GPU telemetry.
+    [Fact]
+    public void CoversWindowsSustainabilityTelemetry()
+    {
+        var src = Service();
+        Assert.Contains(@"\Microsoft\Windows\Sustainability\SustainabilityTelemetry", src);
+    }
 }
