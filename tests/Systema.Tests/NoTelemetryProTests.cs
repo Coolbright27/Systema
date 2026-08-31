@@ -151,4 +151,39 @@ public class NoTelemetryProTests
         int wait = body.IndexOf("WaitForExit", StringComparison.Ordinal);
         Assert.True(read > 0 && wait > read, "must read stdout before WaitForExit or the pipe can deadlock");
     }
+
+    // Edge is baked into Windows and its policies also govern WebView2, which Discord, Teams and
+    // Office embed, so this reaches well past browsing.
+    [Fact]
+    public void CoversEdgeTelemetryPolicies()
+    {
+        var src = Service();
+        foreach (var p in new[]
+                 { "MetricsReportingEnabled", "SendSiteInfoToImproveServices",
+                   "PersonalizationReportingEnabled", "DiagnosticData", "UserFeedbackAllowed",
+                   "AlternateErrorPagesEnabled", "ResolveNavigationErrorsUseWebService",
+                   "SpotlightExperiencesAndRecommendationsEnabled", "ShowRecommendationsEnabled",
+                   "EdgeShoppingAssistantEnabled", "WebWidgetAllowed" })
+            Assert.Contains(p, src);
+    }
+
+    // SmartScreen is SECURITY, not telemetry. Every "debloat Edge" guide turns it off, which makes
+    // it a standing temptation — on a machine that already fights Smart App Control over unsigned
+    // binaries, disabling it trades a real protection for nothing. It must never become a policy row.
+    [Fact]
+    public void SmartScreenIsNeverDisabled()
+    {
+        var src = Service();
+        int list = src.IndexOf("TelemetryRegistry =", StringComparison.Ordinal);
+        Assert.True(list > 0);
+        int end = src.IndexOf("};", list, StringComparison.Ordinal);
+
+        // Only actual policy rows count; the comment explaining the exclusion is fine.
+        var rows = src[list..end]
+            .Split('\n')
+            .Where(l => l.TrimStart().StartsWith("(true", StringComparison.Ordinal) ||
+                        l.TrimStart().StartsWith("(false", StringComparison.Ordinal));
+
+        Assert.DoesNotContain(rows, l => l.Contains("SmartScreen", StringComparison.Ordinal));
+    }
 }

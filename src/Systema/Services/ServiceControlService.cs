@@ -997,6 +997,34 @@ public class ServiceControlService
         // service or scheduled task to disable, so this value is the only lever there is.
         // 0 = opted out. Absent means "never asked", which the driver treats as opt-in.
         (true,  @"SOFTWARE\NVIDIA Corporation\NvControlPanel2\Client",                "OptInOrOutPreference",           0),
+
+        // ── Microsoft Edge ──
+        // Edge is baked into Windows and its policies ALSO govern WebView2, which Discord, Teams,
+        // Office and plenty of other apps embed. So these reach well beyond browsing.
+        //
+        // Deliberately absent, and they should stay absent: SmartScreenEnabled and
+        // SmartScreenPuaEnabled. Every "debloat Edge" list turns those off; they are security,
+        // not telemetry, and disabling them on a machine that already fights SAC over unsigned
+        // binaries trades a real protection for nothing. The edgeupdate services are left alone
+        // for the same reason: they patch a browser embedded in the OS.
+        (true,  @"SOFTWARE\Policies\Microsoft\Edge", "MetricsReportingEnabled",                       0),
+        (true,  @"SOFTWARE\Policies\Microsoft\Edge", "SendSiteInfoToImproveServices",                 0),
+        (true,  @"SOFTWARE\Policies\Microsoft\Edge", "PersonalizationReportingEnabled",               0),
+        (true,  @"SOFTWARE\Policies\Microsoft\Edge", "DiagnosticData",                                0),
+        (true,  @"SOFTWARE\Policies\Microsoft\Edge", "UserFeedbackAllowed",                           0),
+        (true,  @"SOFTWARE\Policies\Microsoft\Edge", "AlternateErrorPagesEnabled",                    0),
+        (true,  @"SOFTWARE\Policies\Microsoft\Edge", "ResolveNavigationErrorsUseWebService",          0),
+        (true,  @"SOFTWARE\Policies\Microsoft\Edge", "SpotlightExperiencesAndRecommendationsEnabled", 0),
+        (true,  @"SOFTWARE\Policies\Microsoft\Edge", "ShowRecommendationsEnabled",                    0),
+        (true,  @"SOFTWARE\Policies\Microsoft\Edge", "EdgeShoppingAssistantEnabled",                  0),
+        (true,  @"SOFTWARE\Policies\Microsoft\Edge", "WebWidgetAllowed",                              0),
+
+        // These two are the ones you will actually notice. SearchSuggestEnabled=0 stops every
+        // address-bar keystroke going to the search provider, at the cost of autocomplete
+        // suggestions. NetworkPredictionOptions=2 stops prefetching, which sends URLs before you
+        // click them, at the cost of a little page-load speed.
+        (true,  @"SOFTWARE\Policies\Microsoft\Edge", "SearchSuggestEnabled",                          0),
+        (true,  @"SOFTWARE\Policies\Microsoft\Edge", "NetworkPredictionOptions",                      2),
         // Extra data-collection policies. These are Group-Policy settings: Pro / Enterprise / Education
         // honor them (a much fuller telemetry-off); Home ignores the GP-only ones, where they're harmless.
         (true,  @"SOFTWARE\Policies\Microsoft\Windows\DataCollection",                "LimitEnhancedDiagnosticDataWindowsAnalytics", 0),
