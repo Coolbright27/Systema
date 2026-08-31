@@ -1205,6 +1205,11 @@ public class ServiceControlService
     /// reversible; deliberately does NOT touch the hosts file or Windows Update/security channels.</summary>
     public async Task<TweakResult> SetNoTelemetryProAsync(bool on)
     {
+        // Record the intent BEFORE doing the work, so a crash midway still leaves startup able to
+        // finish the job rather than silently leaving telemetry half-on.
+        try { new SettingsService().NoTelemetryProEnabled = on; }
+        catch (Exception ex) { Log.Warn("ServiceControl", $"Could not persist No Telemetry Pro intent: {ex.Message}"); }
+
         if (on)
         {
             SetTelemetryRegistry(off: true);

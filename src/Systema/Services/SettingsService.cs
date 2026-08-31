@@ -78,6 +78,18 @@ public class SettingsService
     // ── Core Parking ────────────────────────────────────────────────────────
 
     /// <summary>Persists whether the user has enabled forced core parking enforcement.</summary>
+    /// <summary>
+    /// Records that the user WANTS No Telemetry Pro on, which is separate from whether it
+    /// currently is. IsNoTelemetryProEnabled() reads live state, so it tells the truth about
+    /// right now but forgets intent, and nothing knew to re-apply after a Windows feature update
+    /// re-enabled DiagTrack or reset the DataCollection policies. This is what startup checks.
+    /// </summary>
+    public bool NoTelemetryProEnabled
+    {
+        get => ReadBool(nameof(NoTelemetryProEnabled), defaultValue: false);
+        set => WriteBool(nameof(NoTelemetryProEnabled), value);
+    }
+
     public bool CoreParkingEnabled
     {
         get => ReadBool(nameof(CoreParkingEnabled), defaultValue: false);

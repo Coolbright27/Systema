@@ -223,4 +223,45 @@ public class NoTelemetryProTests
         Assert.Contains("saved is 2 or 3", body);                        // only real values accepted
         Assert.Contains("[\"DiagTrack\"] = 2", src);                     // and that default is ON
     }
+
+    // Windows feature updates re-enable DiagTrack and reset the DataCollection policies. The
+    // toggle reads LIVE state, so it would quietly show OFF again and stay that way until the
+    // user noticed. Intent has to be persisted separately from current state for anything to
+    // know it should re-apply.
+    [Fact]
+    public void TheUsersIntentIsPersistedSeparatelyFromLiveState()
+    {
+        var svc = Service();
+        Assert.Contains("NoTelemetryProEnabled = on", svc);
+
+        // Written BEFORE the work, so a crash midway still leaves startup able to finish it.
+        int m = svc.IndexOf("SetNoTelemetryProAsync(bool on)", StringComparison.Ordinal);
+        Assert.True(m > 0);
+        var body = svc[m..(m + 900)];
+        int intent = body.IndexOf("NoTelemetryProEnabled = on", StringComparison.Ordinal);
+        int work   = body.IndexOf("SetTelemetryRegistry(off: true)", StringComparison.Ordinal);
+        Assert.True(intent > 0 && work > intent, "intent must be persisted before the work starts");
+    }
+
+    [Fact]
+    public void StartupReAppliesOnlyWhenWantedAndOnlyOnDrift()
+    {
+        string dir = AppContext.BaseDirectory;
+        string? app = null;
+        for (int i = 0; i < 8 && dir != null; i++)
+        {
+            string p = Path.Combine(dir, "src", "Systema", "App.xaml.cs");
+            if (File.Exists(p)) { app = File.ReadAllText(p); break; }
+            dir = Directory.GetParent(dir)?.FullName!;
+        }
+        Assert.NotNull(app);
+
+        int m = app!.IndexOf("NoTelemetryProEnabled", StringComparison.Ordinal);
+        Assert.True(m > 0, "startup does not check the persisted intent");
+        var body = app[m..(m + 1200)];
+
+        // Gated on intent AND on drift, so a normal launch does no work at all.
+        Assert.Contains("IsNoTelemetryProEnabled()", body);
+        Assert.Contains("SetNoTelemetryProAsync(true)", body);
+    }
 }

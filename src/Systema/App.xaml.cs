@@ -442,6 +442,30 @@ public partial class App : Application
             // while the feature is off and needs no restart if it is switched on later.
             coreParkingService.StartPlanWatch(() => settingsService.CoreParkingEnabled);
 
+            // ── No Telemetry Pro re-enforcement on startup ──
+            // Windows feature updates re-enable DiagTrack and reset the DataCollection policies.
+            // Nothing noticed: the toggle reads LIVE state, so it would just quietly show OFF
+            // again, and the user would have to spot that and re-apply by hand.
+            //
+            // Re-applies only when the user asked for it (persisted intent) AND it has actually
+            // drifted, so a normal launch does no work. Delayed so it stays off the startup path.
+            if (settingsService.NoTelemetryProEnabled)
+            {
+                _ = System.Threading.Tasks.Task.Run(async () =>
+                {
+                    try
+                    {
+                        await System.Threading.Tasks.Task.Delay(25_000);
+                        if (!serviceControl.IsNoTelemetryProEnabled())
+                        {
+                            Log.Info("App", "No Telemetry Pro drifted (likely a Windows update) — re-applying.");
+                            await serviceControl.SetNoTelemetryProAsync(true);
+                        }
+                    }
+                    catch (Exception ex) { Log.Warn("App", $"No Telemetry Pro re-apply failed: {ex.Message}"); }
+                });
+            }
+
             // ── Windows 11 nag reinforcement ──
             // Disable Suggestions defaults ON, so on first run this applies it; on
             // every later launch it re-asserts the HKCU values a feature update may
