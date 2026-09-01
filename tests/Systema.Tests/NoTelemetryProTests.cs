@@ -264,4 +264,53 @@ public class NoTelemetryProTests
         Assert.Contains("IsNoTelemetryProEnabled()", body);
         Assert.Contains("SetNoTelemetryProAsync(true)", body);
     }
+
+    // Found by auditing the machine rather than working from a list. whesvc was the only
+    // uncovered telemetry service actually RUNNING; wercplsupport is WerSvc's direct companion
+    // and was covered only by luck on this box.
+    [Fact]
+    public void CoversWindowsHealthAndProblemReportsSupport()
+    {
+        var src = Service();
+        int list = src.IndexOf("ExtraTelemetryServices =", StringComparison.Ordinal);
+        var block = src[list..src.IndexOf("};", list, StringComparison.Ordinal)];
+
+        Assert.Contains("whesvc", block);
+        Assert.Contains("wercplsupport", block);
+    }
+
+    // A whole usage-data pipeline (collect, flush, receive, report) was Ready on a machine with
+    // telemetry explicitly off. Windows ships BootstrapUsageDataReporting disabled itself, which
+    // is a decent signal it considers these optional.
+    [Fact]
+    public void CoversTheFlightingUsageDataPipeline()
+    {
+        var src = Service();
+        foreach (var t in new[] { "UsageDataReporting", "UsageDataFlushing", "UsageDataReceiver",
+                                  "GovernedFeatureUsageProcessing" })
+            Assert.Contains(@"\Microsoft\Windows\Flighting\FeatureConfig\" + t, src);
+    }
+
+    // NumberOfSIUFInPeriod=0 was already set, so without the client tasks the job was half done.
+    [Fact]
+    public void CoversTheWindowsFeedbackClient()
+    {
+        var src = Service();
+        Assert.Contains(@"\Microsoft\Windows\Feedback\Siuf\DmClient", src);
+        Assert.Contains("NumberOfSIUFInPeriod", src);   // the registry half, already present
+    }
+
+    // These power the network and audio troubleshooters. They are diagnostics, not reporting, and
+    // disabling them means "Windows cannot diagnose this" the next time something breaks.
+    [Fact]
+    public void DiagnosticInfrastructureIsLeftAlone()
+    {
+        var src = Service();
+        int list = src.IndexOf("ExtraTelemetryServices =", StringComparison.Ordinal);
+        var block = src[list..src.IndexOf("};", list, StringComparison.Ordinal)];
+
+        foreach (var keep in new[] { "\"DPS\"", "\"WdiServiceHost\"", "\"WdiSystemHost\"",
+                                     "\"QWAVE\"", "\"LxpSvc\"" })
+            Assert.DoesNotContain(keep, block);
+    }
 }

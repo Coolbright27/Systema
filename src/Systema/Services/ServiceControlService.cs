@@ -873,6 +873,22 @@ public class ServiceControlService
         @"\Microsoft\Windows\Customer Experience Improvement Program\UsbCeip",
         @"\Microsoft\Windows\DiskDiagnostic\Microsoft-Windows-DiskDiagnosticDataCollector",
         @"\Microsoft\Windows\Sustainability\SustainabilityTelemetry",
+
+        // The Flighting usage-data pipeline: collect, flush, receive, report. All four were Ready
+        // on a machine with telemetry explicitly turned off. Windows itself already ships
+        // BootstrapUsageDataReporting disabled, so it treats these as optional.
+        @"\Microsoft\Windows\Flighting\FeatureConfig\UsageDataReporting",
+        @"\Microsoft\Windows\Flighting\FeatureConfig\UsageDataFlushing",
+        @"\Microsoft\Windows\Flighting\FeatureConfig\UsageDataReceiver",
+        @"\Microsoft\Windows\Flighting\FeatureConfig\GovernedFeatureUsageProcessing",
+
+        // Windows Feedback (SIUF) client. NumberOfSIUFInPeriod=0 is already set in the registry,
+        // so without these the job was only half done.
+        @"\Microsoft\Windows\Feedback\Siuf\DmClient",
+        @"\Microsoft\Windows\Feedback\Siuf\DmClientOnScenarioDownload",
+
+        @"\Microsoft\Windows\PerformanceTrace\ShowFeedbackToast",
+        @"\Microsoft\Windows\DiskFootprint\Diagnostics",
     };
 
     private static void DisableTelemetryTasks() => SetTelemetryTasks(disable: true);
@@ -1109,6 +1125,13 @@ public class ServiceControlService
         "Intel(R) SUR QC SAM",                        // Its Software Asset Manager companion. Name
                                                       // really does contain spaces and brackets.
         "wuqisvc",                                    // Microsoft Usage and Quality Insights
+        "whesvc",                                     // Windows Health and Optimized Experiences.
+                                                      // Newer Win11 health/optimization reporting,
+                                                      // and the only uncovered telemetry service
+                                                      // found RUNNING during the audit.
+        "wercplsupport",                              // Problem Reports support: the direct
+                                                      // companion to WerSvc, which was already
+                                                      // covered while this one was not.
     };
 
     /// <summary>
