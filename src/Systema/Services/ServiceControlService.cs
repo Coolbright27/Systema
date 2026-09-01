@@ -1094,12 +1094,46 @@ public class ServiceControlService
     }
 
     /// <summary>True when the telemetry data-collection policy is set to off (AllowTelemetry = 0).</summary>
+    /// <summary>
+    /// True when EVERY telemetry registry value is still set the way No Telemetry Pro left it.
+    ///
+    /// This used to check a single value, AllowTelemetry, out of roughly twenty-nine. That made
+    /// drift detection almost blind: a Windows update could wipe every Edge policy and the NVIDIA
+    /// opt-out, and as long as that one value survived the feature still reported itself enabled,
+    /// so the startup re-apply never fired.
+    /// </summary>
     private static bool IsTelemetryRegistryOff()
     {
         try
         {
-            using var key = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Policies\Microsoft\Windows\DataCollection");
-            return key?.GetValue("AllowTelemetry") is int v && v == 0;
+            foreach (var (hklm, path, name, offVal) in TelemetryRegistry)
+            {
+                var root = hklm ? Registry.LocalMachine : Registry.CurrentUser;
+                using var key = root.OpenSubKey(path);
+                if (key?.GetValue(name) is not int v || v != offVal) return false;
+            }
+            return true;
+        }
+        catch { return false; }
+    }
+
+    /// <summary>
+    /// True when every EXTRA telemetry service is still disabled. Checked by reading Start from the
+    /// registry rather than via ServiceController, so a missing service (the Intel entries on an
+    /// AMD box) counts as "nothing to do" instead of throwing.
+    /// </summary>
+    private static bool AreExtraTelemetryServicesDisabled()
+    {
+        try
+        {
+            foreach (var name in ExtraTelemetryServices)
+            {
+                using var key = Registry.LocalMachine.OpenSubKey(
+                    $@"SYSTEM\CurrentControlSet\Services\{name}");
+                if (key == null) continue;                        // not installed here
+                if (key.GetValue("Start") is not int s || s != 4) return false;
+            }
+            return true;
         }
         catch { return false; }
     }
@@ -1220,7 +1254,17 @@ public class ServiceControlService
 
     /// <summary>True when No Telemetry Pro is applied: the policy is off AND the telemetry services
     /// are disabled. (Reflect-state for the toggle.)</summary>
-    public bool IsNoTelemetryProEnabled() => IsTelemetryRegistryOff() && AreTelemetryServicesDisabled();
+    /// <summary>
+    /// True when the whole feature is still in effect: every registry value, the core telemetry
+    /// services, AND the extra services. All three are registry reads, so this stays cheap enough
+    /// for the UI to call on refresh.
+    ///
+    /// Scheduled tasks are deliberately NOT checked here: that would mean spawning schtasks once
+    /// per task on every refresh. They are re-disabled whenever a re-apply runs for any other
+    /// reason, and a task surviving is far rarer than a policy or service being reset.
+    /// </summary>
+    public bool IsNoTelemetryProEnabled() =>
+        IsTelemetryRegistryOff() && AreTelemetryServicesDisabled() && AreExtraTelemetryServicesDisabled();
 
     /// <summary>The maximal safe telemetry kill: data-collection + inventory + input/handwriting/speech
     /// policies (Pro/Enterprise/Education honor the fuller set), the telemetry services (DiagTrack,

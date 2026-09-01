@@ -313,4 +313,47 @@ public class NoTelemetryProTests
                                      "\"QWAVE\"", "\"LxpSvc\"" })
             Assert.DoesNotContain(keep, block);
     }
+
+    // Drift detection used to check ONE registry value (AllowTelemetry) out of roughly
+    // twenty-nine, and two services out of twelve. A Windows update could wipe every Edge policy
+    // and the NVIDIA opt-out and re-enable whesvc, and the feature still reported itself enabled,
+    // so the startup re-apply never fired. Re-enforcement is only as good as the check that
+    // triggers it.
+    [Fact]
+    public void DriftDetectionChecksEveryValueNotJustOne()
+    {
+        var src = Service();
+        int m = src.IndexOf("private static bool IsTelemetryRegistryOff", StringComparison.Ordinal);
+        Assert.True(m > 0);
+        var body = src[m..(m + 1400)];
+
+        // Iterates the whole table rather than reading a single named value.
+        Assert.Contains("foreach (var (hklm, path, name, offVal) in TelemetryRegistry)", body);
+    }
+
+    [Fact]
+    public void DriftDetectionCoversTheExtraServicesToo()
+    {
+        var src = Service();
+        Assert.Contains("AreExtraTelemetryServicesDisabled", src);
+
+        int m = src.IndexOf("public bool IsNoTelemetryProEnabled", StringComparison.Ordinal);
+        Assert.True(m > 0);
+        var body = src[m..(m + 400)];
+
+        Assert.Contains("IsTelemetryRegistryOff()", body);
+        Assert.Contains("AreTelemetryServicesDisabled()", body);
+        Assert.Contains("AreExtraTelemetryServicesDisabled()", body);
+    }
+
+    // A service that is not installed (the Intel entries on an AMD machine) must count as
+    // "nothing to do", not as drift, or the feature would re-apply forever on those boxes.
+    [Fact]
+    public void AMissingServiceIsNotTreatedAsDrift()
+    {
+        var src = Service();
+        int m = src.IndexOf("private static bool AreExtraTelemetryServicesDisabled", StringComparison.Ordinal);
+        Assert.True(m > 0);
+        Assert.Contains("if (key == null) continue;", src[m..(m + 900)]);
+    }
 }
