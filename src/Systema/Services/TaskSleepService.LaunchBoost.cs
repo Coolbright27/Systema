@@ -205,6 +205,7 @@ public sealed partial class TaskSleepService
         public DateTime Expiry;       // UTC
         public uint     OriginalCpu;  // CPU priority class to restore
         public int?     OriginalGpu;  // GPU sched priority to restore (null = GPU not boosted)
+        public uint?    OriginalMem;  // page priority to restore (null = it was already Normal)
         public string   Name = "";
     }
 
@@ -626,6 +627,20 @@ public sealed partial class TaskSleepService
             if (s.LaunchBoostIo)                SetIoPriorityLevel(h, IO_PRIORITY_HIGH);
             if (s.LaunchBoostDisableEfficiency) SetEfficiencyMode(h, false);
 
+            // Page priority. A launching process is faulting in its exe and DLLs, which is exactly
+            // when page priority decides whether those pages survive memory pressure.
+            //
+            // NORMAL (5) is the CEILING — Windows has no above-normal page priority — so this is
+            // a restore to par, not a boost past it. That makes it a no-op for most launches, and
+            // it earns its place in one specific case: a process spawned by a NAPPED parent
+            // inherits that parent's page priority, so it starts at MEMORY_PRIORITY_LOWEST and
+            // thrashes while loading. Systema created that situation, so Systema should undo it.
+            uint? origMem = GetMemoryPriority(h);
+            if (origMem is uint m && m < MEMORY_PRIORITY_NORMAL)
+                TrySetMemoryPriority(h, MEMORY_PRIORITY_NORMAL);
+            else
+                origMem = null;   // nothing changed, so nothing to restore
+
             // GPU scheduling priority — opt-in only (default off). Capture the
             // original so it's restored exactly when the boost ends.
             //
@@ -692,16 +707,21 @@ public sealed partial class TaskSleepService
             // We already claimed the entry above (before raising priority). Now that
             // we've read/changed the GPU scheduling class, record its original so the
             // boost restores GPU exactly when it ends.
-            if (origGpu.HasValue)
+            if (origGpu.HasValue || origMem.HasValue)
             {
                 lock (_launchBoostLock)
                 {
                     if (_lbBoosted.TryGetValue(pid, out var entry))
-                        entry.OriginalGpu = origGpu;
+                    {
+                        if (origGpu.HasValue) entry.OriginalGpu = origGpu;
+                        if (origMem.HasValue) entry.OriginalMem = origMem;
+                    }
                 }
             }
 
-            string what = "CPU/I-O High, efficiency off" + (gpuApplied ? ", GPU High" : "");
+            string what = "CPU/I-O High, efficiency off"
+                        + (gpuApplied ? ", GPU High" : "")
+                        + (origMem.HasValue ? ", page priority restored to Normal" : "");
             AddLaunchBoostEvent(name, pid, "Launch Boost", $"boosted for {s.LaunchBoostDurationSeconds}s — {what}");
         }
         catch (Exception ex) { _log.Warn("TaskSleepService", $"ApplyLaunchBoost({name}) failed: {ex.Message}"); }
@@ -737,6 +757,11 @@ public sealed partial class TaskSleepService
             // cleared (off) — that's the default for user apps, so we leave it.
             SetPriorityClass(h, e.OriginalCpu != 0 ? e.OriginalCpu : NORMAL_PRIORITY_CLASS);
             SetIoPriorityLevel(h, IO_PRIORITY_NORMAL);
+
+            // Only touched when it was BELOW Normal, so put back exactly what was found rather
+            // than assuming Normal. A process legitimately left low by its parent should go back
+            // to low once its launch is over.
+            if (e.OriginalMem is uint om) TrySetMemoryPriority(h, om);
             // Restore GPU scheduling priority if we changed it.
             if (e.OriginalGpu.HasValue)
             {

@@ -90,6 +90,12 @@ public sealed partial class TaskSleepService
             "ApplyCpuCap", "RemoveCpuCap", "NappedCpuCapEnabled",
             "Job Object rate control. Fails on processes already in a job; falls back to soft throttles."),
 
+        new("Launch page priority", NapEffect.Memory,
+            "TrySetMemoryPriority", "TrySetMemoryPriority", null,
+            "LAUNCH BOOST, not nap. Raises a launching process back to Normal page priority when it "
+            + "inherited something lower from a napped parent. Normal is the ceiling, so this is a "
+            + "restore to par rather than a boost past it."),
+
         new("GPU priority", NapEffect.Gpu,
             "LowerNapGpuPriority", "RestoreNapGpuPriority", null,
             "Idle GPU scheduling priority, Win11+. Reversed on wake."),

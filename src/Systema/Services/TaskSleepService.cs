@@ -3899,6 +3899,28 @@ public sealed partial class TaskSleepService : IDisposable
         catch (Exception ex) { _log.Warn("TaskSleepService", $"SetMemoryPriority failed: {ex.Message}"); }
     }
 
+    /// <summary>
+    /// Reads a process's current page priority, or null if it cannot be read.
+    ///
+    /// Needed so Launch Boost can put back what it found. The value matters most for a process
+    /// spawned by a NAPPED parent: children inherit the parent's page priority, so an app launched
+    /// from a napped one starts at MEMORY_PRIORITY_LOWEST and thrashes while it is faulting in its
+    /// own binaries.
+    /// </summary>
+    private static uint? GetMemoryPriority(IntPtr handle)
+    {
+        int size = Marshal.SizeOf<MEMORY_PRIORITY_INFORMATION>();
+        IntPtr ptr = Marshal.AllocHGlobal(size);
+        try
+        {
+            if (!GetProcessInformation(handle, PROCESS_INFORMATION_CLASS.ProcessMemoryPriority, ptr, (uint)size))
+                return null;
+            return Marshal.PtrToStructure<MEMORY_PRIORITY_INFORMATION>(ptr).MemoryPriority;
+        }
+        catch { return null; }
+        finally { Marshal.FreeHGlobal(ptr); }
+    }
+
     private static bool TrySetMemoryPriority(IntPtr handle, uint priority)
     {
         var info = new MEMORY_PRIORITY_INFORMATION { MemoryPriority = priority };

@@ -153,6 +153,10 @@ public sealed partial class TaskSleepService
         IntPtr hSnapshot, ref PROCESSENTRY32 lppe);
 
     [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool GetProcessInformation(
+        IntPtr hProcess, PROCESS_INFORMATION_CLASS infoClass, IntPtr info, uint size);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
     private static extern bool SetProcessInformation(
         IntPtr hProcess,
         PROCESS_INFORMATION_CLASS processInformationClass,
