@@ -648,12 +648,18 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
                                    IsDone = _nvapi.GetPowerMode() == NvapiService.PStateMaxPerf });
             }
 
-            // INTEL iGPU (ALL machines, laptop and desktop): recommend the Max Performance Power
-            // Policy so the integrated graphics hold full clocks instead of the driver's power-saving
-            // default. Writes ONLY the single documented PowerPolicy flag (=2), which Reset removes —
-            // never any of the PSR2/DPST/DRRS/MSI values. Recommended-only, never in the Apply-all pass.
+            // INTEL iGPU, DESKTOPS ONLY: recommend the Max Performance Power Policy so the
+            // integrated graphics hold full clocks instead of the driver's power-saving default.
+            //
+            // Not offered on laptops. Holding full clocks means more heat and more battery drain,
+            // and on a thin chassis the extra heat can cost more performance than the higher
+            // clocks gain once the package starts throttling. A desktop has the cooling and the
+            // wall power to spend, so the trade only makes sense there.
+            //
+            // Writes ONLY the single documented PowerPolicy flag (=2), which Reset removes, and
+            // never any of the PSR2/DPST/DRRS/MSI values. Recommended-only, never in Apply-all.
             var intelAdapters = _intelGpu.DetectIntelAdapters();
-            if (intelAdapters.Count > 0)
+            if (intelAdapters.Count > 0 && !_powerPlan.HasBattery())
             {
                 string ip = intelAdapters[0].FullPath;
                 var pp = _intelGpu.ResolveFeature(ip, new[] { IntelGpuService.PowerPolicy });

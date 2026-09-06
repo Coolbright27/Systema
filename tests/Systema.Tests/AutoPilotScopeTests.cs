@@ -55,4 +55,21 @@ public class AutoPilotScopeTests
         Assert.True(step > 0);
         Assert.Contains("!_powerPlan.HasBattery()", dash[Math.Max(0, step - 600)..step]);
     }
+
+    // "Intel GPU max performance" holds the iGPU at full clocks. That is more heat and more
+    // battery drain, so it is a desktop-only suggestion. It also has to stay in `extras`, which
+    // is the Suggestions-only list, so the Apply-all pass never touches it.
+    [Fact]
+    public void IntelMaxPerformanceIsSuggestedOnDesktopsOnly()
+    {
+        var dash = Read("src", "Systema", "ViewModels", "DashboardViewModel.cs");
+        int at = dash.IndexOf("extras.Add(new() { Label = \"Intel GPU max performance\"", StringComparison.Ordinal);
+        Assert.True(at > 0, "the Intel max performance suggestion moved or was renamed");
+
+        // The nearest enclosing gate must exclude battery-powered machines.
+        Assert.Contains("!_powerPlan.HasBattery()", dash[Math.Max(0, at - 400)..at]);
+
+        // Suggestions-only: it must never be added to the Apply-all list.
+        Assert.DoesNotContain("recs.Add(new() { Label = \"Intel GPU max performance\"", dash);
+    }
 }
