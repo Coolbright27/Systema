@@ -5,7 +5,7 @@
 **Make Windows fast, private, and yours.**
 
 [![Download](https://img.shields.io/badge/Download-v0.7.9-2ea44f?style=for-the-badge&logo=windows&logoColor=white)](../../releases/latest)
-[![Discord](https://img.shields.io/badge/Discord-Join-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/DjxBswDeN8)
+[![Discord](https://img.shields.io/badge/Discord-Join-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.com/invite/yYhM7mdupH)
 [![License](https://img.shields.io/badge/License-Noncommercial-orange?style=for-the-badge)](LICENSE)
 
 Free · Windows 10 & 11 · No accounts · No ads · No telemetry
@@ -41,7 +41,7 @@ Systema updates itself automatically when your PC is idle — no prompts, no pop
 
 Questions, bug reports, or feature requests — drop in on Discord:
 
-[![Discord](https://img.shields.io/badge/discord.gg%2FDjxBswDeN8-Join-5865F2?logo=discord&logoColor=white&style=flat-square)](https://discord.gg/DjxBswDeN8)
+[![Discord](https://img.shields.io/badge/discord.gg%2FyYhM7mdupH-Join-5865F2?logo=discord&logoColor=white&style=flat-square)](https://discord.com/invite/yYhM7mdupH)
 
 ## Requirements
 
