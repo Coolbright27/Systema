@@ -291,9 +291,11 @@ public class CoreParkingTests
         Assert.Contains("EppAc = 50", src);
         Assert.Contains("EppDc = 70", src);
 
-        // Parking has no latency cost, only unparking does, so there is no reason to ease into it.
-        Assert.Contains("DecreaseAllPossible  = 2", src);
-        Assert.Contains("DecreaseTimeFast   = 5", src);
+        // The parking timers stay at Windows' defaults. Forcing them faster parked every idle
+        // core at once and then had to unpark them all on the next spike, which hitched games
+        // and saved no heat: these control how fast cores park, never how many.
+        Assert.Contains("DecreaseIdeal        = 0", src);
+        Assert.Contains("DecreaseTimeDefault = 10", src);
         Assert.Contains("IdleScalingOn     = 1", src);
     }
 
@@ -392,9 +394,9 @@ public class CoreParkingTests
         var src = Service();
         int m = src.IndexOf("private void CheckPlanChanged", StringComparison.Ordinal);
         Assert.True(m > 0);
-        var body = src[m..(m + 2000)];
+        var body = src[m..(m + 2600)];
 
-        Assert.Contains("valuesWiped", body);
+        Assert.Contains("drifted", body);
         Assert.Contains("ReadActiveSchemeValue", body);
     }
 

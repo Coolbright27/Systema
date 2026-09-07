@@ -278,15 +278,28 @@ public class CoreParkingService
     private const int    EppAc = 50;
     private const int    EppDc = 70;   // unplugged, lean harder on efficiency
 
-    // How many cores to park in one step when load drops. Default is "Ideal number of cores",
-    // which eases down. Parking has no latency cost (only UNparking does), so there is no reason
-    // to ease into it. 0 Ideal, 1 Single core, 2 All possible cores, 3 One eighth cores.
+    // How many cores to park in one step when load drops, and how long a core must look idle
+    // before it is parked. Both sit at Windows' own defaults, deliberately.
+    //
+    // Systema used to force "All possible" (2) on a halved 5-second timer, reasoning that parking
+    // costs nothing because only UNparking has latency. That is wrong in the way that matters:
+    // dumping every idle core at once means the next load spike has to unpark them all, so the
+    // machine ends up living in the unpark path instead of avoiding it. Measured on an i7-11800H
+    // mid-game, parked cores swung 6 -> 12 -> 6 -> 10 -> 12 -> 4 inside fifteen seconds and the
+    // game hitched on every swing.
+    //
+    // These two control only HOW FAST cores park, never how many. Depth still comes from min
+    // cores (0%) and the deepest parked P-state, both untouched, so every core still parks. It
+    // just happens gradually once idle is sustained rather than all at once, which is precisely
+    // what Windows' hysteresis exists for. They stay in the table rather than being dropped so
+    // that machines already carrying the old aggressive values get actively healed back.
+    //
+    // 0 Ideal, 1 Single core, 2 All possible cores, 3 One eighth cores.
     private const string CpDecreasePolicyGuid = "71021b41-c749-4d21-be74-a00f335d582b";
-    private const int    DecreaseAllPossible  = 2;
+    private const int    DecreaseIdeal        = 0;
 
-    // How long a core must look idle before it is parked. Halved from Windows' 10.
-    private const string CpDecreaseTimeGuid = "dfd10d17-d5eb-45dd-877a-9a34ddd15c82";
-    private const int    DecreaseTimeFast   = 5;
+    private const string CpDecreaseTimeGuid  = "dfd10d17-d5eb-45dd-877a-9a34ddd15c82";
+    private const int    DecreaseTimeDefault = 10;
 
     // Scales the idle-entry thresholds with load so cores reach deeper C-states sooner.
     // 0 Disable scaling (default), 1 Enable scaling.
@@ -316,8 +329,8 @@ public class CoreParkingService
 
             (CpBoostModeGuid,       BoostEfficientAggressive, BoostEfficientAggressive),
             (CpEppPolicyGuid,       EppAc,                    EppDc),
-            (CpDecreasePolicyGuid,  DecreaseAllPossible,      DecreaseAllPossible),
-            (CpDecreaseTimeGuid,    DecreaseTimeFast,         DecreaseTimeFast),
+            (CpDecreasePolicyGuid,  DecreaseIdeal,            DecreaseIdeal),
+            (CpDecreaseTimeGuid,    DecreaseTimeDefault,      DecreaseTimeDefault),
             (CpIdleScalingGuid,     IdleScalingOn,            IdleScalingOn),
         };
 
@@ -532,26 +545,46 @@ public class CoreParkingService
             string now = ActiveSchemeGuid();
             bool planSwitched = !string.Equals(now, _lastSeenScheme, StringComparison.OrdinalIgnoreCase);
 
-            // A changed plan GUID is not the only way the values go away. A third-party tuner can
-            // reset the settings WITHIN the plan you are already on, leaving the GUID identical
-            // while the values are gone. Watching only the GUID would never notice. So also read
-            // one setting back and treat a wrong value as a reset. Min cores is the sentinel: it
-            // is the setting most likely to be stamped on by another tool.
-            bool valuesWiped = false;
+            // A changed plan GUID is not the only way the values go away. OEM tuners (Dell Power
+            // Manager, Intel DTT, Armoury Crate and friends) reset settings WITHIN the plan you
+            // are already on, leaving the GUID identical while the values are gone. Watching only
+            // the GUID would never notice.
+            //
+            // Every setting is checked, not one sentinel. The old check read back min cores alone,
+            // so an OEM tool that stamped on the parking timers or the parked P-state while
+            // leaving min cores intact was completely invisible to it.
+            //
+            // A missing value (null) is deliberately NOT drift. A setting that cannot be written
+            // on this hardware would never read back, and re-applying every 15 seconds forever is
+            // worse than leaving it alone. A plan switch is caught by the GUID check regardless.
+            string? drifted = null;
             if (!planSwitched)
             {
-                int? live = ReadActiveSchemeValue(CpMinCoresGuid, ac: true);
-                int expected = IsHybridCpu() ? HybridEcoreFloorPercent() : 0;
-                valuesWiped = live.HasValue && live.Value != expected;
+                foreach (var (guid, ac, dc) in ParkingSettings(floorPercent: 0))
+                {
+                    int? liveAc = ReadActiveSchemeValue(guid, ac: true);
+                    if (liveAc.HasValue && liveAc.Value != ac)
+                    {
+                        drifted = $"{guid} AC is {liveAc.Value}, expected {ac}";
+                        break;
+                    }
+
+                    int? liveDc = ReadActiveSchemeValue(guid, ac: false);
+                    if (liveDc.HasValue && liveDc.Value != dc)
+                    {
+                        drifted = $"{guid} DC is {liveDc.Value}, expected {dc}";
+                        break;
+                    }
+                }
             }
 
-            if (!planSwitched && !valuesWiped) return;
+            if (!planSwitched && drifted == null) return;
 
             _lastSeenScheme = now;
             _log.Info("CoreParkingService",
                 planSwitched
                     ? $"Power plan changed ({reason}), re-applying parking to the new plan."
-                    : $"Parking values were reset by something else ({reason}), re-applying.");
+                    : $"Parking value reset by something else ({reason}): {drifted}. Re-applying.");
             ApplyCoreParking(minCoresPercent: 0);
         }
         catch (Exception ex) { _log.Warn("CoreParkingService", $"Plan-change re-apply failed: {ex.Message}"); }

@@ -64,4 +64,49 @@ public class CoreParkingWatchTests
         Assert.True(card > 0, "core efficiency card copy not found");
         Assert.DoesNotContain("\u2014", xaml[card..(card + 700)]);
     }
+
+    // The parking timers stay at Windows' defaults. Forcing "All possible" (2) on a halved
+    // 5-second timer made cores park all at once and immediately unpark again, which is what
+    // hitched games. These control how FAST cores park, never how many, so depth is unaffected.
+    [Fact]
+    public void ParkingTimersStayAtWindowsDefaults()
+    {
+        var svc = Read("src", "Systema", "Services", "CoreParkingService.cs");
+
+        Assert.Contains("DecreaseIdeal        = 0", svc);
+        Assert.Contains("DecreaseTimeDefault = 10", svc);
+
+        // The aggressive values must not come back under any name.
+        Assert.DoesNotContain("DecreaseAllPossible", svc);
+        Assert.DoesNotContain("DecreaseTimeFast", svc);
+
+        // Both must still be written, so machines carrying the old values get healed rather
+        // than left on them forever.
+        Assert.Contains("(CpDecreasePolicyGuid,  DecreaseIdeal", svc);
+        Assert.Contains("(CpDecreaseTimeGuid,    DecreaseTimeDefault", svc);
+    }
+
+    // An OEM tuner that resets the parking timers while leaving min cores alone was invisible
+    // to the old single-sentinel drift check, so the values stayed wiped until the next reboot.
+    [Fact]
+    public void DriftCheckCoversEverySettingNotJustMinCores()
+    {
+        var svc = Read("src", "Systema", "Services", "CoreParkingService.cs");
+        int at = svc.IndexOf("private void CheckPlanChanged", StringComparison.Ordinal);
+        Assert.True(at > 0);
+        string body = svc[at..(at + 2600)];
+
+        // It must walk the whole table rather than reading one sentinel back.
+        Assert.Contains("foreach", body);
+        Assert.Contains("ParkingSettings(floorPercent: 0)", body);
+
+        // Both power sources, since OEM tools reset AC and DC independently.
+        Assert.Contains("ac: true", body);
+        Assert.Contains("ac: false", body);
+
+        // A setting that cannot be written on this hardware reads back null. Treating that as
+        // drift would re-apply every 15 seconds forever.
+        Assert.Contains("liveAc.HasValue", body);
+        Assert.Contains("liveDc.HasValue", body);
+    }
 }
