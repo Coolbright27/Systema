@@ -49,4 +49,4 @@ Built for Windows 10/11 · x64 · Requires administrator
 
 Join the Discord for help, bug reports, and updates:
 
-[![Discord](https://img.shields.io/badge/Discord-Join-5865F2?logo=discord&logoColor=white)](https://discord.gg/DjxBswDeN8)
+[![Discord](https://img.shields.io/badge/Discord-Join-5865F2?logo=discord&logoColor=white)](https://discord.com/invite/yYhM7mdupH)
