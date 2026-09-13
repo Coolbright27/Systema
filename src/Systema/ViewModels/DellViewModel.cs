@@ -278,6 +278,14 @@ public partial class DellViewModel : ObservableObject, IDisposable, IAutoRefresh
     /// <summary>Snap a stop percent to 5% steps, never below start + 5, never above 100.</summary>
     internal static int ClampStop(int start, int v) => Math.Min(100, Math.Max(start + 5, (v / 5) * 5));
 
+    /// <summary>Stop that preserves the BIOS 5% gap when the user just picked a start.</summary>
+    internal static int StopForStart(int start, int currentStop)
+        => currentStop < start + 5 ? Math.Min(100, start + 5) : currentStop;
+
+    /// <summary>Start that preserves the BIOS 5% gap when the user just picked a stop.</summary>
+    internal static int StartForStop(int stop, int currentStart)
+        => currentStart > stop - 5 ? Math.Max(50, stop - 5) : currentStart;
+
     /// <summary>Applies the selected charge mode to the BIOS unless loading or a boost owns charging.</summary>
     private void ApplyChargeMode()
     {
@@ -416,14 +424,24 @@ public partial class DellViewModel : ObservableObject, IDisposable, IAutoRefresh
         ApplyChargeMode();
     }
 
+    // The BIOS refuses a pair closer than 5% apart and silently rewrites it (asking for
+    // 80/80 lands on 80/85 in firmware). So the gap is enforced here first, by moving the
+    // end the user did NOT just touch — picking stop 80 against start 80 drops start to 75,
+    // which is what the Dell app does.
+    //
+    // Moving the other end also sidesteps a WPF trap: coercing the property that a TwoWay
+    // binding is in the middle of pushing leaves the combo box displaying the stale value
+    // while the view model holds the corrected one. That is exactly how 80/80 could show on
+    // screen while 80/85 went to the firmware.
+
     partial void OnCustomStartChanged(int value)
     {
         if (_loadingCharging) return;
-        // Keep at least a 5% gap: bump stop up if the user raised start past it.
-        if (CustomStop < value + 5)
+        int stop = StopForStart(value, CustomStop);
+        if (stop != CustomStop)
         {
             _loadingCharging = true;
-            CustomStop = Math.Min(100, value + 5);
+            CustomStop = stop;
             _loadingCharging = false;
         }
         _settings.DellChargeStart = value;
@@ -434,14 +452,15 @@ public partial class DellViewModel : ObservableObject, IDisposable, IAutoRefresh
     partial void OnCustomStopChanged(int value)
     {
         if (_loadingCharging) return;
-        // Enforce the 5% gap the BIOS requires: snap stop back up to start + 5.
-        if (value < CustomStart + 5)
+        int start = StartForStop(value, CustomStart);
+        if (start != CustomStart)
         {
             _loadingCharging = true;
-            CustomStop = CustomStart + 5;
+            CustomStart = start;
             _loadingCharging = false;
         }
-        _settings.DellChargeStop = CustomStop;
+        _settings.DellChargeStart = CustomStart;
+        _settings.DellChargeStop  = value;
         if (IsCustomMode) ApplyChargeMode();
     }
 

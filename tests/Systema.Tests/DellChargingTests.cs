@@ -108,4 +108,91 @@ public class DellChargingTests
         // Card is hidden entirely on machines without the charging attribute.
         Assert.Contains("ChargingSupported", xaml);
     }
+
+    // ── The 5% gap moves the OTHER end, never the value just picked ─────────────
+
+    // The reported bug: start 80, then pick stop 80. The BIOS silently rewrites that to
+    // 80/85, so the app must resolve it first — by dropping start to 75, keeping the 80
+    // the user actually chose.
+    [Fact]
+    public void PickingStopEqualToStartLowersStartNotStop()
+    {
+        Assert.Equal(75, DellViewModel.StartForStop(stop: 80, currentStart: 80));
+        // The stop the user picked is untouched, so 75/80 reaches the BIOS.
+        Assert.Equal(80, DellViewModel.StopForStart(start: 75, currentStop: 80));
+    }
+
+    [Theory]
+    [InlineData(80, 80, 75)]   // equal -> start drops
+    [InlineData(80, 78, 75)]   // too close -> start drops
+    [InlineData(80, 75, 75)]   // exactly 5 apart -> untouched
+    [InlineData(80, 60, 60)]   // already wider -> untouched
+    [InlineData(55, 90, 50)]   // never below the 50 floor
+    public void StartForStopKeepsTheGap(int stop, int currentStart, int expected)
+        => Assert.Equal(expected, DellViewModel.StartForStop(stop, currentStart));
+
+    [Theory]
+    [InlineData(80, 80, 85)]   // equal -> stop rises
+    [InlineData(80, 82, 85)]   // too close -> stop rises
+    [InlineData(80, 85, 85)]   // exactly 5 apart -> untouched
+    [InlineData(80, 100, 100)] // already wider -> untouched
+    [InlineData(95, 95, 100)]  // never above the 100 ceiling
+    public void StopForStartKeepsTheGap(int start, int currentStop, int expected)
+        => Assert.Equal(expected, DellViewModel.StopForStart(start, currentStop));
+
+    // Whichever end the user picks, the resulting pair is always BIOS-legal and always
+    // lands on a value the combo boxes actually offer (5% steps, 50-95 and 55-100).
+    [Fact]
+    public void EveryResolvedPairIsLegalAndSelectable()
+    {
+        for (int start = 50; start <= 95; start += 5)
+        for (int stop = 55; stop <= 100; stop += 5)
+        {
+            int fixedStop = DellViewModel.StopForStart(start, stop);
+            Assert.True(fixedStop - start >= 5, $"start {start} stop {fixedStop}");
+            Assert.InRange(fixedStop, 55, 100);
+            Assert.Equal(0, fixedStop % 5);
+
+            int fixedStart = DellViewModel.StartForStop(stop, start);
+            Assert.True(stop - fixedStart >= 5, $"start {fixedStart} stop {stop}");
+            Assert.InRange(fixedStart, 50, 95);
+            Assert.Equal(0, fixedStart % 5);
+        }
+    }
+
+    // Coercing the property a TwoWay binding is mid-push leaves the combo box showing a
+    // stale value, which is how 80/80 displayed while 80/85 went to firmware.
+    [Fact]
+    public void HandlersAdjustTheOppositeEnd()
+    {
+        var vm = Read("src", "Systema", "ViewModels", "DellViewModel.cs");
+
+        int onStart = vm.IndexOf("partial void OnCustomStartChanged", StringComparison.Ordinal);
+        Assert.True(onStart > 0);
+        Assert.Contains("StopForStart", vm[onStart..(onStart + 500)]);
+
+        int onStop = vm.IndexOf("partial void OnCustomStopChanged", StringComparison.Ordinal);
+        Assert.True(onStop > 0);
+        Assert.Contains("StartForStop", vm[onStop..(onStop + 500)]);
+    }
+
+    // Thermal Profile sits above Charging Mode, and neither card is flush against the other.
+    [Fact]
+    public void ThermalCardComesFirstAndCardsAreSpaced()
+    {
+        var xaml = Read("src", "Systema", "Views", "DellView.xaml");
+        int thermal  = xaml.IndexOf("Dell Thermal Profile Card", StringComparison.Ordinal);
+        int charging = xaml.IndexOf("Dell Charging Mode Card", StringComparison.Ordinal);
+        Assert.True(thermal > 0 && charging > 0);
+        Assert.True(thermal < charging, "Thermal Profile must render above Charging Mode");
+
+        // The Card style carries no margin, so the wrappers have to supply the gap.
+        // Match the binding itself, not the prose in the surrounding comment.
+        foreach (var binding in new[] { "Binding ThermalCardVisible", "Binding ChargingSupported" })
+        {
+            int at = xaml.IndexOf(binding, StringComparison.Ordinal);
+            Assert.True(at > 0, $"missing {binding}");
+            Assert.Contains("Margin=\"0,0,0,16\"", xaml[Math.Max(0, at - 220)..at]);
+        }
+    }
 }

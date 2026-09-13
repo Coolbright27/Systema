@@ -93,12 +93,96 @@
                 </TextBlock>
             </StackPanel>
 
+            <!-- ══════════════════════════════════════════════ Dell Thermal Profile Card
+                 Entire card hidden unless this is a Dell whose BIOS exposes a thermal
+                 attribute (ThermalSupported) — or needs the provider installed. The
+                 battery selector inside is further gated on IsLaptop so it never shows
+                 on Dell desktops. -->
+            <StackPanel Margin="0,0,0,16"
+                        Visibility="{Binding ThermalCardVisible, Converter={StaticResource BoolToVis}}">
+                <Border Style="{StaticResource Card}">
+                    <StackPanel>
+
+                        <!-- Header -->
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                            <TextBlock Text="Thermal Profile" Style="{StaticResource HeadingMedium}"/>
+                        </StackPanel>
+                        <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,0,0,16" MaxWidth="640">
+                            Sets the same BIOS thermal mode as the Dell or MyDell app (Optimized, Cool,
+                            Quiet, Ultra Performance). Set it once and Systema applies your choice, then
+                            re-applies it automatically whenever you plug in or unplug.
+                        </TextBlock>
+
+                        <!-- Provider-missing guidance — shown when this is a Dell but the BIOS
+                             WMI provider isn't installed. Points at the lightweight provider. -->
+                        <Border Visibility="{Binding ThermalNeedsProvider, Converter={StaticResource BoolToVis}}"
+                                Background="#1AF59E0B" BorderBrush="{StaticResource AccentYellowBrush}"
+                                BorderThickness="1" CornerRadius="6" Padding="12,10">
+                            <StackPanel>
+                                <TextBlock Text="{Binding ThermalStatus}" Style="{StaticResource CaptionText}"
+                                           Foreground="{StaticResource AccentYellowBrush}" TextWrapping="Wrap"/>
+                                <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,8,0,0"
+                                           Foreground="{StaticResource TextSecondaryBrush}">
+                                    Search for "Dell Command Monitor download" and install the standalone package.
+                                    No reboot needed. Just reopen this tab and the selectors show up.
+                                </TextBlock>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Selectors — only when the provider is present (Supported). -->
+                        <StackPanel Visibility="{Binding ThermalSupported, Converter={StaticResource BoolToVis}}">
+
+                        <!-- Plugged-in / desktop selector — always shown when supported -->
+                        <Grid Margin="0,0,0,12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="270"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,16,0">
+                                <TextBlock Text="When plugged in" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
+                                <TextBlock Text="Thermal mode applied on AC power (and on desktops)."
+                                           Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,2,0,0"/>
+                            </StackPanel>
+                            <ComboBox Grid.Column="1" VerticalAlignment="Center"
+                                      Style="{StaticResource DarkComboBox}"
+                                      ItemsSource="{Binding ThermalModes}"
+                                      ItemTemplate="{StaticResource ThermalModeItemTemplate}"
+                                      SelectedValuePath="Value"
+                                      SelectedValue="{Binding ThermalModeAc, Mode=TwoWay}"/>
+                        </Grid>
+
+                        <!-- Battery selector — only on laptops (IsLaptop) -->
+                        <Grid Visibility="{Binding IsLaptop, Converter={StaticResource BoolToVis}}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="270"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,16,0">
+                                <TextBlock Text="On battery" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
+                                <TextBlock Text="Thermal mode applied when you're on battery. Usually Optimized or Quiet for the best mix of heat and runtime."
+                                           Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,2,0,0"/>
+                            </StackPanel>
+                            <ComboBox Grid.Column="1" VerticalAlignment="Center"
+                                      Style="{StaticResource DarkComboBox}"
+                                      ItemsSource="{Binding ThermalModes}"
+                                      ItemTemplate="{StaticResource ThermalModeItemTemplate}"
+                                      SelectedValuePath="Value"
+                                      SelectedValue="{Binding ThermalModeBattery, Mode=TwoWay}"/>
+                        </Grid>
+
+                        </StackPanel><!-- end selectors (ThermalSupported) -->
+
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+
             <!-- ══════════════════════════════════════════════ Dell Charging Mode Card
                  Hidden unless this is a Dell laptop whose BIOS exposes the charging
                  attribute (ChargingSupported). Writes the same PrimaryBattChargeCfg
                  setting the Dell / Power Manager app uses. While a Game Boost session
                  owns charging (IsBatteryPauseActive) the whole control greys out. -->
-            <StackPanel Visibility="{Binding ChargingSupported, Converter={StaticResource BoolToVis}}">
+            <StackPanel Margin="0,0,0,16"
+                        Visibility="{Binding ChargingSupported, Converter={StaticResource BoolToVis}}">
                 <Border Style="{StaticResource Card}">
                     <StackPanel>
 
@@ -180,88 +264,6 @@
                                 </StackPanel>
                             </Border>
                         </Grid>
-
-                    </StackPanel>
-                </Border>
-            </StackPanel>
-
-            <!-- ══════════════════════════════════════════════ Dell Thermal Profile Card
-                 Entire card hidden unless this is a Dell whose BIOS exposes a thermal
-                 attribute (ThermalSupported) — or needs the provider installed. The
-                 battery selector inside is further gated on IsLaptop so it never shows
-                 on Dell desktops. -->
-            <StackPanel Visibility="{Binding ThermalCardVisible, Converter={StaticResource BoolToVis}}">
-                <Border Style="{StaticResource Card}">
-                    <StackPanel>
-
-                        <!-- Header -->
-                        <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-                            <TextBlock Text="Thermal Profile" Style="{StaticResource HeadingMedium}"/>
-                        </StackPanel>
-                        <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,0,0,16" MaxWidth="640">
-                            Sets the same BIOS thermal mode as the Dell or MyDell app (Optimized, Cool,
-                            Quiet, Ultra Performance). Set it once and Systema applies your choice, then
-                            re-applies it automatically whenever you plug in or unplug.
-                        </TextBlock>
-
-                        <!-- Provider-missing guidance — shown when this is a Dell but the BIOS
-                             WMI provider isn't installed. Points at the lightweight provider. -->
-                        <Border Visibility="{Binding ThermalNeedsProvider, Converter={StaticResource BoolToVis}}"
-                                Background="#1AF59E0B" BorderBrush="{StaticResource AccentYellowBrush}"
-                                BorderThickness="1" CornerRadius="6" Padding="12,10">
-                            <StackPanel>
-                                <TextBlock Text="{Binding ThermalStatus}" Style="{StaticResource CaptionText}"
-                                           Foreground="{StaticResource AccentYellowBrush}" TextWrapping="Wrap"/>
-                                <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,8,0,0"
-                                           Foreground="{StaticResource TextSecondaryBrush}">
-                                    Search for "Dell Command Monitor download" and install the standalone package.
-                                    No reboot needed. Just reopen this tab and the selectors show up.
-                                </TextBlock>
-                            </StackPanel>
-                        </Border>
-
-                        <!-- Selectors — only when the provider is present (Supported). -->
-                        <StackPanel Visibility="{Binding ThermalSupported, Converter={StaticResource BoolToVis}}">
-
-                        <!-- Plugged-in / desktop selector — always shown when supported -->
-                        <Grid Margin="0,0,0,12">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="270"/>
-                            </Grid.ColumnDefinitions>
-                            <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,16,0">
-                                <TextBlock Text="When plugged in" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                                <TextBlock Text="Thermal mode applied on AC power (and on desktops)."
-                                           Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,2,0,0"/>
-                            </StackPanel>
-                            <ComboBox Grid.Column="1" VerticalAlignment="Center"
-                                      Style="{StaticResource DarkComboBox}"
-                                      ItemsSource="{Binding ThermalModes}"
-                                      ItemTemplate="{StaticResource ThermalModeItemTemplate}"
-                                      SelectedValuePath="Value"
-                                      SelectedValue="{Binding ThermalModeAc, Mode=TwoWay}"/>
-                        </Grid>
-
-                        <!-- Battery selector — only on laptops (IsLaptop) -->
-                        <Grid Visibility="{Binding IsLaptop, Converter={StaticResource BoolToVis}}">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="270"/>
-                            </Grid.ColumnDefinitions>
-                            <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,16,0">
-                                <TextBlock Text="On battery" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                                <TextBlock Text="Thermal mode applied when you're on battery. Usually Optimized or Quiet for the best mix of heat and runtime."
-                                           Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,2,0,0"/>
-                            </StackPanel>
-                            <ComboBox Grid.Column="1" VerticalAlignment="Center"
-                                      Style="{StaticResource DarkComboBox}"
-                                      ItemsSource="{Binding ThermalModes}"
-                                      ItemTemplate="{StaticResource ThermalModeItemTemplate}"
-                                      SelectedValuePath="Value"
-                                      SelectedValue="{Binding ThermalModeBattery, Mode=TwoWay}"/>
-                        </Grid>
-
-                        </StackPanel><!-- end selectors (ThermalSupported) -->
 
                     </StackPanel>
                 </Border>
