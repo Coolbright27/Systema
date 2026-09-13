@@ -186,6 +186,51 @@ public sealed class BatteryPauseService
     public string? GetCurrentVendorMode()
         => _activeMethod?.GetCurrentMode();
 
+    // ── Charging-mode picker API (Dell tab) ────────────────────────────────────
+    // Same attribute the Game Boost pause uses, surfaced as a persistent setting the
+    // user drives directly. The BIOS itself remembers the mode across reboots, so
+    // there is no re-apply loop here — a write sticks in firmware until changed.
+
+    /// <summary>
+    /// Charge modes the BIOS offers on this machine, or the standard Dell set when the
+    /// firmware does not enumerate them (SetAttribute still accepts the standard values).
+    /// </summary>
+    public List<string> GetChargeModes()
+    {
+        var modes = _activeMethod?.GetSupportedModes() ?? new List<string>();
+        return modes.Count > 0
+            ? modes
+            : new List<string> { "Adaptive", "Standard", "Express", "PrimAcUse", "Custom" };
+    }
+
+    /// <summary>Current charge mode, encoded "Custom:start:stop" when custom. Null if unreadable.</summary>
+    public string? GetCurrentChargeMode() => _activeMethod?.GetCurrentMode();
+
+    /// <summary>
+    /// Applies a user-chosen charge mode to the BIOS. Accepts a plain mode name or
+    /// "Custom:start:stop". Returns true only on the BIOS's confirmed success.
+    /// </summary>
+    public bool SetChargeMode(string mode)
+    {
+        if (_support != BatteryPauseSupport.Supported || _activeMethod == null)
+        {
+            _log.Info("BatteryPauseService", $"SetChargeMode skipped — support={_support}");
+            return false;
+        }
+        try
+        {
+            bool ok = _activeMethod.SetMode(mode);
+            _log.Info("BatteryPauseService",
+                $"SetChargeMode('{mode}') via {_activeMethod.Name} → {(ok ? "OK" : "FAILED")}");
+            return ok;
+        }
+        catch (Exception ex)
+        {
+            _log.Warn("BatteryPauseService", $"SetChargeMode('{mode}') threw: {ex.Message}");
+            return false;
+        }
+    }
+
     /// <summary>
     /// Pauses or limits battery charging via the chosen method.
     /// <paramref name="thresholdHint"/> is the user-preferred floor for methods
@@ -310,6 +355,10 @@ public sealed class BatteryPauseService
         bool Pause(int thresholdHint);
         /// <summary>Restore the saved original mode. Best-effort, never throws.</summary>
         void Resume(string? originalMode);
+        /// <summary>BIOS-reported allowed charge modes for the picker. Empty if the BIOS doesn't enumerate them.</summary>
+        List<string> GetSupportedModes();
+        /// <summary>Apply an arbitrary charge mode ("Standard", "Adaptive", "Custom:75:80", ...). True on confirmed success.</summary>
+        bool SetMode(string mode);
     }
 
     // ── Method 1: Dell modern (root\dcim\sysman\biosattributes) ────────────────
@@ -503,6 +552,43 @@ public sealed class BatteryPauseService
             }
         }
 
+        public List<string> GetSupportedModes()
+        {
+            var list = new List<string>();
+            try
+            {
+                using var s = new ManagementObjectSearcher(Ns,
+                    $"SELECT PossibleValue FROM EnumerationAttribute WHERE AttributeName='{AttrName}'");
+                foreach (var item in s.Get())
+                    if (item["PossibleValue"] is string[] pv) list.AddRange(pv);
+            }
+            catch (Exception ex)
+            {
+                _log.Info("BatteryPauseService", $"Dell GetSupportedModes skipped ({ex.Message})");
+            }
+            return list;
+        }
+
+        // Applies an arbitrary charge mode. "Custom:start:stop" writes the thresholds first (the
+        // BIOS validates them when Custom is activated), then switches the mode — same ordering
+        // Pause uses. Everything else is a straight enum write. Mirrors Resume, but returns the
+        // BIOS's confirmation so the UI can report success.
+        public bool SetMode(string mode)
+        {
+            if (string.IsNullOrWhiteSpace(mode)) return false;
+            if (mode.StartsWith("Custom:", StringComparison.OrdinalIgnoreCase))
+            {
+                var parts = mode.Split(':');
+                if (parts.Length >= 3)
+                {
+                    SetAttr("CustomChargeStart", parts[1]);
+                    SetAttr("CustomChargeStop",  parts[2]);
+                }
+                return SetAttr(AttrName, "Custom");
+            }
+            return SetAttr(AttrName, mode);
+        }
+
         private string? ReadEnumAttr(string attrName)
         {
             try
@@ -653,6 +739,37 @@ public sealed class BatteryPauseService
             {
                 Set(new[] { AttrName }, new[] { originalMode });
             }
+        }
+
+        public List<string> GetSupportedModes()
+        {
+            var list = new List<string>();
+            try
+            {
+                using var s = new ManagementObjectSearcher(Ns,
+                    $"SELECT PossibleValues FROM DCIM_BIOSEnumeration WHERE AttributeName='{AttrName}'");
+                foreach (var item in s.Get())
+                    if (item["PossibleValues"] is string[] pv) list.AddRange(pv);
+            }
+            catch (Exception ex)
+            {
+                _log.Info("BatteryPauseService", $"Dell legacy GetSupportedModes skipped ({ex.Message})");
+            }
+            return list;
+        }
+
+        public bool SetMode(string mode)
+        {
+            if (string.IsNullOrWhiteSpace(mode)) return false;
+            if (mode.StartsWith("Custom:", StringComparison.OrdinalIgnoreCase))
+            {
+                var parts = mode.Split(':');
+                if (parts.Length >= 3)
+                    return Set(new[] { "CustomChargeStart", "CustomChargeStop", AttrName },
+                              new[] { parts[1],             parts[2],           "Custom" });
+                return Set(new[] { AttrName }, new[] { "Custom" });
+            }
+            return Set(new[] { AttrName }, new[] { mode });
         }
 
         private string? ReadEnumAttr(string attrName)

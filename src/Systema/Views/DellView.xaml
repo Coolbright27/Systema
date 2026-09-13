@@ -7,6 +7,52 @@
     <UserControl.Resources>
         <conv:BoolToVisibilityConverter x:Key="BoolToVis"/>
 
+        <!-- Charging-mode row: title + description on the left, a RECOMMENDED pill on the right. -->
+        <DataTemplate x:Key="ChargeModeItemTemplate">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0">
+                    <TextBlock Text="{Binding Label}" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
+                    <TextBlock Text="{Binding Description}" Style="{StaticResource CaptionText}"
+                               TextWrapping="Wrap" Margin="0,2,0,0"/>
+                </StackPanel>
+                <Border Grid.Column="1" VerticalAlignment="Top" Margin="10,1,0,0"
+                        Background="{StaticResource AccentBlueBrush}" CornerRadius="3" Padding="6,2"
+                        Visibility="{Binding Recommended, Converter={StaticResource BoolToVis}}">
+                    <TextBlock Text="RECOMMENDED" FontSize="9" FontWeight="SemiBold" Foreground="White"/>
+                </Border>
+            </Grid>
+        </DataTemplate>
+
+        <!-- Selectable card row. Accent border marks the current selection. -->
+        <Style x:Key="ChargeModeItemStyle" TargetType="ListBoxItem">
+            <Setter Property="Margin" Value="0,0,0,8"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <Border x:Name="Bd" CornerRadius="6" Padding="14,12"
+                                Background="{StaticResource BgSurfaceBrush}"
+                                BorderBrush="{StaticResource BorderBrush}" BorderThickness="1">
+                            <ContentPresenter/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{StaticResource HoverBrush}"/>
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{StaticResource HoverBrush}"/>
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource AccentBlueBrush}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <!-- Thermal mode row: friendly label + small grey hint, e.g. "(Uses more power)". -->
         <DataTemplate x:Key="ThermalModeItemTemplate">
             <StackPanel Orientation="Horizontal">
@@ -45,6 +91,98 @@
                 <TextBlock Style="{StaticResource CaptionText}" Margin="0,4,0,0" TextWrapping="Wrap" MaxWidth="720">
                     <Run Text="Dell-specific tools and tweaks for your "/><Run Text="{Binding Model, Mode=OneWay}"/><Run Text="."/>
                 </TextBlock>
+            </StackPanel>
+
+            <!-- ══════════════════════════════════════════════ Dell Charging Mode Card
+                 Hidden unless this is a Dell laptop whose BIOS exposes the charging
+                 attribute (ChargingSupported). Writes the same PrimaryBattChargeCfg
+                 setting the Dell / Power Manager app uses. While a Game Boost session
+                 owns charging (IsBatteryPauseActive) the whole control greys out. -->
+            <StackPanel Visibility="{Binding ChargingSupported, Converter={StaticResource BoolToVis}}">
+                <Border Style="{StaticResource Card}">
+                    <StackPanel>
+
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                            <TextBlock Text="Charging Mode" Style="{StaticResource HeadingMedium}"/>
+                        </StackPanel>
+                        <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,0,0,16" MaxWidth="640">
+                            Sets the same BIOS charging behaviour as the Dell or Dell Power Manager app.
+                            Capping the charge with Custom (for example 75 to 80 percent) reduces battery
+                            wear when you stay plugged in. Your choice is saved in the BIOS and sticks
+                            across reboots.
+                        </TextBlock>
+
+                        <!-- Interactive area + grey-out overlay share one cell. -->
+                        <Grid>
+                            <!-- Inner content: dims and disables while Game Boost owns charging. -->
+                            <StackPanel>
+                                <StackPanel.Style>
+                                    <Style TargetType="StackPanel">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsBatteryPauseActive}" Value="True">
+                                                <Setter Property="IsEnabled" Value="False"/>
+                                                <Setter Property="Opacity"   Value="0.4"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </StackPanel.Style>
+
+                                <ListBox ItemsSource="{Binding ChargeModes}"
+                                         SelectedValuePath="Value"
+                                         SelectedValue="{Binding SelectedChargeMode, Mode=TwoWay}"
+                                         ItemTemplate="{StaticResource ChargeModeItemTemplate}"
+                                         ItemContainerStyle="{StaticResource ChargeModeItemStyle}"
+                                         Background="Transparent" BorderThickness="0"
+                                         HorizontalContentAlignment="Stretch"
+                                         ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                         ScrollViewer.VerticalScrollBarVisibility="Disabled"/>
+
+                                <!-- Custom thresholds — only when Custom is selected. -->
+                                <Border Visibility="{Binding IsCustomMode, Converter={StaticResource BoolToVis}}"
+                                        Background="{StaticResource BgSurfaceBrush}" BorderBrush="{StaticResource BorderBrush}"
+                                        BorderThickness="1" CornerRadius="6" Padding="14,12" Margin="0,2,0,0">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" Margin="0,0,10,0">
+                                            <TextBlock Text="Start charging (at or below)" Style="{StaticResource CaptionText}"/>
+                                            <ComboBox Margin="0,4,0,0" Style="{StaticResource DarkComboBox}"
+                                                      ItemsSource="{Binding ChargeStartOptions}"
+                                                      ItemStringFormat="{}{0}%"
+                                                      SelectedItem="{Binding CustomStart, Mode=TwoWay}"/>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="1" Margin="10,0,0,0">
+                                            <TextBlock Text="Stop charging (at or above)" Style="{StaticResource CaptionText}"/>
+                                            <ComboBox Margin="0,4,0,0" Style="{StaticResource DarkComboBox}"
+                                                      ItemsSource="{Binding ChargeStopOptions}"
+                                                      ItemStringFormat="{}{0}%"
+                                                      SelectedItem="{Binding CustomStop, Mode=TwoWay}"/>
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
+                            </StackPanel>
+
+                            <!-- Grey-out banner shown while Game Boost owns charging. -->
+                            <Border Visibility="{Binding IsBatteryPauseActive, Converter={StaticResource BoolToVis}}"
+                                    HorizontalAlignment="Center" VerticalAlignment="Center"
+                                    Background="{StaticResource BgCardBrush}" Opacity="0.96"
+                                    BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
+                                    CornerRadius="8" Padding="20,14">
+                                <StackPanel>
+                                    <TextBlock Text="Battery Pause active" Style="{StaticResource BodyText}"
+                                               FontWeight="SemiBold" HorizontalAlignment="Center"/>
+                                    <TextBlock Text="Battery pause is on in Game Boost."
+                                               Style="{StaticResource CaptionText}"
+                                               Foreground="{StaticResource TextSecondaryBrush}"
+                                               HorizontalAlignment="Center" Margin="0,4,0,0"/>
+                                </StackPanel>
+                            </Border>
+                        </Grid>
+
+                    </StackPanel>
+                </Border>
             </StackPanel>
 
             <!-- ══════════════════════════════════════════════ Dell Thermal Profile Card

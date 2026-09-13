@@ -558,7 +558,8 @@ public partial class App : Application
             var audioVm       = new AudioViewModel(new AudioService());
             var intelVm       = new IntelGpuViewModel(intelGpuService, settingsService);
             var nvidiaVm      = new NvidiaGpuViewModel(nvidiaGpuService, settingsService);
-            var dellVm        = new DellViewModel(thermalService, settingsService, powerPlanService);
+            var dellVm        = new DellViewModel(thermalService, settingsService, powerPlanService,
+                                                  batteryPauseService, gameboosterService);
 
             _mainVm = new MainViewModel(dashboardVm, memoryVm, servicesVm,
                                         visualVm, gameBoosterVm, settingsVm, toolsVm, taskSleepVm, bloatwareVm, graphicsVm, audioVm, intelVm, nvidiaVm, dellVm);

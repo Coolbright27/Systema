@@ -30,11 +30,17 @@ namespace Systema.ViewModels;
 /// Value = raw BIOS value, Label = friendly name, Note = optional small grey hint.</summary>
 public sealed record ThermalModeOption(string Value, string Label, string Note);
 
+/// <summary>One Dell charging-mode row for the selectable list.
+/// Value = raw BIOS value, Label/Description = friendly text, Recommended = shows the pill.</summary>
+public sealed record ChargeModeOption(string Value, string Label, string Description, bool Recommended);
+
 public partial class DellViewModel : ObservableObject, IDisposable, IAutoRefreshable
 {
     private readonly ThermalManagementService _thermal;
     private readonly SettingsService           _settings;
     private readonly PowerPlanService          _powerPlan;
+    private readonly BatteryPauseService       _batteryPause;
+    private readonly GameBoosterService        _gameBooster;
     private static readonly LoggerService _log = LoggerService.Instance;
 
     [ObservableProperty] private bool   _isDellPresent;
@@ -62,11 +68,40 @@ public partial class DellViewModel : ObservableObject, IDisposable, IAutoRefresh
     // Suppress the apply side-effect while populating the selectors at startup.
     private bool _loadingThermal;
 
-    public DellViewModel(ThermalManagementService thermal, SettingsService settings, PowerPlanService powerPlan)
+    // ── Dell charging mode ─────────────────────────────────────────────────────
+    /// <summary>True only on a Dell laptop whose BIOS exposes the charging attribute.</summary>
+    [ObservableProperty] private bool _chargingSupported;
+    /// <summary>Charge-mode rows offered by this machine's BIOS.</summary>
+    public ObservableCollection<ChargeModeOption> ChargeModes { get; } = new();
+    /// <summary>Raw BIOS value of the selected charge mode ("Adaptive", "Custom", ...).</summary>
+    [ObservableProperty] private string _selectedChargeMode = "";
+    /// <summary>True when Custom is selected — reveals the start/stop pickers.</summary>
+    public bool IsCustomMode =>
+        string.Equals(SelectedChargeMode, "Custom", StringComparison.OrdinalIgnoreCase);
+    /// <summary>Percent presets for the custom start/stop pickers.</summary>
+    public ObservableCollection<int> ChargeStartOptions { get; } = new();
+    public ObservableCollection<int> ChargeStopOptions  { get; } = new();
+    /// <summary>Custom start threshold — charge when at or below this percent.</summary>
+    [ObservableProperty] private int _customStart = 75;
+    /// <summary>Custom stop threshold — stop when at or above this percent.</summary>
+    [ObservableProperty] private int _customStop = 80;
+    /// <summary>True while a Game Boost session owns charging — greys the card out.</summary>
+    [ObservableProperty] private bool _isBatteryPauseActive;
+    [ObservableProperty] private string _chargingStatus = "";
+    // Suppress the apply side-effect while populating the pickers / snapping thresholds.
+    private bool _loadingCharging;
+
+    private Action<string>? _onBoostActivatedCharging;
+    private Action?         _onBoostDeactivatedCharging;
+
+    public DellViewModel(ThermalManagementService thermal, SettingsService settings, PowerPlanService powerPlan,
+                         BatteryPauseService batteryPause, GameBoosterService gameBooster)
     {
-        _thermal   = thermal;
-        _settings  = settings;
-        _powerPlan = powerPlan;
+        _thermal      = thermal;
+        _settings     = settings;
+        _powerPlan    = powerPlan;
+        _batteryPause = batteryPause;
+        _gameBooster  = gameBooster;
 
         // ── Manufacturer detection (sync — sidebar visibility is needed at shell build) ──
         try
@@ -138,6 +173,166 @@ public partial class DellViewModel : ObservableObject, IDisposable, IAutoRefresh
 
         // Re-apply the AC/battery thermal preference on every plug/unplug.
         SystemEvents.PowerModeChanged += OnPowerModeChanged;
+
+        // ── Charging-mode detection (worker thread — WMI probe) ────────────────────
+        // A boost that is already running when the tab first builds means the BIOS is
+        // showing the pause value, not the user's real mode, so gate that in.
+        IsBatteryPauseActive = _gameBooster.BoostActive;
+        _ = Task.Run(() =>
+        {
+            bool supported = _batteryPause.DetectSupport() == BatteryPauseSupport.Supported;
+            var  modes     = supported ? _batteryPause.GetChargeModes() : new List<string>();
+            // Only trust the live BIOS value when no boost is overriding charging.
+            string? live   = supported && !_gameBooster.BoostActive
+                ? _batteryPause.GetCurrentChargeMode()
+                : null;
+
+            System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
+            {
+                ChargingSupported = supported;
+                if (!supported) return;
+
+                _loadingCharging = true;
+
+                ChargeStartOptions.Clear();
+                for (int p = 50; p <= 95; p += 5) ChargeStartOptions.Add(p);
+                ChargeStopOptions.Clear();
+                for (int p = 55; p <= 100; p += 5) ChargeStopOptions.Add(p);
+
+                ChargeModes.Clear();
+                foreach (var m in modes)
+                {
+                    var (label, desc, rec) = ChargeFriendly(m);
+                    ChargeModes.Add(new ChargeModeOption(m, label, desc, rec));
+                }
+
+                // Seed custom thresholds from the saved preference (falls back to 75/80).
+                CustomStart = _settings.DellChargeStart;
+                CustomStop  = _settings.DellChargeStop;
+
+                // Pick what to show: the live BIOS mode when readable, else the saved
+                // preference, else the machine's current mode name. If live is a Custom
+                // string, split its thresholds out into the pickers.
+                string chosen = "";
+                if (!string.IsNullOrEmpty(live))
+                {
+                    if (live.StartsWith("Custom:", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var parts = live.Split(':');
+                        if (parts.Length >= 3
+                            && int.TryParse(parts[1], out int s) && int.TryParse(parts[2], out int e))
+                        {
+                            CustomStart = ClampStart(s);
+                            CustomStop  = ClampStop(CustomStart, e);
+                        }
+                        chosen = "Custom";
+                    }
+                    else chosen = live;
+                    // Record the freshly-read live mode as the saved preference.
+                    _settings.DellChargeMode  = chosen;
+                    _settings.DellChargeStart = CustomStart;
+                    _settings.DellChargeStop  = CustomStop;
+                }
+                else if (!string.IsNullOrEmpty(_settings.DellChargeMode))
+                {
+                    chosen = _settings.DellChargeMode;
+                }
+
+                if (!string.IsNullOrEmpty(chosen)
+                    && modes.Contains(chosen, StringComparer.OrdinalIgnoreCase))
+                    SelectedChargeMode = modes.First(m => string.Equals(m, chosen, StringComparison.OrdinalIgnoreCase));
+
+                _loadingCharging = false;
+                OnPropertyChanged(nameof(IsCustomMode));
+            });
+        });
+
+        // Grey the charging card while Game Boost owns charging, and re-sync from the
+        // BIOS once the boost restores the user's mode.
+        _onBoostActivatedCharging = _ => System.Windows.Application.Current?.Dispatcher.BeginInvoke(
+            () => IsBatteryPauseActive = true);
+        _onBoostDeactivatedCharging = () => System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
+        {
+            IsBatteryPauseActive = false;
+            ReloadChargeFromBios();
+        });
+        _gameBooster.BoostActivated   += _onBoostActivatedCharging;
+        _gameBooster.BoostDeactivated += _onBoostDeactivatedCharging;
+    }
+
+    /// <summary>Friendly label, description and "recommended" flag for a raw BIOS charge mode.</summary>
+    internal static (string Label, string Description, bool Recommended) ChargeFriendly(string value) =>
+        value.ToLowerInvariant() switch
+        {
+            "adaptive"  => ("Adaptive",      "Optimizes charging to your typical usage pattern.", true),
+            "standard"  => ("Standard",      "For switching between battery power and an external power source.", false),
+            "express"   => ("ExpressCharge", "Charges the battery over a shorter period of time.", false),
+            "primacuse" => ("Always AC",     "Best when you mostly run plugged into a power source.", false),
+            "custom"    => ("Custom",        "Set your own start and stop charge thresholds.", false),
+            _           => (value,           "", false),
+        };
+
+    /// <summary>Snap a start percent to the nearest 5% inside the BIOS-allowed 50-95 range.</summary>
+    internal static int ClampStart(int v) => Math.Min(95, Math.Max(50, (v / 5) * 5));
+
+    /// <summary>Snap a stop percent to 5% steps, never below start + 5, never above 100.</summary>
+    internal static int ClampStop(int start, int v) => Math.Min(100, Math.Max(start + 5, (v / 5) * 5));
+
+    /// <summary>Applies the selected charge mode to the BIOS unless loading or a boost owns charging.</summary>
+    private void ApplyChargeMode()
+    {
+        if (_loadingCharging || !ChargingSupported || IsBatteryPauseActive) return;
+        string mode = SelectedChargeMode;
+        if (string.IsNullOrEmpty(mode)) return;
+
+        string payload = string.Equals(mode, "Custom", StringComparison.OrdinalIgnoreCase)
+            ? $"Custom:{CustomStart}:{CustomStop}"
+            : mode;
+
+        Task.Run(() =>
+        {
+            bool ok = _batteryPause.SetChargeMode(payload);
+            System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
+                ChargingStatus = ok
+                    ? $"Charging mode set to {ChargeFriendly(mode).Label}."
+                    : "Could not change the charging mode. The Dell BIOS provider may not be installed.");
+        });
+    }
+
+    /// <summary>Re-reads the BIOS charge mode into the pickers (after a boost restores it).</summary>
+    private void ReloadChargeFromBios()
+    {
+        if (!ChargingSupported) return;
+        Task.Run(() =>
+        {
+            string? live = _batteryPause.GetCurrentChargeMode();
+            if (string.IsNullOrEmpty(live)) return;
+            System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
+            {
+                _loadingCharging = true;
+                if (live.StartsWith("Custom:", StringComparison.OrdinalIgnoreCase))
+                {
+                    var parts = live.Split(':');
+                    if (parts.Length >= 3
+                        && int.TryParse(parts[1], out int s) && int.TryParse(parts[2], out int e))
+                    {
+                        CustomStart = ClampStart(s);
+                        CustomStop  = ClampStop(CustomStart, e);
+                    }
+                    SelectByValue("Custom");
+                }
+                else SelectByValue(live);
+                _loadingCharging = false;
+                OnPropertyChanged(nameof(IsCustomMode));
+            });
+        });
+    }
+
+    private void SelectByValue(string value)
+    {
+        var match = ChargeModes.FirstOrDefault(m =>
+            string.Equals(m.Value, value, StringComparison.OrdinalIgnoreCase));
+        if (match != null) SelectedChargeMode = match.Value;
     }
 
     /// <summary>True when the system manufacturer identifies as Dell. Pure + testable.</summary>
@@ -211,6 +406,45 @@ public partial class DellViewModel : ObservableObject, IDisposable, IAutoRefresh
         }
     }
 
+    // ── Charging-mode change handlers ──────────────────────────────────────────
+
+    partial void OnSelectedChargeModeChanged(string value)
+    {
+        OnPropertyChanged(nameof(IsCustomMode));
+        if (_loadingCharging || !ChargingSupported) return;
+        _settings.DellChargeMode = value;
+        ApplyChargeMode();
+    }
+
+    partial void OnCustomStartChanged(int value)
+    {
+        if (_loadingCharging) return;
+        // Keep at least a 5% gap: bump stop up if the user raised start past it.
+        if (CustomStop < value + 5)
+        {
+            _loadingCharging = true;
+            CustomStop = Math.Min(100, value + 5);
+            _loadingCharging = false;
+        }
+        _settings.DellChargeStart = value;
+        _settings.DellChargeStop  = CustomStop;
+        if (IsCustomMode) ApplyChargeMode();
+    }
+
+    partial void OnCustomStopChanged(int value)
+    {
+        if (_loadingCharging) return;
+        // Enforce the 5% gap the BIOS requires: snap stop back up to start + 5.
+        if (value < CustomStart + 5)
+        {
+            _loadingCharging = true;
+            CustomStop = CustomStart + 5;
+            _loadingCharging = false;
+        }
+        _settings.DellChargeStop = CustomStop;
+        if (IsCustomMode) ApplyChargeMode();
+    }
+
     /// <summary>
     /// On-navigate / periodic refresh (IAutoRefreshable). Re-syncs the AC/battery selectors from
     /// the persisted preferences and the live power state, so a change made elsewhere — e.g. the
@@ -239,5 +473,7 @@ public partial class DellViewModel : ObservableObject, IDisposable, IAutoRefresh
     public void Dispose()
     {
         SystemEvents.PowerModeChanged -= OnPowerModeChanged;
+        if (_onBoostActivatedCharging   != null) _gameBooster.BoostActivated   -= _onBoostActivatedCharging;
+        if (_onBoostDeactivatedCharging != null) _gameBooster.BoostDeactivated -= _onBoostDeactivatedCharging;
     }
 }

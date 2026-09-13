@@ -307,6 +307,33 @@ public class SettingsService
         set => WriteString(nameof(ThermalModeBattery), value);
     }
 
+    // ── Dell charging mode (Dell tab) ──────────────────────────────────────────
+    // Mirrors the BIOS PrimaryBattChargeCfg attribute. The BIOS is the source of
+    // truth and persists it across reboots; this only remembers the user's choice
+    // so the card can display it correctly while a Game Boost session temporarily
+    // overrides charging. "" means never set by the user.
+
+    /// <summary>Last charge mode the user chose ("Adaptive", "Standard", "Custom", ...).</summary>
+    public string DellChargeMode
+    {
+        get => ReadString(nameof(DellChargeMode), defaultValue: "") ?? "";
+        set => WriteString(nameof(DellChargeMode), value);
+    }
+
+    /// <summary>Custom start-charging threshold (charge when at or below this %).</summary>
+    public int DellChargeStart
+    {
+        get => ReadInt(nameof(DellChargeStart), defaultValue: 75);
+        set => WriteInt(nameof(DellChargeStart), value);
+    }
+
+    /// <summary>Custom stop-charging threshold (stop when at or above this %).</summary>
+    public int DellChargeStop
+    {
+        get => ReadInt(nameof(DellChargeStop), defaultValue: 80);
+        set => WriteInt(nameof(DellChargeStop), value);
+    }
+
     /// <summary>
     /// User explicitly toggled High Performance Mode on. When true, Systema restores
     /// High Performance every time the user plugs back in after running on battery.
