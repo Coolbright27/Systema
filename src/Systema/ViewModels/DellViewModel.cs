@@ -180,17 +180,18 @@ public partial class DellViewModel : ObservableObject, IDisposable, IAutoRefresh
         IsBatteryPauseActive = _gameBooster.BoostActive;
         _ = Task.Run(() =>
         {
-            bool supported = _batteryPause.DetectSupport() == BatteryPauseSupport.Supported;
-            var  modes     = supported ? _batteryPause.GetChargeModes() : new List<string>();
+            // DetectSupport only proves SetAttribute exists, which is all the blind pause
+            // path needs. The card needs the charge attribute to enumerate and read back
+            // too, so DescribeCharging is the gate — no capability, no card.
+            _batteryPause.DetectSupport();
+            var cap = _batteryPause.DescribeCharging();
             // Only trust the live BIOS value when no boost is overriding charging.
-            string? live   = supported && !_gameBooster.BoostActive
-                ? _batteryPause.GetCurrentChargeMode()
-                : null;
+            string? live = cap.Available && !_gameBooster.BoostActive ? cap.CurrentMode : null;
 
             System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
             {
-                ChargingSupported = supported;
-                if (!supported) return;
+                ChargingSupported = cap.Available;
+                if (!cap.Available) return;
 
                 _loadingCharging = true;
 
@@ -200,7 +201,7 @@ public partial class DellViewModel : ObservableObject, IDisposable, IAutoRefresh
                 for (int p = 55; p <= 100; p += 5) ChargeStopOptions.Add(p);
 
                 ChargeModes.Clear();
-                foreach (var m in modes)
+                foreach (var m in cap.Modes)
                 {
                     var (label, desc, rec) = ChargeFriendly(m);
                     ChargeModes.Add(new ChargeModeOption(m, label, desc, rec));
@@ -239,8 +240,8 @@ public partial class DellViewModel : ObservableObject, IDisposable, IAutoRefresh
                 }
 
                 if (!string.IsNullOrEmpty(chosen)
-                    && modes.Contains(chosen, StringComparer.OrdinalIgnoreCase))
-                    SelectedChargeMode = modes.First(m => string.Equals(m, chosen, StringComparison.OrdinalIgnoreCase));
+                    && cap.Modes.Contains(chosen, StringComparer.OrdinalIgnoreCase))
+                    SelectedChargeMode = cap.Modes.First(m => string.Equals(m, chosen, StringComparison.OrdinalIgnoreCase));
 
                 _loadingCharging = false;
                 OnPropertyChanged(nameof(IsCustomMode));

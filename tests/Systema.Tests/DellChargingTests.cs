@@ -195,4 +195,84 @@ public class DellChargingTests
             Assert.Contains("Margin=\"0,0,0,16\"", xaml[Math.Max(0, at - 220)..at]);
         }
     }
+
+    // ── The card only appears when the BIOS can actually drive it ───────────────
+
+    [Fact]
+    public void NoCapabilityMeansNoCardAndNoOptions()
+    {
+        var none = Systema.Services.ChargingCapability.None;
+        Assert.False(none.Available);
+        Assert.Empty(none.Modes);
+        Assert.False(none.SupportsCustom);
+        Assert.Null(none.CurrentMode);
+    }
+
+    // DetectSupport only proves SetAttribute exists, which is all the blind pause path
+    // needs. The card additionally needs the charge attribute to enumerate and read back,
+    // so it must gate on DescribeCharging instead.
+    [Fact]
+    public void CardGatesOnTheCapabilityProbeNotJustDetectSupport()
+    {
+        var vm = Read("src", "Systema", "ViewModels", "DellViewModel.cs");
+        Assert.Contains("DescribeCharging()", vm);
+        Assert.Contains("ChargingSupported = cap.Available", vm);
+        Assert.Contains("if (!cap.Available) return;", vm);
+
+        // The old loose gate must not creep back.
+        Assert.DoesNotContain("ChargingSupported = supported", vm);
+    }
+
+    [Fact]
+    public void CapabilityRequiresEnumeratedModesAndAReadableCurrentValue()
+    {
+        var svc = Read("src", "Systema", "Services", "BatteryPauseService.cs");
+        int at = svc.IndexOf("public ChargingCapability DescribeCharging", StringComparison.Ordinal);
+        Assert.True(at > 0);
+        string body = svc[at..(at + 2200)];
+
+        // No vendor method -> nothing to drive.
+        Assert.Contains("_activeMethod == null", body);
+        // An empty list or an unreadable current value hides the card.
+        Assert.Contains("modes.Count == 0", body);
+        Assert.Contains("string.IsNullOrEmpty(current)", body);
+        Assert.Contains("ChargingCapability.None", body);
+    }
+
+    // Picking Custom without the threshold attributes would switch the BIOS mode and then
+    // silently fail to set the percents, so the option is removed when they are missing.
+    [Fact]
+    public void CustomIsHiddenWhenThresholdAttributesAreMissing()
+    {
+        var svc = Read("src", "Systema", "Services", "BatteryPauseService.cs");
+        int at = svc.IndexOf("public ChargingCapability DescribeCharging", StringComparison.Ordinal);
+        string body = svc[at..(at + 2200)];
+
+        Assert.Contains("HasCustomThresholds()", body);
+        Assert.Contains("\"Custom\"", body);
+
+        // Both Dell paths must be able to answer the question.
+        Assert.Contains("CustomChargeStart", svc);
+        Assert.Contains("CustomChargeStop", svc);
+    }
+
+    // The old helper handed back a hardcoded five-mode list whenever the BIOS did not
+    // enumerate, which is exactly how a dead card would have been shown.
+    [Fact]
+    public void NoHardcodedModeListSurvives()
+    {
+        var svc = Read("src", "Systema", "Services", "BatteryPauseService.cs");
+        Assert.DoesNotContain("GetChargeModes", svc);
+        Assert.DoesNotContain("new List<string> { \"Adaptive\", \"Standard\", \"Express\", \"PrimAcUse\", \"Custom\" }", svc);
+    }
+
+    [Fact]
+    public void XamlStillHidesTheWholeCardWhenUnsupported()
+    {
+        var xaml = Read("src", "Systema", "Views", "DellView.xaml");
+        int at = xaml.IndexOf("Binding ChargingSupported", StringComparison.Ordinal);
+        Assert.True(at > 0);
+        // The visibility binding drives the outer wrapper, so nothing inside renders.
+        Assert.Contains("Visibility", xaml[Math.Max(0, at - 160)..at]);
+    }
 }

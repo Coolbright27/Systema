@@ -49,6 +49,25 @@ public enum BatteryPauseSupport
 }
 
 /// <summary>
+/// What the charging-mode picker can actually do on this machine.
+///
+/// Deliberately stricter than <see cref="BatteryPauseSupport"/>. The pause path only needs
+/// SetAttribute to exist, because it writes blind and falls back through several strategies.
+/// A visible picker has to be truthful: it must list the modes this BIOS really offers and
+/// show which one is active, so it requires the charge attribute to enumerate AND read back.
+/// When it cannot, the card stays hidden rather than showing buttons that quietly do nothing.
+/// </summary>
+public sealed record ChargingCapability(
+    bool Available,
+    List<string> Modes,
+    bool SupportsCustom,
+    string? CurrentMode)
+{
+    public static ChargingCapability None { get; } =
+        new(false, new List<string>(), false, null);
+}
+
+/// <summary>
 /// Persisted alongside Game Booster's boost_state.json. Lets crash recovery
 /// route back through the exact method that did the pause.
 /// </summary>
@@ -192,15 +211,52 @@ public sealed class BatteryPauseService
     // there is no re-apply loop here — a write sticks in firmware until changed.
 
     /// <summary>
-    /// Charge modes the BIOS offers on this machine, or the standard Dell set when the
-    /// firmware does not enumerate them (SetAttribute still accepts the standard values).
+    /// Decides whether the charging-mode card can be shown, and with which options.
+    ///
+    /// Every gate here is a thing the card genuinely needs, so a machine that fails any of
+    /// them gets no card at all instead of a dead one:
+    ///   1. A vendor method won the probe (SetAttribute exists).
+    ///   2. The BIOS enumerates PrimaryBattChargeCfg, so the list is the real list rather
+    ///      than a hardcoded guess that may not match this firmware.
+    ///   3. The attribute reads back, so the card can show which mode is actually active.
+    ///   4. Custom is offered only when both threshold attributes exist, because picking it
+    ///      without them would switch the mode and then silently fail to set the percents.
     /// </summary>
-    public List<string> GetChargeModes()
+    public ChargingCapability DescribeCharging()
     {
-        var modes = _activeMethod?.GetSupportedModes() ?? new List<string>();
-        return modes.Count > 0
-            ? modes
-            : new List<string> { "Adaptive", "Standard", "Express", "PrimAcUse", "Custom" };
+        if (_support != BatteryPauseSupport.Supported || _activeMethod == null)
+        {
+            _log.Info("BatteryPauseService", $"Charging card hidden — support={_support}");
+            return ChargingCapability.None;
+        }
+
+        var     modes   = _activeMethod.GetSupportedModes();
+        string? current = _activeMethod.GetCurrentMode();
+
+        if (modes.Count == 0 || string.IsNullOrEmpty(current))
+        {
+            _log.Info("BatteryPauseService",
+                $"Charging card hidden — BIOS enumerated {modes.Count} mode(s), " +
+                $"current='{current ?? "(unreadable)"}'");
+            return ChargingCapability.None;
+        }
+
+        bool custom = _activeMethod.HasCustomThresholds();
+        if (!custom)
+        {
+            modes = modes
+                .Where(m => !string.Equals(m, "Custom", StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            _log.Info("BatteryPauseService",
+                "Charging card: custom thresholds unavailable on this BIOS — hiding the Custom option");
+        }
+
+        if (modes.Count == 0) return ChargingCapability.None;
+
+        _log.Info("BatteryPauseService",
+            $"Charging card available — modes=[{string.Join(", ", modes)}] " +
+            $"current='{current}' custom={custom}");
+        return new ChargingCapability(true, modes, custom, current);
     }
 
     /// <summary>Current charge mode, encoded "Custom:start:stop" when custom. Null if unreadable.</summary>
@@ -357,6 +413,8 @@ public sealed class BatteryPauseService
         void Resume(string? originalMode);
         /// <summary>BIOS-reported allowed charge modes for the picker. Empty if the BIOS doesn't enumerate them.</summary>
         List<string> GetSupportedModes();
+        /// <summary>True when both custom start/stop threshold attributes exist and read back.</summary>
+        bool HasCustomThresholds();
         /// <summary>Apply an arbitrary charge mode ("Standard", "Adaptive", "Custom:75:80", ...). True on confirmed success.</summary>
         bool SetMode(string mode);
     }
@@ -569,6 +627,10 @@ public sealed class BatteryPauseService
             return list;
         }
 
+        public bool HasCustomThresholds()
+            => ReadIntegerAttr("CustomChargeStart") != null
+            && ReadIntegerAttr("CustomChargeStop")  != null;
+
         // Applies an arbitrary charge mode. "Custom:start:stop" writes the thresholds first (the
         // BIOS validates them when Custom is activated), then switches the mode — same ordering
         // Pause uses. Everything else is a straight enum write. Mirrors Resume, but returns the
@@ -757,6 +819,10 @@ public sealed class BatteryPauseService
             }
             return list;
         }
+
+        public bool HasCustomThresholds()
+            => ReadIntegerAttr("CustomChargeStart") != null
+            && ReadIntegerAttr("CustomChargeStop")  != null;
 
         public bool SetMode(string mode)
         {
