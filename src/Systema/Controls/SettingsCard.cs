@@ -43,6 +43,12 @@ public class SettingsCard : HeaderedContentControl
     public static readonly DependencyProperty BadgeBrushProperty = DependencyProperty.Register(
         nameof(BadgeBrush), typeof(System.Windows.Media.Brush), typeof(SettingsCard), new FrameworkPropertyMetadata(null));
 
+    public static readonly DependencyProperty ExtraBadgeProperty = DependencyProperty.Register(
+        nameof(ExtraBadge), typeof(string), typeof(SettingsCard), new FrameworkPropertyMetadata(null));
+
+    public static readonly DependencyProperty ExtraBadgeBrushProperty = DependencyProperty.Register(
+        nameof(ExtraBadgeBrush), typeof(System.Windows.Media.Brush), typeof(SettingsCard), new FrameworkPropertyMetadata(null));
+
     public static readonly DependencyProperty IconDataProperty = DependencyProperty.Register(
         nameof(IconData), typeof(Geometry), typeof(SettingsCard), new FrameworkPropertyMetadata(null));
 
@@ -65,6 +71,21 @@ public class SettingsCard : HeaderedContentControl
     {
         get => (System.Windows.Media.Brush?)GetValue(BadgeBrushProperty);
         set => SetValue(BadgeBrushProperty, value);
+    }
+
+    /// <summary>A second pill after Badge, for a card that carries two labels
+    /// (e.g. a "Moderate" risk level plus "Recommended"). Green unless set.</summary>
+    public string? ExtraBadge
+    {
+        get => (string?)GetValue(ExtraBadgeProperty);
+        set => SetValue(ExtraBadgeProperty, value);
+    }
+
+    /// <summary>Colour of the second badge's text and outline.</summary>
+    public System.Windows.Media.Brush? ExtraBadgeBrush
+    {
+        get => (System.Windows.Media.Brush?)GetValue(ExtraBadgeBrushProperty);
+        set => SetValue(ExtraBadgeBrushProperty, value);
     }
 
     /// <summary>Optional 24x24 line icon on the left, drawn with the theme's stroke.</summary>
@@ -93,4 +114,16 @@ public class SettingsCard : HeaderedContentControl
             return list.GetEnumerator();
         }
     }
+}
+
+/// <summary>
+/// Gives a plain-string SettingsCard description the CardDescription look. Anything else
+/// (a TextBlock, a StackPanel of notes) gets null, which means "display it as it is".
+/// </summary>
+public sealed class StringDescriptionSelector : DataTemplateSelector
+{
+    public DataTemplate? StringTemplate { get; set; }
+
+    public override DataTemplate? SelectTemplate(object item, DependencyObject container)
+        => item is string ? StringTemplate : null;
 }

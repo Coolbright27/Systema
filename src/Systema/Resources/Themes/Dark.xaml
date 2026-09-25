@@ -1,8 +1,7 @@
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                     xmlns:conv="clr-namespace:Systema.Core.Converters"
-                    xmlns:ctl="clr-namespace:Systema.Controls"
-                    xmlns:sys="clr-namespace:System;assembly=mscorlib">
+                    xmlns:ctl="clr-namespace:Systema.Controls">
 
     <!-- ============================================================ -->
     <!--  COLORS — Windows 11 dark                                     -->
@@ -1138,6 +1137,14 @@
     <!-- One setting per card: header (+ optional badge) and description on the left, the
          control on the right. Controls/SettingsCard.cs has the properties. Cards stack with a
          4px gap, the rhythm Windows Settings uses. -->
+    <ctl:StringDescriptionSelector x:Key="SettingsCardDescriptionSelector">
+        <ctl:StringDescriptionSelector.StringTemplate>
+            <DataTemplate>
+                <TextBlock Text="{Binding}" Style="{StaticResource CardDescription}"/>
+            </DataTemplate>
+        </ctl:StringDescriptionSelector.StringTemplate>
+    </ctl:StringDescriptionSelector>
+
     <Style TargetType="ctl:SettingsCard">
         <Setter Property="Background" Value="{StaticResource BgCardBrush}"/>
         <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
@@ -1151,6 +1158,7 @@
         <Setter Property="Focusable" Value="False"/>
         <Setter Property="IsTabStop" Value="False"/>
         <Setter Property="BadgeBrush" Value="{StaticResource AccentBlueBrush}"/>
+        <Setter Property="ExtraBadgeBrush" Value="{StaticResource AccentGreenBrush}"/>
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="ctl:SettingsCard">
@@ -1183,22 +1191,23 @@
                                         <TextBlock Text="{TemplateBinding Badge}" FontSize="11"
                                                    Foreground="{TemplateBinding BadgeBrush}"/>
                                     </Border>
+                                    <Border x:Name="ExtraBadgePill" Margin="6,0,0,0" CornerRadius="4" Padding="6,1"
+                                            VerticalAlignment="Center" BorderThickness="1"
+                                            BorderBrush="{TemplateBinding ExtraBadgeBrush}"
+                                            Background="{StaticResource ControlFillBrush}">
+                                        <TextBlock Text="{TemplateBinding ExtraBadge}" FontSize="11"
+                                                   Foreground="{TemplateBinding ExtraBadgeBrush}"/>
+                                    </Border>
                                 </StackPanel>
+                                <!-- Plain-string descriptions (Description="…") render exactly like the
+                                     TextBlock ones written with CardDescription. A selector, not a typed
+                                     DataTemplate in Resources, so it only ever touches this presenter's own
+                                     content and never the captions of buttons nested in a description. -->
                                 <ContentPresenter x:Name="DescriptionHost" Content="{TemplateBinding Description}"
+                                                  ContentTemplateSelector="{StaticResource SettingsCardDescriptionSelector}"
                                                   Margin="0,3,0,0"
                                                   TextElement.FontSize="12"
-                                                  TextElement.Foreground="{StaticResource TextSecondaryBrush}">
-                                    <ContentPresenter.Resources>
-                                        <!-- Plain-string descriptions (Description="…") render exactly like the
-                                             TextBlock ones written with CardDescription. -->
-                                        <DataTemplate DataType="{x:Type sys:String}">
-                                            <TextBlock Text="{Binding}" Style="{StaticResource CardDescription}"/>
-                                        </DataTemplate>
-                                        <Style TargetType="TextBlock">
-                                            <Setter Property="TextWrapping" Value="Wrap"/>
-                                        </Style>
-                                    </ContentPresenter.Resources>
-                                </ContentPresenter>
+                                                  TextElement.Foreground="{StaticResource TextSecondaryBrush}"/>
                             </StackPanel>
                             <ContentPresenter Grid.Column="2" Margin="20,0,0,0"
                                               HorizontalAlignment="Right" VerticalAlignment="Center"/>
@@ -1210,6 +1219,9 @@
                         </Trigger>
                         <Trigger Property="Badge" Value="{x:Null}">
                             <Setter TargetName="BadgePill" Property="Visibility" Value="Collapsed"/>
+                        </Trigger>
+                        <Trigger Property="ExtraBadge" Value="{x:Null}">
+                            <Setter TargetName="ExtraBadgePill" Property="Visibility" Value="Collapsed"/>
                         </Trigger>
                         <Trigger Property="Description" Value="{x:Null}">
                             <Setter TargetName="DescriptionHost" Property="Visibility" Value="Collapsed"/>

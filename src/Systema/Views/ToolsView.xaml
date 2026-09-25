@@ -2,7 +2,12 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:conv="clr-namespace:Systema.Core.Converters"
+             xmlns:ctl="clr-namespace:Systema.Controls"
              Background="Transparent">
+
+    <!-- Windows 11 Settings layout: one SettingsCard per tweak, grouped under headers. Each
+         card keeps its live status line and busy indicator under the description. Same
+         bindings and text as before; em dashes in the status lines became "·". -->
 
     <UserControl.Resources>
         <conv:BoolToVisibilityConverter x:Key="BoolToVis"/>
@@ -13,382 +18,281 @@
             when the style is defined inline inside an element's .Style property element.
             TextBlock styles are exempt (no ControlTemplate). All others must live here.
         -->
-        <!-- ComboBox: DNS Switcher — Auto-Pilot disable -->
+        <!-- ComboBox: DNS Switcher, Auto-Pilot disable -->
         <Style x:Key="DnsComboBoxStyle" TargetType="ComboBox" BasedOn="{StaticResource DarkComboBox}">
             <Style.Triggers>
                 <DataTrigger Binding="{Binding IsAutoPilotActive}" Value="True">
                     <Setter Property="IsEnabled" Value="False"/>
                     <Setter Property="Opacity"   Value="0.4"/>
-                    <Setter Property="ToolTip"   Value="Controlled by Auto-Pilot — turn off Auto-Pilot Mode to change"/>
+                    <Setter Property="ToolTip"   Value="Managed by Auto Pilot. Turn off Auto Pilot Mode to change it."/>
                 </DataTrigger>
             </Style.Triggers>
         </Style>
-        <!-- CheckBox: Block Preview Updates toggle — Auto-Pilot disable -->
+        <!-- CheckBox: Block Preview Updates toggle, Auto-Pilot disable -->
         <Style x:Key="BlockPreviewUpdatesToggleStyle" TargetType="CheckBox" BasedOn="{StaticResource ToggleSwitch}">
             <Style.Triggers>
                 <DataTrigger Binding="{Binding IsAutoPilotActive}" Value="True">
                     <Setter Property="IsEnabled" Value="False"/>
                     <Setter Property="Opacity"   Value="0.4"/>
-                    <Setter Property="ToolTip"   Value="Controlled by Auto-Pilot — turn off Auto-Pilot Mode to change"/>
+                    <Setter Property="ToolTip"   Value="Managed by Auto Pilot. Turn off Auto Pilot Mode to change it."/>
                 </DataTrigger>
             </Style.Triggers>
         </Style>
-        <!-- Button: Apply DNS — Auto-Pilot disable -->
+        <!-- Button: Apply DNS, Auto-Pilot disable -->
         <Style x:Key="ApplyDnsButtonStyle" TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
             <Style.Triggers>
                 <DataTrigger Binding="{Binding IsAutoPilotActive}" Value="True">
                     <Setter Property="IsEnabled" Value="False"/>
                     <Setter Property="Opacity"   Value="0.4"/>
-                    <Setter Property="ToolTip"   Value="Controlled by Auto-Pilot — turn off Auto-Pilot Mode to change"/>
+                    <Setter Property="ToolTip"   Value="Managed by Auto Pilot. Turn off Auto Pilot Mode to change it."/>
                 </DataTrigger>
             </Style.Triggers>
         </Style>
-        <!-- Button: Reset to DHCP — Auto-Pilot disable -->
+        <!-- Button: Reset to DHCP, Auto-Pilot disable -->
         <Style x:Key="ResetDnsButtonStyle" TargetType="Button" BasedOn="{StaticResource GhostButton}">
             <Style.Triggers>
                 <DataTrigger Binding="{Binding IsAutoPilotActive}" Value="True">
                     <Setter Property="IsEnabled" Value="False"/>
                     <Setter Property="Opacity"   Value="0.4"/>
-                    <Setter Property="ToolTip"   Value="Controlled by Auto-Pilot — turn off Auto-Pilot Mode to change"/>
+                    <Setter Property="ToolTip"   Value="Managed by Auto Pilot. Turn off Auto Pilot Mode to change it."/>
                 </DataTrigger>
             </Style.Triggers>
         </Style>
-        <!-- CheckBox: Core Parking toggle — Auto-Pilot disable -->
+        <!-- CheckBox: Core Parking toggle, Auto-Pilot disable -->
         <Style x:Key="CoreParkingToggleStyle" TargetType="CheckBox" BasedOn="{StaticResource ToggleSwitch}">
             <Style.Triggers>
                 <DataTrigger Binding="{Binding IsAutoPilotActive}" Value="True">
                     <Setter Property="IsEnabled" Value="False"/>
                     <Setter Property="Opacity"   Value="0.4"/>
-                    <Setter Property="ToolTip"   Value="Controlled by Auto-Pilot — turn off Auto-Pilot Mode to change"/>
+                    <Setter Property="ToolTip"   Value="Managed by Auto Pilot. Turn off Auto Pilot Mode to change it."/>
                 </DataTrigger>
             </Style.Triggers>
         </Style>
     </UserControl.Resources>
 
     <ScrollViewer VerticalScrollBarVisibility="Auto">
-        <Grid Margin="32,28,32,28">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto"/> <!-- 0: header -->
-                <RowDefinition Height="20"/>   <!-- 1: spacer -->
-                <RowDefinition Height="Auto"/> <!-- 2: Block Preview Updates card -->
-                <RowDefinition Height="20"/>   <!--3: spacer -->
-                <RowDefinition Height="Auto"/> <!-- 4: DNS card -->
-                <RowDefinition Height="20"/>   <!--5: spacer -->
-                <RowDefinition Height="Auto"/> <!-- 6: Core Parking card -->
-                <RowDefinition Height="20"/>   <!--7: spacer -->
-                <RowDefinition Height="Auto"/> <!-- 8: NTFS Last-Access card -->
-                <RowDefinition Height="20"/>   <!--9: spacer -->
-                <RowDefinition Height="Auto"/> <!-- 10: Responsiveness card -->
-                <RowDefinition Height="20"/>   <!--11: spacer -->
-                <RowDefinition Height="Auto"/> <!-- 12: Sleep → Hibernate (Battery) card -->
-                <RowDefinition Height="20"/>   <!--13: spacer -->
-                <RowDefinition Height="Auto"/> <!-- 14: Sleep → Hibernate (AC) card -->
-                <RowDefinition Height="20"/>   <!--15: spacer -->
-                <RowDefinition Height="Auto"/> <!-- 16: Realtek card -->
-                <RowDefinition Height="20"/>   <!--17: spacer -->
-                <RowDefinition Height="Auto"/> <!-- 18: status bar -->
-            </Grid.RowDefinitions>
+        <StackPanel Margin="32,24,32,28">
 
             <!-- ===== HEADER ===== -->
-            <StackPanel Grid.Row="0">
+            <StackPanel Margin="0,0,0,8">
                 <TextBlock Text="System Tweaks" Style="{StaticResource HeadingLarge}"/>
                 <TextBlock Text="Safe, reversible tweaks to fine-tune your PC."
-                           Style="{StaticResource CaptionText}" Margin="0,4,0,0"/>
+                           Style="{StaticResource CaptionText}" Margin="0,4,0,0" TextWrapping="Wrap"/>
             </StackPanel>
 
-            <!-- ===== CARD: Block Windows Preview Updates ===== -->
-            <Border Grid.Row="2" Style="{StaticResource Card}">
-                <StackPanel>
+            <!-- ══════════════════════ UPDATES AND NETWORK ══════════════════════ -->
+            <TextBlock Text="Updates and network" Style="{StaticResource SettingsGroupHeader}"/>
 
-                    <!-- Header row with toggle -->
-                    <Grid Margin="0,0,0,10">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
+            <!-- ===== Block Windows Preview Updates ===== -->
+            <ctl:SettingsCard Header="Block Preview Updates" Badge="Safe"
+                              BadgeBrush="{StaticResource TextSecondaryBrush}">
+                <ctl:SettingsCard.Description>
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource CardDescription}">
+                            Blocks Windows Insider Program builds and monthly preview cumulative
+                            updates from appearing in Windows Update, including the optional-updates
+                            section. Regular security, quality, and feature updates continue to
+                            install normally.
+                        </TextBlock>
 
-                        <StackPanel Grid.Column="0">
-                            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                                <TextBlock Text="Block Preview Updates"
-                                           Style="{StaticResource HeadingMedium}"/>
-                                <Border BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="3"
-                                        Padding="6,2" Margin="10,0,0,0" VerticalAlignment="Center">
-                                    <TextBlock Text="SAFE" FontSize="9" FontWeight="SemiBold" Foreground="{StaticResource TextSecondaryBrush}"/>
-                                </Border>
-                            </StackPanel>
-                            <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" MaxWidth="640">
-                                Blocks Windows Insider Program builds and monthly preview cumulative
-                                updates from appearing in Windows Update — including the optional-updates
-                                section. Regular security, quality, and feature updates continue to
-                                install normally.
-                            </TextBlock>
+                        <!-- Status indicator -->
+                        <TextBlock>
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock" BasedOn="{StaticResource CardNote}">
+                                    <Setter Property="Text" Value="Status: OFF  ·  Preview updates are allowed"/>
+                                    <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding BlockPreviewUpdates}" Value="True">
+                                            <Setter Property="Text" Value="Status: ON ✓  ·  Preview updates and Insider builds blocked"/>
+                                            <Setter Property="Foreground" Value="{StaticResource AccentGreenBrush}"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+
+                        <!-- Loading indicator -->
+                        <StackPanel Orientation="Horizontal" Margin="0,6,0,0"
+                                    Visibility="{Binding IsPreviewUpdatesLoading, Converter={StaticResource BoolToVis}}">
+                            <ProgressBar IsIndeterminate="True" Width="160" Height="4"
+                                         Style="{StaticResource AccentProgressBar}" Margin="0,0,10,0"
+                                         VerticalAlignment="Center"/>
+                            <TextBlock Text="Applying..." Style="{StaticResource CaptionText}" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </StackPanel>
+                </ctl:SettingsCard.Description>
+                <CheckBox IsChecked="{Binding BlockPreviewUpdates, Mode=TwoWay}"
+                          Style="{StaticResource BlockPreviewUpdatesToggleStyle}"
+                          ToolTipService.ShowOnDisabled="True"/>
+            </ctl:SettingsCard>
+
+            <!-- ===== DNS Switcher ===== -->
+            <ctl:SettingsCard Header="DNS Switcher" Badge="Safe"
+                              BadgeBrush="{StaticResource TextSecondaryBrush}">
+                <ctl:SettingsCard.Description>
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource CardDescription}">
+                            Switch to faster, more private DNS servers. Cloudflare (1.1.1.1) is recommended for most users.
+                            Use "Reset to DHCP" to return to your provider's default.
+                        </TextBlock>
+
+                        <!-- Current DNS display -->
+                        <TextBlock Style="{StaticResource CardNote}">
+                            <Run Text="Current DNS: "/><Run Text="{Binding CurrentDns, Mode=OneWay}"
+                                                            Foreground="{StaticResource AccentBlueBrush}" FontWeight="SemiBold"/>
+                        </TextBlock>
+
+                        <!-- Profile picker + buttons, grayed out under Auto-Pilot -->
+                        <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                            <ComboBox ItemsSource="{Binding DnsProfiles}"
+                                      SelectedItem="{Binding SelectedDnsProfile}"
+                                      DisplayMemberPath="Name"
+                                      Width="240"
+                                      Margin="0,0,8,0"
+                                      VerticalAlignment="Center"
+                                      Style="{StaticResource DnsComboBoxStyle}"
+                                      ToolTipService.ShowOnDisabled="True"/>
+                            <Button Content="Apply DNS"
+                                    Command="{Binding ApplyDnsCommand}"
+                                    Margin="0,0,8,0"
+                                    Style="{StaticResource ApplyDnsButtonStyle}"
+                                    ToolTipService.ShowOnDisabled="True"/>
+                            <Button Content="Reset to DHCP"
+                                    Command="{Binding ResetDnsCommand}"
+                                    Style="{StaticResource ResetDnsButtonStyle}"
+                                    ToolTipService.ShowOnDisabled="True"/>
                         </StackPanel>
 
-                        <CheckBox Grid.Column="1" VerticalAlignment="Center"
-                                  IsChecked="{Binding BlockPreviewUpdates, Mode=TwoWay}"
-                                  Style="{StaticResource BlockPreviewUpdatesToggleStyle}"
-                                  ToolTipService.ShowOnDisabled="True"/>
-                    </Grid>
-
-                    <!-- Status indicator -->
-                    <TextBlock Margin="0,2,0,0">
-                        <TextBlock.Style>
-                            <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionText}">
-                                <Setter Property="Text" Value="Status: OFF  —  Preview updates are allowed"/>
-                                <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding BlockPreviewUpdates}" Value="True">
-                                        <Setter Property="Text" Value="Status: ON ✓  —  Preview updates and Insider builds blocked"/>
-                                        <Setter Property="Foreground" Value="{StaticResource AccentGreenBrush}"/>
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </TextBlock.Style>
-                    </TextBlock>
-
-                    <!-- Loading indicator -->
-                    <StackPanel Orientation="Horizontal" Margin="0,6,0,0"
-                                Visibility="{Binding IsPreviewUpdatesLoading, Converter={StaticResource BoolToVis}}">
-                        <ProgressBar IsIndeterminate="True" Width="160" Height="4"
-                                     Style="{StaticResource AccentProgressBar}" Margin="0,0,10,0"
-                                     VerticalAlignment="Center"/>
-                        <TextBlock Text="Applying..." Style="{StaticResource CaptionText}" VerticalAlignment="Center"/>
-                    </StackPanel>
-
-                </StackPanel>
-            </Border>
-
-            <!-- ===== CARD: DNS Switcher ===== -->
-            <Border Grid.Row="4" Style="{StaticResource Card}">
-                <StackPanel>
-                    <!-- Header -->
-                    <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-                        <TextBlock Text="DNS Switcher" Style="{StaticResource HeadingMedium}"/>
-                        <Border BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="3"
-                                Padding="6,2" Margin="10,0,0,0" VerticalAlignment="Center">
-                            <TextBlock Text="SAFE" FontSize="9" FontWeight="SemiBold" Foreground="{StaticResource TextSecondaryBrush}"/>
-                        </Border>
-                    </StackPanel>
-
-                    <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,0,0,12"
-                               MaxWidth="640">
-                        Switch to faster, more private DNS servers. Cloudflare (1.1.1.1) is recommended for most users.
-                        Use "Reset to DHCP" to return to your provider's default.
-                    </TextBlock>
-
-                    <!-- Current DNS display -->
-                    <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
-                        <TextBlock Text="Current DNS: " Style="{StaticResource CaptionText}"/>
-                        <TextBlock Text="{Binding CurrentDns}" Style="{StaticResource CaptionText}"
-                                   Foreground="{StaticResource AccentBlueBrush}" FontWeight="SemiBold"/>
-                    </StackPanel>
-
-                    <!-- Profile picker + buttons — grayed out under Auto-Pilot -->
-                    <StackPanel Orientation="Horizontal">
-                        <ComboBox ItemsSource="{Binding DnsProfiles}"
-                                  SelectedItem="{Binding SelectedDnsProfile}"
-                                  DisplayMemberPath="Name"
-                                  Width="240"
-                                  Margin="0,0,10,0"
-                                  VerticalAlignment="Center"
-                                  Style="{StaticResource DnsComboBoxStyle}"
-                                  ToolTipService.ShowOnDisabled="True"/>
-                        <Button Content="Apply DNS"
-                                Command="{Binding ApplyDnsCommand}"
-                                Margin="0,0,8,0"
-                                Style="{StaticResource ApplyDnsButtonStyle}"
-                                ToolTipService.ShowOnDisabled="True"/>
-                        <Button Content="Reset to DHCP"
-                                Command="{Binding ResetDnsCommand}"
-                                Style="{StaticResource ResetDnsButtonStyle}"
-                                ToolTipService.ShowOnDisabled="True"/>
-                    </StackPanel>
-
-                    <!-- Loading indicator -->
-                    <StackPanel Orientation="Horizontal"
-                                Visibility="{Binding IsDnsLoading, Converter={StaticResource BoolToVis}}"
-                                Margin="0,8,0,0">
-                        <ProgressBar IsIndeterminate="True" Width="160" Height="4"
-                                     Style="{StaticResource AccentProgressBar}" Margin="0,0,10,0"
-                                     VerticalAlignment="Center"/>
-                        <TextBlock Text="Applying..." Style="{StaticResource CaptionText}" VerticalAlignment="Center"/>
-                    </StackPanel>
-                </StackPanel>
-            </Border>
-
-            <!-- ===== CARD: Core Parking ===== -->
-            <Border Grid.Row="6" Style="{StaticResource Card}">
-                <StackPanel>
-
-                    <!-- Header row with toggle -->
-                    <Grid Margin="0,0,0,10">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-
-                        <StackPanel Grid.Column="0">
-                            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                                <TextBlock Text="CPU Core Efficiency"
-                                           Style="{StaticResource HeadingMedium}"/>
-                                <Border BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="3"
-                                        Padding="6,2" Margin="10,0,0,0" VerticalAlignment="Center">
-                                    <TextBlock Text="MODERATE" FontSize="9" FontWeight="SemiBold" Foreground="{StaticResource TextSecondaryBrush}"/>
-                                </Border>
-                                <Border CornerRadius="4" Padding="5,2" Margin="6,0,0,0" VerticalAlignment="Center"
-                                        Background="#1A22C55E" BorderBrush="{StaticResource AccentGreenBrush}"
-                                        BorderThickness="1">
-                                    <TextBlock Text="RECOMMENDED" FontSize="8" FontWeight="Bold"
-                                               Foreground="{StaticResource AccentGreenBrush}"/>
-                                </Border>
-                            </StackPanel>
-                            <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap">
-                                Puts idle CPU cores to sleep and lets the ones still awake clock all
-                                the way down, so the machine draws less power and runs cooler when it
-                                is not busy. Sleeping cores also sit in their lowest power state
-                                instead of idling high. On chips with performance and efficiency
-                                cores it parks the power-hungry ones first and keeps an efficiency
-                                core free, so light work stays on the cheap cores. Everything comes
-                                straight back the moment you need it. Re-applied at every boot, every
-                                app start, and whenever your power plan changes.
-                            </TextBlock>
+                        <!-- Loading indicator -->
+                        <StackPanel Orientation="Horizontal"
+                                    Visibility="{Binding IsDnsLoading, Converter={StaticResource BoolToVis}}"
+                                    Margin="0,8,0,0">
+                            <ProgressBar IsIndeterminate="True" Width="160" Height="4"
+                                         Style="{StaticResource AccentProgressBar}" Margin="0,0,10,0"
+                                         VerticalAlignment="Center"/>
+                            <TextBlock Text="Applying..." Style="{StaticResource CaptionText}" VerticalAlignment="Center"/>
                         </StackPanel>
-
-                        <CheckBox Grid.Column="1" VerticalAlignment="Center"
-                                  IsChecked="{Binding CoreParkingEnforced, Mode=TwoWay}"
-                                  Style="{StaticResource CoreParkingToggleStyle}"
-                                  ToolTipService.ShowOnDisabled="True"/>
-                    </Grid>
-
-                    <!-- Status indicator -->
-                    <TextBlock Margin="0,2,0,0">
-                        <TextBlock.Style>
-                            <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionText}">
-                                <Setter Property="Text" Value="Status: OFF  ·  Windows decides when to sleep cores"/>
-                                <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding CoreParkingEnforced}" Value="True">
-                                        <Setter Property="Text" Value="Status: ON ✓  ·  Active, and re-applied after restarts and power plan changes"/>
-                                        <Setter Property="Foreground" Value="{StaticResource AccentGreenBrush}"/>
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </TextBlock.Style>
-                    </TextBlock>
-
-                    <!-- Loading indicator -->
-                    <StackPanel Orientation="Horizontal" Margin="0,6,0,0"
-                                Visibility="{Binding IsCoreParkingLoading, Converter={StaticResource BoolToVis}}">
-                        <ProgressBar IsIndeterminate="True" Width="160" Height="4"
-                                     Style="{StaticResource AccentProgressBar}" Margin="0,0,10,0"
-                                     VerticalAlignment="Center"/>
-                        <TextBlock Text="Working..." Style="{StaticResource CaptionText}" VerticalAlignment="Center"/>
                     </StackPanel>
+                </ctl:SettingsCard.Description>
+            </ctl:SettingsCard>
 
-                </StackPanel>
-            </Border>
+            <!-- ══════════════════════ PERFORMANCE ══════════════════════ -->
+            <TextBlock Text="Performance" Style="{StaticResource SettingsGroupHeader}"/>
 
-            <!-- ===== CARD: Disable NTFS Last-Access Timestamps ===== -->
-            <Border Grid.Row="8" Style="{StaticResource Card}">
-                <StackPanel>
+            <!-- ===== Core Parking ===== -->
+            <ctl:SettingsCard Header="CPU Core Efficiency" Badge="Moderate"
+                              BadgeBrush="{StaticResource TextSecondaryBrush}"
+                              ExtraBadge="Recommended">
+                <ctl:SettingsCard.Description>
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource CardDescription}">
+                            Puts idle CPU cores to sleep and lets the ones still awake clock all
+                            the way down, so the machine draws less power and runs cooler when it
+                            is not busy. Sleeping cores also sit in their lowest power state
+                            instead of idling high. On chips with performance and efficiency
+                            cores it parks the power-hungry ones first and keeps an efficiency
+                            core free, so light work stays on the cheap cores. Everything comes
+                            straight back the moment you need it. Re-applied at every boot, every
+                            app start, and whenever your power plan changes.
+                        </TextBlock>
 
-                    <!-- Header row with toggle -->
-                    <Grid Margin="0,0,0,10">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
+                        <!-- Status indicator -->
+                        <TextBlock>
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock" BasedOn="{StaticResource CardNote}">
+                                    <Setter Property="Text" Value="Status: OFF  ·  Windows decides when to sleep cores"/>
+                                    <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding CoreParkingEnforced}" Value="True">
+                                            <Setter Property="Text" Value="Status: ON ✓  ·  Active, and re-applied after restarts and power plan changes"/>
+                                            <Setter Property="Foreground" Value="{StaticResource AccentGreenBrush}"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
 
-                        <StackPanel Grid.Column="0">
-                            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                                <TextBlock Text="Disable NTFS Last-Access Timestamps"
-                                           Style="{StaticResource HeadingMedium}"/>
-                                <Border BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="3"
-                                        Padding="6,2" Margin="10,0,0,0" VerticalAlignment="Center">
-                                    <TextBlock Text="SAFE" FontSize="9" FontWeight="SemiBold" Foreground="{StaticResource TextSecondaryBrush}"/>
-                                </Border>
-                            </StackPanel>
-                            <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap">
-                                Stops NTFS from writing a "Date Accessed" timestamp on every file read.
-                                Reduces background disk activity, lowers SSD wear, and improves responsiveness on systems with many small files.
-                            </TextBlock>
+                        <!-- Loading indicator -->
+                        <StackPanel Orientation="Horizontal" Margin="0,6,0,0"
+                                    Visibility="{Binding IsCoreParkingLoading, Converter={StaticResource BoolToVis}}">
+                            <ProgressBar IsIndeterminate="True" Width="160" Height="4"
+                                         Style="{StaticResource AccentProgressBar}" Margin="0,0,10,0"
+                                         VerticalAlignment="Center"/>
+                            <TextBlock Text="Working..." Style="{StaticResource CaptionText}" VerticalAlignment="Center"/>
                         </StackPanel>
-
-                        <CheckBox Grid.Column="1" VerticalAlignment="Center"
-                                  Style="{StaticResource ToggleSwitch}"
-                                  IsChecked="{Binding NtfsLastAccessDisabled, Mode=TwoWay}"/>
-                    </Grid>
-
-                    <!-- Status indicator -->
-                    <TextBlock Margin="0,2,0,0">
-                        <TextBlock.Style>
-                            <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionText}">
-                                <Setter Property="Text" Value="Status: OFF  —  Last-access timestamps are written on every read (default)"/>
-                                <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding NtfsLastAccessDisabled}" Value="True">
-                                        <Setter Property="Text" Value="Status: ON ✓  —  Last-access timestamp writes are disabled"/>
-                                        <Setter Property="Foreground" Value="{StaticResource AccentGreenBrush}"/>
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </TextBlock.Style>
-                    </TextBlock>
-
-                    <!-- Loading indicator -->
-                    <StackPanel Orientation="Horizontal" Margin="0,6,0,0"
-                                Visibility="{Binding IsNtfsLastAccessLoading, Converter={StaticResource BoolToVis}}">
-                        <ProgressBar IsIndeterminate="True" Width="160" Height="4"
-                                     Style="{StaticResource AccentProgressBar}" Margin="0,0,10,0"
-                                     VerticalAlignment="Center"/>
-                        <TextBlock Text="Applying..." Style="{StaticResource CaptionText}" VerticalAlignment="Center"/>
                     </StackPanel>
+                </ctl:SettingsCard.Description>
+                <CheckBox IsChecked="{Binding CoreParkingEnforced, Mode=TwoWay}"
+                          Style="{StaticResource CoreParkingToggleStyle}"
+                          ToolTipService.ShowOnDisabled="True"/>
+            </ctl:SettingsCard>
 
-                </StackPanel>
-            </Border>
+            <!-- ===== Disable NTFS Last-Access Timestamps ===== -->
+            <ctl:SettingsCard Header="Disable NTFS Last-Access Timestamps" Badge="Safe"
+                              BadgeBrush="{StaticResource TextSecondaryBrush}">
+                <ctl:SettingsCard.Description>
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource CardDescription}">
+                            Stops NTFS from writing a "Date Accessed" timestamp on every file read.
+                            Reduces background disk activity, lowers SSD wear, and improves responsiveness on systems with many small files.
+                        </TextBlock>
+
+                        <!-- Status indicator -->
+                        <TextBlock>
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock" BasedOn="{StaticResource CardNote}">
+                                    <Setter Property="Text" Value="Status: OFF  ·  Last-access timestamps are written on every read (default)"/>
+                                    <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding NtfsLastAccessDisabled}" Value="True">
+                                            <Setter Property="Text" Value="Status: ON ✓  ·  Last-access timestamp writes are disabled"/>
+                                            <Setter Property="Foreground" Value="{StaticResource AccentGreenBrush}"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+
+                        <!-- Loading indicator -->
+                        <StackPanel Orientation="Horizontal" Margin="0,6,0,0"
+                                    Visibility="{Binding IsNtfsLastAccessLoading, Converter={StaticResource BoolToVis}}">
+                            <ProgressBar IsIndeterminate="True" Width="160" Height="4"
+                                         Style="{StaticResource AccentProgressBar}" Margin="0,0,10,0"
+                                         VerticalAlignment="Center"/>
+                            <TextBlock Text="Applying..." Style="{StaticResource CaptionText}" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </StackPanel>
+                </ctl:SettingsCard.Description>
+                <CheckBox Style="{StaticResource ToggleSwitch}"
+                          IsChecked="{Binding NtfsLastAccessDisabled, Mode=TwoWay}"/>
+            </ctl:SettingsCard>
 
             <!-- Foreground Priority Boost + Instant App Focus moved to the Systema
-                 Engine tab (see TaskSleepView). Row 10 now holds the Win11 cleanup
-                 cards (Disable Suggestions + Disable Web Search). -->
-            <StackPanel Grid.Row="10">
+                 Engine tab (see TaskSleepView). -->
 
-                <!-- ===== CARD: Disable Windows Suggestions & Nags ===== -->
-                <Border Style="{StaticResource Card}">
+            <!-- ══════════════════════ START MENU AND TIPS ══════════════════════ -->
+            <TextBlock Text="Start menu and tips" Style="{StaticResource SettingsGroupHeader}"/>
+
+            <!-- ===== Disable Windows Suggestions & Nags ===== -->
+            <ctl:SettingsCard Header="Disable Suggestions &amp; Nags" Badge="Safe"
+                              BadgeBrush="{StaticResource TextSecondaryBrush}">
+                <ctl:SettingsCard.Description>
                     <StackPanel>
-                        <Grid Margin="0,0,0,10">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <StackPanel Grid.Column="0">
-                                <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                                    <TextBlock Text="Disable Suggestions &amp; Nags"
-                                               Style="{StaticResource HeadingMedium}"/>
-                                    <Border BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="3"
-                                            Padding="6,2" Margin="10,0,0,0" VerticalAlignment="Center">
-                                        <TextBlock Text="SAFE" FontSize="9" FontWeight="SemiBold" Foreground="{StaticResource TextSecondaryBrush}"/>
-                                    </Border>
-                                </StackPanel>
-                                <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" MaxWidth="640">
-                                    Turns off Start-menu app suggestions, lock-screen spotlight tips, "tips &amp; tricks"
-                                    notifications, "Finish setting up your device" prompts, suggested content in Settings,
-                                    and OneDrive ads in File Explorer. When on, it's re-applied each launch so the nags
-                                    never come back. Fully reversible.
-                                </TextBlock>
-                            </StackPanel>
-                            <CheckBox Grid.Column="1" VerticalAlignment="Center"
-                                      Style="{StaticResource ToggleSwitch}"
-                                      IsChecked="{Binding DisableSuggestions, Mode=TwoWay}"/>
-                        </Grid>
+                        <TextBlock Style="{StaticResource CardDescription}">
+                            Turns off Start-menu app suggestions, lock-screen spotlight tips, "tips &amp; tricks"
+                            notifications, "Finish setting up your device" prompts, suggested content in Settings,
+                            and OneDrive ads in File Explorer. When on, it's re-applied each launch so the nags
+                            never come back. Fully reversible.
+                        </TextBlock>
 
-                        <TextBlock Margin="0,2,0,0">
+                        <TextBlock>
                             <TextBlock.Style>
-                                <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionText}">
-                                    <Setter Property="Text" Value="Status: OFF  —  Windows suggestions and tips are shown"/>
+                                <Style TargetType="TextBlock" BasedOn="{StaticResource CardNote}">
+                                    <Setter Property="Text" Value="Status: OFF  ·  Windows suggestions and tips are shown"/>
                                     <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
                                     <Style.Triggers>
                                         <DataTrigger Binding="{Binding DisableSuggestions}" Value="True">
-                                            <Setter Property="Text" Value="Status: ON ✓  —  Suggestions, tips, and setup nags are off"/>
+                                            <Setter Property="Text" Value="Status: ON ✓  ·  Suggestions, tips, and setup nags are off"/>
                                             <Setter Property="Foreground" Value="{StaticResource AccentGreenBrush}"/>
                                         </DataTrigger>
                                     </Style.Triggers>
@@ -404,47 +308,30 @@
                             <TextBlock Text="Applying..." Style="{StaticResource CaptionText}" VerticalAlignment="Center"/>
                         </StackPanel>
                     </StackPanel>
-                </Border>
+                </ctl:SettingsCard.Description>
+                <CheckBox Style="{StaticResource ToggleSwitch}"
+                          IsChecked="{Binding DisableSuggestions, Mode=TwoWay}"/>
+            </ctl:SettingsCard>
 
-                <!-- spacer -->
-                <Border Height="20" Background="Transparent"/>
-
-                <!-- ===== CARD: Disable Bing / Web Results in Start Search ===== -->
-                <Border Style="{StaticResource Card}">
+            <!-- ===== Disable Bing / Web Results in Start Search ===== -->
+            <ctl:SettingsCard Header="Disable Web Search in Start" Badge="Safe"
+                              BadgeBrush="{StaticResource TextSecondaryBrush}">
+                <ctl:SettingsCard.Description>
                     <StackPanel>
-                        <Grid Margin="0,0,0,10">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <StackPanel Grid.Column="0">
-                                <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                                    <TextBlock Text="Disable Web Search in Start"
-                                               Style="{StaticResource HeadingMedium}"/>
-                                    <Border BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="3"
-                                            Padding="6,2" Margin="10,0,0,0" VerticalAlignment="Center">
-                                        <TextBlock Text="SAFE" FontSize="9" FontWeight="SemiBold" Foreground="{StaticResource TextSecondaryBrush}"/>
-                                    </Border>
-                                </StackPanel>
-                                <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" MaxWidth="640">
-                                    Stops the Start menu from sending your typing to Bing and showing web results — searches
-                                    return only your local apps and files, which is faster and needs no network. Off by default.
-                                    Fully reversible.
-                                </TextBlock>
-                            </StackPanel>
-                            <CheckBox Grid.Column="1" VerticalAlignment="Center"
-                                      Style="{StaticResource ToggleSwitch}"
-                                      IsChecked="{Binding DisableWebSearch, Mode=TwoWay}"/>
-                        </Grid>
+                        <TextBlock Style="{StaticResource CardDescription}">
+                            Stops the Start menu from sending your typing to Bing and showing web results. Searches
+                            return only your local apps and files, which is faster and needs no network. Off by default.
+                            Fully reversible.
+                        </TextBlock>
 
-                        <TextBlock Margin="0,2,0,0">
+                        <TextBlock>
                             <TextBlock.Style>
-                                <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionText}">
-                                    <Setter Property="Text" Value="Status: OFF  —  Start search shows Bing/web results"/>
+                                <Style TargetType="TextBlock" BasedOn="{StaticResource CardNote}">
+                                    <Setter Property="Text" Value="Status: OFF  ·  Start search shows Bing/web results"/>
                                     <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
                                     <Style.Triggers>
                                         <DataTrigger Binding="{Binding DisableWebSearch}" Value="True">
-                                            <Setter Property="Text" Value="Status: ON ✓  —  Start search is local-only (no web)"/>
+                                            <Setter Property="Text" Value="Status: ON ✓  ·  Start search is local-only (no web)"/>
                                             <Setter Property="Foreground" Value="{StaticResource AccentGreenBrush}"/>
                                         </DataTrigger>
                                     </Style.Triggers>
@@ -460,299 +347,247 @@
                             <TextBlock Text="Applying..." Style="{StaticResource CaptionText}" VerticalAlignment="Center"/>
                         </StackPanel>
                     </StackPanel>
-                </Border>
+                </ctl:SettingsCard.Description>
+                <CheckBox Style="{StaticResource ToggleSwitch}"
+                          IsChecked="{Binding DisableWebSearch, Mode=TwoWay}"/>
+            </ctl:SettingsCard>
+
+            <!-- ══════════════════════ SLEEP ══════════════════════ -->
+            <TextBlock Text="Sleep and hibernate" Style="{StaticResource SettingsGroupHeader}"/>
+
+            <!-- ===== Sleep → Hibernate (Battery, laptop only) ===== -->
+            <ctl:SettingsCard Header="Sleep → Hibernate (Battery)" Badge="Safe"
+                              BadgeBrush="{StaticResource TextSecondaryBrush}"
+                              Visibility="{Binding HasBattery, Converter={StaticResource BoolToVis}}">
+                <ctl:SettingsCard.Description>
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource CardDescription}">
+                            When your laptop sleeps on battery, Windows normally stays in low-power sleep
+                            indefinitely. This drains the battery overnight. Enable this to automatically
+                            hibernate (zero battery drain) after the chosen timeout. Only applies on battery.
+                            Plugged-in behavior is unchanged.
+                        </TextBlock>
+
+                        <!-- Timeout picker (visible when enabled) -->
+                        <StackPanel Orientation="Horizontal" Margin="0,10,0,0"
+                                    Visibility="{Binding SleepToHibernateEnabled, Converter={StaticResource BoolToVis}}">
+                            <TextBlock Text="Hibernate after: " Style="{StaticResource CaptionText}"
+                                       VerticalAlignment="Center" Margin="0,0,6,0"/>
+                            <ComboBox ItemsSource="{Binding SleepToHibernateOptions}"
+                                      SelectedItem="{Binding SleepToHibernateMinutes, Mode=TwoWay}"
+                                      Width="110" VerticalAlignment="Center">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock>
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionText}">
+                                                    <Setter Property="Text" Value="{Binding StringFormat='{}{0} min'}"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding}" Value="60">
+                                                            <Setter Property="Text" Value="1 hour"/>
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding}" Value="120">
+                                                            <Setter Property="Text" Value="2 hours"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                            <TextBlock Text="of sleep on battery" Style="{StaticResource CaptionText}"
+                                       VerticalAlignment="Center" Margin="8,0,0,0"/>
+                        </StackPanel>
+
+                        <!-- Status indicator -->
+                        <TextBlock>
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock" BasedOn="{StaticResource CardNote}">
+                                    <Setter Property="Text" Value="Status: OFF  ·  laptop stays in sleep on battery (Windows default)"/>
+                                    <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding SleepToHibernateEnabled}" Value="True">
+                                            <Setter Property="Text" Value="Status: ON ✓  ·  will hibernate on battery after the chosen timeout"/>
+                                            <Setter Property="Foreground" Value="{StaticResource AccentGreenBrush}"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+
+                        <!-- Loading indicator -->
+                        <StackPanel Orientation="Horizontal" Margin="0,6,0,0"
+                                    Visibility="{Binding IsSleepToHibernateLoading, Converter={StaticResource BoolToVis}}">
+                            <ProgressBar IsIndeterminate="True" Width="160" Height="4"
+                                         Style="{StaticResource AccentProgressBar}" Margin="0,0,10,0"
+                                         VerticalAlignment="Center"/>
+                            <TextBlock Text="Applying..." Style="{StaticResource CaptionText}" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </StackPanel>
+                </ctl:SettingsCard.Description>
+                <CheckBox Style="{StaticResource ToggleSwitch}"
+                          IsChecked="{Binding SleepToHibernateEnabled, Mode=TwoWay}"/>
+            </ctl:SettingsCard>
+
+            <!-- ===== Sleep → Hibernate (AC / plugged-in) ===== -->
+            <ctl:SettingsCard Header="Sleep → Hibernate (Plugged In)" Badge="Safe"
+                              BadgeBrush="{StaticResource TextSecondaryBrush}">
+                <ctl:SettingsCard.Description>
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource CardDescription}">
+                            When your PC or laptop sleeps while plugged in, Windows stays in low-power sleep
+                            indefinitely by default. Enable this to automatically hibernate (zero power draw)
+                            after the chosen timeout. Useful for desktops and laptops left idle overnight.
+                            Only applies on AC power. Battery behavior is controlled separately above.
+                        </TextBlock>
+
+                        <!-- Timeout picker (visible when enabled) -->
+                        <StackPanel Orientation="Horizontal" Margin="0,10,0,0"
+                                    Visibility="{Binding SleepToHibernateAcEnabled, Converter={StaticResource BoolToVis}}">
+                            <TextBlock Text="Hibernate after: " Style="{StaticResource CaptionText}"
+                                       VerticalAlignment="Center" Margin="0,0,6,0"/>
+                            <ComboBox ItemsSource="{Binding SleepToHibernateOptions}"
+                                      SelectedItem="{Binding SleepToHibernateAcMinutes, Mode=TwoWay}"
+                                      Width="110" VerticalAlignment="Center">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock>
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionText}">
+                                                    <Setter Property="Text" Value="{Binding StringFormat='{}{0} min'}"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding}" Value="60">
+                                                            <Setter Property="Text" Value="1 hour"/>
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding}" Value="120">
+                                                            <Setter Property="Text" Value="2 hours"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                            <TextBlock Text="of sleep while plugged in" Style="{StaticResource CaptionText}"
+                                       VerticalAlignment="Center" Margin="8,0,0,0"/>
+                        </StackPanel>
+
+                        <!-- Status indicator -->
+                        <TextBlock>
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock" BasedOn="{StaticResource CardNote}">
+                                    <Setter Property="Text" Value="Status: OFF  ·  PC stays in sleep while plugged in (Windows default)"/>
+                                    <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding SleepToHibernateAcEnabled}" Value="True">
+                                            <Setter Property="Text" Value="Status: ON ✓  ·  will hibernate on AC after the chosen timeout"/>
+                                            <Setter Property="Foreground" Value="{StaticResource AccentGreenBrush}"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+
+                        <!-- Loading indicator -->
+                        <StackPanel Orientation="Horizontal" Margin="0,6,0,0"
+                                    Visibility="{Binding IsSleepToHibernateAcLoading, Converter={StaticResource BoolToVis}}">
+                            <ProgressBar IsIndeterminate="True" Width="160" Height="4"
+                                         Style="{StaticResource AccentProgressBar}" Margin="0,0,10,0"
+                                         VerticalAlignment="Center"/>
+                            <TextBlock Text="Applying..." Style="{StaticResource CaptionText}" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </StackPanel>
+                </ctl:SettingsCard.Description>
+                <CheckBox Style="{StaticResource ToggleSwitch}"
+                          IsChecked="{Binding SleepToHibernateAcEnabled, Mode=TwoWay}"/>
+            </ctl:SettingsCard>
+
+            <!-- ══════════════════════ CLEANUP (Realtek hardware only) ══════════════════════ -->
+            <StackPanel Visibility="{Binding HasRealtekHardware, Converter={StaticResource BoolToVis}}">
+                <TextBlock Text="Cleanup" Style="{StaticResource SettingsGroupHeader}"/>
+
+                <ctl:SettingsCard Header="Realtek App Cleanup" Badge="Moderate"
+                                  BadgeBrush="{StaticResource TextSecondaryBrush}">
+                    <ctl:SettingsCard.Description>
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource CardDescription}">
+                                Removes the Realtek Audio Manager companion app. Your speakers, microphone, and headphones keep working. Only the unnecessary app is removed.
+                            </TextBlock>
+
+                            <!-- Pre-scan placeholder -->
+                            <Border Background="{StaticResource BgSurfaceBrush}" CornerRadius="4"
+                                    Padding="12,8" Margin="0,12,0,0" MaxWidth="680" HorizontalAlignment="Stretch"
+                                    Visibility="{Binding RealtekScanned,
+                                        Converter={StaticResource BoolToVis},
+                                        ConverterParameter=Invert}">
+                                <TextBlock Style="{StaticResource CaptionText}"
+                                           Text="Click Scan to check for Realtek bloatware on this PC."
+                                           VerticalAlignment="Center"/>
+                            </Border>
+
+                            <!-- Post-scan: show item list or empty message -->
+                            <Border Background="{StaticResource BgSurfaceBrush}" CornerRadius="4"
+                                    Padding="12,8" Margin="0,12,0,0" MaxWidth="680" HorizontalAlignment="Stretch"
+                                    Visibility="{Binding RealtekScanned, Converter={StaticResource BoolToVis}}">
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource CaptionText}"
+                                               Text="No Realtek bloatware found. Your system is clean."
+                                               Visibility="{Binding HasRealtekEntries,
+                                                   Converter={StaticResource BoolToVis},
+                                                   ConverterParameter=Invert}"/>
+                                    <ItemsControl ItemsSource="{Binding RealtekEntries}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Grid Margin="0,3">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="100"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Grid.Column="0" Text="{Binding DisplayName}"
+                                                               Style="{StaticResource BodyText}" FontSize="12"/>
+                                                    <TextBlock Grid.Column="1" Text="{Binding Version}"
+                                                               Style="{StaticResource CaptionText}"
+                                                               HorizontalAlignment="Right"/>
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Actions row -->
+                            <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                                <Button Content="Scan" Style="{StaticResource GhostButton}"
+                                        Command="{Binding ScanRealtekCommand}"
+                                        Margin="0,0,8,0"/>
+                                <Button Content="Remove Realtek App" Style="{StaticResource DangerButton}"
+                                        Command="{Binding RemoveRealtekCommand}"
+                                        IsEnabled="{Binding RealtekScanned}"/>
+                            </StackPanel>
+
+                            <!-- Loading indicator -->
+                            <StackPanel Orientation="Horizontal"
+                                        Visibility="{Binding IsRealtekLoading, Converter={StaticResource BoolToVis}}"
+                                        Margin="0,8,0,0">
+                                <ProgressBar IsIndeterminate="True" Width="160" Height="4"
+                                             Style="{StaticResource AccentProgressBar}" Margin="0,0,10,0"
+                                             VerticalAlignment="Center"/>
+                                <TextBlock Text="Working..." Style="{StaticResource CaptionText}" VerticalAlignment="Center"/>
+                            </StackPanel>
+
+                            <!-- Status -->
+                            <TextBlock Text="{Binding RealtekStatusMessage}" Style="{StaticResource CardNote}"/>
+                        </StackPanel>
+                    </ctl:SettingsCard.Description>
+                </ctl:SettingsCard>
             </StackPanel>
 
-            <!-- ===== CARD: Sleep → Hibernate (Battery — laptop only) ===== -->
-            <Border Grid.Row="12" Style="{StaticResource Card}"
-                    Visibility="{Binding HasBattery, Converter={StaticResource BoolToVis}}">
-                <StackPanel>
-
-                    <!-- Header row with toggle -->
-                    <Grid Margin="0,0,0,10">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-
-                        <StackPanel Grid.Column="0">
-                            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                                <TextBlock Text="Sleep → Hibernate (Battery)"
-                                           Style="{StaticResource HeadingMedium}"/>
-                                <Border BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="3"
-                                        Padding="6,2" Margin="10,0,0,0" VerticalAlignment="Center">
-                                    <TextBlock Text="SAFE" FontSize="9" FontWeight="SemiBold" Foreground="{StaticResource TextSecondaryBrush}"/>
-                                </Border>
-                            </StackPanel>
-                            <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap">
-                                When your laptop sleeps on battery, Windows normally stays in low-power sleep
-                                indefinitely. This drains the battery overnight. Enable this to automatically
-                                hibernate (zero battery drain) after the chosen timeout. Only applies on battery —
-                                plugged-in behavior is unchanged.
-                            </TextBlock>
-                        </StackPanel>
-
-                        <CheckBox Grid.Column="1" VerticalAlignment="Center"
-                                  Style="{StaticResource ToggleSwitch}"
-                                  IsChecked="{Binding SleepToHibernateEnabled, Mode=TwoWay}"/>
-                    </Grid>
-
-                    <!-- Timeout picker (visible when enabled) -->
-                    <StackPanel Orientation="Horizontal" Margin="0,0,0,8"
-                                Visibility="{Binding SleepToHibernateEnabled, Converter={StaticResource BoolToVis}}">
-                        <TextBlock Text="Hibernate after: " Style="{StaticResource CaptionText}"
-                                   VerticalAlignment="Center" Margin="0,0,6,0"/>
-                        <ComboBox ItemsSource="{Binding SleepToHibernateOptions}"
-                                  SelectedItem="{Binding SleepToHibernateMinutes, Mode=TwoWay}"
-                                  Width="110" VerticalAlignment="Center">
-                            <ComboBox.ItemTemplate>
-                                <DataTemplate>
-                                    <TextBlock>
-                                        <TextBlock.Style>
-                                            <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionText}">
-                                                <Setter Property="Text" Value="{Binding StringFormat='{}{0} min'}"/>
-                                                <Style.Triggers>
-                                                    <DataTrigger Binding="{Binding}" Value="60">
-                                                        <Setter Property="Text" Value="1 hour"/>
-                                                    </DataTrigger>
-                                                    <DataTrigger Binding="{Binding}" Value="120">
-                                                        <Setter Property="Text" Value="2 hours"/>
-                                                    </DataTrigger>
-                                                </Style.Triggers>
-                                            </Style>
-                                        </TextBlock.Style>
-                                    </TextBlock>
-                                </DataTemplate>
-                            </ComboBox.ItemTemplate>
-                        </ComboBox>
-                        <TextBlock Text="of sleep on battery" Style="{StaticResource CaptionText}"
-                                   VerticalAlignment="Center" Margin="8,0,0,0"/>
-                    </StackPanel>
-
-                    <!-- Status indicator -->
-                    <TextBlock Margin="0,2,0,0">
-                        <TextBlock.Style>
-                            <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionText}">
-                                <Setter Property="Text" Value="Status: OFF  —  laptop stays in sleep on battery (Windows default)"/>
-                                <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding SleepToHibernateEnabled}" Value="True">
-                                        <Setter Property="Text" Value="Status: ON ✓  —  will hibernate on battery after the chosen timeout"/>
-                                        <Setter Property="Foreground" Value="{StaticResource AccentGreenBrush}"/>
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </TextBlock.Style>
-                    </TextBlock>
-
-                    <!-- Loading indicator -->
-                    <StackPanel Orientation="Horizontal" Margin="0,6,0,0"
-                                Visibility="{Binding IsSleepToHibernateLoading, Converter={StaticResource BoolToVis}}">
-                        <ProgressBar IsIndeterminate="True" Width="160" Height="4"
-                                     Style="{StaticResource AccentProgressBar}" Margin="0,0,10,0"
-                                     VerticalAlignment="Center"/>
-                        <TextBlock Text="Applying..." Style="{StaticResource CaptionText}" VerticalAlignment="Center"/>
-                    </StackPanel>
-
-                </StackPanel>
-            </Border>
-
-            <!-- ===== CARD: Sleep → Hibernate (AC / plugged-in) ===== -->
-            <Border Grid.Row="14" Style="{StaticResource Card}">
-                <StackPanel>
-
-                    <!-- Header row with toggle -->
-                    <Grid Margin="0,0,0,10">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-
-                        <StackPanel Grid.Column="0">
-                            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                                <TextBlock Text="Sleep → Hibernate (Plugged In)"
-                                           Style="{StaticResource HeadingMedium}"/>
-                                <Border BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="3"
-                                        Padding="6,2" Margin="10,0,0,0" VerticalAlignment="Center">
-                                    <TextBlock Text="SAFE" FontSize="9" FontWeight="SemiBold" Foreground="{StaticResource TextSecondaryBrush}"/>
-                                </Border>
-                            </StackPanel>
-                            <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap">
-                                When your PC or laptop sleeps while plugged in, Windows stays in low-power sleep
-                                indefinitely by default. Enable this to automatically hibernate (zero power draw)
-                                after the chosen timeout. Useful for desktops and laptops left idle overnight.
-                                Only applies on AC power — battery behavior is controlled separately above.
-                            </TextBlock>
-                        </StackPanel>
-
-                        <CheckBox Grid.Column="1" VerticalAlignment="Center"
-                                  Style="{StaticResource ToggleSwitch}"
-                                  IsChecked="{Binding SleepToHibernateAcEnabled, Mode=TwoWay}"/>
-                    </Grid>
-
-                    <!-- Timeout picker (visible when enabled) -->
-                    <StackPanel Orientation="Horizontal" Margin="0,0,0,8"
-                                Visibility="{Binding SleepToHibernateAcEnabled, Converter={StaticResource BoolToVis}}">
-                        <TextBlock Text="Hibernate after: " Style="{StaticResource CaptionText}"
-                                   VerticalAlignment="Center" Margin="0,0,6,0"/>
-                        <ComboBox ItemsSource="{Binding SleepToHibernateOptions}"
-                                  SelectedItem="{Binding SleepToHibernateAcMinutes, Mode=TwoWay}"
-                                  Width="110" VerticalAlignment="Center">
-                            <ComboBox.ItemTemplate>
-                                <DataTemplate>
-                                    <TextBlock>
-                                        <TextBlock.Style>
-                                            <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionText}">
-                                                <Setter Property="Text" Value="{Binding StringFormat='{}{0} min'}"/>
-                                                <Style.Triggers>
-                                                    <DataTrigger Binding="{Binding}" Value="60">
-                                                        <Setter Property="Text" Value="1 hour"/>
-                                                    </DataTrigger>
-                                                    <DataTrigger Binding="{Binding}" Value="120">
-                                                        <Setter Property="Text" Value="2 hours"/>
-                                                    </DataTrigger>
-                                                </Style.Triggers>
-                                            </Style>
-                                        </TextBlock.Style>
-                                    </TextBlock>
-                                </DataTemplate>
-                            </ComboBox.ItemTemplate>
-                        </ComboBox>
-                        <TextBlock Text="of sleep while plugged in" Style="{StaticResource CaptionText}"
-                                   VerticalAlignment="Center" Margin="8,0,0,0"/>
-                    </StackPanel>
-
-                    <!-- Status indicator -->
-                    <TextBlock Margin="0,2,0,0">
-                        <TextBlock.Style>
-                            <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionText}">
-                                <Setter Property="Text" Value="Status: OFF  —  PC stays in sleep while plugged in (Windows default)"/>
-                                <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding SleepToHibernateAcEnabled}" Value="True">
-                                        <Setter Property="Text" Value="Status: ON ✓  —  will hibernate on AC after the chosen timeout"/>
-                                        <Setter Property="Foreground" Value="{StaticResource AccentGreenBrush}"/>
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </TextBlock.Style>
-                    </TextBlock>
-
-                    <!-- Loading indicator -->
-                    <StackPanel Orientation="Horizontal" Margin="0,6,0,0"
-                                Visibility="{Binding IsSleepToHibernateAcLoading, Converter={StaticResource BoolToVis}}">
-                        <ProgressBar IsIndeterminate="True" Width="160" Height="4"
-                                     Style="{StaticResource AccentProgressBar}" Margin="0,0,10,0"
-                                     VerticalAlignment="Center"/>
-                        <TextBlock Text="Applying..." Style="{StaticResource CaptionText}" VerticalAlignment="Center"/>
-                    </StackPanel>
-
-                </StackPanel>
-            </Border>
-
-            <!-- ===== CARD: Remove Realtek Bloat ===== -->
-            <Border Grid.Row="16" Style="{StaticResource Card}"
-                    Visibility="{Binding HasRealtekHardware, Converter={StaticResource BoolToVis}}">
-                <StackPanel>
-
-                    <!-- Header -->
-                    <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-                        <TextBlock Text="Realtek App Cleanup" Style="{StaticResource HeadingMedium}"/>
-                        <Border BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="3"
-                                Padding="6,2" Margin="10,0,0,0" VerticalAlignment="Center">
-                            <TextBlock Text="MODERATE" FontSize="9" FontWeight="SemiBold" Foreground="{StaticResource TextSecondaryBrush}"/>
-                        </Border>
-                    </StackPanel>
-
-                    <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,0,0,12"
-                               MaxWidth="640">
-                        Removes the Realtek Audio Manager companion app. Your speakers, microphone, and headphones keep working — only the unnecessary app is removed.
-                    </TextBlock>
-
-                    <!-- Entry list -->
-                    <Border Background="{StaticResource BgSurfaceBrush}" CornerRadius="6"
-                            Padding="12,8" Margin="0,0,0,10"
-                            MinHeight="56">
-                        <!-- Pre-scan placeholder -->
-                        <TextBlock Style="{StaticResource CaptionText}"
-                                   Text="Click Scan to check for Realtek bloatware on this PC."
-                                   VerticalAlignment="Center"
-                                   Visibility="{Binding RealtekScanned,
-                                       Converter={StaticResource BoolToVis},
-                                       ConverterParameter=Invert}"/>
-                    </Border>
-
-                    <!-- Post-scan: show item list or empty message -->
-                    <Border Background="{StaticResource BgSurfaceBrush}" CornerRadius="6"
-                            Padding="12,8" Margin="0,-10,0,10"
-                            Visibility="{Binding RealtekScanned, Converter={StaticResource BoolToVis}}">
-                        <StackPanel>
-                            <TextBlock Style="{StaticResource CaptionText}"
-                                       Text="No Realtek bloatware found. Your system is clean."
-                                       Visibility="{Binding HasRealtekEntries,
-                                           Converter={StaticResource BoolToVis},
-                                           ConverterParameter=Invert}"/>
-                            <ItemsControl ItemsSource="{Binding RealtekEntries}">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate>
-                                        <Grid Margin="0,3">
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="*"/>
-                                                <ColumnDefinition Width="100"/>
-                                            </Grid.ColumnDefinitions>
-                                            <TextBlock Grid.Column="0" Text="{Binding DisplayName}"
-                                                       Style="{StaticResource BodyText}" FontSize="12"/>
-                                            <TextBlock Grid.Column="1" Text="{Binding Version}"
-                                                       Style="{StaticResource CaptionText}"
-                                                       HorizontalAlignment="Right"/>
-                                        </Grid>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                        </StackPanel>
-                    </Border>
-
-                    <!-- Actions row -->
-                    <StackPanel Orientation="Horizontal">
-                        <Button Content="Scan" Style="{StaticResource GhostButton}"
-                                Command="{Binding ScanRealtekCommand}"
-                                Margin="0,0,8,0"/>
-                        <Button Content="Remove Realtek App" Style="{StaticResource DangerButton}"
-                                Command="{Binding RemoveRealtekCommand}"
-                                IsEnabled="{Binding RealtekScanned}"/>
-                    </StackPanel>
-
-                    <!-- Loading indicator -->
-                    <StackPanel Orientation="Horizontal"
-                                Visibility="{Binding IsRealtekLoading, Converter={StaticResource BoolToVis}}"
-                                Margin="0,8,0,0">
-                        <ProgressBar IsIndeterminate="True" Width="160" Height="4"
-                                     Style="{StaticResource AccentProgressBar}" Margin="0,0,10,0"
-                                     VerticalAlignment="Center"/>
-                        <TextBlock Text="Working..." Style="{StaticResource CaptionText}" VerticalAlignment="Center"/>
-                    </StackPanel>
-
-                    <!-- Status -->
-                    <TextBlock Text="{Binding RealtekStatusMessage}"
-                               Style="{StaticResource CaptionText}"
-                               Margin="0,6,0,0"
-                               TextWrapping="Wrap"/>
-                </StackPanel>
-            </Border>
-
             <!-- ===== STATUS BAR ===== -->
-            <Grid Grid.Row="18" Margin="0,8,0,0">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
-                <TextBlock Grid.Column="0"
-                           Text="{Binding StatusMessage}"
-                           Style="{StaticResource CaptionText}"
-                           VerticalAlignment="Center"
-                           TextWrapping="Wrap"/>
-            </Grid>
+            <TextBlock Text="{Binding StatusMessage}" Style="{StaticResource CaptionText}"
+                       TextWrapping="Wrap" Margin="2,16,0,0"/>
 
-        </Grid>
+        </StackPanel>
     </ScrollViewer>
 </UserControl>
