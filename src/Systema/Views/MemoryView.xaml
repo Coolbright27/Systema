@@ -2,22 +2,29 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:conv="clr-namespace:Systema.Core.Converters"
+             xmlns:ctl="clr-namespace:Systema.Controls"
              Background="Transparent">
+
+    <!-- Windows 11 Settings layout: the memory breakdown reads like Settings > System > Storage,
+         the startup list like Settings > Apps > Startup (one row per app: name and publisher on
+         the left, impact and switch on the right). Same bindings and text as before. -->
 
     <UserControl.Resources>
         <conv:BoolToVisibilityConverter x:Key="BoolToVis"/>
     </UserControl.Resources>
 
     <ScrollViewer VerticalScrollBarVisibility="Auto">
-        <StackPanel Margin="32,28,32,28">
+        <StackPanel Margin="32,24,32,28">
 
-            <!-- Header -->
-            <TextBlock Text="Memory &amp; Startup" Style="{StaticResource HeadingLarge}"/>
-            <TextBlock Text="See how your memory is doing and manage the apps that open when your PC starts."
-                       Style="{StaticResource CaptionText}" Margin="0,4,0,20"/>
+            <!-- ===== HEADER ===== -->
+            <StackPanel Margin="0,0,0,8">
+                <TextBlock Text="Memory &amp; Startup" Style="{StaticResource HeadingLarge}"/>
+                <TextBlock Text="See how your memory is doing and manage the apps that open when your PC starts."
+                           Style="{StaticResource CaptionText}" Margin="0,4,0,0" TextWrapping="Wrap"/>
+            </StackPanel>
 
-            <!-- Hero: live memory breakdown + trend line -->
-            <Border Background="{StaticResource BgSurfaceBrush}" CornerRadius="12" Padding="18,16" Margin="0,0,0,12">
+            <!-- ===== LIVE MEMORY BREAKDOWN + TREND LINE ===== -->
+            <Border Style="{StaticResource ListRowCard}" Padding="20,18" Margin="0,16,0,4">
                 <StackPanel>
                     <Grid Margin="0,0,0,13">
                         <Grid.ColumnDefinitions>
@@ -41,7 +48,7 @@
                             <TextBlock Text="Memory in use" Style="{StaticResource CaptionText}"
                                        HorizontalAlignment="Right" Margin="0,0,2,3"/>
                             <Grid Width="168" Height="46">
-                                <Polygon Points="{Binding SparklineArea}" Fill="#2E38BDF8"/>
+                                <Polygon Points="{Binding SparklineArea}" Fill="#2E60CDFF"/>
                                 <Polyline Points="{Binding SparklinePoints}" Stroke="{StaticResource AccentBlueBrush}"
                                           StrokeThickness="2" StrokeLineJoin="Round"/>
                             </Grid>
@@ -49,7 +56,7 @@
                     </Grid>
 
                     <!-- three-segment usage bar -->
-                    <Border CornerRadius="7" Height="14" ClipToBounds="True"
+                    <Border CornerRadius="4" Height="12" ClipToBounds="True"
                             BorderBrush="{StaticResource BorderBrush}" BorderThickness="1">
                         <Grid>
                             <Grid.ColumnDefinitions>
@@ -87,21 +94,15 @@
                 </StackPanel>
             </Border>
 
-            <!-- Free up memory -->
-            <Border Style="{StaticResource Card}" Margin="0,0,0,12">
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
-                    </Grid.ColumnDefinitions>
-                    <StackPanel Grid.Column="0" Margin="0,0,16,0" VerticalAlignment="Center">
-                        <TextBlock Text="Free up memory" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                        <TextBlock Text="Flushes background working sets and clears standby RAM so the app you're using gets it."
-                                   Style="{StaticResource CaptionText}" TextWrapping="Wrap"/>
-                        <TextBlock Text="{Binding FreeRamStatus}" Foreground="{StaticResource AccentGreenBrush}"
-                                   TextWrapping="Wrap" Margin="0,8,0,0">
+            <!-- ===== FREE UP MEMORY ===== -->
+            <ctl:SettingsCard Header="Free up memory">
+                <ctl:SettingsCard.Description>
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource CardDescription}"
+                                   Text="Flushes background working sets and clears standby RAM so the app you're using gets it."/>
+                        <TextBlock Text="{Binding FreeRamStatus}">
                             <TextBlock.Style>
-                                <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionText}">
+                                <Style TargetType="TextBlock" BasedOn="{StaticResource CardNoteGood}">
                                     <Setter Property="Visibility" Value="Visible"/>
                                     <Style.Triggers>
                                         <DataTrigger Binding="{Binding FreeRamStatus}" Value="">
@@ -112,86 +113,72 @@
                             </TextBlock.Style>
                         </TextBlock>
                     </StackPanel>
-                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                        <Button Command="{Binding FreeRamCommand}" MinWidth="130">
-                            <Button.Style>
-                                <Style TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
-                                    <Setter Property="Content"   Value="Free up memory"/>
-                                    <Setter Property="IsEnabled" Value="True"/>
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding IsFreeing}" Value="True">
-                                            <Setter Property="Content"   Value="Freeing up…"/>
-                                            <Setter Property="IsEnabled" Value="False"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </Button.Style>
-                        </Button>
-                    </StackPanel>
-                </Grid>
-            </Border>
+                </ctl:SettingsCard.Description>
+                <Button Command="{Binding FreeRamCommand}" MinWidth="130">
+                    <Button.Style>
+                        <Style TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
+                            <Setter Property="Content"   Value="Free up memory"/>
+                            <Setter Property="IsEnabled" Value="True"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsFreeing}" Value="True">
+                                    <Setter Property="Content"   Value="Freeing up…"/>
+                                    <Setter Property="IsEnabled" Value="False"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Button.Style>
+                </Button>
+            </ctl:SettingsCard>
 
-            <!-- Speed-up recommendation -->
-            <Border CornerRadius="12" Padding="18,16" Margin="0,20,0,0"
-                    Background="{StaticResource BgCardBrush}"
-                    BorderBrush="{StaticResource AccentBlueBrush}" BorderThickness="2"
-                    Visibility="{Binding HasStartupRecommendation, Converter={StaticResource BoolToVis}}">
-                <StackPanel>
-                    <TextBlock Text="Speed up your startup" Style="{StaticResource HeadingSmall}" Margin="0,0,0,4"/>
-                    <TextBlock Text="{Binding StartupRecommendationText}"
-                               Foreground="{StaticResource AccentBlueBrush}" FontWeight="SemiBold" Margin="0,0,0,6"/>
-                    <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,0,0,12">
-                        <Run Text="These apps make your PC slower to get ready after you turn it on: "/>
-                        <Run Text="{Binding HighImpactNames, Mode=OneWay}" Foreground="{StaticResource TextPrimaryBrush}"/>
-                        <Run Text=". You can still open them anytime."/>
-                    </TextBlock>
-                    <Button Content="Turn them all off" Command="{Binding DisableHeavyStartupCommand}"
-                            Style="{StaticResource PrimaryButton}" HorizontalAlignment="Left"/>
-                </StackPanel>
-            </Border>
+            <!-- ===== STARTUP ===== -->
+            <TextBlock Text="Startup" Style="{StaticResource SettingsGroupHeader}"/>
+
+            <!-- Speed-up recommendation: outlined in the accent so it stands out from the list -->
+            <ctl:SettingsCard Header="Speed up your startup" BorderBrush="{StaticResource AccentBlueBrush}"
+                              Visibility="{Binding HasStartupRecommendation, Converter={StaticResource BoolToVis}}">
+                <ctl:SettingsCard.Description>
+                    <StackPanel>
+                        <TextBlock Text="{Binding StartupRecommendationText}" Style="{StaticResource CardDescription}"
+                                   Foreground="{StaticResource AccentBlueBrush}" FontWeight="SemiBold"/>
+                        <TextBlock Style="{StaticResource CardNote}">
+                            <Run Text="These apps make your PC slower to get ready after you turn it on: "/>
+                            <Run Text="{Binding HighImpactNames, Mode=OneWay}" Foreground="{StaticResource TextPrimaryBrush}"/>
+                            <Run Text=". You can still open them anytime."/>
+                        </TextBlock>
+                    </StackPanel>
+                </ctl:SettingsCard.Description>
+                <Button Content="Turn them all off" Command="{Binding DisableHeavyStartupCommand}"
+                        Style="{StaticResource PrimaryButton}"/>
+            </ctl:SettingsCard>
 
             <!-- All startup apps -->
-            <TextBlock Text="All startup apps" Style="{StaticResource HeadingMedium}" Margin="0,24,0,2"/>
-            <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,0,0,12">
+            <TextBlock Text="All startup apps" Style="{StaticResource BodyText}" FontWeight="SemiBold" Margin="2,14,0,2"/>
+            <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="2,0,0,8">
                 <Run Text="These open automatically with Windows. Turning off the heavy ones makes your PC ready faster. The colored tag shows how much each one slows you down."/>
             </TextBlock>
 
             <ItemsControl ItemsSource="{Binding StartupItems}">
-                <ItemsControl.ItemsPanel>
-                    <ItemsPanelTemplate>
-                        <WrapPanel/>
-                    </ItemsPanelTemplate>
-                </ItemsControl.ItemsPanel>
                 <ItemsControl.ItemTemplate>
                     <DataTemplate>
-                        <Border Width="232" Margin="0,0,12,12" Padding="16,14"
-                                Background="{StaticResource BgCardBrush}"
-                                BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
-                                CornerRadius="12" ToolTip="{Binding Command}">
-                            <StackPanel>
-                                <!-- Name + toggle -->
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="Auto"/>
-                                    </Grid.ColumnDefinitions>
-                                    <TextBlock Grid.Column="0" Text="{Binding Name}" Style="{StaticResource BodyText}"
-                                               FontWeight="SemiBold" TextTrimming="CharacterEllipsis"
-                                               VerticalAlignment="Center" Margin="0,0,8,0"/>
-                                    <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}"
-                                              VerticalAlignment="Center"
-                                              IsChecked="{Binding IsEnabled, Mode=OneWay}"
-                                              Command="{Binding DataContext.ToggleStartupItemCommand,
-                                                  RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                              CommandParameter="{Binding}"/>
-                                </Grid>
+                        <Border Style="{StaticResource ListRowCard}" ToolTip="{Binding Command}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
 
-                                <!-- Publisher -->
-                                <TextBlock Text="{Binding Publisher}" Style="{StaticResource CaptionText}"
-                                           TextTrimming="CharacterEllipsis" Opacity="0.7" Margin="0,2,0,10"/>
+                                <!-- Name + publisher -->
+                                <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,16,0">
+                                    <TextBlock Text="{Binding Name}" Style="{StaticResource BodyText}"
+                                               FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                                    <TextBlock Text="{Binding Publisher}" Style="{StaticResource CaptionText}"
+                                               TextTrimming="CharacterEllipsis" Opacity="0.7" Margin="0,2,0,0"/>
+                                </StackPanel>
 
                                 <!-- Impact badge -->
-                                <Border HorizontalAlignment="Left" CornerRadius="6" Padding="8,3">
+                                <Border Grid.Column="1" VerticalAlignment="Center" CornerRadius="4" Padding="8,3"
+                                        Margin="0,0,20,0">
                                     <Border.Style>
                                         <Style TargetType="Border">
                                             <Setter Property="Background" Value="#2222C55E"/>
@@ -224,49 +211,62 @@
                                         </TextBlock.Style>
                                     </TextBlock>
                                 </Border>
-                            </StackPanel>
+
+                                <!-- Switch -->
+                                <CheckBox Grid.Column="2" Style="{StaticResource ToggleSwitch}"
+                                          VerticalAlignment="Center"
+                                          IsChecked="{Binding IsEnabled, Mode=OneWay}"
+                                          Command="{Binding DataContext.ToggleStartupItemCommand,
+                                              RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                          CommandParameter="{Binding}"/>
+                            </Grid>
                         </Border>
                     </DataTemplate>
                 </ItemsControl.ItemTemplate>
             </ItemsControl>
 
-            <!-- Advanced (demoted) — Virtual memory / page file -->
-            <Border Style="{StaticResource Card}" Margin="0,8,0,0">
-                <StackPanel>
-                    <StackPanel.Style>
-                        <Style TargetType="StackPanel">
-                            <Style.Triggers>
-                                <DataTrigger Binding="{Binding IsAutoPilotActive}" Value="True">
-                                    <Setter Property="IsEnabled" Value="False"/>
-                                    <Setter Property="Opacity"   Value="0.4"/>
-                                </DataTrigger>
-                            </Style.Triggers>
-                        </Style>
-                    </StackPanel.Style>
+            <!-- ===== ADVANCED: VIRTUAL MEMORY (PAGE FILE) ===== -->
+            <TextBlock Text="Advanced" Style="{StaticResource SettingsGroupHeader}"/>
 
-                    <TextBlock Text="Advanced · Virtual memory (page file)" Style="{StaticResource HeadingSmall}"/>
-                    <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,4,0,4">
-                        Windows uses a file on disk as backup memory when RAM fills up. A fixed size avoids
-                        stutter from resizing on the fly. Most people can leave this alone. Requires a restart.
-                    </TextBlock>
-                    <TextBlock Text="{Binding CurrentPagefileText}" Style="{StaticResource CaptionText}"
-                               Foreground="{StaticResource AccentGreenBrush}" Margin="0,0,0,2"/>
-                    <TextBlock Text="{Binding RecommendedPagefileText}" Style="{StaticResource CaptionText}"
-                               Foreground="{StaticResource AccentBlueBrush}" Margin="0,0,0,12"/>
+            <!-- Locked while Auto Pilot runs, exactly as before. -->
+            <StackPanel>
+                <StackPanel.Style>
+                    <Style TargetType="StackPanel">
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsAutoPilotActive}" Value="True">
+                                <Setter Property="IsEnabled" Value="False"/>
+                                <Setter Property="Opacity"   Value="0.4"/>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </StackPanel.Style>
 
-                    <StackPanel Width="180" HorizontalAlignment="Left" Margin="0,0,0,8">
+                <ctl:SettingsCard Header="Virtual memory (page file)">
+                    <ctl:SettingsCard.Description>
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource CardDescription}">
+                                Windows uses a file on disk as backup memory when RAM fills up. A fixed size avoids
+                                stutter from resizing on the fly. Most people can leave this alone. Requires a restart.
+                            </TextBlock>
+                            <TextBlock Text="{Binding CurrentPagefileText}" Style="{StaticResource CardNoteGood}"/>
+                            <TextBlock Text="{Binding RecommendedPagefileText}" Style="{StaticResource CardNote}"
+                                       Foreground="{StaticResource AccentBlueBrush}" Margin="0,2,0,0"/>
+                        </StackPanel>
+                    </ctl:SettingsCard.Description>
+                    <StackPanel>
                         <TextBlock Text="Fixed size (MB)" Style="{StaticResource CaptionText}" Margin="0,0,0,4"/>
                         <TextBox Text="{Binding PagefileInitialMb, UpdateSourceTrigger=PropertyChanged}"
-                                 Style="{StaticResource DarkTextBox}"/>
+                                 Style="{StaticResource DarkTextBox}" Width="180" HorizontalAlignment="Left"
+                                 Margin="0,0,0,8"/>
+                        <StackPanel Orientation="Horizontal">
+                            <Button Content="Apply" Command="{Binding ConfigurePagefileCommand}"
+                                    Style="{StaticResource PrimaryButton}" Margin="0,0,8,0"/>
+                            <Button Content="Reset to default" Command="{Binding RevertPagefileCommand}"
+                                    Style="{StaticResource GhostButton}"/>
+                        </StackPanel>
                     </StackPanel>
-                    <StackPanel Orientation="Horizontal">
-                        <Button Content="Apply" Command="{Binding ConfigurePagefileCommand}"
-                                Style="{StaticResource PrimaryButton}" Margin="0,0,10,0"/>
-                        <Button Content="Reset to default" Command="{Binding RevertPagefileCommand}"
-                                Style="{StaticResource GhostButton}"/>
-                    </StackPanel>
-                </StackPanel>
-            </Border>
+                </ctl:SettingsCard>
+            </StackPanel>
 
             <!-- Status line -->
             <TextBlock Text="{Binding StatusMessage}" Style="{StaticResource CaptionText}" Margin="2,14,0,0"/>
