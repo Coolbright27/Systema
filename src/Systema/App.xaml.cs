@@ -377,6 +377,11 @@ public partial class App : Application
         // is self-contained — no need to ask for a separate diagnostic report.
         Log.LogSystemInfo();
 
+        // Home's "Today" feed listens to the log, so start it before the services come up and
+        // it catches everything they do from the first moment. UI mode only: the headless
+        // --reapply-parking and --cleanup paths above have already returned.
+        ActivityFeed.Instance.Start(Dispatcher);
+
         try
         {
             // ── Manual DI composition root ──

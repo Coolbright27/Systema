@@ -7,7 +7,10 @@ using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Threading;
+using Systema.Core;
 using Systema.ViewModels;
+using Controls = System.Windows.Controls;
+using Media = System.Windows.Media;
 
 namespace Systema.Views;
 
@@ -289,7 +292,236 @@ public partial class MainWindow : Window
     }
 
     private void Window_Deactivated(object sender, EventArgs e)
-        => (DataContext as MainViewModel)?.SetFocused(false);
+    {
+        (DataContext as MainViewModel)?.SetFocused(false);
+        // Clicking away from Systema dismisses the search palette, as a flyout would.
+        if (IsSearchOpen) CloseSearch();
+    }
+
+    // ── Search (Ctrl+K) ──────────────────────────────────────────────────────
+    // The palette searches Core/SettingsSearchIndex. Picking a page just navigates; picking a
+    // setting navigates and then outlines that setting's row for a moment so the eye lands on
+    // it. Everything past navigation is cosmetic and wrapped so it can never throw into the UI.
+
+    private bool IsSearchOpen => SearchOverlay.Visibility == Visibility.Visible;
+
+    private void SearchBox_Click(object sender, RoutedEventArgs e) => OpenSearch();
+
+    private void Window_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+    {
+        if (e.Key == Key.K && (Keyboard.Modifiers & ModifierKeys.Control) != 0)
+        {
+            if (IsSearchOpen) CloseSearch(); else OpenSearch();
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Escape && IsSearchOpen)
+        {
+            CloseSearch();
+            e.Handled = true;
+        }
+    }
+
+    private void OpenSearch()
+    {
+        SearchInput.Text = "";
+        RunSearch();
+        SearchOverlay.Visibility = Visibility.Visible;
+
+        if (SystemParameters.ClientAreaAnimation)
+        {
+            SearchOverlay.BeginAnimation(OpacityProperty,
+                new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(167)));
+            SearchPanelShift.BeginAnimation(TranslateTransform.YProperty,
+                new DoubleAnimation(-8, 0, TimeSpan.FromMilliseconds(250))
+                {
+                    EasingFunction = new QuinticEase { EasingMode = EasingMode.EaseOut }
+                });
+        }
+
+        Dispatcher.BeginInvoke(DispatcherPriority.Input, new Action(() =>
+        {
+            SearchInput.Focus();
+            Keyboard.Focus(SearchInput);
+        }));
+    }
+
+    private void CloseSearch()
+    {
+        SearchOverlay.BeginAnimation(OpacityProperty, null);
+        SearchOverlay.Visibility = Visibility.Collapsed;
+    }
+
+    private static bool IsSectionVisible(MainViewModel vm, string section) => section switch
+    {
+        "Intel"  => vm.IsIntelGpuPresent,
+        "Nvidia" => vm.IsNvidiaGpuPresent,
+        "Dell"   => vm.IsDellPresent,
+        _        => true,
+    };
+
+    private void RunSearch()
+    {
+        if (DataContext is not MainViewModel vm) return;
+        var hits = SettingsSearchIndex.Search(SearchInput.Text, s => IsSectionVisible(vm, s));
+        SearchResults.ItemsSource = hits.Select(h => new SearchResultItem(
+            h.Title, h.IsPage ? "Page" : SettingsSearchIndex.SectionNames[h.Section], h)).ToList();
+        SearchResults.SelectedIndex = hits.Count > 0 ? 0 : -1;
+        SearchEmpty.Visibility       = hits.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        SearchPlaceholder.Visibility = SearchInput.Text.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void SearchInput_TextChanged(object sender, Controls.TextChangedEventArgs e) => RunSearch();
+
+    private void SearchInput_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+    {
+        int count = SearchResults.Items.Count;
+        switch (e.Key)
+        {
+            case Key.Down when count > 0:
+                SearchResults.SelectedIndex = (SearchResults.SelectedIndex + 1) % count;
+                SearchResults.ScrollIntoView(SearchResults.SelectedItem);
+                e.Handled = true;
+                break;
+            case Key.Up when count > 0:
+                SearchResults.SelectedIndex = (SearchResults.SelectedIndex - 1 + count) % count;
+                SearchResults.ScrollIntoView(SearchResults.SelectedItem);
+                e.Handled = true;
+                break;
+            case Key.Enter:
+                ChooseResult(SearchResults.SelectedItem as SearchResultItem);
+                e.Handled = true;
+                break;
+            case Key.Tab:
+                e.Handled = true;   // keep focus in the palette
+                break;
+        }
+    }
+
+    private void SearchResults_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        // Only a click on a result row opens it, not a click on the list's scrollbar.
+        for (var d = e.OriginalSource as DependencyObject; d != null && d != SearchResults; d = Media.VisualTreeHelper.GetParent(d))
+        {
+            if (d is Controls.ListBoxItem item)
+            {
+                ChooseResult(item.DataContext as SearchResultItem);
+                return;
+            }
+        }
+    }
+
+    private void SearchOverlay_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        // Only the dimmed area closes the palette; clicks inside the panel bubble here too.
+        if (ReferenceEquals(e.OriginalSource, SearchOverlay)) CloseSearch();
+    }
+
+    private void ChooseResult(SearchResultItem? item)
+    {
+        if (item == null || DataContext is not MainViewModel vm) return;
+        CloseSearch();
+        vm.NavigateCommand.Execute(item.Entry.Section);
+        if (!item.Entry.IsPage)
+            Dispatcher.BeginInvoke(DispatcherPriority.ContextIdle,
+                new Action(() => HighlightSetting(item.Entry.Title, attempt: 0)));
+    }
+
+    /// <summary>
+    /// Finds the setting's title on the page that just opened, scrolls it into view and outlines
+    /// its row for a moment. Heavy pages can take a beat to build, so it retries a few times.
+    /// A setting inside a collapsed section simply isn't outlined; the page still opened.
+    /// </summary>
+    private void HighlightSetting(string title, int attempt)
+    {
+        try
+        {
+            var text = FindVisibleText(PageHost, title);
+            if (text == null)
+            {
+                if (attempt >= 4) return;
+                var retry = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(150) };
+                retry.Tick += (_, _) => { retry.Stop(); HighlightSetting(title, attempt + 1); };
+                retry.Start();
+                return;
+            }
+
+            var row = RowFor(text);
+            row.BringIntoView(new Rect(0, -60, row.ActualWidth, row.ActualHeight + 120));
+
+            var layer = System.Windows.Documents.AdornerLayer.GetAdornerLayer(row);
+            if (layer == null) return;
+            var accent = TryFindResource("AccentBlueBrush") as Media.SolidColorBrush;
+            var outline = new SearchHighlightAdorner(row, accent?.Color ?? Media.Color.FromRgb(0x60, 0xCD, 0xFF));
+            layer.Add(outline);
+
+            var fade = new DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(700))
+            {
+                BeginTime = TimeSpan.FromMilliseconds(SystemParameters.ClientAreaAnimation ? 900 : 1400)
+            };
+            fade.Completed += (_, _) => { try { layer.Remove(outline); } catch { } };
+            outline.BeginAnimation(OpacityProperty, fade);
+        }
+        catch { /* cosmetic: the page has already opened */ }
+    }
+
+    private static Controls.TextBlock? FindVisibleText(DependencyObject root, string text)
+    {
+        int n = Media.VisualTreeHelper.GetChildrenCount(root);
+        for (int i = 0; i < n; i++)
+        {
+            var child = Media.VisualTreeHelper.GetChild(root, i);
+            if (child is Controls.TextBlock tb && tb.IsVisible &&
+                string.Equals(tb.Text, text, StringComparison.Ordinal))
+                return tb;
+            var deeper = FindVisibleText(child, text);
+            if (deeper != null) return deeper;
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// The setting's row: settings are laid out as a Grid with the text in one column and the
+    /// control in another, so the nearest multi-column Grid is the row. Never climbs past the
+    /// card, which would outline a whole group instead of one setting.
+    /// </summary>
+    private FrameworkElement RowFor(Controls.TextBlock text)
+    {
+        var card = TryFindResource("Card");
+        DependencyObject? cur = text;
+        for (int i = 0; i < 6 && cur != null; i++)
+        {
+            cur = Media.VisualTreeHelper.GetParent(cur);
+            if (cur is Controls.Grid g && g.ColumnDefinitions.Count >= 2) return g;
+            if (cur is Controls.Border b && card != null && ReferenceEquals(b.Style, card)) break;
+        }
+        return (Media.VisualTreeHelper.GetParent(text) as FrameworkElement) ?? text;
+    }
+
+    /// <summary>Accent outline drawn over a row, never taking input or changing layout.</summary>
+    private sealed class SearchHighlightAdorner : System.Windows.Documents.Adorner
+    {
+        private readonly Media.Pen _pen;
+        private readonly Media.Brush _fill;
+
+        public SearchHighlightAdorner(UIElement adorned, Media.Color accent) : base(adorned)
+        {
+            IsHitTestVisible = false;
+            var stroke = new Media.SolidColorBrush(accent);
+            stroke.Freeze();
+            _pen = new Media.Pen(stroke, 2);
+            _pen.Freeze();
+            var fill = new Media.SolidColorBrush(Media.Color.FromArgb(0x1F, accent.R, accent.G, accent.B));
+            fill.Freeze();
+            _fill = fill;
+        }
+
+        protected override void OnRender(Media.DrawingContext dc)
+        {
+            var r = new Rect(AdornedElement.RenderSize);
+            r.Inflate(8, 5);
+            dc.DrawRoundedRectangle(_fill, _pen, r, 6, 6);
+        }
+    }
 
     // ── Title-bar action buttons ─────────────────────────────────────────────
     // Both open in the user's default browser. UseShellExecute=true is required
@@ -317,3 +549,6 @@ public partial class MainWindow : Window
         }
     }
 }
+
+/// <summary>One row in the Ctrl+K palette. Public so WPF bindings can read it.</summary>
+public sealed record SearchResultItem(string Title, string Where, Systema.Core.SearchEntry Entry);

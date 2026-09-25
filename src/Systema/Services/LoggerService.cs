@@ -232,7 +232,22 @@ public class LoggerService
         // somehow saturated the line is dropped rather than stalling the caller —
         // losing a log line is always better than freezing the app that emits it.
         _writeQueue.TryAdd(new PendingWrite(entry.ToString(), isChangeLog: false));
+
+        // Live listeners (the Home activity feed). They run on the CALLER's thread, so they
+        // must stay trivial: the feed only does string checks and posts to the dispatcher.
+        // A throwing listener must never be able to break logging, so it is contained here.
+        var listeners = EntryLogged;
+        if (listeners != null)
+        {
+            try { listeners(entry); } catch { /* never throw from logger */ }
+        }
     }
+
+    /// <summary>
+    /// Raised for every logged line, on the thread that logged it. Handlers must be cheap and
+    /// non-blocking; the Home activity feed is the only subscriber.
+    /// </summary>
+    public event Action<LogEntry>? EntryLogged;
 
     public void Info(string source, string message) => Log(LogLevel.Info, source, message);
     public void Warn(string source, string message, Exception? ex = null) => Log(LogLevel.Warning, source, message, ex);

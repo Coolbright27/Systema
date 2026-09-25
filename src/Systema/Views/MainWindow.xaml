@@ -23,7 +23,8 @@
         Background="{StaticResource BgPrimaryBrush}"
         WindowStartupLocation="CenterScreen"
         Activated="Window_Activated"
-        Deactivated="Window_Deactivated">
+        Deactivated="Window_Deactivated"
+        PreviewKeyDown="Window_PreviewKeyDown">
     <WindowChrome.WindowChrome>
         <!-- Custom chrome without the VSync-breaking layered-window path.
              CaptionHeight=0: our own title bar handles drag via MouseLeftButtonDown.
@@ -81,6 +82,101 @@
         <DataTemplate DataType="{x:Type vm:DellViewModel}">
             <views:DellView/>
         </DataTemplate>
+
+        <!-- ── Ctrl+K search ─────────────────────────────────────────────── -->
+        <!-- The search box in the title bar. It's a button that opens the palette, like the
+             Settings app's search, so the title bar keeps no live text field. -->
+        <Style x:Key="TitleSearchBox" TargetType="Button">
+            <Setter Property="Background" Value="{StaticResource ControlFillBrush}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource ControlStrokeBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+            <Setter Property="FontFamily" Value="{StaticResource MainFont}"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Cursor" Value="IBeam"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Chrome" Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="4" Padding="10,0">
+                            <ContentPresenter VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Chrome" Property="Background" Value="{StaticResource ControlFillHoverBrush}"/>
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="Chrome" Property="BorderBrush" Value="{StaticResource TextPrimaryBrush}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Chromeless input for the palette; the palette itself is the frame. -->
+        <Style x:Key="SearchInputBox" TargetType="TextBox">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+            <Setter Property="CaretBrush" Value="{StaticResource TextPrimaryBrush}"/>
+            <Setter Property="SelectionBrush" Value="{StaticResource AccentBlueBrush}"/>
+            <Setter Property="SelectionOpacity" Value="0.35"/>
+            <Setter Property="FontFamily" Value="{StaticResource MainFont}"/>
+            <Setter Property="FontSize" Value="15"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TextBox">
+                        <ScrollViewer x:Name="PART_ContentHost" VerticalAlignment="Center"/>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Result rows: a subtle highlight under the pointer and an accent pill on the row that
+             Enter will open, the same selection language as the nav and the dropdowns. -->
+        <Style x:Key="SearchResultsList" TargetType="ListBox">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+            <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled"/>
+            <Setter Property="ItemContainerStyle">
+                <Setter.Value>
+                    <Style TargetType="ListBoxItem">
+                        <Setter Property="Padding" Value="12,8"/>
+                        <Setter Property="Cursor" Value="Hand"/>
+                        <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+                        <Setter Property="Template">
+                            <Setter.Value>
+                                <ControlTemplate TargetType="ListBoxItem">
+                                    <Grid Margin="0,1">
+                                        <Border x:Name="Bg" CornerRadius="4" Background="Transparent"/>
+                                        <Border x:Name="Pill" Width="3" Height="16" CornerRadius="1.5"
+                                                HorizontalAlignment="Left" VerticalAlignment="Center"
+                                                Background="{StaticResource AccentBlueBrush}" Opacity="0"/>
+                                        <ContentPresenter Margin="{TemplateBinding Padding}"/>
+                                    </Grid>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="Bg" Property="Background" Value="{StaticResource PopupItemHoverBrush}"/>
+                                        </Trigger>
+                                        <Trigger Property="IsSelected" Value="True">
+                                            <Setter TargetName="Bg" Property="Background" Value="{StaticResource SubtleSelectedBrush}"/>
+                                            <Setter TargetName="Pill" Property="Opacity" Value="1"/>
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Setter.Value>
+                        </Setter>
+                    </Style>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </Window.Resources>
 
     <!-- Rounded corners are provided by DWM on Win11 via DwmSetWindowAttribute in
@@ -135,7 +231,36 @@
 
                     <!-- (Download + Discord moved to the sidebar footer, bottom-left.)
                          This middle column stays empty so it remains a draggable title-bar area. -->
-                    <StackPanel Grid.Column="1"/>
+                    <!-- Search box (Ctrl+K). Fixed width and centred, so the title bar either side
+                         of it is still a drag area. -->
+                    <Button x:Name="SearchBox" Grid.Column="1" Width="360" Height="28"
+                            HorizontalAlignment="Center" VerticalAlignment="Center"
+                            Style="{StaticResource TitleSearchBox}"
+                            Click="SearchBox_Click" ToolTip="Search every setting (Ctrl+K)">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <Path Grid.Column="0" Width="14" Height="14" Stretch="Uniform" Margin="0,0,8,0"
+                                  Stroke="{StaticResource TextSecondaryBrush}" StrokeThickness="1.5"
+                                  StrokeStartLineCap="Round" StrokeEndLineCap="Round" VerticalAlignment="Center">
+                                <Path.Data>
+                                    <GeometryGroup>
+                                        <EllipseGeometry Center="10.5,10.5" RadiusX="6.5" RadiusY="6.5"/>
+                                        <LineGeometry StartPoint="15.3,15.3" EndPoint="20,20"/>
+                                    </GeometryGroup>
+                                </Path.Data>
+                            </Path>
+                            <TextBlock Grid.Column="1" Text="Search settings" VerticalAlignment="Center"
+                                       Foreground="{StaticResource TextSecondaryBrush}"/>
+                            <Border Grid.Column="2" BorderBrush="{StaticResource ControlStrokeBrush}" BorderThickness="1"
+                                    CornerRadius="3" Padding="5,0" VerticalAlignment="Center">
+                                <TextBlock Text="Ctrl K" FontSize="11" Foreground="{StaticResource TextTertiaryBrush}"/>
+                            </Border>
+                        </Grid>
+                    </Button>
 
                     <!-- Window Buttons.
                          No Maximize — the window is fixed-size (ResizeMode=NoResize).
@@ -202,7 +327,7 @@
                                         <Path Style="{StaticResource NavIcon}"
                                               Data="M3 10.5 L12 3 L21 10.5 M5.5 9 V19.5 A1 1 0 0 0 6.5 20.5 H17.5 A1 1 0 0 0 18.5 19.5 V9 M9.5 20.5 V14.5 H14.5 V20.5"/>
                                     </Viewbox>
-                                    <TextBlock Text="Auto Pilot"/>
+                                    <TextBlock Text="Home"/>
                                 </StackPanel>
                             </Button>
 
@@ -394,7 +519,7 @@
                                 Background="{StaticResource BgCardBrush}"
                                 BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="8">
                             <StackPanel>
-                                <TextBlock Text="Systema v0.7.337" FontSize="11" FontWeight="SemiBold"
+                                <TextBlock Text="Systema v0.7.338" FontSize="11" FontWeight="SemiBold"
                                            Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,7"/>
 
                                 <!-- Live status: green check + status text from the updater -->
@@ -497,6 +622,73 @@
                         </EventTrigger>
                     </ContentControl.Triggers>
                 </ContentControl>
+            </Grid>
+
+            <!-- ===== SEARCH PALETTE (Ctrl+K) =====
+                 Covers the whole window. Clicking the dimmed area, pressing Esc, or picking a
+                 result closes it. Results come from Core/SettingsSearchIndex; picking a setting
+                 opens its page and briefly outlines the setting (MainWindow.xaml.cs). -->
+            <Grid x:Name="SearchOverlay" Grid.RowSpan="2" Visibility="Collapsed"
+                  Background="#66000000"
+                  MouseLeftButtonDown="SearchOverlay_MouseLeftButtonDown">
+                <Border x:Name="SearchPanel" Width="560" VerticalAlignment="Top" Margin="0,52,0,0"
+                        Background="{StaticResource PopupBrush}"
+                        BorderBrush="{StaticResource PopupStrokeBrush}"
+                        BorderThickness="1" CornerRadius="8">
+                    <Border.RenderTransform>
+                        <TranslateTransform x:Name="SearchPanelShift"/>
+                    </Border.RenderTransform>
+                    <StackPanel>
+                        <Grid Height="48" Margin="16,0,16,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Path Grid.Column="0" Width="16" Height="16" Stretch="Uniform" Margin="0,0,12,0"
+                                  Stroke="{StaticResource TextSecondaryBrush}" StrokeThickness="1.5"
+                                  StrokeStartLineCap="Round" StrokeEndLineCap="Round" VerticalAlignment="Center">
+                                <Path.Data>
+                                    <GeometryGroup>
+                                        <EllipseGeometry Center="10.5,10.5" RadiusX="6.5" RadiusY="6.5"/>
+                                        <LineGeometry StartPoint="15.3,15.3" EndPoint="20,20"/>
+                                    </GeometryGroup>
+                                </Path.Data>
+                            </Path>
+                            <TextBlock x:Name="SearchPlaceholder" Grid.Column="1"
+                                       Text="Search settings, or type what you want"
+                                       FontSize="15" VerticalAlignment="Center" IsHitTestVisible="False"
+                                       Foreground="{StaticResource TextTertiaryBrush}"/>
+                            <TextBox x:Name="SearchInput" Grid.Column="1"
+                                     Style="{StaticResource SearchInputBox}"
+                                     TextChanged="SearchInput_TextChanged"
+                                     PreviewKeyDown="SearchInput_PreviewKeyDown"/>
+                        </Grid>
+                        <Border Height="1" Background="{StaticResource PopupStrokeBrush}"/>
+                        <ListBox x:Name="SearchResults" MaxHeight="360" Margin="6"
+                                 Style="{StaticResource SearchResultsList}"
+                                 PreviewMouseLeftButtonUp="SearchResults_PreviewMouseLeftButtonUp">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="{Binding Title, Mode=OneWay}" FontSize="14"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   Foreground="{StaticResource TextPrimaryBrush}"/>
+                                        <TextBlock Grid.Column="1" Text="{Binding Where, Mode=OneWay}"
+                                                   FontSize="12" Margin="16,0,0,0" VerticalAlignment="Center"
+                                                   Foreground="{StaticResource TextTertiaryBrush}"/>
+                                    </Grid>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                        <TextBlock x:Name="SearchEmpty" Visibility="Collapsed" Margin="22,4,22,18"
+                                   TextWrapping="Wrap" Style="{StaticResource CaptionText}"
+                                   Text="Nothing matches that. Settings that can't apply to this PC are left out of search."/>
+                    </StackPanel>
+                </Border>
             </Grid>
             </Grid>
         </Grid>

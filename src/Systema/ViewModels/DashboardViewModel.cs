@@ -122,6 +122,25 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
     [ObservableProperty] private bool   _systemHealthOptimal = true;
     [ObservableProperty] private string _systemHealthStatus  = "Checking…";
 
+    // ── Home: live status ─────────────────────────────────────────────────────
+    // What the Home header says about the PC right now. Most of it reuses values this view model
+    // already refreshes; the old page computed them and never showed them.
+    [ObservableProperty] private string _homeHeadline = "Checking your PC…";
+    [ObservableProperty] private string _homeSubline  = "";
+    /// <summary>Every app Task Sleep is resting right now (NappedAppCount stops at 8).</summary>
+    [ObservableProperty] private int    _restingAppCount;
+    [ObservableProperty] private string _coresParkedText = "—";
+    [ObservableProperty] private string _batteryText = "—";
+    [ObservableProperty] private bool   _hasBatteryFact;
+
+    /// <summary>Home's "Today" list. Shared with the feed, which fills it from the log.</summary>
+    public ObservableCollection<ActivityEntry> Activity => ActivityFeed.Instance.Entries;
+
+    // Parked-core count comes from a performance counter. Reading it takes a few milliseconds,
+    // so it runs off the UI thread and at most every few seconds.
+    private DateTime _lastParkingRead = DateTime.MinValue;
+    private int      _parkingReadInFlight;
+
     // ── Napping list ──────────────────────────────────────────────────────────
     /// <summary>Names of processes currently napped by Task Sleep (top 8).</summary>
     public ObservableCollection<string> NappedApps { get; } = new();
@@ -293,7 +312,11 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
         }
         catch (Exception ex) { _log.Warn("DashboardViewModel", $"RAM stats failed: {ex.Message}"); RamUsageText = "—"; }
 
-        StatusMessage = $"Systema is running · {DateTime.Now:HH:mm}";
+        // Idle filler used to be "Systema is running · HH:mm", which was just the clock. Home now
+        // shows real live status, so the line stays empty until there's an actual message.
+        StatusMessage = string.Empty;
+
+        RefreshHomeStatus();
 
         // Re-check Auto-Pilot status every 30 s so changes made in other tabs are
         // reflected as soon as the user navigates back to the Dashboard.
@@ -748,6 +771,7 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
                   : "Auto-Pilot Mode OFF — controls unlocked");
 
         RebuildRecommendationsFromChecklist();   // mode on hides the feed; off resurfaces it
+        RefreshHomeStatus();                     // header answers the click now, not next tick
 
         if (value)
             _ = RunAutoPilotAsync();
@@ -1076,6 +1100,92 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
             }),
     };
 
+    /// <summary>
+    /// Home's live header. Runs on every refresh tick (UI thread), so it only reads cheap values:
+    /// counts this view model already has, the battery state (one GetSystemPowerStatus call), and
+    /// a parked-core count that is read in the background at most every 3 seconds.
+    /// </summary>
+    private void RefreshHomeStatus()
+    {
+        try
+        {
+            RestingAppCount = _taskSleepVm.LiveProcesses.Count(p => p.IsThrottled);
+
+            // Desktops report "no system battery", so the battery tile simply isn't shown there.
+            var ps = System.Windows.Forms.SystemInformation.PowerStatus;
+            bool hasBattery = (ps.BatteryChargeStatus & System.Windows.Forms.BatteryChargeStatus.NoSystemBattery) == 0;
+            HasBatteryFact = hasBattery;
+            if (hasBattery)
+            {
+                int pct = (int)Math.Round(ps.BatteryLifePercent * 100);
+                bool plugged = ps.PowerLineStatus == System.Windows.Forms.PowerLineStatus.Online;
+                BatteryText = $"{pct}%, {(plugged ? "plugged in" : "on battery")}";
+            }
+
+            int applied = AutoPilotChecklist.Count(i => i.IsDone);
+            int total   = AutoPilotChecklist.Count;
+            if (GameBoostActive)
+            {
+                HomeHeadline = $"Game Boost is running for {ActivityFeed.PrettyGame(_gameBooster.ActiveGameName ?? "your game")}.";
+                HomeSubline  = "Background apps are resting and Windows is staying out of the way until the game closes.";
+            }
+            else if (AutoPilotModeEnabled)
+            {
+                HomeHeadline = "Your PC is tuned and staying that way.";
+                HomeSubline  = $"Auto Pilot is keeping {applied} optimization{(applied == 1 ? "" : "s")} in place and puts them back if anything changes them.";
+            }
+            else
+            {
+                HomeHeadline = "Your PC is running normally.";
+                HomeSubline  = total > 0
+                    ? $"{applied} of {total} recommended optimizations are on. Turn on Auto Pilot to apply the rest and keep them that way."
+                    : "Checking which optimizations fit this PC…";
+            }
+            if (TaskSleepActive && !GameBoostActive && RestingAppCount > 0)
+                HomeSubline += $" {RestingAppCount} background app{(RestingAppCount == 1 ? " is" : "s are")} resting right now.";
+
+            QueueParkingRead();
+        }
+        catch (Exception ex) { _log.Warn("DashboardViewModel", $"Home status refresh failed: {ex.Message}"); }
+    }
+
+    private void QueueParkingRead()
+    {
+        if (DateTime.UtcNow - _lastParkingRead < TimeSpan.FromSeconds(3)) return;
+        if (Interlocked.Exchange(ref _parkingReadInFlight, 1) == 1) return;
+        _lastParkingRead = DateTime.UtcNow;
+        var dispatcher = System.Windows.Application.Current?.Dispatcher;
+        _ = Task.Run(() =>
+        {
+            try
+            {
+                var (parked, total) = ReadParkedCores();
+                string text = total > 0 ? $"{parked} of {total}" : "—";
+                dispatcher?.BeginInvoke(new Action(() => CoresParkedText = text));
+            }
+            catch { /* informational tile; leave the last value */ }
+            finally { Interlocked.Exchange(ref _parkingReadInFlight, 0); }
+        });
+    }
+
+    /// <summary>
+    /// Logical processors Windows has parked right now, from the same "Parking Status" counter
+    /// Resource Monitor uses. One category snapshot rather than a counter per core.
+    /// </summary>
+    internal static (int Parked, int Total) ReadParkedCores()
+    {
+        var data = new System.Diagnostics.PerformanceCounterCategory("Processor Information").ReadCategory();
+        if (!data.Contains("Parking Status")) return (0, 0);
+        int parked = 0, total = 0;
+        foreach (System.Diagnostics.InstanceData d in data["Parking Status"].Values)
+        {
+            if (d.InstanceName.Contains("_Total", StringComparison.OrdinalIgnoreCase)) continue;
+            total++;
+            if (d.RawValue != 0) parked++;
+        }
+        return (parked, total);
+    }
+
     /// <summary>Rebuilds the status line + the visible recommendation feed from the current
     /// checklist (already computed by the background pass). UI thread only. When Auto Pilot Mode
     /// is on the feed is empty (the engine manages everything, so the "all set" state shows).</summary>
@@ -1083,10 +1193,12 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
     {
         int applied = AutoPilotChecklist.Count(i => i.IsDone);
         int total   = AutoPilotChecklist.Count;
-        AutoPilotActive     = AutoPilotModeEnabled || applied > 0;
+        // The dot is green only when Auto Pilot is actually on. It used to go green whenever
+        // anything was applied, which put a green "all good" dot next to a switch that was off.
+        AutoPilotActive     = AutoPilotModeEnabled;
         AutoPilotStatusLine = AutoPilotModeEnabled
             ? $"On · {applied} optimization{(applied == 1 ? "" : "s")} active · re-checked automatically"
-            : (total > 0 ? $"{applied} of {total} optimizations applied" : "Checking…");
+            : (total > 0 ? $"Off · {applied} of {total} optimizations applied" : "Checking…");
 
         Recommendations.Clear();
         if (!AutoPilotModeEnabled)

@@ -5,28 +5,61 @@
              xmlns:vm="clr-namespace:Systema.ViewModels"
              Background="Transparent">
 
+    <!--
+        HOME (nav key "Dashboard")
+        ─────────────────────────────────────────────────────────────────────
+        Windows 11 Settings layout, top to bottom:
+          1. Live status: one sentence about the PC right now, plus the numbers behind it.
+          2. Auto Pilot: the master switch, its status, and the checklist behind "Show details".
+          3. Suggestions for this PC: the same one-at-a-time queue as before, restyled.
+          4. Today: what Systema actually did, from Services/ActivityFeed.
+        Everything the old Auto Pilot page bound to is still bound here;
+        UiBindingSnapshotTests fails the build if any of it goes missing.
+    -->
+
     <UserControl.Resources>
         <conv:BoolToVisibilityConverter x:Key="BoolToVis"/>
+
+        <!-- Live fact tile: small label over a number, on a subtle inset fill. -->
+        <Style x:Key="FactTile" TargetType="Border">
+            <Setter Property="Background" Value="{StaticResource ControlFillBrush}"/>
+            <Setter Property="CornerRadius" Value="6"/>
+            <Setter Property="Padding" Value="14,10"/>
+            <Setter Property="Margin" Value="4"/>
+        </Style>
+        <Style x:Key="FactValue" TargetType="TextBlock">
+            <Setter Property="FontFamily" Value="{StaticResource MainFont}"/>
+            <Setter Property="FontSize" Value="16"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+            <Setter Property="Margin" Value="0,2,0,0"/>
+            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+            <Setter Property="Typography.NumeralAlignment" Value="Tabular"/>
+        </Style>
+
+        <!-- Windows 11 group header ("Body Strong" above a group of cards) -->
+        <Style x:Key="GroupHeader" TargetType="TextBlock" BasedOn="{StaticResource HeadingSmall}">
+            <Setter Property="Margin" Value="2,28,0,8"/>
+        </Style>
     </UserControl.Resources>
 
     <ScrollViewer VerticalScrollBarVisibility="Auto">
-        <StackPanel Margin="32,28,32,28">
+        <StackPanel Margin="32,24,32,28">
 
             <!-- ===== HEADER ===== -->
-            <Grid Margin="0,0,0,20">
+            <Grid Margin="0,0,0,16">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
                 <StackPanel Grid.Column="0">
-                    <TextBlock Text="Auto Pilot" Style="{StaticResource HeadingLarge}"/>
+                    <TextBlock Text="Home" Style="{StaticResource HeadingLarge}"/>
                     <TextBlock Text="Your PC, optimized and kept that way."
-                               Style="{StaticResource CaptionText}" Margin="0,4,0,0"
-                               Foreground="{StaticResource TextSecondaryBrush}"/>
+                               Style="{StaticResource CaptionText}" Margin="0,4,0,0"/>
                 </StackPanel>
-                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top" Margin="12,4,0,0">
-                    <Border Background="{StaticResource BgSurfaceBrush}" BorderBrush="{StaticResource BorderBrush}"
-                            BorderThickness="1" CornerRadius="4" Padding="10,5" Margin="0,0,8,0">
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top" Margin="12,6,0,0">
+                    <Border Background="{StaticResource ControlFillBrush}" BorderBrush="{StaticResource ControlStrokeBrush}"
+                            BorderThickness="1" CornerRadius="4" Padding="10,4" Margin="0,0,8,0">
                         <StackPanel Orientation="Horizontal">
                             <Ellipse Width="6" Height="6" VerticalAlignment="Center" Margin="0,0,7,0">
                                 <Ellipse.Style>
@@ -40,32 +73,97 @@
                                     </Style>
                                 </Ellipse.Style>
                             </Ellipse>
-                            <TextBlock Text="{Binding AdminBadgeText}" FontSize="11" FontWeight="SemiBold"
+                            <TextBlock Text="{Binding AdminBadgeText}" FontSize="12"
                                        Foreground="{StaticResource TextPrimaryBrush}" FontFamily="{StaticResource SmallFont}"/>
                         </StackPanel>
                     </Border>
-                    <Border Background="{StaticResource BgSurfaceBrush}" BorderBrush="{StaticResource BorderBrush}"
-                            BorderThickness="1" CornerRadius="4" Padding="10,5">
-                        <TextBlock Text="v0.7.337" FontSize="11" FontWeight="SemiBold"
+                    <Border Background="{StaticResource ControlFillBrush}" BorderBrush="{StaticResource ControlStrokeBrush}"
+                            BorderThickness="1" CornerRadius="4" Padding="10,4">
+                        <TextBlock Text="v0.7.338" FontSize="12"
                                    Foreground="{StaticResource TextSecondaryBrush}" FontFamily="{StaticResource SmallFont}"/>
                     </Border>
                 </StackPanel>
             </Grid>
 
-            <!-- ===== STATUS CARD (master switch + collapsible detail) ===== -->
-            <Border Style="{StaticResource Card}" Padding="0" Margin="0,0,0,28">
+            <!-- ===== LIVE STATUS ===== -->
+            <Border Style="{StaticResource Card}" Padding="22,20,22,20">
+                <StackPanel>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0">
+                            <TextBlock Text="{Binding HomeHeadline, Mode=OneWay}" TextWrapping="Wrap"
+                                       FontFamily="{StaticResource DisplayFont}" FontSize="20" FontWeight="SemiBold"
+                                       LineHeight="28" LineStackingStrategy="BlockLineHeight"
+                                       Foreground="{StaticResource TextPrimaryBrush}"/>
+                            <TextBlock Text="{Binding HomeSubline, Mode=OneWay}" Style="{StaticResource BodyText}"
+                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                       TextWrapping="Wrap" MaxWidth="660" Margin="0,4,0,0"/>
+                        </StackPanel>
+                        <!-- Static dot on purpose: an endlessly pulsing animation would keep the
+                             render thread busy for as long as Home is open. -->
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top" Margin="16,6,0,0">
+                            <Ellipse Width="7" Height="7" Fill="{StaticResource AccentGreenBrush}"
+                                     Margin="0,0,6,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="Live" FontSize="12" FontWeight="SemiBold"
+                                       Foreground="{StaticResource AccentGreenBrush}" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Grid>
+
+                    <!-- UniformGrid lays out only the visible tiles, so desktops (no battery tile)
+                         get four even columns instead of a gap. -->
+                    <UniformGrid Rows="1" Margin="-4,16,-4,-4">
+                        <Border Style="{StaticResource FactTile}">
+                            <StackPanel>
+                                <TextBlock Text="Apps resting" Style="{StaticResource CaptionText}"/>
+                                <TextBlock Text="{Binding RestingAppCount, Mode=OneWay}" Style="{StaticResource FactValue}"/>
+                            </StackPanel>
+                        </Border>
+                        <Border Style="{StaticResource FactTile}">
+                            <StackPanel>
+                                <TextBlock Text="Cores parked" Style="{StaticResource CaptionText}"/>
+                                <TextBlock Text="{Binding CoresParkedText, Mode=OneWay}" Style="{StaticResource FactValue}"/>
+                            </StackPanel>
+                        </Border>
+                        <Border Style="{StaticResource FactTile}">
+                            <StackPanel>
+                                <TextBlock Text="Memory in use" Style="{StaticResource CaptionText}"/>
+                                <TextBlock Text="{Binding RamUsageText, Mode=OneWay}" Style="{StaticResource FactValue}"/>
+                            </StackPanel>
+                        </Border>
+                        <Border Style="{StaticResource FactTile}"
+                                Visibility="{Binding HasBatteryFact, Converter={StaticResource BoolToVis}}">
+                            <StackPanel>
+                                <TextBlock Text="Battery" Style="{StaticResource CaptionText}"/>
+                                <TextBlock Text="{Binding BatteryText, Mode=OneWay}" Style="{StaticResource FactValue}"/>
+                            </StackPanel>
+                        </Border>
+                        <Border Style="{StaticResource FactTile}">
+                            <StackPanel>
+                                <TextBlock Text="Data collection" Style="{StaticResource CaptionText}"/>
+                                <TextBlock Text="{Binding DataCollectionStatus, Mode=OneWay}" Style="{StaticResource FactValue}"/>
+                            </StackPanel>
+                        </Border>
+                    </UniformGrid>
+                </StackPanel>
+            </Border>
+
+            <!-- ===== AUTO PILOT (master switch + collapsible detail) ===== -->
+            <Border Style="{StaticResource Card}" Padding="0" Margin="0,12,0,0">
                 <StackPanel>
 
                     <!-- Master switch row -->
-                    <Grid Margin="22,18,22,18">
+                    <Grid Margin="20,16,20,16">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <Border Grid.Column="0" Width="40" Height="40" CornerRadius="12"
-                                Background="#1A38BDF8" VerticalAlignment="Center">
-                            <Viewbox Width="21" Height="21">
+                        <Border Grid.Column="0" Width="40" Height="40" CornerRadius="8"
+                                Background="#1A60CDFF" VerticalAlignment="Center">
+                            <Viewbox Width="20" Height="20">
                                 <Path Data="M12 3 L13.6 9.4 L20 11 L13.6 12.6 L12 19 L10.4 12.6 L4 11 L10.4 9.4 Z"
                                       Fill="{StaticResource AccentBlueBrush}"/>
                             </Viewbox>
@@ -73,10 +171,11 @@
                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="14,0,16,0">
                             <TextBlock Text="Auto Pilot" Style="{StaticResource HeadingSmall}"/>
                             <StackPanel Orientation="Horizontal" Margin="0,3,0,0">
+                                <!-- Green only while Auto Pilot is ON (see DashboardViewModel) -->
                                 <Ellipse Width="7" Height="7" VerticalAlignment="Center" Margin="0,0,8,0">
                                     <Ellipse.Style>
                                         <Style TargetType="Ellipse">
-                                            <Setter Property="Fill" Value="{StaticResource TextSecondaryBrush}"/>
+                                            <Setter Property="Fill" Value="{StaticResource TextTertiaryBrush}"/>
                                             <Style.Triggers>
                                                 <DataTrigger Binding="{Binding AutoPilotActive}" Value="True">
                                                     <Setter Property="Fill" Value="{StaticResource AccentGreenBrush}"/>
@@ -86,8 +185,7 @@
                                     </Ellipse.Style>
                                 </Ellipse>
                                 <TextBlock Text="{Binding AutoPilotStatusLine}" Style="{StaticResource CaptionText}"
-                                           VerticalAlignment="Center" TextWrapping="Wrap"
-                                           Foreground="{StaticResource TextSecondaryBrush}"/>
+                                           VerticalAlignment="Center" TextWrapping="Wrap"/>
                             </StackPanel>
                         </StackPanel>
                         <CheckBox Grid.Column="2" Style="{StaticResource ToggleSwitch}" VerticalAlignment="Center"
@@ -99,13 +197,13 @@
                     <!-- Show details disclosure -->
                     <Button Command="{Binding ToggleSeeWhatsOnCommand}" Style="{StaticResource ExpanderButton}"
                             HorizontalContentAlignment="Stretch">
-                        <Grid Margin="22,12,22,12">
+                        <Grid Margin="20,12,20,12">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
-                            <TextBlock Grid.Column="0" FontSize="12.5" VerticalAlignment="Center"
-                                       Foreground="{StaticResource AccentBlueBrush}">
+                            <TextBlock Grid.Column="0" FontSize="13" VerticalAlignment="Center"
+                                       Foreground="{StaticResource TextPrimaryBrush}">
                                 <TextBlock.Style>
                                     <Style TargetType="TextBlock">
                                         <Setter Property="Text" Value="Show details"/>
@@ -117,27 +215,46 @@
                                     </Style>
                                 </TextBlock.Style>
                             </TextBlock>
-                            <TextBlock Grid.Column="1" FontSize="10" VerticalAlignment="Center"
-                                       Foreground="{StaticResource TextSecondaryBrush}">
-                                <TextBlock.Style>
-                                    <Style TargetType="TextBlock">
-                                        <Setter Property="Text" Value="&#x25BC;"/>
+                            <!-- Windows 11 expander chevron: rotates to point up while open -->
+                            <Path Grid.Column="1" Data="M 0 0 L 4.5 4.5 L 9 0" Width="9" Height="5"
+                                  VerticalAlignment="Center" RenderTransformOrigin="0.5,0.5"
+                                  Stroke="{StaticResource TextSecondaryBrush}" StrokeThickness="1.2"
+                                  StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round">
+                                <Path.RenderTransform>
+                                    <RotateTransform Angle="0"/>
+                                </Path.RenderTransform>
+                                <Path.Style>
+                                    <Style TargetType="Path">
                                         <Style.Triggers>
                                             <DataTrigger Binding="{Binding SeeWhatsOnExpanded}" Value="True">
-                                                <Setter Property="Text" Value="&#x25B2;"/>
+                                                <DataTrigger.EnterActions>
+                                                    <BeginStoryboard>
+                                                        <Storyboard>
+                                                            <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(RotateTransform.Angle)"
+                                                                             To="180" Duration="0:0:0.167"/>
+                                                        </Storyboard>
+                                                    </BeginStoryboard>
+                                                </DataTrigger.EnterActions>
+                                                <DataTrigger.ExitActions>
+                                                    <BeginStoryboard>
+                                                        <Storyboard>
+                                                            <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(RotateTransform.Angle)"
+                                                                             To="0" Duration="0:0:0.167"/>
+                                                        </Storyboard>
+                                                    </BeginStoryboard>
+                                                </DataTrigger.ExitActions>
                                             </DataTrigger>
                                         </Style.Triggers>
                                     </Style>
-                                </TextBlock.Style>
-                            </TextBlock>
+                                </Path.Style>
+                            </Path>
                         </Grid>
                     </Button>
 
-                    <!-- Dropdown: what Auto Pilot has turned on.
-                         Fades and eases down on open so the panel arrives rather than
-                         snapping in. Closing stays instant — a lingering collapse just
-                         feels like lag. -->
-                    <StackPanel Margin="22,2,22,18"
+                    <!-- What Auto Pilot has turned on. Fades and eases down on open so the panel
+                         arrives rather than snapping in. Closing stays instant: a lingering
+                         collapse just feels like lag. -->
+                    <StackPanel Margin="20,2,20,16"
                                 Visibility="{Binding SeeWhatsOnExpanded, Converter={StaticResource BoolToVis}}">
                         <StackPanel.RenderTransform>
                             <TranslateTransform Y="0"/>
@@ -150,11 +267,11 @@
                                             <BeginStoryboard>
                                                 <Storyboard>
                                                     <DoubleAnimation Storyboard.TargetProperty="Opacity"
-                                                                     From="0" To="1" Duration="0:0:0.18"/>
+                                                                     From="0" To="1" Duration="0:0:0.25"/>
                                                     <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)"
-                                                                     From="-6" To="0" Duration="0:0:0.18">
+                                                                     From="-6" To="0" Duration="0:0:0.25">
                                                         <DoubleAnimation.EasingFunction>
-                                                            <CubicEase EasingMode="EaseOut"/>
+                                                            <QuinticEase EasingMode="EaseOut"/>
                                                         </DoubleAnimation.EasingFunction>
                                                     </DoubleAnimation>
                                                 </Storyboard>
@@ -177,7 +294,7 @@
                                             <TextBlock.Style>
                                                 <Style TargetType="TextBlock">
                                                     <Setter Property="Text"       Value="&#x25CB;"/>
-                                                    <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+                                                    <Setter Property="Foreground" Value="{StaticResource TextTertiaryBrush}"/>
                                                     <Style.Triggers>
                                                         <DataTrigger Binding="{Binding IsDone}" Value="True">
                                                             <Setter Property="Text"       Value="&#x2713;"/>
@@ -187,7 +304,7 @@
                                                 </Style>
                                             </TextBlock.Style>
                                         </TextBlock>
-                                        <TextBlock Text="{Binding Label}" FontSize="12.5" VerticalAlignment="Center"
+                                        <TextBlock Text="{Binding Label}" FontSize="13" VerticalAlignment="Center"
                                                    TextWrapping="Wrap">
                                             <TextBlock.Style>
                                                 <Style TargetType="TextBlock">
@@ -210,17 +327,17 @@
             </Border>
 
             <!-- ===== SUGGESTIONS ===== -->
-            <Grid Margin="0,0,0,14">
+            <Grid Margin="0,28,0,10">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
-                <StackPanel Grid.Column="0">
-                    <TextBlock Text="Suggestions for this PC" Style="{StaticResource HeadingMedium}" Margin="0,0,0,4"/>
+                <StackPanel Grid.Column="0" Margin="2,0,0,0">
+                    <TextBlock Text="Suggestions for this PC" Style="{StaticResource HeadingSmall}"/>
                     <TextBlock Text="One at a time. Apply what you like, skip the rest."
-                               Style="{StaticResource CaptionText}" Foreground="{StaticResource TextSecondaryBrush}"/>
+                               Style="{StaticResource CaptionText}" Margin="0,2,0,0"/>
                 </StackPanel>
-                <Button Grid.Column="1" Style="{StaticResource GhostButton}" Padding="12,7" VerticalAlignment="Center"
+                <Button Grid.Column="1" Style="{StaticResource GhostButton}" Padding="12,6" VerticalAlignment="Center"
                         Click="DismissedBtn_Click"
                         Visibility="{Binding HasDismissed, Converter={StaticResource BoolToVis}}">
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
@@ -230,8 +347,8 @@
                                   StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
                                   Data="M4 13 h3 l3 3 h4 l3 -3 h3 M5 19 h14 a2 2 0 0 0 2 -2 v-11 a2 2 0 0 0 -2 -2 h-14 a2 2 0 0 0 -2 2 v11 a2 2 0 0 0 2 2 z"/>
                         </Viewbox>
-                        <TextBlock Text="Dismissed" FontSize="12.5" VerticalAlignment="Center"/>
-                        <Border CornerRadius="9" Background="#1A38BDF8" Padding="7,1" Margin="8,0,0,0"
+                        <TextBlock Text="Dismissed" FontSize="13" VerticalAlignment="Center"/>
+                        <Border CornerRadius="9" Background="#1A60CDFF" Padding="7,1" Margin="8,0,0,0"
                                 MinWidth="20" VerticalAlignment="Center">
                             <TextBlock Text="{Binding DismissedCount}" FontSize="11" FontWeight="SemiBold"
                                        HorizontalAlignment="Center" Foreground="{StaticResource AccentBlueBrush}"/>
@@ -244,31 +361,31 @@
             <Border Style="{StaticResource Card}" Padding="0"
                     Visibility="{Binding HasRecommendations, Converter={StaticResource BoolToVis}}">
                 <StackPanel>
-                    <StackPanel Margin="26,22,26,20">
+                    <StackPanel Margin="22,20,22,18">
 
                         <Border CornerRadius="4" Padding="7,2" HorizontalAlignment="Left"
                                 Background="#1A22C55E" BorderBrush="{StaticResource AccentGreenBrush}" BorderThickness="1">
-                            <TextBlock Text="{Binding CurrentRecommendation.Safety}" FontSize="9" FontWeight="SemiBold"
+                            <TextBlock Text="{Binding CurrentRecommendation.Safety}" FontSize="10" FontWeight="SemiBold"
                                        Foreground="{StaticResource AccentGreenBrush}"/>
                         </Border>
 
                         <TextBlock Text="{Binding CurrentRecommendation.Title}" Style="{StaticResource HeadingMedium}"
                                    TextWrapping="Wrap" Margin="0,12,0,0"/>
 
-                        <TextBlock Text="{Binding CurrentRecommendation.WhyBody}" Style="{StaticResource CaptionText}"
-                                   TextWrapping="Wrap" MaxWidth="620" HorizontalAlignment="Left" Margin="0,10,0,0"
+                        <TextBlock Text="{Binding CurrentRecommendation.WhyBody}" Style="{StaticResource BodyText}"
+                                   TextWrapping="Wrap" MaxWidth="660" Margin="0,8,0,0"
                                    Foreground="{StaticResource TextSecondaryBrush}"/>
 
                         <!-- Trade-off pulled out of the paragraph so the caveat is not buried -->
-                        <Border CornerRadius="7" Padding="13,10" Margin="0,14,0,0"
-                                MaxWidth="620" HorizontalAlignment="Left"
+                        <Border CornerRadius="6" Padding="13,10" Margin="0,14,0,0"
+                                MaxWidth="660" HorizontalAlignment="Left"
                                 Background="#14F59E0B" BorderBrush="#3AF59E0B" BorderThickness="1"
                                 Visibility="{Binding CurrentRecommendation.HasTradeoff, Converter={StaticResource BoolToVis}}">
                             <StackPanel>
-                                <TextBlock Text="TRADE-OFF" FontSize="9.5" FontWeight="Bold"
+                                <TextBlock Text="Trade-off" FontSize="12" FontWeight="SemiBold"
                                            Foreground="{StaticResource AccentYellowBrush}"/>
-                                <TextBlock Text="{Binding CurrentRecommendation.Tradeoff}" FontSize="12.5"
-                                           TextWrapping="Wrap" Margin="0,5,0,0"
+                                <TextBlock Text="{Binding CurrentRecommendation.Tradeoff}" FontSize="13"
+                                           TextWrapping="Wrap" Margin="0,4,0,0"
                                            Foreground="{StaticResource TextSecondaryBrush}"/>
                             </StackPanel>
                         </Border>
@@ -278,30 +395,30 @@
                     <Border Height="1" Background="{StaticResource BorderBrush}"/>
 
                     <!-- Actions + queue navigation -->
-                    <Grid Margin="26,14,26,14">
+                    <Grid Margin="22,12,22,12">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
 
                         <StackPanel Grid.Column="0" Orientation="Horizontal">
-                            <Button Content="Apply" Style="{StaticResource PrimaryButton}" Padding="24,8"
+                            <Button Content="Apply" Style="{StaticResource PrimaryButton}" Padding="22,7"
                                     Command="{Binding ApplyRecommendationCommand}"
                                     CommandParameter="{Binding CurrentRecommendation}"/>
-                            <Button Content="Not now" Style="{StaticResource GhostButton}" Padding="18,8" Margin="10,0,0,0"
+                            <Button Content="Not now" Style="{StaticResource GhostButton}" Padding="18,7" Margin="8,0,0,0"
                                     Command="{Binding DismissRecommendationCommand}"
                                     CommandParameter="{Binding CurrentRecommendation}"/>
                         </StackPanel>
 
                         <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                            <Button Style="{StaticResource GhostButton}" Content="&#x2039;" Padding="14,1"
-                                    FontSize="17" FontWeight="Bold" ToolTip="Previous suggestion"
+                            <Button Style="{StaticResource GhostButton}" Content="&#x2039;" Padding="12,0"
+                                    FontSize="17" ToolTip="Previous suggestion"
                                     Command="{Binding PrevRecCommand}" IsEnabled="{Binding CanGoPrevRec}"/>
-                            <TextBlock Text="{Binding RecPositionText}" FontSize="11.5" Margin="12,0,12,0"
+                            <TextBlock Text="{Binding RecPositionText}" FontSize="12" Margin="12,0,12,0"
                                        VerticalAlignment="Center" MinWidth="46" TextAlignment="Center"
                                        Foreground="{StaticResource TextSecondaryBrush}"/>
-                            <Button Style="{StaticResource GhostButton}" Content="&#x203A;" Padding="14,1"
-                                    FontSize="17" FontWeight="Bold" ToolTip="Next suggestion"
+                            <Button Style="{StaticResource GhostButton}" Content="&#x203A;" Padding="12,0"
+                                    FontSize="17" ToolTip="Next suggestion"
                                     Command="{Binding NextRecCommand}" IsEnabled="{Binding CanGoNextRec}"/>
                         </StackPanel>
                     </Grid>
@@ -311,24 +428,81 @@
             <!-- Empty / all-set state -->
             <Border Style="{StaticResource Card}"
                     Visibility="{Binding HasRecommendations, Converter={StaticResource BoolToVis}, ConverterParameter=Invert}">
-                <StackPanel HorizontalAlignment="Center" Margin="0,18,0,18">
-                    <Border Width="52" Height="52" CornerRadius="26" Background="#1A22C55E"
+                <StackPanel HorizontalAlignment="Center" Margin="0,14,0,14">
+                    <Border Width="48" Height="48" CornerRadius="24" Background="#1A22C55E"
                             HorizontalAlignment="Center" Margin="0,0,0,12">
-                        <TextBlock Text="&#x2713;" FontSize="24" FontWeight="Bold"
+                        <TextBlock Text="&#x2713;" FontSize="22" FontWeight="Bold"
                                    Foreground="{StaticResource AccentGreenBrush}"
                                    HorizontalAlignment="Center" VerticalAlignment="Center"/>
                     </Border>
                     <TextBlock Text="You're all set" Style="{StaticResource HeadingSmall}" HorizontalAlignment="Center"/>
                     <TextBlock Text="Auto Pilot is keeping your PC tuned. We'll add a suggestion here if something new comes up."
-                               Style="{StaticResource CaptionText}" Foreground="{StaticResource TextSecondaryBrush}"
+                               Style="{StaticResource CaptionText}"
                                TextWrapping="Wrap" MaxWidth="420" TextAlignment="Center"
                                HorizontalAlignment="Center" Margin="0,6,0,0"/>
                 </StackPanel>
             </Border>
 
-            <!-- Subtle status line -->
-            <TextBlock Text="{Binding StatusMessage}" Style="{StaticResource CaptionText}"
-                       Foreground="{StaticResource TextSecondaryBrush}" TextWrapping="Wrap" Margin="2,16,0,0"/>
+            <!-- ===== TODAY ===== -->
+            <TextBlock Text="Today" Style="{StaticResource GroupHeader}"/>
+            <Border Style="{StaticResource Card}" Padding="0">
+                <Grid>
+                    <ItemsControl ItemsSource="{Binding Activity}" Margin="0,8">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <!-- A new line fades in rather than popping into the list -->
+                                <Grid Margin="20,7">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="76"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.Triggers>
+                                        <EventTrigger RoutedEvent="FrameworkElement.Loaded">
+                                            <BeginStoryboard>
+                                                <Storyboard>
+                                                    <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                                                                     From="0" To="1" Duration="0:0:0.25"/>
+                                                </Storyboard>
+                                            </BeginStoryboard>
+                                        </EventTrigger>
+                                    </Grid.Triggers>
+                                    <TextBlock Grid.Column="0" Text="{Binding TimeText, Mode=OneWay}"
+                                               Style="{StaticResource CaptionText}" Margin="0,2,0,0"
+                                               Foreground="{StaticResource TextTertiaryBrush}"/>
+                                    <TextBlock Grid.Column="1" Text="{Binding Text, Mode=OneWay}"
+                                               Style="{StaticResource BodyText}" TextWrapping="Wrap"/>
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <TextBlock Margin="20,16,20,16" TextWrapping="Wrap"
+                               Text="Nothing yet. As Systema rests apps, boosts games and puts back settings other apps change, it lists them here.">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionText}">
+                                <Setter Property="Visibility" Value="Collapsed"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding Activity.Count}" Value="0">
+                                        <Setter Property="Visibility" Value="Visible"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+                </Grid>
+            </Border>
+
+            <!-- Action messages ("Applied: …", Auto Pilot progress). Hidden while empty. -->
+            <TextBlock Text="{Binding StatusMessage}" TextWrapping="Wrap" Margin="2,16,0,0">
+                <TextBlock.Style>
+                    <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionText}">
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding StatusMessage}" Value="">
+                                <Setter Property="Visibility" Value="Collapsed"/>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </TextBlock.Style>
+            </TextBlock>
 
         </StackPanel>
     </ScrollViewer>
