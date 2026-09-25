@@ -1,8 +1,12 @@
 using System;
+using System.ComponentModel;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Interop;
+using System.Windows.Media;
+using System.Windows.Media.Animation;
+using System.Windows.Threading;
 using Systema.ViewModels;
 
 namespace Systema.Views;
@@ -57,6 +61,78 @@ public partial class MainWindow : Window
         ApplyWindowIcon();
         DataContext = viewModel;
         ClampToWorkArea();
+
+        // Nav selection indicator. Re-placed without animation whenever the list itself
+        // changes size (the Intel, NVIDIA and Dell entries appear after detection finishes),
+        // and slid into place when the user moves between pages.
+        viewModel.PropertyChanged += OnViewModelPropertyChanged;
+        Loaded += (_, _) => UpdateNavIndicator(animate: false);
+        NavList.SizeChanged += (_, _) => UpdateNavIndicator(animate: false);
+    }
+
+    // ── Nav selection indicator ──────────────────────────────────────────────
+    // Windows 11's NavigationView marks the current page with one accent pill that slides
+    // between items, rather than a bar drawn inside each button. This is that pill. It is
+    // purely cosmetic: if anything goes wrong it hides itself, and the active item's subtle
+    // background (set by the NavButton style) still shows which page is open.
+    private bool _navIndicatorPlaced;
+
+    private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName != nameof(MainViewModel.ActiveSection)) return;
+        // Wait for layout so the target button's position is final before measuring it.
+        Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(() => UpdateNavIndicator(animate: true)));
+    }
+
+    private void UpdateNavIndicator(bool animate)
+    {
+        try
+        {
+            if (DataContext is not MainViewModel vm) return;
+
+            System.Windows.Controls.Button? active = null;
+            foreach (var child in NavList.Children)
+            {
+                if (child is System.Windows.Controls.Button b && b.Visibility == Visibility.Visible &&
+                    b.Tag is string tag && string.Equals(tag, vm.ActiveSection, StringComparison.Ordinal))
+                {
+                    active = b;
+                    break;
+                }
+            }
+
+            if (active == null || active.ActualHeight <= 0)
+            {
+                NavIndicator.Opacity = 0;
+                _navIndicatorPlaced = false;
+                return;
+            }
+
+            double y = active.TranslatePoint(new System.Windows.Point(0, 0), NavCanvas).Y
+                     + (active.ActualHeight - NavIndicator.Height) / 2;
+
+            // First placement, a layout change, or Windows animations turned off: jump there.
+            if (!animate || !_navIndicatorPlaced || !SystemParameters.ClientAreaAnimation)
+            {
+                NavIndicatorShift.BeginAnimation(TranslateTransform.YProperty, null);
+                NavIndicatorShift.Y = y;
+                NavIndicator.Opacity = 1;
+                _navIndicatorPlaced = true;
+                return;
+            }
+
+            // 250 ms decelerate, WinUI's ControlNormalAnimationDuration.
+            var slide = new DoubleAnimation(y, TimeSpan.FromMilliseconds(250))
+            {
+                EasingFunction = new QuinticEase { EasingMode = EasingMode.EaseOut }
+            };
+            NavIndicatorShift.BeginAnimation(TranslateTransform.YProperty, slide);
+        }
+        catch
+        {
+            NavIndicator.Opacity = 0;
+            _navIndicatorPlaced = false;
+        }
     }
 
     /// <summary>

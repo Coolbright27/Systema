@@ -105,8 +105,10 @@
             </Grid.RowDefinitions>
 
             <!-- ===== TITLE BAR ===== -->
+            <!-- Windows 11 caption: same colour as the window, so the title bar, nav pane and
+                 page read as one surface, the way the Settings app does. -->
             <Border Grid.Row="0"
-                    Background="{StaticResource BgSurfaceBrush}"
+                    Background="{StaticResource BgPrimaryBrush}"
                     MouseLeftButtonDown="TitleBar_MouseLeftButtonDown">
                 <Grid>
                     <Grid.ColumnDefinitions>
@@ -115,17 +117,19 @@
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
 
-                    <!-- Logo + Brand — solid muted accent, no gradients -->
+                    <!-- App mark + name in the Windows 11 caption style (12px, regular weight) -->
                     <StackPanel Grid.Column="0" Orientation="Horizontal"
                                 VerticalAlignment="Center" Margin="16,0">
-                        <Ellipse Width="10" Height="10" Margin="0,0,10,0"
-                                 Fill="{StaticResource AccentBlueBrush}"/>
-                        <TextBlock Text="SYSTEMA" FontWeight="SemiBold" FontSize="13"
+                        <Border Width="14" Height="14" CornerRadius="4" Margin="0,0,10,0"
+                                Background="{StaticResource AccentBlueBrush}"/>
+                        <TextBlock Text="Systema" FontSize="12"
+                                   FontFamily="{StaticResource SmallFont}"
                                    Foreground="{StaticResource TextPrimaryBrush}"
                                    VerticalAlignment="Center"
                                    Margin="0,0,8,0"/>
-                        <TextBlock Text="BETA" FontSize="9" FontWeight="SemiBold"
-                                   Foreground="{StaticResource TextSecondaryBrush}"
+                        <TextBlock Text="Beta" FontSize="12"
+                                   FontFamily="{StaticResource SmallFont}"
+                                   Foreground="{StaticResource TextTertiaryBrush}"
                                    VerticalAlignment="Center"/>
                     </StackPanel>
 
@@ -138,8 +142,9 @@
                          No Minimize — it ran the same Hide()-to-tray code as Close, so it was a
                          second control that did an identical thing. Close hides to tray; the tray
                          icon restores, and tray "Exit" fully quits. -->
-                    <StackPanel Grid.Column="2" Orientation="Horizontal" Margin="0,0,8,0"
-                                VerticalAlignment="Center">
+                    <!-- Flush to the corner, full caption height, as Windows 11 draws it. -->
+                    <StackPanel Grid.Column="2" Orientation="Horizontal"
+                                VerticalAlignment="Top">
                         <Button Click="CloseButton_Click" ToolTip="Close to tray"
                                 Style="{StaticResource CaptionCloseButton}"/>
                     </StackPanel>
@@ -154,10 +159,13 @@
                 </Grid.ColumnDefinitions>
 
                 <!-- ===== SIDEBAR ===== -->
+                <!-- Windows 11 nav pane: it sits on the window base with no divider, exactly as
+                     in the Settings app. No live BlurEffect or translucent overlay: a GPU
+                     pixel-shader effect on an unsigned binary is a needless SmartScreen and
+                     Defender heuristic risk, and the Settings look doesn't need one. -->
                 <Border Grid.Column="0"
                         Background="{StaticResource BgSidebarBrush}"
-                        BorderBrush="{StaticResource BorderBrush}"
-                        BorderThickness="0,0,1,0"
+                        BorderThickness="0"
                         ClipToBounds="True">
                     <Grid>
                         <Grid.RowDefinitions>
@@ -165,24 +173,20 @@
                             <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
 
-                        <!-- Darkened-glass sidebar: a translucent dark tint over the
-                             shared window backdrop (which sits behind this column).
-                             No live BlurEffect — a GPU pixel-shader effect on an
-                             unsigned binary is a needless SmartScreen/Defender
-                             heuristic risk. The tint softens the artwork enough to
-                             read as a frosted panel. -->
-                        <Rectangle Grid.RowSpan="2" Fill="#0B0B0C" Opacity="0.50" IsHitTestVisible="False"/>
-
                         <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto"
                                       HorizontalScrollBarVisibility="Disabled">
-                        <StackPanel Margin="8,16,8,0">
-                            <!-- Crisp vector line-icons (Lucide-style). Shared style sets the
-                                 stroke look; each Path supplies its own 24x24 geometry, scaled
-                                 by a Viewbox so the stroke stays razor-sharp at any DPI. -->
+                        <!-- The list and its selection indicator share one Grid so the indicator
+                             scrolls with the items. The indicator is drawn on a Canvas above the
+                             list and moved by MainWindow.xaml.cs when ActiveSection changes. -->
+                        <Grid>
+                        <StackPanel x:Name="NavList" Margin="8,12,8,0">
+                            <!-- Crisp vector line-icons. Shared style sets the stroke look; each
+                                 Path supplies its own 24x24 geometry, scaled by a Viewbox so the
+                                 stroke stays sharp at any DPI. -->
                             <StackPanel.Resources>
                                 <Style x:Key="NavIcon" TargetType="Path">
-                                    <Setter Property="Stroke" Value="{StaticResource TextSecondaryBrush}"/>
-                                    <Setter Property="StrokeThickness" Value="1.7"/>
+                                    <Setter Property="Stroke" Value="{StaticResource TextPrimaryBrush}"/>
+                                    <Setter Property="StrokeThickness" Value="1.5"/>
                                     <Setter Property="StrokeLineJoin" Value="Round"/>
                                     <Setter Property="StrokeStartLineCap" Value="Round"/>
                                     <Setter Property="StrokeEndLineCap" Value="Round"/>
@@ -194,7 +198,7 @@
                             <Button Command="{Binding NavigateCommand}" CommandParameter="Dashboard"
                                     Tag="Dashboard" Style="{StaticResource NavButton}">
                                 <StackPanel Orientation="Horizontal">
-                                    <Viewbox Width="18" Height="18" Margin="0,0,12,0" VerticalAlignment="Center">
+                                    <Viewbox Width="16" Height="16" Margin="0,0,14,0" VerticalAlignment="Center">
                                         <Path Style="{StaticResource NavIcon}"
                                               Data="M3 10.5 L12 3 L21 10.5 M5.5 9 V19.5 A1 1 0 0 0 6.5 20.5 H17.5 A1 1 0 0 0 18.5 19.5 V9 M9.5 20.5 V14.5 H14.5 V20.5"/>
                                     </Viewbox>
@@ -206,7 +210,7 @@
                             <Button Command="{Binding NavigateCommand}" CommandParameter="Memory"
                                     Tag="Memory" Style="{StaticResource NavButton}">
                                 <StackPanel Orientation="Horizontal">
-                                    <Viewbox Width="18" Height="18" Margin="0,0,12,0" VerticalAlignment="Center">
+                                    <Viewbox Width="16" Height="16" Margin="0,0,14,0" VerticalAlignment="Center">
                                         <Path Style="{StaticResource NavIcon}"
                                               Data="M4 5 H20 A1 1 0 0 1 21 6 V18 A1 1 0 0 1 20 19 H4 A1 1 0 0 1 3 18 V6 A1 1 0 0 1 4 5 Z M3 12 H21 M12 5 V19"/>
                                     </Viewbox>
@@ -218,7 +222,7 @@
                             <Button Command="{Binding NavigateCommand}" CommandParameter="Services"
                                     Tag="Services" Style="{StaticResource NavButton}">
                                 <StackPanel Orientation="Horizontal">
-                                    <Viewbox Width="18" Height="18" Margin="0,0,12,0" VerticalAlignment="Center">
+                                    <Viewbox Width="16" Height="16" Margin="0,0,14,0" VerticalAlignment="Center">
                                         <Path Style="{StaticResource NavIcon}"
                                               Data="M12 3 C12 3 5.5 10 5.5 14.5 A6.5 6.5 0 0 0 18.5 14.5 C18.5 10 12 3 12 3 Z"/>
                                     </Viewbox>
@@ -230,7 +234,7 @@
                             <Button Command="{Binding NavigateCommand}" CommandParameter="Visual"
                                     Tag="Visual" Style="{StaticResource NavButton}">
                                 <StackPanel Orientation="Horizontal">
-                                    <Viewbox Width="18" Height="18" Margin="0,0,12,0" VerticalAlignment="Center">
+                                    <Viewbox Width="16" Height="16" Margin="0,0,14,0" VerticalAlignment="Center">
                                         <Path Style="{StaticResource NavIcon}"
                                               Data="M13 2.5 L4.5 13.5 H11 L11 21.5 L19.5 10.5 H13 L13 2.5 Z"/>
                                     </Viewbox>
@@ -242,7 +246,7 @@
                             <Button Command="{Binding NavigateCommand}" CommandParameter="GameBooster"
                                     Tag="GameBooster" Style="{StaticResource NavButton}">
                                 <StackPanel Orientation="Horizontal">
-                                    <Viewbox Width="18" Height="18" Margin="0,0,12,0" VerticalAlignment="Center">
+                                    <Viewbox Width="16" Height="16" Margin="0,0,14,0" VerticalAlignment="Center">
                                         <Path Style="{StaticResource NavIcon}"
                                               Data="M8.8 10.8 L15.2 6.9 M8.8 13.2 L15.2 17.1 M15 6 A2.2 2.2 0 1 0 19.4 6 A2.2 2.2 0 1 0 15 6 Z M4.6 12 A2.2 2.2 0 1 0 9 12 A2.2 2.2 0 1 0 4.6 12 Z M15 18 A2.2 2.2 0 1 0 19.4 18 A2.2 2.2 0 1 0 15 18 Z"/>
                                     </Viewbox>
@@ -254,7 +258,7 @@
                             <Button Command="{Binding NavigateCommand}" CommandParameter="Tools"
                                     Tag="Tools" Style="{StaticResource NavButton}">
                                 <StackPanel Orientation="Horizontal">
-                                    <Viewbox Width="18" Height="18" Margin="0,0,12,0" VerticalAlignment="Center">
+                                    <Viewbox Width="16" Height="16" Margin="0,0,14,0" VerticalAlignment="Center">
                                         <Path Style="{StaticResource NavIcon}"
                                               Data="M12 3 L19 6 V11.5 C19 16 16 19.5 12 21 C8 19.5 5 16 5 11.5 V6 L12 3 Z M9.3 12 L11 13.7 L14.7 10"/>
                                     </Viewbox>
@@ -266,7 +270,7 @@
                             <Button Command="{Binding NavigateCommand}" CommandParameter="TaskSleep"
                                     Tag="TaskSleep" Style="{StaticResource NavButton}">
                                 <StackPanel Orientation="Horizontal">
-                                    <Viewbox Width="18" Height="18" Margin="0,0,12,0" VerticalAlignment="Center">
+                                    <Viewbox Width="16" Height="16" Margin="0,0,14,0" VerticalAlignment="Center">
                                         <Path Style="{StaticResource NavIcon}"
                                               Data="M12 3 L13.6 9.4 L20 11 L13.6 12.6 L12 19 L10.4 12.6 L4 11 L10.4 9.4 Z M18 16 L18.6 18.4 L21 19 L18.6 19.6 L18 22 L17.4 19.6 L15 19 L17.4 18.4 Z"/>
                                     </Viewbox>
@@ -278,7 +282,7 @@
                             <Button Command="{Binding NavigateCommand}" CommandParameter="Bloatware"
                                     Tag="Bloatware" Style="{StaticResource NavButton}">
                                 <StackPanel Orientation="Horizontal">
-                                    <Viewbox Width="18" Height="18" Margin="0,0,12,0" VerticalAlignment="Center">
+                                    <Viewbox Width="16" Height="16" Margin="0,0,14,0" VerticalAlignment="Center">
                                         <Path Style="{StaticResource NavIcon}"
                                               Data="M8 9 H16 A5 5 0 0 1 21 14 A2 2 0 0 1 17.4 15.2 L16 13.5 H8 L6.6 15.2 A2 2 0 0 1 3 14 A5 5 0 0 1 8 9 Z M6.7 11.7 V13.7 M5.7 12.7 H7.7 M15 12 A0.55 0.55 0 1 0 15.01 12 Z M16.8 13.7 A0.55 0.55 0 1 0 16.81 13.7 Z"/>
                                     </Viewbox>
@@ -290,7 +294,7 @@
                             <Button Command="{Binding NavigateCommand}" CommandParameter="Graphics"
                                     Tag="Graphics" Style="{StaticResource NavButton}">
                                 <StackPanel Orientation="Horizontal">
-                                    <Viewbox Width="18" Height="18" Margin="0,0,12,0" VerticalAlignment="Center">
+                                    <Viewbox Width="16" Height="16" Margin="0,0,14,0" VerticalAlignment="Center">
                                         <Path Style="{StaticResource NavIcon}"
                                               Data="M3.5 4 H20.5 A0.5 0.5 0 0 1 21 4.5 V16.5 A0.5 0.5 0 0 1 20.5 17 H3.5 A0.5 0.5 0 0 1 3 16.5 V4.5 A0.5 0.5 0 0 1 3.5 4 Z M7 20 H17 M12 17 V20 M7.5 13.5 L10 9.5 L12 12.5 L14 8 L16.5 13.5"/>
                                     </Viewbox>
@@ -302,7 +306,7 @@
                             <Button Command="{Binding NavigateCommand}" CommandParameter="Audio"
                                     Tag="Audio" Style="{StaticResource NavButton}">
                                 <StackPanel Orientation="Horizontal">
-                                    <Viewbox Width="18" Height="18" Margin="0,0,12,0" VerticalAlignment="Center">
+                                    <Viewbox Width="16" Height="16" Margin="0,0,14,0" VerticalAlignment="Center">
                                         <Path Style="{StaticResource NavIcon}"
                                               Data="M4 9 H7 L11 5 V19 L7 15 H4 Z M15 9 A4 4 0 0 1 15 15 M17.5 7 A7.5 7.5 0 0 1 17.5 17"/>
                                     </Viewbox>
@@ -319,7 +323,7 @@
                                     Tag="Intel" Style="{StaticResource NavButton}"
                                     Visibility="{Binding IsIntelGpuPresent, Converter={StaticResource BoolToVis}}">
                                 <StackPanel Orientation="Horizontal">
-                                    <Viewbox Width="18" Height="18" Margin="0,0,12,0" VerticalAlignment="Center">
+                                    <Viewbox Width="16" Height="16" Margin="0,0,14,0" VerticalAlignment="Center">
                                         <Path Style="{StaticResource NavIcon}"
                                               Data="M3.5 5 H20.5 A0.5 0.5 0 0 1 21 5.5 V15.5 A0.5 0.5 0 0 1 20.5 16 H3.5 A0.5 0.5 0 0 1 3 15.5 V5.5 A0.5 0.5 0 0 1 3.5 5 Z M8 20 H16 M12 16 V20"/>
                                     </Viewbox>
@@ -332,7 +336,7 @@
                                     Tag="Nvidia" Style="{StaticResource NavButton}"
                                     Visibility="{Binding IsNvidiaGpuPresent, Converter={StaticResource BoolToVis}}">
                                 <StackPanel Orientation="Horizontal">
-                                    <Viewbox Width="18" Height="18" Margin="0,0,12,0" VerticalAlignment="Center">
+                                    <Viewbox Width="16" Height="16" Margin="0,0,14,0" VerticalAlignment="Center">
                                         <Path Style="{StaticResource NavIcon}"
                                               Data="M3.5 5 H20.5 A0.5 0.5 0 0 1 21 5.5 V15.5 A0.5 0.5 0 0 1 20.5 16 H3.5 A0.5 0.5 0 0 1 3 15.5 V5.5 A0.5 0.5 0 0 1 3.5 5 Z M8 20 H16 M12 16 V20"/>
                                     </Viewbox>
@@ -345,7 +349,7 @@
                                     Tag="Dell" Style="{StaticResource NavButton}"
                                     Visibility="{Binding IsDellPresent, Converter={StaticResource BoolToVis}}">
                                 <StackPanel Orientation="Horizontal">
-                                    <Viewbox Width="18" Height="18" Margin="0,0,12,0" VerticalAlignment="Center">
+                                    <Viewbox Width="16" Height="16" Margin="0,0,14,0" VerticalAlignment="Center">
                                         <Path Style="{StaticResource NavIcon}"
                                               Data="M4.5 5 H19.5 A0.5 0.5 0 0 1 20 5.5 V18.5 A0.5 0.5 0 0 1 19.5 19 H4.5 A0.5 0.5 0 0 1 4 18.5 V5.5 A0.5 0.5 0 0 1 4.5 5 Z M9 10 H15 V14 H9 Z"/>
                                     </Viewbox>
@@ -360,7 +364,7 @@
                             <Button Command="{Binding NavigateCommand}" CommandParameter="Settings"
                                     Tag="Settings" Style="{StaticResource NavButton}">
                                 <StackPanel Orientation="Horizontal">
-                                    <Viewbox Width="18" Height="18" Margin="0,0,12,0" VerticalAlignment="Center">
+                                    <Viewbox Width="16" Height="16" Margin="0,0,14,0" VerticalAlignment="Center">
                                         <Path Style="{StaticResource NavIcon}"
                                               Data="M9 12 A3 3 0 1 0 15 12 A3 3 0 1 0 9 12 Z M12 3.5 V6 M12 18 V20.5 M3.5 12 H6 M18 12 H20.5 M5.6 5.6 L7.4 7.4 M16.6 16.6 L18.4 18.4 M18.4 5.6 L16.6 7.4 M7.4 16.6 L5.6 18.4"/>
                                     </Viewbox>
@@ -368,16 +372,29 @@
                                 </StackPanel>
                             </Button>
                         </StackPanel>
+
+                        <!-- Windows 11 selection pill: one indicator that slides to the active item.
+                             Hidden until it has been placed, so it never flashes at the top. -->
+                        <Canvas x:Name="NavCanvas" IsHitTestVisible="False">
+                            <Border x:Name="NavIndicator" Canvas.Left="11" Width="3" Height="16"
+                                    CornerRadius="1.5" Opacity="0"
+                                    Background="{StaticResource AccentBlueBrush}">
+                                <Border.RenderTransform>
+                                    <TranslateTransform x:Name="NavIndicatorShift"/>
+                                </Border.RenderTransform>
+                            </Border>
+                        </Canvas>
+                        </Grid>
                         </ScrollViewer>
 
                         <!-- ===== UPDATE / VERSION FOOTER CARD =====
                              Binds to the shared SettingsVm so the check/download/install state
                              is identical to the Settings → Updates card (single source of truth). -->
                         <Border Grid.Row="1" Margin="8,8,8,12" Padding="12,10"
-                                Background="{StaticResource BgSurfaceBrush}"
-                                BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="10">
+                                Background="{StaticResource BgCardBrush}"
+                                BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="8">
                             <StackPanel>
-                                <TextBlock Text="Systema v0.7.336" FontSize="11" FontWeight="SemiBold"
+                                <TextBlock Text="Systema v0.7.337" FontSize="11" FontWeight="SemiBold"
                                            Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,7"/>
 
                                 <!-- Live status: green check + status text from the updater -->
@@ -446,10 +463,40 @@
                     </Grid>
                 </Border>
 
-                <!-- ===== MAIN CONTENT ===== -->
-                <ContentControl Grid.Column="1"
-                                Content="{Binding CurrentView}"
-                                Background="Transparent"/>
+                <!-- ===== MAIN CONTENT =====
+                     Page transition: each new page fades in while rising 14px, over 250 ms on a
+                     decelerate curve (WinUI's ControlNormalAnimationDuration and its "fast out,
+                     slow in" easing). NotifyOnTargetUpdated raises Binding.TargetUpdated only when
+                     CurrentView actually changes, so clicking the page you're already on does
+                     nothing and the periodic auto-refresh never re-animates the page. -->
+                <ContentControl x:Name="PageHost"
+                                Grid.Column="1"
+                                Content="{Binding CurrentView, NotifyOnTargetUpdated=True}"
+                                Background="Transparent">
+                    <ContentControl.RenderTransform>
+                        <TranslateTransform/>
+                    </ContentControl.RenderTransform>
+                    <ContentControl.Triggers>
+                        <EventTrigger RoutedEvent="Binding.TargetUpdated">
+                            <BeginStoryboard>
+                                <Storyboard>
+                                    <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                                                     From="0" To="1" Duration="0:0:0.25">
+                                        <DoubleAnimation.EasingFunction>
+                                            <QuinticEase EasingMode="EaseOut"/>
+                                        </DoubleAnimation.EasingFunction>
+                                    </DoubleAnimation>
+                                    <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)"
+                                                     From="14" To="0" Duration="0:0:0.25">
+                                        <DoubleAnimation.EasingFunction>
+                                            <QuinticEase EasingMode="EaseOut"/>
+                                        </DoubleAnimation.EasingFunction>
+                                    </DoubleAnimation>
+                                </Storyboard>
+                            </BeginStoryboard>
+                        </EventTrigger>
+                    </ContentControl.Triggers>
+                </ContentControl>
             </Grid>
             </Grid>
         </Grid>
