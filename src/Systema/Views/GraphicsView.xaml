@@ -2,7 +2,11 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:conv="clr-namespace:Systema.Core.Converters"
+             xmlns:ctl="clr-namespace:Systema.Controls"
              Background="Transparent">
+
+    <!-- Windows 11 Settings layout: one SettingsCard per setting, grouped under headers.
+         Same seven toggles, the same state notes, and the Intel / NVIDIA links as before. -->
 
     <UserControl.Resources>
         <conv:BoolToVisibilityConverter x:Key="BoolToVis"/>
@@ -13,296 +17,193 @@
                 <DataTrigger Binding="{Binding IsAutoPilotActive}" Value="True">
                     <Setter Property="IsEnabled" Value="False"/>
                     <Setter Property="Opacity"   Value="0.4"/>
-                    <Setter Property="ToolTip"   Value="Managed by Auto-Pilot — turn off Auto-Pilot Mode to change"/>
+                    <Setter Property="ToolTip"   Value="Managed by Auto Pilot. Turn off Auto Pilot Mode to change it."/>
                 </DataTrigger>
             </Style.Triggers>
         </Style>
     </UserControl.Resources>
 
     <ScrollViewer VerticalScrollBarVisibility="Auto">
-        <StackPanel Margin="32,28,32,28">
+        <StackPanel Margin="32,24,32,28">
 
             <!-- ===== HEADER ===== -->
-            <StackPanel Margin="0,0,0,16">
+            <StackPanel Margin="0,0,0,8">
                 <TextBlock Text="Graphics" Style="{StaticResource HeadingLarge}"/>
                 <TextBlock Text="Windows graphics settings that affect frame timing and stability. Each shows your current system state and changes nothing until you flip it."
                            Style="{StaticResource CaptionText}" Margin="0,4,0,0" TextWrapping="Wrap" MaxWidth="720"/>
             </StackPanel>
 
-            <!-- ===== CARD: Disable MPO ===== -->
-            <Border Style="{StaticResource Card}" Margin="0,0,0,16">
-                <StackPanel>
-                    <Grid Margin="0,0,0,8">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" Margin="0,0,16,0">
-                            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                                <TextBlock Text="Disable Multi-Plane Overlay (MPO)" Style="{StaticResource HeadingMedium}"/>
-                                <Border CornerRadius="4" Padding="5,2" Margin="8,0,0,0" VerticalAlignment="Center"
-                                        Background="#1A22C55E" BorderBrush="{StaticResource AccentGreenBrush}" BorderThickness="1">
-                                    <TextBlock Text="RECOMMENDED" FontSize="8" FontWeight="Bold"
-                                               Foreground="{StaticResource AccentGreenBrush}"/>
-                                </Border>
-                            </StackPanel>
-                            <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" MaxWidth="620">
-                                MPO lets the GPU composite layers directly, but several drivers integrate it poorly —
-                                causing flickering, stutter, and uneven frame timing. Disabling it is Microsoft's own
-                                workaround and often makes frame pacing more consistent.
-                            </TextBlock>
-                            <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" MaxWidth="620"
-                                       Foreground="{StaticResource AccentYellowBrush}" Margin="0,6,0,0">
-                                Tradeoff: NVIDIA's VSync / Independent Flip relies on MPO. On NVIDIA GPUs, disabling MPO
-                                can fix stutter on some systems but cause screen tearing on others — test it and revert
-                                if you see tearing.
-                            </TextBlock>
-                        </StackPanel>
-                        <CheckBox Grid.Column="1" VerticalAlignment="Center"
-                                  Style="{StaticResource AutoPilotManagedToggle}"
-                                  ToolTipService.ShowOnDisabled="True"
-                                  IsChecked="{Binding DisableMpo, Mode=TwoWay}"/>
-                    </Grid>
-                    <TextBlock Text="⟳  Restart your PC to apply."
-                               Style="{StaticResource CaptionText}" Foreground="{StaticResource AccentYellowBrush}"/>
-                </StackPanel>
-            </Border>
+            <!-- ===== FRAME PACING & DISPLAY ===== -->
+            <TextBlock Text="Frame pacing and display" Style="{StaticResource SettingsGroupHeader}"/>
 
-            <!-- ===== CARD: Hardware-accelerated GPU Scheduling ===== -->
-            <Border Style="{StaticResource Card}" Margin="0,0,0,16">
-                <StackPanel>
-                    <Grid Margin="0,0,0,8">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" Margin="0,0,16,0">
-                            <TextBlock Text="Hardware-accelerated GPU Scheduling" Style="{StaticResource HeadingMedium}" Margin="0,0,0,4"/>
-                            <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" MaxWidth="620">
-                                Lets the GPU manage its own memory scheduling. On capable GPUs it can lower latency and
-                                smooth frame delivery; on some setups turning it off is more stable. Same toggle as
-                                Windows Settings → Display → Graphics.
-                            </TextBlock>
-                            <TextBlock Text="Not supported on this GPU/driver."
-                                       Style="{StaticResource CaptionText}" Foreground="{StaticResource TextSecondaryBrush}"
-                                       Margin="0,4,0,0"
-                                       Visibility="{Binding HagsSupported, Converter={StaticResource BoolToVis}, ConverterParameter=Invert}"/>
-                        </StackPanel>
-                        <CheckBox Grid.Column="1" VerticalAlignment="Center"
-                                  Style="{StaticResource ToggleSwitch}"
-                                  IsEnabled="{Binding HagsSupported}"
-                                  IsChecked="{Binding HardwareGpuScheduling, Mode=TwoWay}"/>
-                    </Grid>
-                    <TextBlock Text="⟳  Restart your PC to apply."
-                               Style="{StaticResource CaptionText}" Foreground="{StaticResource AccentYellowBrush}"/>
-                </StackPanel>
-            </Border>
+            <ctl:SettingsCard Header="Disable Multi-Plane Overlay (MPO)"
+                              Badge="Recommended" BadgeBrush="{StaticResource AccentGreenBrush}">
+                <ctl:SettingsCard.Description>
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource CardDescription}">
+                            MPO lets the GPU composite layers directly, but several drivers integrate it poorly, which causes
+                            flickering, stutter, and uneven frame timing. Disabling it is Microsoft's own workaround and often
+                            makes frame pacing more consistent.
+                        </TextBlock>
+                        <TextBlock Style="{StaticResource CardNoteWarn}">
+                            Tradeoff: NVIDIA's VSync / Independent Flip relies on MPO. On NVIDIA GPUs, disabling MPO can fix
+                            stutter on some systems but cause screen tearing on others. Test it, and revert if you see tearing.
+                        </TextBlock>
+                        <TextBlock Text="⟳  Restart your PC to apply." Style="{StaticResource CardNoteWarn}"/>
+                    </StackPanel>
+                </ctl:SettingsCard.Description>
+                <CheckBox Style="{StaticResource AutoPilotManagedToggle}"
+                          ToolTipService.ShowOnDisabled="True"
+                          IsChecked="{Binding DisableMpo, Mode=TwoWay}"/>
+            </ctl:SettingsCard>
 
-            <!-- ===== CARD: Optimizations for windowed games ===== -->
-            <Border Style="{StaticResource Card}" Margin="0,0,0,16">
-                <StackPanel>
-                    <Grid Margin="0,0,0,8">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" Margin="0,0,16,0">
-                            <TextBlock Text="Optimizations for windowed games" Style="{StaticResource HeadingMedium}" Margin="0,0,0,4"/>
-                            <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" MaxWidth="620">
-                                Upgrades the presentation path for games running in windowed / borderless mode, giving them
-                                lower latency and tearing control closer to true fullscreen. Same toggle as Windows Settings
-                                → Display → Graphics.
-                            </TextBlock>
-                        </StackPanel>
-                        <CheckBox Grid.Column="1" VerticalAlignment="Center"
-                                  Style="{StaticResource ToggleSwitch}"
-                                  IsChecked="{Binding WindowedOptimizations, Mode=TwoWay}"/>
-                    </Grid>
-                    <TextBlock Text="⟳  Restart any open games to apply."
-                               Style="{StaticResource CaptionText}" Foreground="{StaticResource AccentYellowBrush}"/>
-                </StackPanel>
-            </Border>
+            <ctl:SettingsCard Header="Hardware-accelerated GPU Scheduling">
+                <ctl:SettingsCard.Description>
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource CardDescription}">
+                            Lets the GPU manage its own memory scheduling. On capable GPUs it can lower latency and
+                            smooth frame delivery; on some setups turning it off is more stable. Same toggle as
+                            Windows Settings → Display → Graphics.
+                        </TextBlock>
+                        <TextBlock Text="Not supported on this GPU/driver." Style="{StaticResource CardNote}"
+                                   Visibility="{Binding HagsSupported, Converter={StaticResource BoolToVis}, ConverterParameter=Invert}"/>
+                        <TextBlock Text="⟳  Restart your PC to apply." Style="{StaticResource CardNoteWarn}"/>
+                    </StackPanel>
+                </ctl:SettingsCard.Description>
+                <CheckBox Style="{StaticResource ToggleSwitch}"
+                          IsEnabled="{Binding HagsSupported}"
+                          IsChecked="{Binding HardwareGpuScheduling, Mode=TwoWay}"/>
+            </ctl:SettingsCard>
 
-            <!-- ===== CARD: Extend GPU recovery timeout (TdrDelay) ===== -->
-            <Border Style="{StaticResource Card}" Margin="0,0,0,16">
-                <StackPanel>
-                    <Grid Margin="0,0,0,8">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" Margin="0,0,16,0">
-                            <TextBlock Text="Extend GPU recovery timeout" Style="{StaticResource HeadingMedium}" Margin="0,0,0,4"/>
-                            <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" MaxWidth="620">
-                                Windows hard-resets the GPU after only ~2 seconds when it briefly stalls — the
-                                "display driver stopped responding and has recovered" black-screen flash. This raises
-                                the timeout to 10 seconds so the GPU can recover from a short hiccup instead of
-                                resetting, cutting down on those black screens.
-                            </TextBlock>
-                        </StackPanel>
-                        <CheckBox Grid.Column="1" VerticalAlignment="Center"
-                                  Style="{StaticResource AutoPilotManagedToggle}"
-                                  ToolTipService.ShowOnDisabled="True"
-                                  IsChecked="{Binding ExtendGpuRecoveryTimeout, Mode=TwoWay}"/>
-                    </Grid>
-                    <TextBlock Text="⟳  Restart your PC to apply."
-                               Style="{StaticResource CaptionText}" Foreground="{StaticResource AccentYellowBrush}"/>
-                </StackPanel>
-            </Border>
+            <ctl:SettingsCard Header="Optimizations for windowed games">
+                <ctl:SettingsCard.Description>
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource CardDescription}">
+                            Upgrades the presentation path for games running in windowed / borderless mode, giving them
+                            lower latency and tearing control closer to true fullscreen. Same toggle as Windows Settings
+                            → Display → Graphics.
+                        </TextBlock>
+                        <TextBlock Text="⟳  Restart any open games to apply." Style="{StaticResource CardNoteWarn}"/>
+                    </StackPanel>
+                </ctl:SettingsCard.Description>
+                <CheckBox Style="{StaticResource ToggleSwitch}"
+                          IsChecked="{Binding WindowedOptimizations, Mode=TwoWay}"/>
+            </ctl:SettingsCard>
 
-            <!-- ===== CARD: Stable timer resolution (0.5 ms) ===== -->
-            <Border Style="{StaticResource Card}" Margin="0,0,0,16">
-                <StackPanel>
-                    <Grid Margin="0,0,0,8">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" Margin="0,0,16,0">
-                            <TextBlock Text="Stable timer resolution (0.5 ms)" Style="{StaticResource HeadingMedium}" Margin="0,0,0,4"/>
-                            <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" MaxWidth="620">
-                                Pins the Windows system timer to 0.5 ms instead of letting it idle around 15.6 ms, so the
-                                scheduler ticks more often. This can tighten frame pacing and steady out FPS in some games.
-                                It's off by default and changes nothing until you turn it on.
-                                <LineBreak/><Run FontWeight="SemiBold">Needs a restart to take effect system-wide.</Run>
-                            </TextBlock>
-                            <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" MaxWidth="620" Margin="0,8,0,0"
-                                       Foreground="{StaticResource AccentYellowBrush}"
-                                       Text="Keeps the CPU waking more often, so it can increase heat and power draw (worst on a laptop or on battery). Turn it on only if the smoother FPS is worth that to you."/>
-                            <TextBlock Margin="0,8,0,0" Style="{StaticResource CaptionText}">
-                                <Run Text="Current: "/><Run Text="{Binding TimerResolutionDisplay, Mode=OneWay}"
-                                     Foreground="{StaticResource AccentGreenBrush}" FontWeight="SemiBold"/>
-                            </TextBlock>
-                        </StackPanel>
-                        <CheckBox Grid.Column="1" VerticalAlignment="Center"
-                                  Style="{StaticResource ToggleSwitch}"
-                                  IsChecked="{Binding ForceTimerResolution, Mode=TwoWay}"/>
-                    </Grid>
-                    <!-- State-aware system-wide status: pending restart vs active for every process -->
-                    <TextBlock Text="⟳  Restart your PC so it applies system-wide."
-                               Style="{StaticResource CaptionText}" Foreground="{StaticResource AccentYellowBrush}"
-                               Visibility="{Binding ShowTimerRestartNote, Converter={StaticResource BoolToVis}}"/>
-                    <TextBlock Text="✓  Active system-wide. Every app now gets the 0.5 ms timer."
-                               Style="{StaticResource CaptionText}" Foreground="{StaticResource AccentGreenBrush}"
-                               Visibility="{Binding ShowTimerActiveNote, Converter={StaticResource BoolToVis}}"/>
-                    <TextBlock Text="Stays on while Systema is running. If you fully close Systema, the timer goes back to normal."
-                               Style="{StaticResource CaptionText}" Foreground="{StaticResource TextSecondaryBrush}"
-                               TextWrapping="Wrap" MaxWidth="620" Margin="0,4,0,0"
-                               Visibility="{Binding ForceTimerResolution, Converter={StaticResource BoolToVis}}"/>
-                </StackPanel>
-            </Border>
+            <ctl:SettingsCard Header="Turn off Game Bar capture">
+                <ctl:SettingsCard.Description>
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource CardDescription}">
+                            The Xbox Game Bar keeps a rolling background recording ("Game DVR") while you play, which adds
+                            frame-time variance and a little input latency. Turning it on here switches that capture off for
+                            steadier FPS and lower latency. This reflects your current Windows setting and changes nothing
+                            until you flip it; off restores the Windows default.
+                        </TextBlock>
+                        <TextBlock Text="⟳  Restart any open games to apply." Style="{StaticResource CardNoteWarn}"/>
+                    </StackPanel>
+                </ctl:SettingsCard.Description>
+                <CheckBox Style="{StaticResource ToggleSwitch}"
+                          IsChecked="{Binding DisableGameDvr, Mode=TwoWay}"/>
+            </ctl:SettingsCard>
 
-            <!-- ===== CARD: Game DVR / Game Bar capture ===== -->
-            <Border Style="{StaticResource Card}" Margin="0,0,0,16">
-                <StackPanel>
-                    <Grid Margin="0,0,0,8">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" Margin="0,0,16,0">
-                            <TextBlock Text="Turn off Game Bar capture" Style="{StaticResource HeadingMedium}" Margin="0,0,0,4"/>
-                            <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" MaxWidth="620">
-                                The Xbox Game Bar keeps a rolling background recording ("Game DVR") while you play, which adds
-                                frame-time variance and a little input latency. Turning it on here switches that capture off for
-                                steadier FPS and lower latency. This reflects your current Windows setting and changes nothing
-                                until you flip it; off restores the Windows default.
-                            </TextBlock>
-                        </StackPanel>
-                        <CheckBox Grid.Column="1" VerticalAlignment="Center"
-                                  Style="{StaticResource ToggleSwitch}"
-                                  IsChecked="{Binding DisableGameDvr, Mode=TwoWay}"/>
-                    </Grid>
-                    <TextBlock Text="⟳  Restart any open games to apply."
-                               Style="{StaticResource CaptionText}" Foreground="{StaticResource AccentYellowBrush}"/>
-                </StackPanel>
-            </Border>
+            <!-- ===== SCHEDULING & TIMING ===== -->
+            <TextBlock Text="Scheduling and timing" Style="{StaticResource SettingsGroupHeader}"/>
 
-            <!-- ===== CARD: Priority graphics scheduling (MMCSS) ===== -->
-            <Border Style="{StaticResource Card}" Margin="0,0,0,16">
-                <StackPanel>
-                    <Grid Margin="0,0,0,8">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" Margin="0,0,16,0">
-                            <TextBlock Text="Priority graphics scheduling" Style="{StaticResource HeadingMedium}" Margin="0,0,0,4"/>
-                            <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" MaxWidth="620">
-                                The graphics twin of "Priority audio scheduling." Windows' multimedia scheduler ranks visual
-                                workloads; this raises the ones that matter — games and 3D apps, video playback, screen capture or
-                                streaming, and the desktop compositor itself — to the top tier so the scheduler favors them and
-                                background work stutters them less. It reflects your current setting and changes nothing until you
-                                turn it on.
-                            </TextBlock>
-                            <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" MaxWidth="620"
-                                       Foreground="{StaticResource AccentYellowBrush}" Margin="0,6,0,0"
-                                       Text="It caps at the highest safe level, not true realtime. Real realtime priority can starve Windows itself and freeze the machine, so Systema stays one notch below that. This does raise the desktop compositor's priority for a smoother whole-display pipeline, which is fully reversible if anything ever looks off."/>
-                        </StackPanel>
-                        <CheckBox Grid.Column="1" VerticalAlignment="Center"
-                                  Style="{StaticResource ToggleSwitch}"
-                                  IsChecked="{Binding PriorityGraphicsScheduling, Mode=TwoWay}"/>
-                    </Grid>
-                    <TextBlock Text="⟳  Needs a full restart to take effect."
-                               Style="{StaticResource CaptionText}" Foreground="{StaticResource AccentYellowBrush}"/>
-                </StackPanel>
-            </Border>
+            <ctl:SettingsCard Header="Priority graphics scheduling">
+                <ctl:SettingsCard.Description>
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource CardDescription}">
+                            The graphics twin of "Priority audio scheduling." Windows' multimedia scheduler ranks visual
+                            workloads, and this raises the ones that matter (games and 3D apps, video playback, screen capture
+                            or streaming, and the desktop compositor itself) to the top tier, so the scheduler favors them and
+                            background work stutters them less. It reflects your current setting and changes nothing until you
+                            turn it on.
+                        </TextBlock>
+                        <TextBlock Style="{StaticResource CardNoteWarn}"
+                                   Text="It caps at the highest safe level, not true realtime. Real realtime priority can starve Windows itself and freeze the machine, so Systema stays one notch below that. This does raise the desktop compositor's priority for a smoother whole-display pipeline, which is fully reversible if anything ever looks off."/>
+                        <TextBlock Text="⟳  Needs a full restart to take effect." Style="{StaticResource CardNoteWarn}"/>
+                    </StackPanel>
+                </ctl:SettingsCard.Description>
+                <CheckBox Style="{StaticResource ToggleSwitch}"
+                          IsChecked="{Binding PriorityGraphicsScheduling, Mode=TwoWay}"/>
+            </ctl:SettingsCard>
+
+            <ctl:SettingsCard Header="Stable timer resolution (0.5 ms)">
+                <ctl:SettingsCard.Description>
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource CardDescription}">
+                            Pins the Windows system timer to 0.5 ms instead of letting it idle around 15.6 ms, so the
+                            scheduler ticks more often. This can tighten frame pacing and steady out FPS in some games.
+                            It's off by default and changes nothing until you turn it on.
+                            <LineBreak/><Run FontWeight="SemiBold">Needs a restart to take effect system-wide.</Run>
+                        </TextBlock>
+                        <TextBlock Style="{StaticResource CardNoteWarn}"
+                                   Text="Keeps the CPU waking more often, so it can increase heat and power draw (worst on a laptop or on battery). Turn it on only if the smoother FPS is worth that to you."/>
+                        <TextBlock Style="{StaticResource CardNote}">
+                            <Run Text="Current: "/><Run Text="{Binding TimerResolutionDisplay, Mode=OneWay}"
+                                 Foreground="{StaticResource AccentGreenBrush}" FontWeight="SemiBold"/>
+                        </TextBlock>
+                        <!-- State-aware system-wide status: pending restart vs active for every process -->
+                        <TextBlock Text="⟳  Restart your PC so it applies system-wide." Style="{StaticResource CardNoteWarn}"
+                                   Visibility="{Binding ShowTimerRestartNote, Converter={StaticResource BoolToVis}}"/>
+                        <TextBlock Text="✓  Active system-wide. Every app now gets the 0.5 ms timer." Style="{StaticResource CardNoteGood}"
+                                   Visibility="{Binding ShowTimerActiveNote, Converter={StaticResource BoolToVis}}"/>
+                        <TextBlock Text="Stays on while Systema is running. If you fully close Systema, the timer goes back to normal."
+                                   Style="{StaticResource CardNote}"
+                                   Visibility="{Binding ForceTimerResolution, Converter={StaticResource BoolToVis}}"/>
+                    </StackPanel>
+                </ctl:SettingsCard.Description>
+                <CheckBox Style="{StaticResource ToggleSwitch}"
+                          IsChecked="{Binding ForceTimerResolution, Mode=TwoWay}"/>
+            </ctl:SettingsCard>
+
+            <!-- ===== STABILITY ===== -->
+            <TextBlock Text="Stability" Style="{StaticResource SettingsGroupHeader}"/>
+
+            <ctl:SettingsCard Header="Extend GPU recovery timeout">
+                <ctl:SettingsCard.Description>
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource CardDescription}">
+                            Windows hard-resets the GPU after only about 2 seconds when it briefly stalls. That's the
+                            "display driver stopped responding and has recovered" black-screen flash. This raises the timeout
+                            to 10 seconds so the GPU can recover from a short hiccup instead of resetting, cutting down on
+                            those black screens.
+                        </TextBlock>
+                        <TextBlock Text="⟳  Restart your PC to apply." Style="{StaticResource CardNoteWarn}"/>
+                    </StackPanel>
+                </ctl:SettingsCard.Description>
+                <CheckBox Style="{StaticResource AutoPilotManagedToggle}"
+                          ToolTipService.ShowOnDisabled="True"
+                          IsChecked="{Binding ExtendGpuRecoveryTimeout, Mode=TwoWay}"/>
+            </ctl:SettingsCard>
 
             <!-- status -->
             <TextBlock Text="{Binding StatusMessage}" Style="{StaticResource CaptionText}"
-                       Margin="0,4,0,0" TextWrapping="Wrap"/>
+                       Margin="2,8,0,0" TextWrapping="Wrap"/>
 
             <!-- ===== Intel Graphics link (only when an Intel iGPU is present) ===== -->
-            <Border Style="{StaticResource Card}" Margin="0,16,0,0"
-                    Visibility="{Binding DataContext.IsIntelGpuPresent, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToVis}}">
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
-                    </Grid.ColumnDefinitions>
-                    <StackPanel Grid.Column="0" Margin="0,0,16,0" VerticalAlignment="Center">
-                        <TextBlock Text="Intel integrated graphics detected" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                        <TextBlock Text="Per-GPU power, display, and performance tweaks live on the Intel Graphics page."
-                                   Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,2,0,0"/>
-                    </StackPanel>
-                    <Button Grid.Column="1" VerticalAlignment="Center"
-                            Content="Open Intel Graphics  →"
-                            Padding="14,8"
-                            Foreground="{StaticResource AccentBlueBrush}"
-                            Background="Transparent"
-                            BorderBrush="{StaticResource AccentBlueBrush}"
-                            BorderThickness="1"
-                            Cursor="Hand"
-                            Command="{Binding DataContext.NavigateCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                            CommandParameter="Intel"/>
-                </Grid>
-            </Border>
+            <ctl:SettingsCard Header="Intel integrated graphics detected" Margin="0,16,0,4"
+                              Visibility="{Binding DataContext.IsIntelGpuPresent, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToVis}}">
+                <ctl:SettingsCard.Description>
+                    <TextBlock Text="Per-GPU power, display, and performance tweaks live on the Intel Graphics page."
+                               Style="{StaticResource CardDescription}"/>
+                </ctl:SettingsCard.Description>
+                <Button Content="Open Intel Graphics" Style="{StaticResource GhostButton}"
+                        Command="{Binding DataContext.NavigateCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                        CommandParameter="Intel"/>
+            </ctl:SettingsCard>
 
             <!-- ===== Nvidia Graphics link (only when an NVIDIA GPU is present) ===== -->
-            <Border Style="{StaticResource Card}" Margin="0,16,0,0"
-                    Visibility="{Binding DataContext.IsNvidiaGpuPresent, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToVis}}">
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
-                    </Grid.ColumnDefinitions>
-                    <StackPanel Grid.Column="0" Margin="0,0,16,0" VerticalAlignment="Center">
-                        <TextBlock Text="NVIDIA graphics detected" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                        <TextBlock Text="Per-GPU power management and driver tweaks live on the Nvidia Graphics page."
-                                   Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,2,0,0"/>
-                    </StackPanel>
-                    <Button Grid.Column="1" VerticalAlignment="Center"
-                            Content="Open Nvidia Graphics  →"
-                            Padding="14,8"
-                            Foreground="{StaticResource AccentBlueBrush}"
-                            Background="Transparent"
-                            BorderBrush="{StaticResource AccentBlueBrush}"
-                            BorderThickness="1"
-                            Cursor="Hand"
-                            Command="{Binding DataContext.NavigateCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                            CommandParameter="Nvidia"/>
-                </Grid>
-            </Border>
+            <ctl:SettingsCard Header="NVIDIA graphics detected"
+                              Visibility="{Binding DataContext.IsNvidiaGpuPresent, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToVis}}">
+                <ctl:SettingsCard.Description>
+                    <TextBlock Text="Per-GPU power management and driver tweaks live on the Nvidia Graphics page."
+                               Style="{StaticResource CardDescription}"/>
+                </ctl:SettingsCard.Description>
+                <Button Content="Open Nvidia Graphics" Style="{StaticResource GhostButton}"
+                        Command="{Binding DataContext.NavigateCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                        CommandParameter="Nvidia"/>
+            </ctl:SettingsCard>
 
         </StackPanel>
     </ScrollViewer>
