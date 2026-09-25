@@ -45,7 +45,9 @@ public class UiSearchIndexTests
         {
             string xaml = File.ReadAllText(Path.Combine(RepoRoot(), "src", "Systema", "Views", ViewFor[e.Section] + ".xaml"));
             string encoded = e.Title.Replace("&", "&amp;");
-            if (!xaml.Contains($"Text=\"{encoded}\"", StringComparison.Ordinal))
+            // A plain TextBlock title, or a SettingsCard header (rendered as a TextBlock too).
+            if (!xaml.Contains($"Text=\"{encoded}\"", StringComparison.Ordinal) &&
+                !xaml.Contains($"Header=\"{encoded}\"", StringComparison.Ordinal))
                 missing.Add($"{e.Section}: {e.Title}");
         }
         Assert.True(missing.Count == 0,

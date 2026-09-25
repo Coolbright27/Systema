@@ -9,7 +9,7 @@ using System.Windows.Media.Animation;
 using System.Windows.Threading;
 using Systema.Core;
 using Systema.ViewModels;
-using Controls = System.Windows.Controls;
+using WpfControls = System.Windows.Controls;
 using Media = System.Windows.Media;
 
 namespace Systema.Views;
@@ -370,7 +370,7 @@ public partial class MainWindow : Window
         SearchPlaceholder.Visibility = SearchInput.Text.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 
-    private void SearchInput_TextChanged(object sender, Controls.TextChangedEventArgs e) => RunSearch();
+    private void SearchInput_TextChanged(object sender, WpfControls.TextChangedEventArgs e) => RunSearch();
 
     private void SearchInput_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
     {
@@ -402,7 +402,7 @@ public partial class MainWindow : Window
         // Only a click on a result row opens it, not a click on the list's scrollbar.
         for (var d = e.OriginalSource as DependencyObject; d != null && d != SearchResults; d = Media.VisualTreeHelper.GetParent(d))
         {
-            if (d is Controls.ListBoxItem item)
+            if (d is WpfControls.ListBoxItem item)
             {
                 ChooseResult(item.DataContext as SearchResultItem);
                 return;
@@ -464,13 +464,13 @@ public partial class MainWindow : Window
         catch { /* cosmetic: the page has already opened */ }
     }
 
-    private static Controls.TextBlock? FindVisibleText(DependencyObject root, string text)
+    private static WpfControls.TextBlock? FindVisibleText(DependencyObject root, string text)
     {
         int n = Media.VisualTreeHelper.GetChildrenCount(root);
         for (int i = 0; i < n; i++)
         {
             var child = Media.VisualTreeHelper.GetChild(root, i);
-            if (child is Controls.TextBlock tb && tb.IsVisible &&
+            if (child is WpfControls.TextBlock tb && tb.IsVisible &&
                 string.Equals(tb.Text, text, StringComparison.Ordinal))
                 return tb;
             var deeper = FindVisibleText(child, text);
@@ -484,15 +484,15 @@ public partial class MainWindow : Window
     /// control in another, so the nearest multi-column Grid is the row. Never climbs past the
     /// card, which would outline a whole group instead of one setting.
     /// </summary>
-    private FrameworkElement RowFor(Controls.TextBlock text)
+    private FrameworkElement RowFor(WpfControls.TextBlock text)
     {
         var card = TryFindResource("Card");
         DependencyObject? cur = text;
         for (int i = 0; i < 6 && cur != null; i++)
         {
             cur = Media.VisualTreeHelper.GetParent(cur);
-            if (cur is Controls.Grid g && g.ColumnDefinitions.Count >= 2) return g;
-            if (cur is Controls.Border b && card != null && ReferenceEquals(b.Style, card)) break;
+            if (cur is WpfControls.Grid g && g.ColumnDefinitions.Count >= 2) return g;
+            if (cur is WpfControls.Border b && card != null && ReferenceEquals(b.Style, card)) break;
         }
         return (Media.VisualTreeHelper.GetParent(text) as FrameworkElement) ?? text;
     }
