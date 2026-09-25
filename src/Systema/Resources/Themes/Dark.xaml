@@ -1037,6 +1037,76 @@
     <!--  SETTINGS PAGES  (Windows 11 Settings layout)                -->
     <!-- ============================================================ -->
 
+    <!-- Windows 11 check box: 20px rounded square, outlined when clear, accent-filled with a
+         black tick when checked. Keyed, not implicit, so it only reaches the check boxes a
+         converted page asks for; unstyled ones elsewhere keep their current look until their
+         page is converted. -->
+    <Style x:Key="Win11CheckBox" TargetType="CheckBox">
+        <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+        <Setter Property="FontFamily" Value="{StaticResource MainFont}"/>
+        <Setter Property="FontSize" Value="14"/>
+        <Setter Property="Padding" Value="0"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="CheckBox">
+                    <!-- Grid, not a horizontal StackPanel, so a long label wraps. The transparent
+                         padded Border makes the whole padded area (a full list row) clickable. -->
+                    <Border x:Name="Root" Background="Transparent" Padding="{TemplateBinding Padding}">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid Width="20" Height="20" VerticalAlignment="Center">
+                            <Border x:Name="BoxOff" CornerRadius="4" BorderThickness="1"
+                                    BorderBrush="{StaticResource ToggleOffStrokeBrush}" Background="Transparent"/>
+                            <Border x:Name="BoxHover" CornerRadius="4" Background="{StaticResource ControlFillBrush}" Opacity="0"/>
+                            <Border x:Name="BoxOn" CornerRadius="4" Background="{StaticResource AccentBlueBrush}" Opacity="0"/>
+                            <Border x:Name="FocusRing" CornerRadius="6" Margin="-3" BorderThickness="2"
+                                    BorderBrush="{StaticResource TextPrimaryBrush}" Opacity="0"/>
+                            <Path x:Name="Tick" Data="M 4.5 10.5 L 8.5 14 L 15.5 6.5" Opacity="0"
+                                  Stroke="{StaticResource TextOnAccentBrush}" StrokeThickness="1.6"
+                                  StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"/>
+                        </Grid>
+                        <ContentPresenter x:Name="Label" Grid.Column="1" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                    </Grid>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="Content" Value="{x:Null}">
+                            <Setter TargetName="Label" Property="Margin" Value="0"/>
+                        </Trigger>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="BoxHover" Property="Opacity" Value="1"/>
+                        </Trigger>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="BoxOn" Property="Opacity" Value="1"/>
+                            <Setter TargetName="Tick" Property="Opacity" Value="1"/>
+                        </Trigger>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="FocusRing" Property="Opacity" Value="1"/>
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter TargetName="Root" Property="Opacity" Value="0.4"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- A row in a list page (apps to remove, startup apps): the card look without the
+         header/description layout, for rows whose content is built by an ItemTemplate. -->
+    <Style x:Key="ListRowCard" TargetType="Border">
+        <Setter Property="Background" Value="{StaticResource BgCardBrush}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="CornerRadius" Value="6"/>
+        <Setter Property="Padding" Value="16,12"/>
+        <Setter Property="Margin" Value="0,0,0,4"/>
+    </Style>
+
     <!-- Group header above a run of cards: Windows 11 "Body Strong". -->
     <Style x:Key="SettingsGroupHeader" TargetType="TextBlock" BasedOn="{StaticResource HeadingSmall}">
         <Setter Property="Margin" Value="2,24,0,8"/>

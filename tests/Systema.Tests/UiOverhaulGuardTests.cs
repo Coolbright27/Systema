@@ -97,6 +97,13 @@ public class UiOverhaulGuardTests
     [InlineData("StatusPillGreen", "Border")]
     [InlineData("StatusPillRed", "Border")]
     [InlineData("StatusPillGray", "Border")]
+    [InlineData("SettingsGroupHeader", "TextBlock")]
+    [InlineData("CardDescription", "TextBlock")]
+    [InlineData("CardNote", "TextBlock")]
+    [InlineData("CardNoteWarn", "TextBlock")]
+    [InlineData("CardNoteGood", "TextBlock")]
+    [InlineData("Win11CheckBox", "CheckBox")]
+    [InlineData("ListRowCard", "Border")]
     public void SharedStyle_KeepsItsTargetType(string key, string targetType)
     {
         string theme = StripXmlComments(ReadSrc("Resources", "Themes", "Dark.xaml"));
