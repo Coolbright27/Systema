@@ -491,6 +491,10 @@ public partial class MainWindow : Window
         for (int i = 0; i < 6 && cur != null; i++)
         {
             cur = Media.VisualTreeHelper.GetParent(cur);
+            // Reached the page itself: the title is a heading above a group ("I want…",
+            // "All startup apps"), not a row. Outline just the heading, never the ScrollViewer's
+            // own two-column template Grid, which is the whole page.
+            if (cur is WpfControls.ScrollContentPresenter) return text;
             if (cur is WpfControls.Grid g && g.ColumnDefinitions.Count >= 2) return g;
             if (cur is WpfControls.Border b && card != null && ReferenceEquals(b.Style, card)) break;
         }
