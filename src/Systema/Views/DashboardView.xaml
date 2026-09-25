@@ -120,7 +120,7 @@
                     </Border>
                     <Border Background="{StaticResource ControlFillBrush}" BorderBrush="{StaticResource ControlStrokeBrush}"
                             BorderThickness="1" CornerRadius="4" Padding="10,4">
-                        <TextBlock Text="v0.7.338" FontSize="12"
+                        <TextBlock Text="v0.7.339" FontSize="12"
                                    Foreground="{StaticResource TextSecondaryBrush}" FontFamily="{StaticResource SmallFont}"/>
                     </Border>
                 </StackPanel>
