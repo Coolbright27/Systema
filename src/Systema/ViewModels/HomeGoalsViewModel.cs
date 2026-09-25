@@ -131,16 +131,38 @@ public sealed partial class HomeGoalsViewModel : ObservableObject
         }
     }
 
+    // Runs work on the UI thread (null = run inline, as in tests).
+    private readonly Action<Action>? _toUi;
+    private int _refreshQueued;
+
     public HomeGoalsViewModel(IEnumerable<HomeGoal> goals, IEnumerable<INotifyPropertyChanged> sources,
-                              Action<string>? logInfo = null, Action<string>? logWarn = null)
+                              Action<string>? logInfo = null, Action<string>? logWarn = null,
+                              Action<Action>? toUi = null)
     {
         _logInfo = logInfo;
         _logWarn = logWarn;
+        _toUi    = toUi;
         foreach (var g in goals) Goals.Add(g);
 
         // Any change on a page the goals read from (a toggle flipped there, a failed apply
         // reverting, Auto Pilot turning on) re-reads the open preview.
-        foreach (var src in sources) src.PropertyChanged += (_, _) => Refresh();
+        foreach (var src in sources) src.PropertyChanged += (_, _) => OnSourceChanged();
+    }
+
+    /// <summary>
+    /// Pages sometimes raise PropertyChanged from a background thread, and this handler runs
+    /// inside their setter. So the refresh hops to the UI thread (where SelectedSteps is edited),
+    /// and a burst of changes collapses into one refresh instead of flooding the dispatcher.
+    /// </summary>
+    private void OnSourceChanged()
+    {
+        if (_toUi == null) { Refresh(); return; }
+        if (Interlocked.Exchange(ref _refreshQueued, 1) == 1) return;
+        _toUi(() =>
+        {
+            Interlocked.Exchange(ref _refreshQueued, 0);
+            Refresh();
+        });
     }
 
     [RelayCommand]
@@ -280,7 +302,13 @@ public sealed partial class HomeGoalsViewModel : ObservableObject
             new[] { quiet, battery, smooth, privacy },
             new INotifyPropertyChanged[] { tools, visual, games, services },
             logInfo: m => log.Info("HomeGoals", m),
-            logWarn: m => log.Warn("HomeGoals", m));
+            logWarn: m => log.Warn("HomeGoals", m),
+            toUi: work =>
+            {
+                var ui = System.Windows.Application.Current?.Dispatcher;
+                if (ui == null) { work(); return; }   // shutting down; nothing is on screen
+                ui.BeginInvoke(work, System.Windows.Threading.DispatcherPriority.Background);
+            });
     }
 
     internal static string BatteryModeName(string mode) => mode switch

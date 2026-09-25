@@ -189,6 +189,25 @@ public class HomeGoalsTests
     }
 
     [Fact]
+    public void ABurstOfPageChanges_QueuesOneRefreshOnTheUiThread()
+    {
+        // Pages can raise PropertyChanged from a background thread, inside their own setter.
+        // The goals must hand the refresh to the UI thread, once per burst, never inline.
+        var queued = new List<Action>();
+        var src = new Source();
+        var goal = new HomeGoal("g", "Goal", new[] { Step("A", new Switch()) });
+        var vm = new HomeGoalsViewModel(new[] { goal }, new INotifyPropertyChanged[] { src },
+                                        toUi: queued.Add);
+
+        for (int i = 0; i < 50; i++) src.Raise();
+        Assert.Single(queued);
+
+        queued[0]();                 // the UI thread runs it
+        src.Raise();
+        Assert.Equal(2, queued.Count);
+    }
+
+    [Fact]
     public void GoalIsHidden_WhenItDoesNotApplyToThisPC()
     {
         var laptopOnly = new HomeGoal("b", "Battery", new[] { Step("A", new Switch()) }, isAvailable: () => false);
