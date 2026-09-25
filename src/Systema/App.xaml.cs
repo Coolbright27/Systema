@@ -566,6 +566,10 @@ public partial class App : Application
             var dellVm        = new DellViewModel(thermalService, settingsService, powerPlanService,
                                                   batteryPauseService, gameboosterService);
 
+            // Home's "I want…" goals drive toggles on other pages, so they're built last,
+            // once every page ViewModel they read and set exists.
+            dashboardVm.Goals = HomeGoalsViewModel.Create(toolsVm, visualVm, gameBoosterVm, servicesVm, settingsService);
+
             _mainVm = new MainViewModel(dashboardVm, memoryVm, servicesVm,
                                         visualVm, gameBoosterVm, settingsVm, toolsVm, taskSleepVm, bloatwareVm, graphicsVm, audioVm, intelVm, nvidiaVm, dellVm);
 

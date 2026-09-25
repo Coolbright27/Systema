@@ -42,6 +42,7 @@ public static class SettingsSearchIndex
         // Home
         new("Dashboard", "Auto Pilot", "autopilot automatic optimize everything one click"),
         new("Dashboard", "Suggestions for this PC", "recommendations suggested tips"),
+        new("Dashboard", "I want…", "goal goals quieter cooler quiet battery life games smoother privacy private"),
 
         // Memory & Startup
         new("Memory", "Free up memory", "ram clean cleaner purge standby"),

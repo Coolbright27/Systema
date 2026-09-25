@@ -12,7 +12,8 @@
           1. Live status: one sentence about the PC right now, plus the numbers behind it.
           2. Auto Pilot: the master switch, its status, and the checklist behind "Show details".
           3. Suggestions for this PC: the same one-at-a-time queue as before, restyled.
-          4. Today: what Systema actually did, from Services/ActivityFeed.
+          4. I want…: plain-words goals that preview, then apply, settings from other pages.
+          5. Today: what Systema actually did, from Services/ActivityFeed.
         Everything the old Auto Pilot page bound to is still bound here;
         UiBindingSnapshotTests fails the build if any of it goes missing.
     -->
@@ -40,6 +41,46 @@
         <!-- Windows 11 group header ("Body Strong" above a group of cards) -->
         <Style x:Key="GroupHeader" TargetType="TextBlock" BasedOn="{StaticResource HeadingSmall}">
             <Setter Property="Margin" Value="2,28,0,8"/>
+        </Style>
+
+        <!-- "I want…" goal chip: a pill that outlines in the accent while its preview is open.
+             Declared here, not inline, like every style that carries a ControlTemplate. -->
+        <Style x:Key="GoalChip" TargetType="Button">
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+            <Setter Property="Background" Value="{StaticResource BgCardBrush}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Padding" Value="14,7"/>
+            <Setter Property="Margin" Value="0,0,8,8"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Pill" Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1"
+                                CornerRadius="16" Padding="{TemplateBinding Padding}">
+                            <StackPanel Orientation="Horizontal">
+                                <Ellipse x:Name="Dot" Width="6" Height="6" Margin="0,0,8,0" VerticalAlignment="Center"
+                                         Fill="{StaticResource TextTertiaryBrush}"/>
+                                <ContentPresenter VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Pill" Property="Background" Value="{StaticResource ControlFillBrush}"/>
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="Pill" Property="BorderBrush" Value="{StaticResource TextPrimaryBrush}"/>
+                            </Trigger>
+                            <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                <Setter TargetName="Pill" Property="BorderBrush" Value="{StaticResource AccentBlueBrush}"/>
+                                <Setter TargetName="Dot" Property="Fill" Value="{StaticResource AccentBlueBrush}"/>
+                            </DataTrigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
     </UserControl.Resources>
 
@@ -440,6 +481,66 @@
                                Style="{StaticResource CaptionText}"
                                TextWrapping="Wrap" MaxWidth="420" TextAlignment="Center"
                                HorizontalAlignment="Center" Margin="0,6,0,0"/>
+                </StackPanel>
+            </Border>
+
+            <!-- ===== I WANT… =====
+                 Plain-words goals. A chip opens a preview of every setting it would change;
+                 nothing changes until Apply. See ViewModels/HomeGoalsViewModel.cs. -->
+            <TextBlock Text="I want…" Style="{StaticResource GroupHeader}"/>
+            <ItemsControl ItemsSource="{Binding Goals.Goals}" Focusable="False">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <WrapPanel/>
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Button Style="{StaticResource GoalChip}" Content="{Binding Label}"
+                                Visibility="{Binding IsAvailable, Converter={StaticResource BoolToVis}}"
+                                Command="{Binding DataContext.Goals.SelectCommand,
+                                    RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                CommandParameter="{Binding}"/>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <!-- Preview of the open goal -->
+            <Border Style="{StaticResource Card}" Padding="0" Margin="0,2,0,0"
+                    Visibility="{Binding Goals.HasSelection, Converter={StaticResource BoolToVis}}">
+                <StackPanel>
+                    <TextBlock Text="Here's what would change. Nothing happens until you apply it, and each one can be switched back on its own page."
+                               Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="20,14,20,4"/>
+                    <ItemsControl ItemsSource="{Binding Goals.SelectedSteps}" Margin="0,4,0,8">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Grid Margin="20,7">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="{Binding Title, Mode=OneWay}" Style="{StaticResource BodyText}"
+                                               TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,16,0"/>
+                                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding ChangeText, Mode=OneWay}" Style="{StaticResource CaptionText}"
+                                                   Typography.NumeralAlignment="Tabular" VerticalAlignment="Center"/>
+                                        <TextBlock Text="&#x2713;" FontWeight="Bold" Margin="8,0,0,0" VerticalAlignment="Center"
+                                                   Foreground="{StaticResource AccentGreenBrush}"
+                                                   Visibility="{Binding IsDone, Converter={StaticResource BoolToVis}}"/>
+                                    </StackPanel>
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <Border BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,1,0,0" Padding="20,12">
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                            <Button Content="Close" Style="{StaticResource GhostButton}" Margin="0,0,8,0"
+                                    Command="{Binding Goals.CloseCommand}"/>
+                            <Button Content="{Binding Goals.ApplyText}" Style="{StaticResource PrimaryButton}"
+                                    Command="{Binding Goals.ApplyCommand}"
+                                    IsEnabled="{Binding Goals.CanApply}"/>
+                        </StackPanel>
+                    </Border>
                 </StackPanel>
             </Border>
 
