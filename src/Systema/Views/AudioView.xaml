@@ -1,23 +1,26 @@
 <UserControl x:Class="Systema.Views.AudioView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ctl="clr-namespace:Systema.Controls"
              Background="Transparent">
 
+    <!-- Windows 11 Settings layout: one SettingsCard per setting, grouped under headers.
+         Same four toggles and the same text as before; only the layout changed. -->
+
     <ScrollViewer VerticalScrollBarVisibility="Auto">
-        <StackPanel Margin="32,28,32,28">
+        <StackPanel Margin="32,24,32,28">
 
             <!-- ===== HEADER ===== -->
-            <StackPanel Margin="0,0,0,16">
+            <StackPanel Margin="0,0,0,8">
                 <TextBlock Text="Audio" Style="{StaticResource HeadingLarge}"/>
                 <TextBlock Text="Cleaner, lower-latency sound by peeling back the layers Windows stacks on top of your audio. Every toggle shows what your system is doing right now and changes nothing until you flip it."
                            Style="{StaticResource CaptionText}" Margin="0,4,0,0" TextWrapping="Wrap" MaxWidth="760"/>
             </StackPanel>
 
-            <!-- ===== CARD: Why audio hitches ===== -->
-            <Border Style="{StaticResource Card}" Margin="0,0,0,16">
-                <StackPanel>
-                    <TextBlock Text="Why audio stutters, crackles, and adds delay" Style="{StaticResource HeadingMedium}" Margin="0,0,0,8"/>
-                    <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" MaxWidth="760">
+            <!-- ===== WHY ===== -->
+            <ctl:SettingsCard Header="Why audio stutters, crackles, and adds delay" Margin="0,16,0,4">
+                <ctl:SettingsCard.Description>
+                    <TextBlock Style="{StaticResource CardDescription}">
                         Sound on Windows almost never goes straight from an app to your speakers. It gets pushed through
                         layer after layer first: audio "enhancements" and effect processors, spatial sound, loudness
                         equalization, call "ducking," and the system juggling exclusive versus shared access. Every one of
@@ -25,156 +28,97 @@
                         one more place to start. Turn the optional ones off and your audio usually gets cleaner and snappier,
                         not worse.
                     </TextBlock>
-                </StackPanel>
-            </Border>
+                </ctl:SettingsCard.Description>
+            </ctl:SettingsCard>
 
-            <!-- ===== CARD: Stop ducking during calls ===== -->
-            <Border Style="{StaticResource Card}" Margin="0,0,0,16">
-                <StackPanel>
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" Margin="0,0,16,0">
-                            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                                <TextBlock Text="Stop lowering other sounds during calls" Style="{StaticResource HeadingMedium}"/>
-                                <Border CornerRadius="4" Padding="5,2" Margin="8,0,0,0" VerticalAlignment="Center"
-                                        Background="#1A22C55E" BorderBrush="{StaticResource AccentGreenBrush}" BorderThickness="1">
-                                    <TextBlock Text="RECOMMENDED" FontSize="8" FontWeight="Bold"
-                                               Foreground="{StaticResource AccentGreenBrush}"/>
-                                </Border>
-                            </StackPanel>
-                            <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" MaxWidth="620">
-                                When Windows hears a call (Discord, Teams, a call in your browser), it quietly drops the
-                                volume of everything else, by default cutting other sounds by 80%. This stops that, so your
-                                music, game, and video stay at full volume. It's fully reversible and can't hurt your devices.
-                            </TextBlock>
-                        </StackPanel>
-                        <CheckBox Grid.Column="1" VerticalAlignment="Center"
-                                  Style="{StaticResource ToggleSwitch}"
-                                  IsChecked="{Binding DisableDucking, Mode=TwoWay}"/>
-                    </Grid>
-                    <TextBlock Text="Takes effect on your next call. No restart needed."
-                               Style="{StaticResource CaptionText}" Margin="0,8,0,0"/>
-                </StackPanel>
-            </Border>
+            <!-- ===== CALLS & PLAYBACK ===== -->
+            <TextBlock Text="Calls and playback" Style="{StaticResource SettingsGroupHeader}"/>
 
-            <!-- ===== CARD: Priority audio scheduling ===== -->
-            <Border Style="{StaticResource Card}" Margin="0,0,0,16">
-                <StackPanel>
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" Margin="0,0,16,0">
-                            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                                <TextBlock Text="Priority audio scheduling" Style="{StaticResource HeadingMedium}"/>
-                                <Border CornerRadius="4" Padding="5,2" Margin="8,0,0,0" VerticalAlignment="Center"
-                                        Background="#1A22C55E" BorderBrush="{StaticResource AccentGreenBrush}" BorderThickness="1">
-                                    <TextBlock Text="RECOMMENDED" FontSize="8" FontWeight="Bold"
-                                               Foreground="{StaticResource AccentGreenBrush}"/>
-                                </Border>
-                            </StackPanel>
-                            <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" MaxWidth="620">
-                                Bumps up how hard Windows works to keep audio threads running, the same priority its own
-                                "Pro Audio" profile uses, so a heavy CPU or GPU load can't starve playback into crackles and
-                                dropouts. It only touches scheduling, never any device effect, so it won't change how your
-                                speakers sound. Turning it off puts the Windows default back.
-                            </TextBlock>
-                        </StackPanel>
-                        <CheckBox Grid.Column="1" VerticalAlignment="Center"
-                                  Style="{StaticResource ToggleSwitch}"
-                                  IsChecked="{Binding BoostAudioScheduling, Mode=TwoWay}"/>
-                    </Grid>
-                    <TextBlock Text="⟳  Restart your PC to apply."
-                               Style="{StaticResource CaptionText}" Foreground="{StaticResource AccentYellowBrush}" Margin="0,8,0,0"/>
-                </StackPanel>
-            </Border>
+            <ctl:SettingsCard Header="Stop lowering other sounds during calls"
+                              Badge="Recommended" BadgeBrush="{StaticResource AccentGreenBrush}">
+                <ctl:SettingsCard.Description>
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource CardDescription}">
+                            When Windows hears a call (Discord, Teams, a call in your browser), it quietly drops the
+                            volume of everything else, by default cutting other sounds by 80%. This stops that, so your
+                            music, game, and video stay at full volume. It's fully reversible and can't hurt your devices.
+                        </TextBlock>
+                        <TextBlock Text="Takes effect on your next call. No restart needed." Style="{StaticResource CardNote}"/>
+                    </StackPanel>
+                </ctl:SettingsCard.Description>
+                <CheckBox Style="{StaticResource ToggleSwitch}"
+                          IsChecked="{Binding DisableDucking, Mode=TwoWay}"/>
+            </ctl:SettingsCard>
 
-            <!-- ===== CARD: Disable all audio & mic enhancements (device-wide) ===== -->
-            <Border Style="{StaticResource Card}" Margin="0,0,0,16">
-                <StackPanel>
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" Margin="0,0,16,0">
-                            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                                <TextBlock Text="Disable all audio &amp; mic enhancements" Style="{StaticResource HeadingMedium}"/>
-                                <Border CornerRadius="4" Padding="5,2" Margin="8,0,0,0" VerticalAlignment="Center"
-                                        Background="#1A38BDF8" BorderBrush="{StaticResource AccentBlueBrush}" BorderThickness="1">
-                                    <TextBlock Text="ALL DEVICES" FontSize="8" FontWeight="Bold" Foreground="{StaticResource AccentBlueBrush}"/>
-                                </Border>
-                            </StackPanel>
-                            <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" MaxWidth="620">
-                                The master "enhancements off" switch for every output AND microphone at once. On speakers and
-                                headphones it clears bass boost, loudness equalization, virtual surround, and the driver's "mode"
-                                effects; on mics it clears noise suppression, echo cancellation, and auto gain. It also pulls
-                                driver-injected vendor packs like Realtek, Waves MaxxAudio, and Intel Smart Sound out of the chain and
-                                stops their background audio services and startup agents, so nothing adds effects and the raw signal
-                                goes about as straight through as Windows allows. Core Windows audio is never touched, so sound keeps
-                                working.
-                            </TextBlock>
-                            <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" MaxWidth="620"
-                                       Foreground="{StaticResource AccentYellowBrush}" Margin="0,6,0,0">
-                                Built-in speakers tuned through these effects (many laptops and all-in-ones, and Waves setups) can
-                                sound a bit thinner with them off, and turning off mic noise suppression can make you noisier on calls
-                                unless the app (Discord, Zoom) does its own. It's fully reversible, so just toggle it back if you like
-                                them on. Spatial sound has its own toggle below.
-                            </TextBlock>
-                        </StackPanel>
-                        <CheckBox Grid.Column="1" VerticalAlignment="Center"
-                                  Style="{StaticResource ToggleSwitch}"
-                                  IsChecked="{Binding DisableAllEnhancements, Mode=TwoWay}"/>
-                    </Grid>
-                    <TextBlock Text="⟳  Needs a full restart to take effect. Reopening Sound settings won't show it until the audio engine reloads."
-                               Style="{StaticResource CaptionText}" Foreground="{StaticResource AccentYellowBrush}" TextWrapping="Wrap" Margin="0,8,0,0"/>
-                    <TextBlock Text="↻  Stays enforced. If a device reconnects with its effects back on, or a vendor audio service comes back after an update, Systema turns them off again on its own."
-                               Style="{StaticResource CaptionText}" Foreground="{StaticResource AccentGreenBrush}" TextWrapping="Wrap" Margin="0,4,0,0"/>
-                </StackPanel>
-            </Border>
+            <ctl:SettingsCard Header="Priority audio scheduling"
+                              Badge="Recommended" BadgeBrush="{StaticResource AccentGreenBrush}">
+                <ctl:SettingsCard.Description>
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource CardDescription}">
+                            Bumps up how hard Windows works to keep audio threads running, the same priority its own
+                            "Pro Audio" profile uses, so a heavy CPU or GPU load can't starve playback into crackles and
+                            dropouts. It only touches scheduling, never any device effect, so it won't change how your
+                            speakers sound. Turning it off puts the Windows default back.
+                        </TextBlock>
+                        <TextBlock Text="⟳  Restart your PC to apply." Style="{StaticResource CardNoteWarn}"/>
+                    </StackPanel>
+                </ctl:SettingsCard.Description>
+                <CheckBox Style="{StaticResource ToggleSwitch}"
+                          IsChecked="{Binding BoostAudioScheduling, Mode=TwoWay}"/>
+            </ctl:SettingsCard>
 
-            <!-- ===== CARD: Disable spatial audio (device-wide) ===== -->
-            <Border Style="{StaticResource Card}" Margin="0,0,0,16">
-                <StackPanel>
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" Margin="0,0,16,0">
-                            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                                <TextBlock Text="Disable spatial audio" Style="{StaticResource HeadingMedium}"/>
-                                <Border CornerRadius="4" Padding="5,2" Margin="8,0,0,0" VerticalAlignment="Center"
-                                        Background="#1A38BDF8" BorderBrush="{StaticResource AccentBlueBrush}" BorderThickness="1">
-                                    <TextBlock Text="ALL DEVICES" FontSize="8" FontWeight="Bold" Foreground="{StaticResource AccentBlueBrush}"/>
-                                </Border>
-                            </StackPanel>
-                            <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" MaxWidth="620">
-                                Turns off spatial sound on every output device, including Windows Sonic, Dolby Atmos for
-                                Headphones, and DTS. Spatial fakes surround inside your stereo output, so switching it off gives
-                                you the most direct signal and drops one more processing layer. Your original setting is saved
-                                per device and put back exactly when you toggle this off.
-                            </TextBlock>
-                            <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" MaxWidth="620"
-                                       Foreground="{StaticResource AccentYellowBrush}" Margin="0,6,0,0">
-                                This covers the Windows spatial engine. Standalone apps like Dolby Access or DTS Sound Unbound
-                                have their own off switch.
-                            </TextBlock>
-                        </StackPanel>
-                        <CheckBox Grid.Column="1" VerticalAlignment="Center"
-                                  Style="{StaticResource ToggleSwitch}"
-                                  IsChecked="{Binding DisableSpatialAudio, Mode=TwoWay}"/>
-                    </Grid>
-                    <TextBlock Text="⟳  Needs a full restart to take effect."
-                               Style="{StaticResource CaptionText}" Foreground="{StaticResource AccentYellowBrush}" Margin="0,8,0,0"/>
-                    <TextBlock Text="↻  Stays enforced. If a device reconnects with spatial back on, Systema turns it off again on its own."
-                               Style="{StaticResource CaptionText}" Foreground="{StaticResource AccentGreenBrush}" TextWrapping="Wrap" Margin="0,4,0,0"/>
-                </StackPanel>
-            </Border>
+            <!-- ===== SOUND PROCESSING ===== -->
+            <TextBlock Text="Sound processing" Style="{StaticResource SettingsGroupHeader}"/>
+
+            <ctl:SettingsCard Header="Disable all audio &amp; mic enhancements" Badge="All devices">
+                <ctl:SettingsCard.Description>
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource CardDescription}">
+                            The master "enhancements off" switch for every output AND microphone at once. On speakers and
+                            headphones it clears bass boost, loudness equalization, virtual surround, and the driver's "mode"
+                            effects; on mics it clears noise suppression, echo cancellation, and auto gain. It also pulls
+                            driver-injected vendor packs like Realtek, Waves MaxxAudio, and Intel Smart Sound out of the chain and
+                            stops their background audio services and startup agents, so nothing adds effects and the raw signal
+                            goes about as straight through as Windows allows. Core Windows audio is never touched, so sound keeps
+                            working.
+                        </TextBlock>
+                        <TextBlock Style="{StaticResource CardNoteWarn}">
+                            Built-in speakers tuned through these effects (many laptops and all-in-ones, and Waves setups) can
+                            sound a bit thinner with them off, and turning off mic noise suppression can make you noisier on calls
+                            unless the app (Discord, Zoom) does its own. It's fully reversible, so just toggle it back if you like
+                            them on. Spatial sound has its own toggle below.
+                        </TextBlock>
+                        <TextBlock Text="⟳  Needs a full restart to take effect. Reopening Sound settings won't show it until the audio engine reloads."
+                                   Style="{StaticResource CardNoteWarn}"/>
+                        <TextBlock Text="↻  Stays enforced. If a device reconnects with its effects back on, or a vendor audio service comes back after an update, Systema turns them off again on its own."
+                                   Style="{StaticResource CardNoteGood}"/>
+                    </StackPanel>
+                </ctl:SettingsCard.Description>
+                <CheckBox Style="{StaticResource ToggleSwitch}"
+                          IsChecked="{Binding DisableAllEnhancements, Mode=TwoWay}"/>
+            </ctl:SettingsCard>
+
+            <ctl:SettingsCard Header="Disable spatial audio" Badge="All devices">
+                <ctl:SettingsCard.Description>
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource CardDescription}">
+                            Turns off spatial sound on every output device, including Windows Sonic, Dolby Atmos for
+                            Headphones, and DTS. Spatial fakes surround inside your stereo output, so switching it off gives
+                            you the most direct signal and drops one more processing layer. Your original setting is saved
+                            per device and put back exactly when you toggle this off.
+                        </TextBlock>
+                        <TextBlock Style="{StaticResource CardNoteWarn}">
+                            This covers the Windows spatial engine. Standalone apps like Dolby Access or DTS Sound Unbound
+                            have their own off switch.
+                        </TextBlock>
+                        <TextBlock Text="⟳  Needs a full restart to take effect." Style="{StaticResource CardNoteWarn}"/>
+                        <TextBlock Text="↻  Stays enforced. If a device reconnects with spatial back on, Systema turns it off again on its own."
+                                   Style="{StaticResource CardNoteGood}"/>
+                    </StackPanel>
+                </ctl:SettingsCard.Description>
+                <CheckBox Style="{StaticResource ToggleSwitch}"
+                          IsChecked="{Binding DisableSpatialAudio, Mode=TwoWay}"/>
+            </ctl:SettingsCard>
 
             <TextBlock Text="{Binding StatusMessage}" Style="{StaticResource CaptionText}"
                        Foreground="{StaticResource AccentGreenBrush}" TextWrapping="Wrap" Margin="2,12,0,0"/>
