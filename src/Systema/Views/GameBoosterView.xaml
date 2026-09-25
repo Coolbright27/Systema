@@ -3,6 +3,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:conv="clr-namespace:Systema.Core.Converters"
              xmlns:core="clr-namespace:Systema.Core"
+             xmlns:ctl="clr-namespace:Systema.Controls"
              Background="Transparent">
 
     <!-- ════════════════════════════════════════════════════════════════════════
@@ -13,215 +14,189 @@
          No Save buttons: every toggle persists the moment it changes, like the
          rest of the app. The old tab had TWO Save buttons, which is why settings
          could be flipped and then silently lost.
+
+         Windows 11 Settings layout: one SettingsCard per option, grouped under
+         headers. Same bindings and text as before; only the layout changed.
          ════════════════════════════════════════════════════════════════════════ -->
 
     <UserControl.Resources>
         <conv:BoolToVisibilityConverter x:Key="BoolToVis"/>
-
-        <!-- One option row: title, plain-English description, switch. -->
-        <Style x:Key="OptRow" TargetType="Grid">
-            <Setter Property="Margin" Value="0,0,0,18"/>
-        </Style>
     </UserControl.Resources>
 
     <ScrollViewer VerticalScrollBarVisibility="Auto">
         <!-- No MaxWidth: every other tab lets its cards fill the pane, and capping
              this one left a dead strip down the right-hand side. -->
-        <StackPanel Margin="32,28,32,28">
+        <StackPanel Margin="32,24,32,28">
 
-            <TextBlock Text="Game Booster" Style="{StaticResource HeadingLarge}"/>
-            <TextBlock Text="Makes your PC give the game everything it has, then puts it all back when you quit."
-                       Style="{StaticResource CaptionText}" Margin="0,4,0,18" TextWrapping="Wrap"/>
+            <!-- ===== HEADER ===== -->
+            <StackPanel Margin="0,0,0,8">
+                <TextBlock Text="Game Booster" Style="{StaticResource HeadingLarge}"/>
+                <TextBlock Text="Makes your PC give the game everything it has, then puts it all back when you quit."
+                           Style="{StaticResource CaptionText}" Margin="0,4,0,0" TextWrapping="Wrap"/>
+            </StackPanel>
 
             <!-- ═══════════ MASTER + MANUAL ═══════════ -->
-            <Border Style="{StaticResource Card}">
-                <StackPanel>
+            <ctl:SettingsCard Header="Boost games automatically" Margin="0,16,0,4">
+                <ctl:SettingsCard.Description>
+                    <TextBlock Style="{StaticResource CardDescription}"
+                               Text="Systema notices a game within seconds of it opening and boosts on its own. Turn this off and Game Booster does nothing at all unless you press Boost right now."/>
+                </ctl:SettingsCard.Description>
+                <CheckBox IsChecked="{Binding GameBoosterEnabled, Mode=TwoWay}"
+                          ToolTipService.ShowOnDisabled="True">
+                    <CheckBox.Style>
+                        <Style TargetType="CheckBox" BasedOn="{StaticResource ToggleSwitch}">
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsAutoPilotActive}" Value="True">
+                                    <Setter Property="IsEnabled" Value="False"/>
+                                    <Setter Property="Opacity"   Value="0.4"/>
+                                    <Setter Property="ToolTip"   Value="Managed by Auto Pilot. Turn off Auto Pilot Mode to change it."/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </CheckBox.Style>
+                </CheckBox>
+            </ctl:SettingsCard>
 
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" Margin="0,0,20,0">
-                            <TextBlock Text="Boost games automatically" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                            <TextBlock Text="Systema notices a game within seconds of it opening and boosts on its own. Turn this off and Game Booster does nothing at all unless you press Boost right now."
-                                       Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,3,0,0"/>
-                        </StackPanel>
-                        <CheckBox Grid.Column="1" VerticalAlignment="Center"
-                                  IsChecked="{Binding GameBoosterEnabled, Mode=TwoWay}"
-                                  ToolTipService.ShowOnDisabled="True">
-                            <CheckBox.Style>
-                                <Style TargetType="CheckBox" BasedOn="{StaticResource ToggleSwitch}">
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding IsAutoPilotActive}" Value="True">
-                                            <Setter Property="IsEnabled" Value="False"/>
-                                            <Setter Property="Opacity"   Value="0.4"/>
-                                            <Setter Property="ToolTip"   Value="Controlled by Auto-Pilot — turn off Auto-Pilot Mode to change"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </CheckBox.Style>
-                        </CheckBox>
-                    </Grid>
+            <ctl:SettingsCard Header="Boost right now">
+                <ctl:SettingsCard.Description>
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource CardDescription}"
+                                   Text="Turns everything on straight away, even without a game. Handy for streaming or heavy work. Stops on its own after 6 hours."/>
+                        <TextBlock Text="{Binding ManualBoostTimeRemaining}" Style="{StaticResource CardNote}"
+                                   Foreground="{StaticResource AccentBlueBrush}"/>
+                    </StackPanel>
+                </ctl:SettingsCard.Description>
+                <!-- A switch, not a button: ManualBoostEnabled's change handler is the ONLY
+                     thing that starts/stops a manual boost, so a separate command here would
+                     be dead UI (that exact bug is documented in GameBoosterViewModel). -->
+                <CheckBox Style="{StaticResource ToggleSwitch}"
+                          IsChecked="{Binding ManualBoostEnabled, Mode=TwoWay}"/>
+            </ctl:SettingsCard>
 
-                    <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,16,0,15"/>
-
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" Margin="0,0,20,0">
-                            <TextBlock Text="Boost right now" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                            <TextBlock Text="Turns everything on straight away, even without a game. Handy for streaming or heavy work. Stops on its own after 6 hours."
-                                       Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,3,0,0"/>
-                            <TextBlock Text="{Binding ManualBoostTimeRemaining}" Style="{StaticResource CaptionText}"
-                                       Foreground="{StaticResource AccentBlueBrush}" Margin="0,3,0,0"/>
-                        </StackPanel>
-                        <!-- A switch, not a button: ManualBoostEnabled's change handler is the ONLY
-                             thing that starts/stops a manual boost, so a separate command here would
-                             be dead UI (that exact bug is documented in GameBoosterViewModel). -->
-                        <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}" VerticalAlignment="Center"
-                                  IsChecked="{Binding ManualBoostEnabled, Mode=TwoWay}"/>
-                    </Grid>
-
-                    <!-- Live state, only while something is actually boosting. -->
-                    <Border Visibility="{Binding BoostActive, Converter={StaticResource BoolToVis}}"
-                            CornerRadius="10" Padding="14,12" Margin="0,16,0,0"
-                            Background="#16232A" BorderBrush="#2C4C57" BorderThickness="1">
-                        <StackPanel Orientation="Horizontal">
-                            <Ellipse Width="7" Height="7" VerticalAlignment="Center" Margin="0,0,9,0"
-                                     Fill="{StaticResource AccentGreenBrush}"/>
-                            <StackPanel>
-                                <TextBlock Style="{StaticResource BodyText}" FontWeight="SemiBold">
-                                    <Run Text="Boosting "/><Run Text="{Binding ActiveGameName, Mode=OneWay}"/>
-                                </TextBlock>
-                                <TextBlock Text="{Binding SessionElapsedText, Mode=OneWay}"
-                                           Style="{StaticResource CaptionText}" Margin="0,1,0,0"/>
-                            </StackPanel>
-                            <Button Content="Stop" Style="{StaticResource GhostButton}" Padding="16,5"
-                                    Margin="18,0,0,0" VerticalAlignment="Center"
-                                    Command="{Binding StopBoostCommand}"/>
-                        </StackPanel>
-                    </Border>
-
-                </StackPanel>
+            <!-- Live state, only while something is actually boosting. -->
+            <Border Visibility="{Binding BoostActive, Converter={StaticResource BoolToVis}}"
+                    CornerRadius="6" Padding="18,12" Margin="0,0,0,4"
+                    Background="#16232A" BorderBrush="#2C4C57" BorderThickness="1">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <Ellipse Width="7" Height="7" VerticalAlignment="Center" Margin="0,0,11,0"
+                             Fill="{StaticResource AccentGreenBrush}"/>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                        <TextBlock Style="{StaticResource BodyText}" FontWeight="SemiBold">
+                            <Run Text="Boosting "/><Run Text="{Binding ActiveGameName, Mode=OneWay}"/>
+                        </TextBlock>
+                        <TextBlock Text="{Binding SessionElapsedText, Mode=OneWay}"
+                                   Style="{StaticResource CaptionText}" Margin="0,1,0,0"/>
+                    </StackPanel>
+                    <Button Grid.Column="2" Content="Stop" Style="{StaticResource GhostButton}" Padding="16,5"
+                            Margin="18,0,0,0" VerticalAlignment="Center"
+                            Command="{Binding StopBoostCommand}"/>
+                </Grid>
             </Border>
 
             <!-- ═══════════ WHAT BOOSTING DOES ═══════════ -->
-            <TextBlock Text="What boosting does" Style="{StaticResource HeadingMedium}" Margin="2,26,0,3"/>
+            <TextBlock Text="What boosting does" Style="{StaticResource HeadingMedium}" Margin="2,28,0,3"/>
             <TextBlock Text="Turn any of these off if you'd rather it left that alone. Changes save straight away. The game itself is always given top priority, that part isn't optional."
-                       Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="2,0,0,12"/>
+                       Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="2,0,0,12" MaxWidth="760"
+                       HorizontalAlignment="Left"/>
 
-            <Border Style="{StaticResource Card}">
-                <StackPanel>
+            <TextBlock Text="Performance" Style="{StaticResource SettingsGroupHeader}" Margin="2,4,0,8"/>
 
-                    <Grid Style="{StaticResource OptRow}">
-                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" Margin="0,0,20,0">
-                            <TextBlock Text="Use the High performance power plan" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                            <TextBlock Text="Stops Windows slowing your CPU down to save power while you play. Switches back when the game closes."
-                                       Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,3,0,0"/>
-                        </StackPanel>
-                        <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}" VerticalAlignment="Center"
-                                  IsChecked="{Binding HighPerfPowerPlan, Mode=TwoWay}"/>
-                    </Grid>
+            <ctl:SettingsCard Header="Use the High performance power plan">
+                <ctl:SettingsCard.Description>
+                    <TextBlock Style="{StaticResource CardDescription}"
+                               Text="Stops Windows slowing your CPU down to save power while you play. Switches back when the game closes."/>
+                </ctl:SettingsCard.Description>
+                <CheckBox Style="{StaticResource ToggleSwitch}"
+                          IsChecked="{Binding HighPerfPowerPlan, Mode=TwoWay}"/>
+            </ctl:SettingsCard>
 
-                    <Grid Style="{StaticResource OptRow}">
-                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" Margin="0,0,20,0">
-                            <TextBlock Text="Keep the PC awake" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                            <TextBlock Text="Stops the screen sleeping or locking during long cutscenes, lobbies and loading screens."
-                                       Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,3,0,0"/>
-                        </StackPanel>
-                        <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}" VerticalAlignment="Center"
-                                  IsChecked="{Binding PreventSleepOnBoost, Mode=TwoWay}"/>
-                    </Grid>
+            <ctl:SettingsCard Header="Keep the PC awake">
+                <ctl:SettingsCard.Description>
+                    <TextBlock Style="{StaticResource CardDescription}"
+                               Text="Stops the screen sleeping or locking during long cutscenes, lobbies and loading screens."/>
+                </ctl:SettingsCard.Description>
+                <CheckBox Style="{StaticResource ToggleSwitch}"
+                          IsChecked="{Binding PreventSleepOnBoost, Mode=TwoWay}"/>
+            </ctl:SettingsCard>
 
-                    <Grid Style="{StaticResource OptRow}">
-                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" Margin="0,0,20,0">
-                            <TextBlock Text="Pause search indexing" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                            <TextBlock Text="Windows scans your files in the background and it uses the disk. This slows it right down while you play so it stops competing for the drive, then puts it back to normal after."
-                                       Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,3,0,0"/>
-                        </StackPanel>
-                        <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}" VerticalAlignment="Center"
-                                  IsChecked="{Binding PauseIndexing, Mode=TwoWay}"/>
-                    </Grid>
+            <ctl:SettingsCard Header="Pause search indexing">
+                <ctl:SettingsCard.Description>
+                    <TextBlock Style="{StaticResource CardDescription}"
+                               Text="Windows scans your files in the background and it uses the disk. This slows it right down while you play so it stops competing for the drive, then puts it back to normal after."/>
+                </ctl:SettingsCard.Description>
+                <CheckBox Style="{StaticResource ToggleSwitch}"
+                          IsChecked="{Binding PauseIndexing, Mode=TwoWay}"/>
+            </ctl:SettingsCard>
 
-                    <Grid Style="{StaticResource OptRow}">
-                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" Margin="0,0,20,0">
-                            <TextBlock Text="Free up memory before the game loads" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                            <TextBlock Text="Trims memory that background apps are holding but not using, so the game has more to work with."
-                                       Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,3,0,0"/>
-                        </StackPanel>
-                        <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}" VerticalAlignment="Center"
-                                  IsChecked="{Binding FreeMemoryOnBoost, Mode=TwoWay}"/>
-                    </Grid>
+            <ctl:SettingsCard Header="Free up memory before the game loads">
+                <ctl:SettingsCard.Description>
+                    <TextBlock Style="{StaticResource CardDescription}"
+                               Text="Trims memory that background apps are holding but not using, so the game has more to work with."/>
+                </ctl:SettingsCard.Description>
+                <CheckBox Style="{StaticResource ToggleSwitch}"
+                          IsChecked="{Binding FreeMemoryOnBoost, Mode=TwoWay}"/>
+            </ctl:SettingsCard>
 
-                    <!-- Battery pause: laptops only, and only where the vendor exposes it. -->
-                    <Grid Style="{StaticResource OptRow}"
-                          Visibility="{Binding IsBatteryPresent, Converter={StaticResource BoolToVis}}">
-                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" Margin="0,0,20,0">
-                            <TextBlock Text="Pause battery charging" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                            <TextBlock Text="Runs straight off the charger instead of charging at the same time, so the laptop stays cooler and doesn't throttle. Charging resumes the moment you stop playing."
-                                       Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,3,0,0"/>
-                            <TextBlock Text="{Binding BatteryPauseStatus}" Style="{StaticResource CaptionText}"
-                                       Foreground="{StaticResource AccentYellowBrush}" TextWrapping="Wrap"
-                                       FontStyle="Italic" Margin="0,4,0,0"/>
-                        </StackPanel>
-                        <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}" VerticalAlignment="Center"
-                                  IsChecked="{Binding PauseChargingOnBoost, Mode=TwoWay}"
-                                  IsEnabled="{Binding BatteryPauseAvailable}"
-                                  ToolTip="Needs a laptop whose vendor tool exposes charge control."/>
-                    </Grid>
+            <!-- Battery pause: laptops only, and only where the vendor exposes it. -->
+            <ctl:SettingsCard Header="Pause battery charging"
+                              Visibility="{Binding IsBatteryPresent, Converter={StaticResource BoolToVis}}">
+                <ctl:SettingsCard.Description>
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource CardDescription}"
+                                   Text="Runs straight off the charger instead of charging at the same time, so the laptop stays cooler and doesn't throttle. Charging resumes the moment you stop playing."/>
+                        <TextBlock Text="{Binding BatteryPauseStatus}" Style="{StaticResource CardNoteWarn}"
+                                   FontStyle="Italic"/>
+                    </StackPanel>
+                </ctl:SettingsCard.Description>
+                <CheckBox Style="{StaticResource ToggleSwitch}"
+                          IsChecked="{Binding PauseChargingOnBoost, Mode=TwoWay}"
+                          IsEnabled="{Binding BatteryPauseAvailable}"
+                          ToolTipService.ShowOnDisabled="True"
+                          ToolTip="Needs a laptop whose vendor tool exposes charge control."/>
+            </ctl:SettingsCard>
 
-                    <Grid Style="{StaticResource OptRow}">
-                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" Margin="0,0,20,0">
-                            <TextBlock Text="Silence notifications" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                            <TextBlock Text="Turns on Do Not Disturb so nothing pops up mid-game. You won't see messages until you quit."
-                                       Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,3,0,0"/>
-                        </StackPanel>
-                        <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}" VerticalAlignment="Center"
-                                  IsChecked="{Binding SuppressNotifications, Mode=TwoWay}"/>
-                    </Grid>
+            <TextBlock Text="Notifications and network" Style="{StaticResource SettingsGroupHeader}"/>
 
-                    <Grid Style="{StaticResource OptRow}">
-                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" Margin="0,0,20,0">
-                            <TextBlock Text="Turn off Bluetooth" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                            <TextBlock Text="Saves a little power, but it disconnects Bluetooth controllers and headsets. Leave this off if you play with a pad."
-                                       Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,3,0,0"/>
-                        </StackPanel>
-                        <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}" VerticalAlignment="Center"
-                                  IsChecked="{Binding DisableBluetoothOnBoost, Mode=TwoWay}"/>
-                    </Grid>
+            <ctl:SettingsCard Header="Silence notifications">
+                <ctl:SettingsCard.Description>
+                    <TextBlock Style="{StaticResource CardDescription}"
+                               Text="Turns on Do Not Disturb so nothing pops up mid-game. You won't see messages until you quit."/>
+                </ctl:SettingsCard.Description>
+                <CheckBox Style="{StaticResource ToggleSwitch}"
+                          IsChecked="{Binding SuppressNotifications, Mode=TwoWay}"/>
+            </ctl:SettingsCard>
 
-                    <Grid Margin="0,0,0,18">
-                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" Margin="0,0,20,0">
-                            <TextBlock Text="Turn off Wi-Fi when you're on a cable" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                            <TextBlock Text="Only does anything when an Ethernet cable is plugged in, so it can't knock you offline."
-                                       Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,3,0,0"/>
-                        </StackPanel>
-                        <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}" VerticalAlignment="Center"
-                                  IsChecked="{Binding DisableWifiOnEthernet, Mode=TwoWay}"/>
-                    </Grid>
+            <ctl:SettingsCard Header="Turn off Bluetooth">
+                <ctl:SettingsCard.Description>
+                    <TextBlock Style="{StaticResource CardDescription}"
+                               Text="Saves a little power, but it disconnects Bluetooth controllers and headsets. Leave this off if you play with a pad."/>
+                </ctl:SettingsCard.Description>
+                <CheckBox Style="{StaticResource ToggleSwitch}"
+                          IsChecked="{Binding DisableBluetoothOnBoost, Mode=TwoWay}"/>
+            </ctl:SettingsCard>
 
-                    <Grid>
-                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" Margin="0,0,20,0">
-                            <TextBlock Text="Disable Nagle's algorithm" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                            <TextBlock Text="Sends small packets immediately instead of waiting to batch them, which can shave a little latency. It helps on some connections and hurts on others, so try it both ways. Applies to new connections."
-                                       Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,3,0,0"/>
-                        </StackPanel>
-                        <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}" VerticalAlignment="Center"
-                                  IsChecked="{Binding DisableNagleOnBoost, Mode=TwoWay}"/>
-                    </Grid>
+            <ctl:SettingsCard Header="Turn off Wi-Fi when you're on a cable">
+                <ctl:SettingsCard.Description>
+                    <TextBlock Style="{StaticResource CardDescription}"
+                               Text="Only does anything when an Ethernet cable is plugged in, so it can't knock you offline."/>
+                </ctl:SettingsCard.Description>
+                <CheckBox Style="{StaticResource ToggleSwitch}"
+                          IsChecked="{Binding DisableWifiOnEthernet, Mode=TwoWay}"/>
+            </ctl:SettingsCard>
 
-                </StackPanel>
-            </Border>
+            <ctl:SettingsCard Header="Disable Nagle's algorithm">
+                <ctl:SettingsCard.Description>
+                    <TextBlock Style="{StaticResource CardDescription}"
+                               Text="Sends small packets immediately instead of waiting to batch them, which can shave a little latency. It helps on some connections and hurts on others, so try it both ways. Applies to new connections."/>
+                </ctl:SettingsCard.Description>
+                <CheckBox Style="{StaticResource ToggleSwitch}"
+                          IsChecked="{Binding DisableNagleOnBoost, Mode=TwoWay}"/>
+            </ctl:SettingsCard>
 
             <!-- ═══════════ ADVANCED ═══════════
                  Collapsed by default. Kept so the fallback sweep and the game list stay
@@ -257,26 +232,27 @@
                 </StackPanel>
             </Button>
 
-            <Border Style="{StaticResource Card}" Margin="0,4,0,0"
-                    Visibility="{Binding ShowDetection, Converter={StaticResource BoolToVis}}">
-                <StackPanel>
-                    <TextBlock Text="Fallback sweep" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                    <TextBlock Text="Systema spots a game within seconds of it opening. This slower sweep only exists as a backstop for games that never take focus, so there is rarely a reason to change it."
-                               Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,3,0,10"/>
+            <StackPanel Margin="0,4,0,0"
+                        Visibility="{Binding ShowDetection, Converter={StaticResource BoolToVis}}">
+
+                <ctl:SettingsCard Header="Fallback sweep">
+                    <ctl:SettingsCard.Description>
+                        <TextBlock Style="{StaticResource CardDescription}"
+                                   Text="Systema spots a game within seconds of it opening. This slower sweep only exists as a backstop for games that never take focus, so there is rarely a reason to change it."/>
+                    </ctl:SettingsCard.Description>
                     <StackPanel Orientation="Horizontal">
                         <TextBox Width="70" Style="{StaticResource DarkTextBox}"
                                  Text="{Binding CheckIntervalMinutes, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"/>
                         <TextBlock Text="minutes" Style="{StaticResource CaptionText}"
                                    VerticalAlignment="Center" Margin="10,0,0,0"/>
                     </StackPanel>
+                </ctl:SettingsCard>
 
-                    <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,16,0,14"/>
-                    <StackPanel Orientation="Horizontal">
-                        <Button Content="Scan for games now" Style="{StaticResource GhostButton}"
-                                Command="{Binding ScanNowCommand}"/>
-                        <TextBlock VerticalAlignment="Center" Margin="14,0,0,0">
+                <ctl:SettingsCard Header="Installed games">
+                    <ctl:SettingsCard.Description>
+                        <TextBlock>
                             <TextBlock.Style>
-                                <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionText}">
+                                <Style TargetType="TextBlock" BasedOn="{StaticResource CardDescription}">
                                     <Setter Property="Text" Value="No games found yet"/>
                                     <Style.Triggers>
                                         <DataTrigger Binding="{Binding GamesInstalled}" Value="True">
@@ -287,9 +263,12 @@
                                 </Style>
                             </TextBlock.Style>
                         </TextBlock>
-                    </StackPanel>
-                </StackPanel>
-            </Border>
+                    </ctl:SettingsCard.Description>
+                    <Button Content="Scan for games now" Style="{StaticResource GhostButton}"
+                            Command="{Binding ScanNowCommand}"/>
+                </ctl:SettingsCard>
+
+            </StackPanel>
 
             <TextBlock Text="{Binding StatusMessage}" Style="{StaticResource CaptionText}"
                        TextWrapping="Wrap" Margin="2,16,0,0"/>
