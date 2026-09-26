@@ -217,6 +217,23 @@ public class UiOverhaulGuardTests
         Assert.Contains("Resources[\"CardLayerBrush\"] = CardOverMica", body);
     }
 
+    // With the glass extended, DWM paints Windows' own caption buttons, and its close X showed
+    // through under ours as a doubled X (0.7.351). WS_SYSMENU must go whenever Mica is on, and stay
+    // gone if the style is rewritten later.
+    [Fact]
+    public void MainWindow_MicaHidesTheNativeCaptionButtons()
+    {
+        string code = ReadSrc("Views", "MainWindow.xaml.cs");
+        int apply = code.IndexOf("private void ApplyMica", StringComparison.Ordinal);
+        string body = code[apply..];
+        int check = body.IndexOf("if (hr != 0)", StringComparison.Ordinal);
+        int hide  = body.IndexOf("HideNativeCaptionButtons(hwnd);", StringComparison.Ordinal);
+        Assert.True(check > 0 && hide > check, "caption buttons must be hidden once Mica is on");
+
+        Assert.Contains("SetWindowLong(hwnd, GWL_STYLE, style & ~WS_SYSMENU)", code);
+        Assert.Contains("msg == WM_STYLECHANGING && IsMicaOn", code);
+    }
+
     // The card styles read CardLayerBrush dynamically so the main window's Mica swap reaches them;
     // everything else (other windows, the Dell overlay banner) keeps a solid card.
     [Fact]

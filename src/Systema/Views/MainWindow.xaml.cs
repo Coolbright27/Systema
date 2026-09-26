@@ -46,6 +46,17 @@ public partial class MainWindow : Window
     private const int DWMSBT_MAINWINDOW             = 2;    // Mica
     private static readonly bool MicaCapable = Environment.OSVersion.Version.Build >= 22621;
 
+    // With the glass extended over the whole window, DWM paints Windows' own caption buttons in
+    // it, and its close X showed through under ours as a doubled X (0.7.351). WS_SYSMENU is what
+    // makes DWM draw them, so it's removed; our own X, Alt+F4 and the taskbar's Close still work.
+    private const int  GWL_STYLE        = -16;
+    private const int  WS_SYSMENU       = 0x00080000;
+    private const uint SWP_NOSIZE       = 0x0001, SWP_NOMOVE = 0x0002, SWP_NOZORDER = 0x0004,
+                       SWP_NOACTIVATE   = 0x0010, SWP_FRAMECHANGED = 0x0020;
+    [DllImport("user32.dll")] private static extern int GetWindowLong(IntPtr hwnd, int index);
+    [DllImport("user32.dll")] private static extern int SetWindowLong(IntPtr hwnd, int index, int value);
+    [DllImport("user32.dll")] private static extern bool SetWindowPos(IntPtr hwnd, IntPtr after, int x, int y, int cx, int cy, uint flags);
+
     /// <summary>The Settings app's card fill (5% white). Over #202020 it's exactly #2B2B2B.</summary>
     private static readonly Media.SolidColorBrush CardOverMica = Freeze(new Media.SolidColorBrush(Media.Color.FromArgb(0x0D, 0xFF, 0xFF, 0xFF)));
     private static Media.SolidColorBrush Freeze(Media.SolidColorBrush b) { b.Freeze(); return b; }
@@ -364,6 +375,8 @@ public partial class MainWindow : Window
                 return;
             }
 
+            HideNativeCaptionButtons(hwnd);
+
             if (HwndSource.FromHwnd(hwnd)?.CompositionTarget is { } target)
                 target.BackgroundColor = Media.Colors.Transparent;
             Background                = Media.Brushes.Transparent;
@@ -380,8 +393,28 @@ public partial class MainWindow : Window
         }
     }
 
+    private static void HideNativeCaptionButtons(IntPtr hwnd)
+    {
+        int style = GetWindowLong(hwnd, GWL_STYLE);
+        if ((style & WS_SYSMENU) == 0) return;
+        SetWindowLong(hwnd, GWL_STYLE, style & ~WS_SYSMENU);
+        SetWindowPos(hwnd, IntPtr.Zero, 0, 0, 0, 0,
+                     SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
+    }
+
+    private const int WM_STYLECHANGING = 0x007C;
+
     private IntPtr WindowProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
+        // Keep the native caption buttons away if anything (WPF included) later rewrites the
+        // window style. STYLESTRUCT is { styleOld, styleNew }.
+        if (msg == WM_STYLECHANGING && IsMicaOn && wParam.ToInt64() == GWL_STYLE)
+        {
+            int styleNew = Marshal.ReadInt32(lParam, 4);
+            if ((styleNew & WS_SYSMENU) != 0)
+                Marshal.WriteInt32(lParam, 4, styleNew & ~WS_SYSMENU);
+        }
+
         if (msg == WM_GETMINMAXINFO)
         {
             try
