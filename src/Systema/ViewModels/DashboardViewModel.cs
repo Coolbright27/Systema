@@ -120,12 +120,12 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
     [ObservableProperty] private string _dataCollectionDetail = "What Windows sends Microsoft about your PC";
 
     /// <summary>
-    /// Home's "Data collection" value and explanation. "Off" only when No Telemetry Pro is fully
+    /// Home's "Data collection" value and explanation. "Blocked" only when No Telemetry Pro is fully
     /// in effect (policies, telemetry services and the extra services), exactly what its switch on
     /// Cleanup &amp; Privacy shows; "Reduced" when just the telemetry services are off.
     /// </summary>
     internal static (string Status, string Detail) DescribeDataCollection(bool noTelemetryProOn, bool telemetryServicesOff) =>
-        noTelemetryProOn     ? ("Off",     "Blocked by No Telemetry Pro") :
+        noTelemetryProOn     ? ("Blocked", "Stopped by No Telemetry Pro") :
         telemetryServicesOff ? ("Reduced", "Partly blocked. No Telemetry Pro stops the rest") :
                                ("On",      "Windows default. No Telemetry Pro can stop it");
 

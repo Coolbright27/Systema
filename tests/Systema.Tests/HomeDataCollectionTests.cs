@@ -14,7 +14,7 @@ namespace Systema.Tests;
 public class HomeDataCollectionTests
 {
     [Theory]
-    [InlineData(true,  true,  "Off")]
+    [InlineData(true,  true,  "Blocked")]
     [InlineData(false, true,  "Reduced")]
     [InlineData(false, false, "On")]
     public void Status_FollowsNoTelemetryProFirst(bool noTelPro, bool servicesOff, string expected) =>

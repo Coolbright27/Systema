@@ -12,7 +12,7 @@ public class HomeStatusTests
 {
     private static Facts AllGood(bool autoPilot = false) => new(
         GameBoost: false, GameName: null, AutoPilotOn: autoPilot, IsAdmin: true, EngineOn: true,
-        DataCollection: "Off", Applied: 17, Total: 17, Resting: 0);
+        DataCollection: "Blocked", Applied: 17, Total: 17, Resting: 0);
 
     private static (string Headline, string Subline, bool HasIssues) Compose(Facts f) =>
         DashboardViewModel.ComposeHomeStatus(f);
