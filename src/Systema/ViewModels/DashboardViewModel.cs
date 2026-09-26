@@ -136,6 +136,13 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
     /// <summary>Home's "Today" list. Shared with the feed, which fills it from the log.</summary>
     public ObservableCollection<ActivityEntry> Activity => ActivityFeed.Instance.Entries;
 
+    // ── Home: device header (like Windows Settings > Home) ────────────────────
+    // Read once, in the background, by LoadDeviceIdentity. Purely for display.
+    [ObservableProperty] private string _deviceName  = Environment.MachineName;
+    [ObservableProperty] private string _deviceModel = "";
+    /// <summary>A small, decoded-down copy of the desktop wallpaper, or null to show the fallback tile.</summary>
+    [ObservableProperty] private System.Windows.Media.ImageSource? _wallpaperImage;
+
     // Parked-core count comes from a performance counter. Reading it takes a few milliseconds,
     // so it runs off the UI thread and at most every few seconds.
     private DateTime _lastParkingRead = DateTime.MinValue;
@@ -243,7 +250,111 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
         LoadDismissed();
         RebuildDismissed();
 
+        LoadDeviceIdentity();
         _ = InitAsync();
+    }
+
+    // ── Home: device header ───────────────────────────────────────────────────
+
+    private void LoadDeviceIdentity()
+    {
+        var dispatcher = System.Windows.Application.Current?.Dispatcher;
+        _ = Task.Run(() =>
+        {
+            string name  = ReadDeviceName();
+            string model = ReadDeviceModel();
+            var wallpaper = LoadWallpaperThumbnail();
+            dispatcher?.BeginInvoke(new Action(() =>
+            {
+                DeviceName     = name;
+                DeviceModel    = model;
+                WallpaperImage = wallpaper;
+            }));
+        });
+    }
+
+    /// <summary>The name Windows Settings shows (DNS host name keeps its case; NetBIOS is all caps).</summary>
+    internal static string ReadDeviceName()
+    {
+        try
+        {
+            string host = System.Net.Dns.GetHostName();
+            if (!string.IsNullOrWhiteSpace(host)) return host;
+        }
+        catch { }
+        return Environment.MachineName;
+    }
+
+    private static string ReadDeviceModel()
+    {
+        try
+        {
+            using var s = new System.Management.ManagementObjectSearcher("SELECT Manufacturer, Model FROM Win32_ComputerSystem");
+            foreach (var item in s.Get())
+            {
+                string vendor = (item["Manufacturer"]?.ToString() ?? "").Trim();
+                string model  = (item["Model"]?.ToString()        ?? "").Trim();
+                return CleanModel(vendor, model);
+            }
+        }
+        catch { }
+        return "Windows PC";
+    }
+
+    /// <summary>
+    /// The model line under the device name. Custom-built desktops report placeholder strings
+    /// like "System Product Name"; show something human instead of those.
+    /// </summary>
+    internal static string CleanModel(string vendor, string model)
+    {
+        static bool Placeholder(string s) =>
+            string.IsNullOrWhiteSpace(s) ||
+            s.Contains("To Be Filled", StringComparison.OrdinalIgnoreCase) ||
+            s.Contains("System Product Name", StringComparison.OrdinalIgnoreCase) ||
+            s.Contains("System manufacturer", StringComparison.OrdinalIgnoreCase) ||
+            s.Equals("Default string", StringComparison.OrdinalIgnoreCase);
+
+        if (!Placeholder(model)) return model;
+        if (!Placeholder(vendor)) return vendor;
+        return "Windows PC";
+    }
+
+    /// <summary>
+    /// The current desktop wallpaper, decoded at thumbnail size (a 4K wallpaper would otherwise
+    /// sit in memory at full size). Falls back to the copy Windows keeps for itself when the
+    /// original file has moved. Null on any problem: the header then shows a plain tile.
+    /// </summary>
+    private static System.Windows.Media.ImageSource? LoadWallpaperThumbnail()
+    {
+        try
+        {
+            var candidates = new List<string>();
+            using (var key = Registry.CurrentUser.OpenSubKey(@"Control Panel\Desktop"))
+                if (key?.GetValue("WallPaper") is string wp && !string.IsNullOrWhiteSpace(wp)) candidates.Add(wp);
+            candidates.Add(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                                        "Microsoft", "Windows", "Themes", "TranscodedWallpaper"));
+
+            foreach (var path in candidates)
+            {
+                if (!File.Exists(path)) continue;
+                try
+                {
+                    using var stream = File.OpenRead(path);
+                    var img = new System.Windows.Media.Imaging.BitmapImage();
+                    img.BeginInit();
+                    img.CacheOption      = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
+                    img.CreateOptions    = System.Windows.Media.Imaging.BitmapCreateOptions.IgnoreColorProfile;
+                    img.DecodePixelWidth = 240;
+                    img.StreamSource     = stream;
+                    img.EndInit();
+                    img.Freeze();
+                    return img;
+                }
+                catch { /* not an image we can read; try the next one */ }
+            }
+        }
+        catch { }
+        return null;
     }
 
     private async Task InitAsync()

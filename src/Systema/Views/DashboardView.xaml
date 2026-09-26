@@ -8,11 +8,14 @@
     <!--
         HOME (nav key "Dashboard")
         ─────────────────────────────────────────────────────────────────────
-        Windows 11 Settings layout, top to bottom:
-          1. Live status: one sentence about the PC right now, plus the numbers behind it.
-          2. Auto Pilot: the master switch, its status, and the checklist behind "Show details".
-          3. Suggestions for this PC: the same one-at-a-time queue as before, restyled.
-          4. Today: what Systema actually did, from Services/ActivityFeed.
+        Laid out like Windows 11 Settings > Home:
+          • Device header: wallpaper thumbnail, PC name and model, and status items on the right
+            (Auto Pilot, administrator rights).
+          • Two columns of cards, each a title and subtitle over rows split by hairlines:
+              left:  Right now (live facts) · Suggestions for this PC
+              right: Auto Pilot (switch + details) · Popular settings (page shortcuts) · Today
+            Below ~860 px the right column drops under the left (DashboardView.xaml.cs).
+          • Get help, at the bottom.
         Everything the old Auto Pilot page bound to is still bound here;
         UiBindingSnapshotTests fails the build if any of it goes missing.
     -->
@@ -20,159 +23,186 @@
     <UserControl.Resources>
         <conv:BoolToVisibilityConverter x:Key="BoolToVis"/>
 
-        <!-- Live fact tile: small label over a number, on a subtle inset fill. -->
-        <Style x:Key="FactTile" TargetType="Border">
-            <Setter Property="Background" Value="{StaticResource ControlFillBrush}"/>
-            <Setter Property="CornerRadius" Value="6"/>
-            <Setter Property="Padding" Value="14,10"/>
-            <Setter Property="Margin" Value="4"/>
+        <!-- A Home card: Windows Settings' big rounded tile. Built on the shared Card look
+             (so it also cascades in when the page opens), with rows drawing their own padding. -->
+        <Style x:Key="HomeCard" TargetType="Border" BasedOn="{StaticResource Card}">
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Margin" Value="0,0,0,12"/>
         </Style>
-        <Style x:Key="FactValue" TargetType="TextBlock">
-            <Setter Property="FontFamily" Value="{StaticResource MainFont}"/>
-            <Setter Property="FontSize" Value="16"/>
+        <Style x:Key="HomeCardTitle" TargetType="TextBlock">
+            <Setter Property="FontFamily" Value="{StaticResource DisplayFont}"/>
+            <Setter Property="FontSize" Value="20"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
-            <Setter Property="Margin" Value="0,2,0,0"/>
-            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+        </Style>
+        <Style x:Key="HomeCardSubtitle" TargetType="TextBlock">
+            <Setter Property="FontFamily" Value="{StaticResource MainFont}"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+            <Setter Property="Margin" Value="0,6,0,0"/>
+        </Style>
+        <!-- Header block at the top of a card -->
+        <Style x:Key="HomeCardHeader" TargetType="StackPanel">
+            <Setter Property="Margin" Value="24,22,24,18"/>
+        </Style>
+        <!-- One row inside a card, with the hairline above it -->
+        <Style x:Key="HomeRow" TargetType="Border">
+            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
+            <Setter Property="BorderThickness" Value="0,1,0,0"/>
+            <Setter Property="Padding" Value="24,0"/>
+            <Setter Property="MinHeight" Value="64"/>
+        </Style>
+        <!-- 20px line icon at the start of a row -->
+        <Style x:Key="HomeRowIcon" TargetType="Path">
+            <Setter Property="Width" Value="20"/>
+            <Setter Property="Height" Value="20"/>
+            <Setter Property="Stretch" Value="Uniform"/>
+            <Setter Property="Margin" Value="0,0,16,0"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Stroke" Value="{StaticResource TextPrimaryBrush}"/>
+            <Setter Property="StrokeThickness" Value="1.4"/>
+            <Setter Property="StrokeLineJoin" Value="Round"/>
+            <Setter Property="StrokeStartLineCap" Value="Round"/>
+            <Setter Property="StrokeEndLineCap" Value="Round"/>
+            <Setter Property="Fill" Value="Transparent"/>
+        </Style>
+        <Style x:Key="HomeRowValue" TargetType="TextBlock">
+            <Setter Property="FontFamily" Value="{StaticResource MainFont}"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Margin" Value="16,0,0,0"/>
             <Setter Property="Typography.NumeralAlignment" Value="Tabular"/>
         </Style>
 
-        <!-- Windows 11 group header ("Body Strong" above a group of cards) -->
-        <Style x:Key="GroupHeader" TargetType="TextBlock" BasedOn="{StaticResource HeadingSmall}">
-            <Setter Property="Margin" Value="2,28,0,8"/>
+        <!-- A clickable row (icon, label, chevron): the whole row is the button and softly
+             lights up under the pointer, inset so it never covers the card's rounded edge.
+             Declared here, not inline, like every style that carries a ControlTemplate. -->
+        <Style x:Key="HomeRowButton" TargetType="Button">
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,1,0,0" Background="Transparent">
+                            <Grid MinHeight="60">
+                                <Border x:Name="Hover" Margin="6,4" CornerRadius="4"
+                                        Background="{StaticResource ControlFillBrush}" Opacity="0"/>
+                                <Border x:Name="Focus" Margin="6,4" CornerRadius="4" BorderThickness="2"
+                                        BorderBrush="{StaticResource TextPrimaryBrush}" Opacity="0"/>
+                                <Grid Margin="24,0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <ContentPresenter VerticalAlignment="Center"/>
+                                    <Path x:Name="Chevron" Grid.Column="1" Data="M 0 0 L 4.5 4.5 L 0 9" Width="5" Height="9"
+                                          Margin="16,0,0,0" VerticalAlignment="Center"
+                                          Stroke="{StaticResource TextSecondaryBrush}" StrokeThickness="1.2"
+                                          StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"/>
+                                </Grid>
+                            </Grid>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Trigger.EnterActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="Hover" Storyboard.TargetProperty="Opacity"
+                                                             To="1" Duration="0:0:0.083"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.EnterActions>
+                                <Trigger.ExitActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="Hover" Storyboard.TargetProperty="Opacity"
+                                                             To="0" Duration="0:0:0.167"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.ExitActions>
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="Focus" Property="Opacity" Value="1"/>
+                            </Trigger>
+                            <!-- A disclosure row (Tag="Expander") has its own up/down chevron instead -->
+                            <Trigger Property="Tag" Value="Expander">
+                                <Setter TargetName="Chevron" Property="Visibility" Value="Collapsed"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Status item title in the device header -->
+        <Style x:Key="HeaderStatusTitle" TargetType="TextBlock">
+            <Setter Property="FontFamily" Value="{StaticResource MainFont}"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
         </Style>
     </UserControl.Resources>
 
     <ScrollViewer VerticalScrollBarVisibility="Auto">
         <StackPanel Margin="32,24,32,28">
 
-            <!-- ===== HEADER ===== -->
-            <Grid Margin="0,0,0,16">
+            <TextBlock Text="Home" Style="{StaticResource HeadingLarge}"/>
+
+            <!-- ===== DEVICE HEADER ===== -->
+            <Grid Margin="0,20,0,24">
                 <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
-                <StackPanel Grid.Column="0">
-                    <TextBlock Text="Home" Style="{StaticResource HeadingLarge}"/>
-                    <TextBlock Text="Your PC, optimized and kept that way."
-                               Style="{StaticResource CaptionText}" Margin="0,4,0,0"/>
-                </StackPanel>
-                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top" Margin="12,6,0,0">
-                    <Border Background="{StaticResource ControlFillBrush}" BorderBrush="{StaticResource ControlStrokeBrush}"
-                            BorderThickness="1" CornerRadius="4" Padding="10,4" Margin="0,0,8,0">
-                        <StackPanel Orientation="Horizontal">
-                            <Ellipse Width="6" Height="6" VerticalAlignment="Center" Margin="0,0,7,0">
-                                <Ellipse.Style>
-                                    <Style TargetType="Ellipse">
-                                        <Setter Property="Fill" Value="{StaticResource AccentYellowBrush}"/>
-                                        <Style.Triggers>
-                                            <DataTrigger Binding="{Binding IsAdministrator}" Value="True">
-                                                <Setter Property="Fill" Value="{StaticResource AccentGreenBrush}"/>
-                                            </DataTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </Ellipse.Style>
-                            </Ellipse>
-                            <TextBlock Text="{Binding AdminBadgeText}" FontSize="12"
-                                       Foreground="{StaticResource TextPrimaryBrush}" FontFamily="{StaticResource SmallFont}"/>
-                        </StackPanel>
-                    </Border>
-                    <Border Background="{StaticResource ControlFillBrush}" BorderBrush="{StaticResource ControlStrokeBrush}"
-                            BorderThickness="1" CornerRadius="4" Padding="10,4">
-                        <TextBlock Text="v0.7.339" FontSize="12"
-                                   Foreground="{StaticResource TextSecondaryBrush}" FontFamily="{StaticResource SmallFont}"/>
-                    </Border>
-                </StackPanel>
-            </Grid>
 
-            <!-- ===== LIVE STATUS ===== -->
-            <Border Style="{StaticResource Card}" Padding="22,20,22,20">
-                <StackPanel>
+                <!-- Wallpaper thumbnail, with a plain accent tile underneath for when there's no image -->
+                <Border Grid.Column="0" Width="120" Height="75" CornerRadius="6" ClipToBounds="True"
+                        BorderBrush="{StaticResource BorderBrush}" BorderThickness="1">
+                    <Border.Background>
+                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                            <GradientStop Color="#1E3A5F" Offset="0"/>
+                            <GradientStop Color="#0F1B2D" Offset="1"/>
+                        </LinearGradientBrush>
+                    </Border.Background>
                     <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0">
-                            <TextBlock Text="{Binding HomeHeadline, Mode=OneWay}" TextWrapping="Wrap"
-                                       FontFamily="{StaticResource DisplayFont}" FontSize="20" FontWeight="SemiBold"
-                                       LineHeight="28" LineStackingStrategy="BlockLineHeight"
-                                       Foreground="{StaticResource TextPrimaryBrush}"/>
-                            <TextBlock Text="{Binding HomeSubline, Mode=OneWay}" Style="{StaticResource BodyText}"
-                                       Foreground="{StaticResource TextSecondaryBrush}"
-                                       TextWrapping="Wrap" MaxWidth="660" Margin="0,4,0,0"/>
-                        </StackPanel>
-                        <!-- Static dot on purpose: an endlessly pulsing animation would keep the
-                             render thread busy for as long as Home is open. -->
-                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top" Margin="16,6,0,0">
-                            <Ellipse Width="7" Height="7" Fill="{StaticResource AccentGreenBrush}"
-                                     Margin="0,0,6,0" VerticalAlignment="Center"/>
-                            <TextBlock Text="Live" FontSize="12" FontWeight="SemiBold"
-                                       Foreground="{StaticResource AccentGreenBrush}" VerticalAlignment="Center"/>
-                        </StackPanel>
+                        <Viewbox Width="26" Height="26">
+                            <Path Width="24" Height="24" Fill="{StaticResource AccentBlueBrush}"
+                                  Data="M12 3 L13.6 9.4 L20 11 L13.6 12.6 L12 19 L10.4 12.6 L4 11 L10.4 9.4 Z"/>
+                        </Viewbox>
+                        <Image Source="{Binding WallpaperImage}" Stretch="UniformToFill"
+                               RenderOptions.BitmapScalingMode="HighQuality"/>
                     </Grid>
+                </Border>
 
-                    <!-- UniformGrid lays out only the visible tiles, so desktops (no battery tile)
-                         get four even columns instead of a gap. -->
-                    <UniformGrid Rows="1" Margin="-4,16,-4,-4">
-                        <Border Style="{StaticResource FactTile}">
-                            <StackPanel>
-                                <TextBlock Text="Apps resting" Style="{StaticResource CaptionText}"/>
-                                <TextBlock Text="{Binding RestingAppCount, Mode=OneWay}" Style="{StaticResource FactValue}"/>
-                            </StackPanel>
-                        </Border>
-                        <Border Style="{StaticResource FactTile}">
-                            <StackPanel>
-                                <TextBlock Text="Cores parked" Style="{StaticResource CaptionText}"/>
-                                <TextBlock Text="{Binding CoresParkedText, Mode=OneWay}" Style="{StaticResource FactValue}"/>
-                            </StackPanel>
-                        </Border>
-                        <Border Style="{StaticResource FactTile}">
-                            <StackPanel>
-                                <TextBlock Text="Memory in use" Style="{StaticResource CaptionText}"/>
-                                <TextBlock Text="{Binding RamUsageText, Mode=OneWay}" Style="{StaticResource FactValue}"/>
-                            </StackPanel>
-                        </Border>
-                        <Border Style="{StaticResource FactTile}"
-                                Visibility="{Binding HasBatteryFact, Converter={StaticResource BoolToVis}}">
-                            <StackPanel>
-                                <TextBlock Text="Battery" Style="{StaticResource CaptionText}"/>
-                                <TextBlock Text="{Binding BatteryText, Mode=OneWay}" Style="{StaticResource FactValue}"/>
-                            </StackPanel>
-                        </Border>
-                        <Border Style="{StaticResource FactTile}">
-                            <StackPanel>
-                                <TextBlock Text="Data collection" Style="{StaticResource CaptionText}"/>
-                                <TextBlock Text="{Binding DataCollectionStatus, Mode=OneWay}" Style="{StaticResource FactValue}"/>
-                            </StackPanel>
-                        </Border>
-                    </UniformGrid>
+                <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="16,0,16,0">
+                    <TextBlock Text="{Binding DeviceName, Mode=OneWay}" FontFamily="{StaticResource DisplayFont}"
+                               FontSize="18" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}"
+                               TextTrimming="CharacterEllipsis"/>
+                    <TextBlock Text="{Binding DeviceModel, Mode=OneWay}" Style="{StaticResource BodyText}"
+                               Margin="0,2,0,0" TextTrimming="CharacterEllipsis"/>
+                    <TextBlock Text="Systema v0.7.339" FontSize="13" Margin="0,4,0,0"
+                               Foreground="{StaticResource AccentBlueBrush}" FontFamily="{StaticResource SmallFont}"/>
                 </StackPanel>
-            </Border>
 
-            <!-- ===== AUTO PILOT (master switch + collapsible detail) ===== -->
-            <Border Style="{StaticResource Card}" Padding="0" Margin="0,12,0,0">
-                <StackPanel>
-
-                    <!-- Master switch row -->
-                    <Grid Margin="20,16,20,16">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <Border Grid.Column="0" Width="40" Height="40" CornerRadius="8"
-                                Background="#1A60CDFF" VerticalAlignment="Center">
-                            <Viewbox Width="20" Height="20">
-                                <Path Data="M12 3 L13.6 9.4 L20 11 L13.6 12.6 L12 19 L10.4 12.6 L4 11 L10.4 9.4 Z"
-                                      Fill="{StaticResource AccentBlueBrush}"/>
-                            </Viewbox>
-                        </Border>
-                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="14,0,16,0">
-                            <TextBlock Text="Auto Pilot" Style="{StaticResource HeadingSmall}"/>
-                            <StackPanel Orientation="Horizontal" Margin="0,3,0,0">
+                <!-- Status items, like "Windows Update · Attention needed" in Settings -->
+                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                    <StackPanel Orientation="Horizontal" Margin="0,0,28,0">
+                        <Viewbox Width="22" Height="22" VerticalAlignment="Center" Margin="0,0,12,0">
+                            <Path Width="24" Height="24" Fill="{StaticResource AccentBlueBrush}"
+                                  Data="M12 3 L13.6 9.4 L20 11 L13.6 12.6 L12 19 L10.4 12.6 L4 11 L10.4 9.4 Z"/>
+                        </Viewbox>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Text="Auto Pilot" Style="{StaticResource HeaderStatusTitle}" Tag="NotSearchable"/>
+                            <StackPanel Orientation="Horizontal" Margin="0,1,0,0">
                                 <!-- Green only while Auto Pilot is ON (see DashboardViewModel) -->
-                                <Ellipse Width="7" Height="7" VerticalAlignment="Center" Margin="0,0,8,0">
+                                <Ellipse Width="6" Height="6" VerticalAlignment="Center" Margin="0,0,6,0">
                                     <Ellipse.Style>
                                         <Style TargetType="Ellipse">
                                             <Setter Property="Fill" Value="{StaticResource TextTertiaryBrush}"/>
@@ -184,315 +214,613 @@
                                         </Style>
                                     </Ellipse.Style>
                                 </Ellipse>
-                                <TextBlock Text="{Binding AutoPilotStatusLine}" Style="{StaticResource CaptionText}"
-                                           VerticalAlignment="Center" TextWrapping="Wrap"/>
+                                <TextBlock FontSize="12" Foreground="{StaticResource TextSecondaryBrush}">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Text" Value="Off"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding AutoPilotModeEnabled}" Value="True">
+                                                    <Setter Property="Text" Value="On"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
                             </StackPanel>
                         </StackPanel>
-                        <CheckBox Grid.Column="2" Style="{StaticResource ToggleSwitch}" VerticalAlignment="Center"
-                                  IsChecked="{Binding AutoPilotModeEnabled}"/>
-                    </Grid>
+                    </StackPanel>
 
-                    <Border Height="1" Background="{StaticResource BorderBrush}"/>
+                    <StackPanel Orientation="Horizontal">
+                        <Viewbox Width="22" Height="22" VerticalAlignment="Center" Margin="0,0,12,0">
+                            <Path Width="24" Height="24" Stroke="{StaticResource TextPrimaryBrush}" StrokeThickness="1.5"
+                                  StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                                  Data="M12 3 L19 6 V11.5 C19 16 16 19.5 12 21 C8 19.5 5 16 5 11.5 V6 L12 3 Z M9.3 12 L11 13.7 L14.7 10"/>
+                        </Viewbox>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Text="{Binding AdminBadgeText}" Style="{StaticResource HeaderStatusTitle}"/>
+                            <StackPanel Orientation="Horizontal" Margin="0,1,0,0">
+                                <Ellipse Width="6" Height="6" VerticalAlignment="Center" Margin="0,0,6,0">
+                                    <Ellipse.Style>
+                                        <Style TargetType="Ellipse">
+                                            <Setter Property="Fill" Value="{StaticResource AccentYellowBrush}"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsAdministrator}" Value="True">
+                                                    <Setter Property="Fill" Value="{StaticResource AccentGreenBrush}"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Ellipse.Style>
+                                </Ellipse>
+                                <TextBlock FontSize="12" Foreground="{StaticResource TextSecondaryBrush}">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Text" Value="Some tweaks need admin"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsAdministrator}" Value="True">
+                                                    <Setter Property="Text" Value="Full access"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </StackPanel>
+                        </StackPanel>
+                    </StackPanel>
+                </StackPanel>
+            </Grid>
 
-                    <!-- Show details disclosure -->
-                    <Button Command="{Binding ToggleSeeWhatsOnCommand}" Style="{StaticResource ExpanderButton}"
-                            HorizontalContentAlignment="Stretch">
-                        <Grid Margin="20,12,20,12">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <TextBlock Grid.Column="0" FontSize="13" VerticalAlignment="Center"
-                                       Foreground="{StaticResource TextPrimaryBrush}">
-                                <TextBlock.Style>
-                                    <Style TargetType="TextBlock">
-                                        <Setter Property="Text" Value="Show details"/>
-                                        <Style.Triggers>
-                                            <DataTrigger Binding="{Binding SeeWhatsOnExpanded}" Value="True">
-                                                <Setter Property="Text" Value="Hide details"/>
-                                            </DataTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </TextBlock.Style>
-                            </TextBlock>
-                            <!-- Windows 11 expander chevron: rotates to point up while open -->
-                            <Path Grid.Column="1" Data="M 0 0 L 4.5 4.5 L 9 0" Width="9" Height="5"
-                                  VerticalAlignment="Center" RenderTransformOrigin="0.5,0.5"
-                                  Stroke="{StaticResource TextSecondaryBrush}" StrokeThickness="1.2"
-                                  StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round">
-                                <Path.RenderTransform>
-                                    <RotateTransform Angle="0"/>
-                                </Path.RenderTransform>
-                                <Path.Style>
-                                    <Style TargetType="Path">
+            <!-- ===== CARDS: two columns, one below ~860 px ===== -->
+            <Grid x:Name="CardGrid" SizeChanged="CardGrid_SizeChanged">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="12"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <!-- ─────────────── LEFT COLUMN ─────────────── -->
+                <StackPanel x:Name="LeftColumn" Grid.Column="0">
+
+                    <!-- ===== RIGHT NOW ===== -->
+                    <Border Style="{StaticResource HomeCard}">
+                        <StackPanel>
+                            <StackPanel Style="{StaticResource HomeCardHeader}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="Right now" Style="{StaticResource HomeCardTitle}"/>
+                                    <!-- Static dot on purpose: an endlessly pulsing animation would keep the
+                                         render thread busy for as long as Home is open. -->
+                                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,0">
+                                        <Ellipse Width="7" Height="7" Fill="{StaticResource AccentGreenBrush}"
+                                                 Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                        <TextBlock Text="Live" FontSize="12" FontWeight="SemiBold"
+                                                   Foreground="{StaticResource AccentGreenBrush}" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </Grid>
+                                <TextBlock Text="{Binding HomeHeadline, Mode=OneWay}" Style="{StaticResource HomeCardSubtitle}"
+                                           Foreground="{StaticResource TextPrimaryBrush}"/>
+                                <TextBlock Text="{Binding HomeSubline, Mode=OneWay}" Style="{StaticResource HomeCardSubtitle}"
+                                           FontSize="13" Margin="0,4,0,0"/>
+                            </StackPanel>
+
+                            <Border Style="{StaticResource HomeRow}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Path Style="{StaticResource HomeRowIcon}"
+                                          Data="M20 14.5 A8 8 0 1 1 9.5 4 A6.5 6.5 0 0 0 20 14.5 Z"/>
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                        <TextBlock Text="Apps resting" Style="{StaticResource BodyText}" Foreground="{StaticResource TextPrimaryBrush}"/>
+                                        <TextBlock Text="Background apps Systema has put to sleep" Style="{StaticResource CaptionText}"
+                                                   TextTrimming="CharacterEllipsis"/>
+                                    </StackPanel>
+                                    <TextBlock Grid.Column="2" Text="{Binding RestingAppCount, Mode=OneWay}" Style="{StaticResource HomeRowValue}"/>
+                                </Grid>
+                            </Border>
+
+                            <Border Style="{StaticResource HomeRow}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Path Style="{StaticResource HomeRowIcon}"
+                                          Data="M7 7 H17 V17 H7 Z M10 10 H14 V14 H10 Z M9.5 3 V7 M14.5 3 V7 M9.5 17 V21 M14.5 17 V21 M3 9.5 H7 M3 14.5 H7 M17 9.5 H21 M17 14.5 H21"/>
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                        <TextBlock Text="Cores parked" Style="{StaticResource BodyText}" Foreground="{StaticResource TextPrimaryBrush}"/>
+                                        <TextBlock Text="Idle CPU cores asleep to save power and heat" Style="{StaticResource CaptionText}"
+                                                   TextTrimming="CharacterEllipsis"/>
+                                    </StackPanel>
+                                    <TextBlock Grid.Column="2" Text="{Binding CoresParkedText, Mode=OneWay}" Style="{StaticResource HomeRowValue}"/>
+                                </Grid>
+                            </Border>
+
+                            <Border Style="{StaticResource HomeRow}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Path Style="{StaticResource HomeRowIcon}"
+                                          Data="M3 7 H21 V15 H3 Z M6.5 15 V18 M10.5 15 V18 M13.5 15 V18 M17.5 15 V18 M7 10 V12 M11 10 V12 M15 10 V12"/>
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                        <TextBlock Text="Memory in use" Style="{StaticResource BodyText}" Foreground="{StaticResource TextPrimaryBrush}"/>
+                                        <TextBlock Text="Used out of total RAM" Style="{StaticResource CaptionText}"
+                                                   TextTrimming="CharacterEllipsis"/>
+                                    </StackPanel>
+                                    <TextBlock Grid.Column="2" Text="{Binding RamUsageText, Mode=OneWay}" Style="{StaticResource HomeRowValue}"/>
+                                </Grid>
+                            </Border>
+
+                            <Border Style="{StaticResource HomeRow}"
+                                    Visibility="{Binding HasBatteryFact, Converter={StaticResource BoolToVis}}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Path Style="{StaticResource HomeRowIcon}"
+                                          Data="M3.5 8 H17.5 A1 1 0 0 1 18.5 9 V15 A1 1 0 0 1 17.5 16 H3.5 A1 1 0 0 1 2.5 15 V9 A1 1 0 0 1 3.5 8 Z M18.5 10.5 H20.5 V13.5 H18.5 M6 11 V13 M9 11 V13"/>
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                        <TextBlock Text="Battery" Style="{StaticResource BodyText}" Foreground="{StaticResource TextPrimaryBrush}"/>
+                                        <TextBlock Text="Charge level and power source" Style="{StaticResource CaptionText}"
+                                                   TextTrimming="CharacterEllipsis"/>
+                                    </StackPanel>
+                                    <TextBlock Grid.Column="2" Text="{Binding BatteryText, Mode=OneWay}" Style="{StaticResource HomeRowValue}"/>
+                                </Grid>
+                            </Border>
+
+                            <Border Style="{StaticResource HomeRow}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Path Style="{StaticResource HomeRowIcon}"
+                                          Data="M2.5 12 C5.5 6.5 18.5 6.5 21.5 12 C18.5 17.5 5.5 17.5 2.5 12 Z M12 9.5 A2.5 2.5 0 1 1 11.99 9.5 Z"/>
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                        <TextBlock Text="Data collection" Style="{StaticResource BodyText}" Foreground="{StaticResource TextPrimaryBrush}"/>
+                                        <TextBlock Text="What Windows sends Microsoft about your PC" Style="{StaticResource CaptionText}"
+                                                   TextTrimming="CharacterEllipsis"/>
+                                    </StackPanel>
+                                    <TextBlock Grid.Column="2" Text="{Binding DataCollectionStatus, Mode=OneWay}" Style="{StaticResource HomeRowValue}"/>
+                                </Grid>
+                            </Border>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- ===== SUGGESTIONS ===== -->
+                    <Border Style="{StaticResource HomeCard}">
+                        <StackPanel>
+                            <Grid Margin="24,22,24,18">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0">
+                                    <TextBlock Text="Suggestions for this PC" Style="{StaticResource HomeCardTitle}"/>
+                                    <TextBlock Text="One at a time. Apply what you like, skip the rest."
+                                               Style="{StaticResource HomeCardSubtitle}"/>
+                                </StackPanel>
+                                <Button Grid.Column="1" Style="{StaticResource GhostButton}" Padding="12,6" VerticalAlignment="Top"
+                                        Margin="12,0,0,0" Click="DismissedBtn_Click"
+                                        Visibility="{Binding HasDismissed, Converter={StaticResource BoolToVis}}">
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                        <Viewbox Width="15" Height="15" Margin="0,0,8,0" VerticalAlignment="Center">
+                                            <Path Width="24" Height="24" Stretch="Uniform"
+                                                  Stroke="{StaticResource TextSecondaryBrush}" StrokeThickness="1.7"
+                                                  StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                                                  Data="M4 13 h3 l3 3 h4 l3 -3 h3 M5 19 h14 a2 2 0 0 0 2 -2 v-11 a2 2 0 0 0 -2 -2 h-14 a2 2 0 0 0 -2 2 v11 a2 2 0 0 0 2 2 z"/>
+                                        </Viewbox>
+                                        <TextBlock Text="Dismissed" FontSize="13" VerticalAlignment="Center"/>
+                                        <Border CornerRadius="9" Background="#1A60CDFF" Padding="7,1" Margin="8,0,0,0"
+                                                MinWidth="20" VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding DismissedCount}" FontSize="11" FontWeight="SemiBold"
+                                                       HorizontalAlignment="Center" Foreground="{StaticResource AccentBlueBrush}"/>
+                                        </Border>
+                                    </StackPanel>
+                                </Button>
+                            </Grid>
+
+                            <!-- ONE suggestion, stepped through with the arrows -->
+                            <StackPanel Visibility="{Binding HasRecommendations, Converter={StaticResource BoolToVis}}">
+                                <Border Style="{StaticResource HomeRow}" Padding="24,18,24,18">
+                                    <StackPanel>
+                                        <Border CornerRadius="4" Padding="7,2" HorizontalAlignment="Left"
+                                                Background="#1A22C55E" BorderBrush="{StaticResource AccentGreenBrush}" BorderThickness="1">
+                                            <TextBlock Text="{Binding CurrentRecommendation.Safety}" FontSize="10" FontWeight="SemiBold"
+                                                       Foreground="{StaticResource AccentGreenBrush}"/>
+                                        </Border>
+
+                                        <TextBlock Text="{Binding CurrentRecommendation.Title}" Style="{StaticResource HeadingSmall}"
+                                                   TextWrapping="Wrap" Margin="0,12,0,0"/>
+
+                                        <TextBlock Text="{Binding CurrentRecommendation.WhyBody}" Style="{StaticResource BodyText}"
+                                                   TextWrapping="Wrap" Margin="0,6,0,0"
+                                                   Foreground="{StaticResource TextSecondaryBrush}"/>
+
+                                        <!-- Trade-off pulled out of the paragraph so the caveat is not buried -->
+                                        <Border CornerRadius="6" Padding="13,10" Margin="0,14,0,0"
+                                                Background="#14F59E0B" BorderBrush="#3AF59E0B" BorderThickness="1"
+                                                Visibility="{Binding CurrentRecommendation.HasTradeoff, Converter={StaticResource BoolToVis}}">
+                                            <StackPanel>
+                                                <TextBlock Text="Trade-off" FontSize="12" FontWeight="SemiBold"
+                                                           Foreground="{StaticResource AccentYellowBrush}"/>
+                                                <TextBlock Text="{Binding CurrentRecommendation.Tradeoff}" FontSize="13"
+                                                           TextWrapping="Wrap" Margin="0,4,0,0"
+                                                           Foreground="{StaticResource TextSecondaryBrush}"/>
+                                            </StackPanel>
+                                        </Border>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- Actions + queue navigation -->
+                                <Border Style="{StaticResource HomeRow}" Padding="24,12">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+
+                                        <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                                            <Button Content="Apply" Style="{StaticResource PrimaryButton}" Padding="22,7"
+                                                    Command="{Binding ApplyRecommendationCommand}"
+                                                    CommandParameter="{Binding CurrentRecommendation}"/>
+                                            <Button Content="Not now" Style="{StaticResource GhostButton}" Padding="18,7" Margin="8,0,0,0"
+                                                    Command="{Binding DismissRecommendationCommand}"
+                                                    CommandParameter="{Binding CurrentRecommendation}"/>
+                                        </StackPanel>
+
+                                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                            <Button Style="{StaticResource GhostButton}" Content="&#x2039;" Padding="12,0"
+                                                    FontSize="17" ToolTip="Previous suggestion"
+                                                    Command="{Binding PrevRecCommand}" IsEnabled="{Binding CanGoPrevRec}"/>
+                                            <TextBlock Text="{Binding RecPositionText}" FontSize="12" Margin="10,0,10,0"
+                                                       VerticalAlignment="Center" MinWidth="40" TextAlignment="Center"
+                                                       Foreground="{StaticResource TextSecondaryBrush}"/>
+                                            <Button Style="{StaticResource GhostButton}" Content="&#x203A;" Padding="12,0"
+                                                    FontSize="17" ToolTip="Next suggestion"
+                                                    Command="{Binding NextRecCommand}" IsEnabled="{Binding CanGoNextRec}"/>
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
+                            </StackPanel>
+
+                            <!-- Empty / all-set state -->
+                            <Border Style="{StaticResource HomeRow}" Padding="24,18"
+                                    Visibility="{Binding HasRecommendations, Converter={StaticResource BoolToVis}, ConverterParameter=Invert}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Border Width="36" Height="36" CornerRadius="18" Background="#1A22C55E"
+                                            VerticalAlignment="Center" Margin="0,0,16,0">
+                                        <TextBlock Text="&#x2713;" FontSize="16" FontWeight="Bold"
+                                                   Foreground="{StaticResource AccentGreenBrush}"
+                                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    </Border>
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                        <TextBlock Text="You're all set" Style="{StaticResource BodyText}"
+                                                   FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}"/>
+                                        <TextBlock Text="Auto Pilot is keeping your PC tuned. We'll add a suggestion here if something new comes up."
+                                                   Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,2,0,0"/>
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+
+                <!-- ─────────────── RIGHT COLUMN ─────────────── -->
+                <StackPanel x:Name="RightColumn" Grid.Column="2">
+
+                    <!-- ===== AUTO PILOT (master switch + collapsible detail) ===== -->
+                    <Border Style="{StaticResource HomeCard}">
+                        <StackPanel>
+                            <StackPanel Style="{StaticResource HomeCardHeader}">
+                                <TextBlock Text="Auto Pilot" Style="{StaticResource HomeCardTitle}"/>
+                                <TextBlock Text="Turns on the safe optimizations and puts them back if anything changes them."
+                                           Style="{StaticResource HomeCardSubtitle}"/>
+                            </StackPanel>
+
+                            <!-- Master switch row -->
+                            <Border Style="{StaticResource HomeRow}" Padding="24,12">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Viewbox Grid.Column="0" Width="20" Height="20" Margin="0,0,16,0" VerticalAlignment="Center">
+                                        <Path Width="24" Height="24" Fill="{StaticResource AccentBlueBrush}"
+                                              Data="M12 3 L13.6 9.4 L20 11 L13.6 12.6 L12 19 L10.4 12.6 L4 11 L10.4 9.4 Z"/>
+                                    </Viewbox>
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,16,0">
+                                        <TextBlock Text="Auto Pilot" Style="{StaticResource BodyText}" Foreground="{StaticResource TextPrimaryBrush}"/>
+                                        <TextBlock Text="{Binding AutoPilotStatusLine}" Style="{StaticResource CaptionText}"
+                                                   TextWrapping="Wrap"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                                        <TextBlock FontSize="14" Margin="0,0,12,0" VerticalAlignment="Center"
+                                                   Foreground="{StaticResource TextPrimaryBrush}">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Text" Value="Off"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding AutoPilotModeEnabled}" Value="True">
+                                                            <Setter Property="Text" Value="On"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                        <CheckBox Style="{StaticResource ToggleSwitch}" VerticalAlignment="Center"
+                                                  IsChecked="{Binding AutoPilotModeEnabled}"/>
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+
+                            <!-- Show details disclosure -->
+                            <Button Command="{Binding ToggleSeeWhatsOnCommand}" Style="{StaticResource HomeRowButton}" Tag="Expander">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" FontSize="14" VerticalAlignment="Center"
+                                               Foreground="{StaticResource TextPrimaryBrush}">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Text" Value="Show details"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding SeeWhatsOnExpanded}" Value="True">
+                                                        <Setter Property="Text" Value="Hide details"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                    <!-- Windows 11 expander chevron: rotates to point up while open -->
+                                    <Path Grid.Column="1" Data="M 0 0 L 4.5 4.5 L 9 0" Width="9" Height="5"
+                                          VerticalAlignment="Center" RenderTransformOrigin="0.5,0.5"
+                                          Stroke="{StaticResource TextSecondaryBrush}" StrokeThickness="1.2"
+                                          StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round">
+                                        <Path.RenderTransform>
+                                            <RotateTransform Angle="0"/>
+                                        </Path.RenderTransform>
+                                        <Path.Style>
+                                            <Style TargetType="Path">
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding SeeWhatsOnExpanded}" Value="True">
+                                                        <DataTrigger.EnterActions>
+                                                            <BeginStoryboard>
+                                                                <Storyboard>
+                                                                    <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(RotateTransform.Angle)"
+                                                                                     To="180" Duration="0:0:0.167"/>
+                                                                </Storyboard>
+                                                            </BeginStoryboard>
+                                                        </DataTrigger.EnterActions>
+                                                        <DataTrigger.ExitActions>
+                                                            <BeginStoryboard>
+                                                                <Storyboard>
+                                                                    <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(RotateTransform.Angle)"
+                                                                                     To="0" Duration="0:0:0.167"/>
+                                                                </Storyboard>
+                                                            </BeginStoryboard>
+                                                        </DataTrigger.ExitActions>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Path.Style>
+                                    </Path>
+                                </Grid>
+                            </Button>
+
+                            <!-- What Auto Pilot has turned on. Fades and eases down on open so the panel
+                                 arrives rather than snapping in. Closing stays instant: a lingering
+                                 collapse just feels like lag. -->
+                            <StackPanel Margin="24,6,24,14"
+                                        Visibility="{Binding SeeWhatsOnExpanded, Converter={StaticResource BoolToVis}}">
+                                <StackPanel.RenderTransform>
+                                    <TranslateTransform Y="0"/>
+                                </StackPanel.RenderTransform>
+                                <StackPanel.Style>
+                                    <Style TargetType="StackPanel">
                                         <Style.Triggers>
                                             <DataTrigger Binding="{Binding SeeWhatsOnExpanded}" Value="True">
                                                 <DataTrigger.EnterActions>
                                                     <BeginStoryboard>
                                                         <Storyboard>
-                                                            <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(RotateTransform.Angle)"
-                                                                             To="180" Duration="0:0:0.167"/>
+                                                            <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                                                                             From="0" To="1" Duration="0:0:0.25"/>
+                                                            <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)"
+                                                                             From="-6" To="0" Duration="0:0:0.25">
+                                                                <DoubleAnimation.EasingFunction>
+                                                                    <QuinticEase EasingMode="EaseOut"/>
+                                                                </DoubleAnimation.EasingFunction>
+                                                            </DoubleAnimation>
                                                         </Storyboard>
                                                     </BeginStoryboard>
                                                 </DataTrigger.EnterActions>
-                                                <DataTrigger.ExitActions>
-                                                    <BeginStoryboard>
-                                                        <Storyboard>
-                                                            <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(RotateTransform.Angle)"
-                                                                             To="0" Duration="0:0:0.167"/>
-                                                        </Storyboard>
-                                                    </BeginStoryboard>
-                                                </DataTrigger.ExitActions>
                                             </DataTrigger>
                                         </Style.Triggers>
                                     </Style>
-                                </Path.Style>
-                            </Path>
-                        </Grid>
-                    </Button>
+                                </StackPanel.Style>
+                                <ItemsControl ItemsSource="{Binding AutoPilotChecklist}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <UniformGrid Columns="2"/>
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate DataType="{x:Type vm:AutoPilotItem}">
+                                            <StackPanel Orientation="Horizontal" Margin="0,0,12,9">
+                                                <TextBlock FontSize="12" Margin="0,0,9,0" VerticalAlignment="Center" FontWeight="Bold">
+                                                    <TextBlock.Style>
+                                                        <Style TargetType="TextBlock">
+                                                            <Setter Property="Text"       Value="&#x25CB;"/>
+                                                            <Setter Property="Foreground" Value="{StaticResource TextTertiaryBrush}"/>
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsDone}" Value="True">
+                                                                    <Setter Property="Text"       Value="&#x2713;"/>
+                                                                    <Setter Property="Foreground" Value="{StaticResource AccentGreenBrush}"/>
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </TextBlock.Style>
+                                                </TextBlock>
+                                                <TextBlock Text="{Binding Label}" FontSize="13" VerticalAlignment="Center"
+                                                           TextWrapping="Wrap">
+                                                    <TextBlock.Style>
+                                                        <Style TargetType="TextBlock">
+                                                            <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsDone}" Value="True">
+                                                                    <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </TextBlock.Style>
+                                                </TextBlock>
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
 
-                    <!-- What Auto Pilot has turned on. Fades and eases down on open so the panel
-                         arrives rather than snapping in. Closing stays instant: a lingering
-                         collapse just feels like lag. -->
-                    <StackPanel Margin="20,2,20,16"
-                                Visibility="{Binding SeeWhatsOnExpanded, Converter={StaticResource BoolToVis}}">
-                        <StackPanel.RenderTransform>
-                            <TranslateTransform Y="0"/>
-                        </StackPanel.RenderTransform>
-                        <StackPanel.Style>
-                            <Style TargetType="StackPanel">
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding SeeWhatsOnExpanded}" Value="True">
-                                        <DataTrigger.EnterActions>
-                                            <BeginStoryboard>
-                                                <Storyboard>
-                                                    <DoubleAnimation Storyboard.TargetProperty="Opacity"
-                                                                     From="0" To="1" Duration="0:0:0.25"/>
-                                                    <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)"
-                                                                     From="-6" To="0" Duration="0:0:0.25">
-                                                        <DoubleAnimation.EasingFunction>
-                                                            <QuinticEase EasingMode="EaseOut"/>
-                                                        </DoubleAnimation.EasingFunction>
-                                                    </DoubleAnimation>
-                                                </Storyboard>
-                                            </BeginStoryboard>
-                                        </DataTrigger.EnterActions>
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </StackPanel.Style>
-                        <ItemsControl ItemsSource="{Binding AutoPilotChecklist}">
-                            <ItemsControl.ItemsPanel>
-                                <ItemsPanelTemplate>
-                                    <UniformGrid Columns="2"/>
-                                </ItemsPanelTemplate>
-                            </ItemsControl.ItemsPanel>
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate DataType="{x:Type vm:AutoPilotItem}">
-                                    <StackPanel Orientation="Horizontal" Margin="0,0,16,9">
-                                        <TextBlock FontSize="12" Margin="0,0,9,0" VerticalAlignment="Center" FontWeight="Bold">
-                                            <TextBlock.Style>
-                                                <Style TargetType="TextBlock">
-                                                    <Setter Property="Text"       Value="&#x25CB;"/>
-                                                    <Setter Property="Foreground" Value="{StaticResource TextTertiaryBrush}"/>
-                                                    <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding IsDone}" Value="True">
-                                                            <Setter Property="Text"       Value="&#x2713;"/>
-                                                            <Setter Property="Foreground" Value="{StaticResource AccentGreenBrush}"/>
-                                                        </DataTrigger>
-                                                    </Style.Triggers>
-                                                </Style>
-                                            </TextBlock.Style>
-                                        </TextBlock>
-                                        <TextBlock Text="{Binding Label}" FontSize="13" VerticalAlignment="Center"
-                                                   TextWrapping="Wrap">
-                                            <TextBlock.Style>
-                                                <Style TargetType="TextBlock">
-                                                    <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
-                                                    <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding IsDone}" Value="True">
-                                                            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
-                                                        </DataTrigger>
-                                                    </Style.Triggers>
-                                                </Style>
-                                            </TextBlock.Style>
-                                        </TextBlock>
-                                    </StackPanel>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                    </StackPanel>
+                    <!-- ===== POPULAR SETTINGS (page shortcuts, like "Recommended settings") ===== -->
+                    <Border Style="{StaticResource HomeCard}">
+                        <StackPanel>
+                            <StackPanel Style="{StaticResource HomeCardHeader}">
+                                <TextBlock Text="Popular settings" Style="{StaticResource HomeCardTitle}"/>
+                                <TextBlock Text="The pages people open the most" Style="{StaticResource HomeCardSubtitle}"/>
+                            </StackPanel>
 
+                            <Button Style="{StaticResource HomeRowButton}" CommandParameter="GameBooster"
+                                    Command="{Binding DataContext.NavigateCommand, RelativeSource={RelativeSource AncestorType=Window}}">
+                                <StackPanel Orientation="Horizontal">
+                                    <Path Style="{StaticResource HomeRowIcon}"
+                                          Data="M8.8 10.8 L15.2 6.9 M8.8 13.2 L15.2 17.1 M15 6 A2.2 2.2 0 1 0 19.4 6 A2.2 2.2 0 1 0 15 6 Z M4.6 12 A2.2 2.2 0 1 0 9 12 A2.2 2.2 0 1 0 4.6 12 Z M15 18 A2.2 2.2 0 1 0 19.4 18 A2.2 2.2 0 1 0 15 18 Z"/>
+                                    <TextBlock Text="Game Booster" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Button>
+                            <Button Style="{StaticResource HomeRowButton}" CommandParameter="TaskSleep"
+                                    Command="{Binding DataContext.NavigateCommand, RelativeSource={RelativeSource AncestorType=Window}}">
+                                <StackPanel Orientation="Horizontal">
+                                    <Path Style="{StaticResource HomeRowIcon}"
+                                          Data="M12 3 L13.6 9.4 L20 11 L13.6 12.6 L12 19 L10.4 12.6 L4 11 L10.4 9.4 Z M18 16 L18.6 18.4 L21 19 L18.6 19.6 L18 22 L17.4 19.6 L15 19 L17.4 18.4 Z"/>
+                                    <TextBlock Text="Systema Engine" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Button>
+                            <Button Style="{StaticResource HomeRowButton}" CommandParameter="Memory"
+                                    Command="{Binding DataContext.NavigateCommand, RelativeSource={RelativeSource AncestorType=Window}}">
+                                <StackPanel Orientation="Horizontal">
+                                    <Path Style="{StaticResource HomeRowIcon}"
+                                          Data="M4 5 H20 A1 1 0 0 1 21 6 V18 A1 1 0 0 1 20 19 H4 A1 1 0 0 1 3 18 V6 A1 1 0 0 1 4 5 Z M3 12 H21 M12 5 V19"/>
+                                    <TextBlock Text="Memory &amp; Startup" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Button>
+                            <Button Style="{StaticResource HomeRowButton}" CommandParameter="Visual"
+                                    Command="{Binding DataContext.NavigateCommand, RelativeSource={RelativeSource AncestorType=Window}}">
+                                <StackPanel Orientation="Horizontal">
+                                    <Path Style="{StaticResource HomeRowIcon}"
+                                          Data="M13 2.5 L4.5 13.5 H11 L11 21.5 L19.5 10.5 H13 L13 2.5 Z"/>
+                                    <TextBlock Text="Visual &amp; Power" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Button>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- ===== TODAY ===== -->
+                    <Border Style="{StaticResource HomeCard}">
+                        <StackPanel>
+                            <StackPanel Style="{StaticResource HomeCardHeader}">
+                                <TextBlock Text="Today" Style="{StaticResource HomeCardTitle}"/>
+                                <TextBlock Text="What Systema did for you" Style="{StaticResource HomeCardSubtitle}"/>
+                            </StackPanel>
+                            <Border BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,1,0,0">
+                                <Grid>
+                                    <ItemsControl ItemsSource="{Binding Activity}" Margin="0,8">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <!-- A new line fades in rather than popping into the list -->
+                                                <Grid Margin="24,7">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="72"/>
+                                                        <ColumnDefinition Width="*"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <Grid.Triggers>
+                                                        <EventTrigger RoutedEvent="FrameworkElement.Loaded">
+                                                            <BeginStoryboard>
+                                                                <Storyboard>
+                                                                    <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                                                                                     From="0" To="1" Duration="0:0:0.25"/>
+                                                                </Storyboard>
+                                                            </BeginStoryboard>
+                                                        </EventTrigger>
+                                                    </Grid.Triggers>
+                                                    <TextBlock Grid.Column="0" Text="{Binding TimeText, Mode=OneWay}"
+                                                               Style="{StaticResource CaptionText}" Margin="0,2,0,0"
+                                                               Foreground="{StaticResource TextTertiaryBrush}"/>
+                                                    <TextBlock Grid.Column="1" Text="{Binding Text, Mode=OneWay}"
+                                                               Style="{StaticResource BodyText}" TextWrapping="Wrap"/>
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                    <TextBlock Margin="24,18,24,18" TextWrapping="Wrap"
+                                               Text="Nothing yet. As Systema rests apps, boosts games and puts back settings other apps change, it lists them here.">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionText}">
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding Activity.Count}" Value="0">
+                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                </Grid>
+                            </Border>
+                        </StackPanel>
+                    </Border>
                 </StackPanel>
-            </Border>
-
-            <!-- ===== SUGGESTIONS ===== -->
-            <Grid Margin="0,28,0,10">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
-                <StackPanel Grid.Column="0" Margin="2,0,0,0">
-                    <TextBlock Text="Suggestions for this PC" Style="{StaticResource HeadingSmall}"/>
-                    <TextBlock Text="One at a time. Apply what you like, skip the rest."
-                               Style="{StaticResource CaptionText}" Margin="0,2,0,0"/>
-                </StackPanel>
-                <Button Grid.Column="1" Style="{StaticResource GhostButton}" Padding="12,6" VerticalAlignment="Center"
-                        Click="DismissedBtn_Click"
-                        Visibility="{Binding HasDismissed, Converter={StaticResource BoolToVis}}">
-                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                        <Viewbox Width="15" Height="15" Margin="0,0,8,0" VerticalAlignment="Center">
-                            <Path Width="24" Height="24" Stretch="Uniform"
-                                  Stroke="{StaticResource TextSecondaryBrush}" StrokeThickness="1.7"
-                                  StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
-                                  Data="M4 13 h3 l3 3 h4 l3 -3 h3 M5 19 h14 a2 2 0 0 0 2 -2 v-11 a2 2 0 0 0 -2 -2 h-14 a2 2 0 0 0 -2 2 v11 a2 2 0 0 0 2 2 z"/>
-                        </Viewbox>
-                        <TextBlock Text="Dismissed" FontSize="13" VerticalAlignment="Center"/>
-                        <Border CornerRadius="9" Background="#1A60CDFF" Padding="7,1" Margin="8,0,0,0"
-                                MinWidth="20" VerticalAlignment="Center">
-                            <TextBlock Text="{Binding DismissedCount}" FontSize="11" FontWeight="SemiBold"
-                                       HorizontalAlignment="Center" Foreground="{StaticResource AccentBlueBrush}"/>
-                        </Border>
-                    </StackPanel>
-                </Button>
             </Grid>
 
-            <!-- Focus card: ONE suggestion, stepped through with the arrows -->
-            <Border Style="{StaticResource Card}" Padding="0"
-                    Visibility="{Binding HasRecommendations, Converter={StaticResource BoolToVis}}">
-                <StackPanel>
-                    <StackPanel Margin="22,20,22,18">
-
-                        <Border CornerRadius="4" Padding="7,2" HorizontalAlignment="Left"
-                                Background="#1A22C55E" BorderBrush="{StaticResource AccentGreenBrush}" BorderThickness="1">
-                            <TextBlock Text="{Binding CurrentRecommendation.Safety}" FontSize="10" FontWeight="SemiBold"
-                                       Foreground="{StaticResource AccentGreenBrush}"/>
-                        </Border>
-
-                        <TextBlock Text="{Binding CurrentRecommendation.Title}" Style="{StaticResource HeadingMedium}"
-                                   TextWrapping="Wrap" Margin="0,12,0,0"/>
-
-                        <TextBlock Text="{Binding CurrentRecommendation.WhyBody}" Style="{StaticResource BodyText}"
-                                   TextWrapping="Wrap" MaxWidth="660" Margin="0,8,0,0"
-                                   Foreground="{StaticResource TextSecondaryBrush}"/>
-
-                        <!-- Trade-off pulled out of the paragraph so the caveat is not buried -->
-                        <Border CornerRadius="6" Padding="13,10" Margin="0,14,0,0"
-                                MaxWidth="660" HorizontalAlignment="Left"
-                                Background="#14F59E0B" BorderBrush="#3AF59E0B" BorderThickness="1"
-                                Visibility="{Binding CurrentRecommendation.HasTradeoff, Converter={StaticResource BoolToVis}}">
-                            <StackPanel>
-                                <TextBlock Text="Trade-off" FontSize="12" FontWeight="SemiBold"
-                                           Foreground="{StaticResource AccentYellowBrush}"/>
-                                <TextBlock Text="{Binding CurrentRecommendation.Tradeoff}" FontSize="13"
-                                           TextWrapping="Wrap" Margin="0,4,0,0"
-                                           Foreground="{StaticResource TextSecondaryBrush}"/>
-                            </StackPanel>
-                        </Border>
-
-                    </StackPanel>
-
-                    <Border Height="1" Background="{StaticResource BorderBrush}"/>
-
-                    <!-- Actions + queue navigation -->
-                    <Grid Margin="22,12,22,12">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-
-                        <StackPanel Grid.Column="0" Orientation="Horizontal">
-                            <Button Content="Apply" Style="{StaticResource PrimaryButton}" Padding="22,7"
-                                    Command="{Binding ApplyRecommendationCommand}"
-                                    CommandParameter="{Binding CurrentRecommendation}"/>
-                            <Button Content="Not now" Style="{StaticResource GhostButton}" Padding="18,7" Margin="8,0,0,0"
-                                    Command="{Binding DismissRecommendationCommand}"
-                                    CommandParameter="{Binding CurrentRecommendation}"/>
-                        </StackPanel>
-
-                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                            <Button Style="{StaticResource GhostButton}" Content="&#x2039;" Padding="12,0"
-                                    FontSize="17" ToolTip="Previous suggestion"
-                                    Command="{Binding PrevRecCommand}" IsEnabled="{Binding CanGoPrevRec}"/>
-                            <TextBlock Text="{Binding RecPositionText}" FontSize="12" Margin="12,0,12,0"
-                                       VerticalAlignment="Center" MinWidth="46" TextAlignment="Center"
-                                       Foreground="{StaticResource TextSecondaryBrush}"/>
-                            <Button Style="{StaticResource GhostButton}" Content="&#x203A;" Padding="12,0"
-                                    FontSize="17" ToolTip="Next suggestion"
-                                    Command="{Binding NextRecCommand}" IsEnabled="{Binding CanGoNextRec}"/>
-                        </StackPanel>
-                    </Grid>
+            <!-- ===== GET HELP ===== -->
+            <Button HorizontalAlignment="Left" Margin="0,8,0,0" Padding="4,6"
+                    Style="{StaticResource GhostButton}" BorderThickness="0" Background="Transparent"
+                    Click="GetHelp_Click" ToolTip="Opens the Systema Discord">
+                <StackPanel Orientation="Horizontal">
+                    <Viewbox Width="18" Height="18" Margin="0,0,12,0" VerticalAlignment="Center">
+                        <Path Width="24" Height="24" Stroke="{StaticResource TextPrimaryBrush}" StrokeThickness="1.5"
+                              StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                              Data="M12 21 A9 9 0 1 1 12 3 A9 9 0 1 1 12 21 Z M9.5 9.5 A2.5 2.5 0 1 1 12 12 V13.5 M12 16.8 V17"/>
+                    </Viewbox>
+                    <TextBlock Text="Get help" FontSize="14" VerticalAlignment="Center"
+                               Foreground="{StaticResource AccentBlueBrush}"/>
                 </StackPanel>
-            </Border>
-
-            <!-- Empty / all-set state -->
-            <Border Style="{StaticResource Card}"
-                    Visibility="{Binding HasRecommendations, Converter={StaticResource BoolToVis}, ConverterParameter=Invert}">
-                <StackPanel HorizontalAlignment="Center" Margin="0,14,0,14">
-                    <Border Width="48" Height="48" CornerRadius="24" Background="#1A22C55E"
-                            HorizontalAlignment="Center" Margin="0,0,0,12">
-                        <TextBlock Text="&#x2713;" FontSize="22" FontWeight="Bold"
-                                   Foreground="{StaticResource AccentGreenBrush}"
-                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                    </Border>
-                    <TextBlock Text="You're all set" Style="{StaticResource HeadingSmall}" HorizontalAlignment="Center"/>
-                    <TextBlock Text="Auto Pilot is keeping your PC tuned. We'll add a suggestion here if something new comes up."
-                               Style="{StaticResource CaptionText}"
-                               TextWrapping="Wrap" MaxWidth="420" TextAlignment="Center"
-                               HorizontalAlignment="Center" Margin="0,6,0,0"/>
-                </StackPanel>
-            </Border>
-
-            <!-- ===== TODAY ===== -->
-            <TextBlock Text="Today" Style="{StaticResource GroupHeader}"/>
-            <Border Style="{StaticResource Card}" Padding="0">
-                <Grid>
-                    <ItemsControl ItemsSource="{Binding Activity}" Margin="0,8">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate>
-                                <!-- A new line fades in rather than popping into the list -->
-                                <Grid Margin="20,7">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="76"/>
-                                        <ColumnDefinition Width="*"/>
-                                    </Grid.ColumnDefinitions>
-                                    <Grid.Triggers>
-                                        <EventTrigger RoutedEvent="FrameworkElement.Loaded">
-                                            <BeginStoryboard>
-                                                <Storyboard>
-                                                    <DoubleAnimation Storyboard.TargetProperty="Opacity"
-                                                                     From="0" To="1" Duration="0:0:0.25"/>
-                                                </Storyboard>
-                                            </BeginStoryboard>
-                                        </EventTrigger>
-                                    </Grid.Triggers>
-                                    <TextBlock Grid.Column="0" Text="{Binding TimeText, Mode=OneWay}"
-                                               Style="{StaticResource CaptionText}" Margin="0,2,0,0"
-                                               Foreground="{StaticResource TextTertiaryBrush}"/>
-                                    <TextBlock Grid.Column="1" Text="{Binding Text, Mode=OneWay}"
-                                               Style="{StaticResource BodyText}" TextWrapping="Wrap"/>
-                                </Grid>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                    <TextBlock Margin="20,16,20,16" TextWrapping="Wrap"
-                               Text="Nothing yet. As Systema rests apps, boosts games and puts back settings other apps change, it lists them here.">
-                        <TextBlock.Style>
-                            <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionText}">
-                                <Setter Property="Visibility" Value="Collapsed"/>
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding Activity.Count}" Value="0">
-                                        <Setter Property="Visibility" Value="Visible"/>
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </TextBlock.Style>
-                    </TextBlock>
-                </Grid>
-            </Border>
+            </Button>
 
             <!-- Action messages ("Applied: …", Auto Pilot progress). Hidden while empty. -->
-            <TextBlock Text="{Binding StatusMessage}" TextWrapping="Wrap" Margin="2,16,0,0">
+            <TextBlock Text="{Binding StatusMessage}" TextWrapping="Wrap" Margin="2,12,0,0">
                 <TextBlock.Style>
                     <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionText}">
                         <Style.Triggers>

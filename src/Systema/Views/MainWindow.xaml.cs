@@ -502,8 +502,11 @@ public partial class MainWindow : Window
         for (int i = 0; i < n; i++)
         {
             var child = Media.VisualTreeHelper.GetChild(root, i);
+            // Tag="NotSearchable" marks a label that repeats a setting's name for display only
+            // (Home's header shows "Auto Pilot" above the Auto Pilot card), so a jump skips it.
             if (child is WpfControls.TextBlock tb && tb.IsVisible &&
-                string.Equals(tb.Text, text, StringComparison.Ordinal))
+                string.Equals(tb.Text, text, StringComparison.Ordinal) &&
+                !Equals(tb.Tag, "NotSearchable"))
                 return tb;
             var deeper = FindVisibleText(child, text);
             if (deeper != null) return deeper;
@@ -528,9 +531,18 @@ public partial class MainWindow : Window
             // own two-column template Grid, which is the whole page.
             if (cur is WpfControls.ScrollContentPresenter) return text;
             if (cur is WpfControls.Grid g && g.ColumnDefinitions.Count >= 2) return g;
-            if (cur is WpfControls.Border b && card != null && ReferenceEquals(b.Style, card)) break;
+            // Reached the card the title sits in (Card, or a style built on it like Home's
+            // cards): outline that card, never climb past it into the page's column layout.
+            if (cur is WpfControls.Border b && card != null && IsCardStyle(b.Style, card)) return b;
         }
         return (Media.VisualTreeHelper.GetParent(text) as FrameworkElement) ?? text;
+    }
+
+    private static bool IsCardStyle(Style? style, object card)
+    {
+        for (var s = style; s != null; s = s.BasedOn)
+            if (ReferenceEquals(s, card)) return true;
+        return false;
     }
 
     /// <summary>Accent outline drawn over a row, never taking input or changing layout.</summary>
