@@ -268,7 +268,7 @@
             </ctl:SettingsCard>
 
             <!-- Version footer -->
-            <TextBlock Text="Systema v0.7.342  ·  For support visit discord.gg/yYhM7mdupH"
+            <TextBlock Text="Systema v0.7.343  ·  For support visit discord.gg/yYhM7mdupH"
                        Style="{StaticResource CaptionText}" Foreground="{StaticResource TextSecondaryBrush}"
                        TextWrapping="Wrap" Margin="2,24,0,0"/>
         </StackPanel>
