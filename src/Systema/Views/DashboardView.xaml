@@ -393,7 +393,7 @@
                                           Data="M2.5 12 C5.5 6.5 18.5 6.5 21.5 12 C18.5 17.5 5.5 17.5 2.5 12 Z M12 9.5 A2.5 2.5 0 1 1 11.99 9.5 Z"/>
                                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                         <TextBlock Text="Data collection" Style="{StaticResource BodyText}" Foreground="{StaticResource TextPrimaryBrush}"/>
-                                        <TextBlock Text="What Windows sends Microsoft about your PC" Style="{StaticResource CaptionText}"
+                                        <TextBlock Text="{Binding DataCollectionDetail, Mode=OneWay}" Style="{StaticResource CaptionText}"
                                                    TextTrimming="CharacterEllipsis"/>
                                     </StackPanel>
                                     <TextBlock Grid.Column="2" Text="{Binding DataCollectionStatus, Mode=OneWay}" Style="{StaticResource HomeRowValue}"/>

@@ -116,6 +116,18 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
 
     [ObservableProperty] private bool   _dataCollectionBlocked;
     [ObservableProperty] private string _dataCollectionStatus = "Checking…";
+    /// <summary>The line under "Data collection" on Home, saying why it reads what it reads.</summary>
+    [ObservableProperty] private string _dataCollectionDetail = "What Windows sends Microsoft about your PC";
+
+    /// <summary>
+    /// Home's "Data collection" value and explanation. "Off" only when No Telemetry Pro is fully
+    /// in effect (policies, telemetry services and the extra services), exactly what its switch on
+    /// Cleanup &amp; Privacy shows; "Reduced" when just the telemetry services are off.
+    /// </summary>
+    internal static (string Status, string Detail) DescribeDataCollection(bool noTelemetryProOn, bool telemetryServicesOff) =>
+        noTelemetryProOn     ? ("Off",     "Blocked by No Telemetry Pro") :
+        telemetryServicesOff ? ("Reduced", "Partly blocked. No Telemetry Pro stops the rest") :
+                               ("On",      "Windows default. No Telemetry Pro can stop it");
 
     // System Health — single aggregate indicator across the modules. Optimal when the
     // app is elevated, telemetry is blocked, and Auto-Pilot's recommendations are applied.
@@ -402,12 +414,16 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
                 : GamesDetected ? "Ready · Games detected" : "Idle · No game running";
 
         // Privacy ────────────────────────────────────────────────────
+        // Mirrors the Cleanup & Privacy page. This used to look only at the DiagTrack and
+        // dmwappushservice services, so it said "Protected" whenever those two were disabled (by
+        // Auto Pilot's privacy step, say) even with No Telemetry Pro off or partly undone by a
+        // Windows update. Now it reads the same full check the No Telemetry Pro switch shows.
         try
         {
-            DataCollectionBlocked = _serviceControl.AreTelemetryServicesDisabled();
-            DataCollectionStatus  = DataCollectionBlocked
-                ? "Protected"
-                : "Collecting data";
+            bool servicesOff = _serviceControl.AreTelemetryServicesDisabled();
+            bool noTelPro    = servicesOff && _serviceControl.IsNoTelemetryProEnabled();
+            DataCollectionBlocked = servicesOff;
+            (DataCollectionStatus, DataCollectionDetail) = DescribeDataCollection(noTelPro, servicesOff);
         }
         catch (Exception ex) { _log.Warn("DashboardViewModel", $"Telemetry status check failed: {ex.Message}"); DataCollectionStatus = "Unknown"; }
 
