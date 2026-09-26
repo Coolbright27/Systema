@@ -2,12 +2,17 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:conv="clr-namespace:Systema.Core.Converters"
+             xmlns:ctl="clr-namespace:Systema.Controls"
              Background="Transparent">
+
+    <!-- Windows 11 Settings layout: a SettingsCard per BIOS setting, the plugged-in and battery
+         pickers as indented sub-cards, and the charging modes as radio rows. Same bindings and
+         text as before; only the layout changed. -->
 
     <UserControl.Resources>
         <conv:BoolToVisibilityConverter x:Key="BoolToVis"/>
 
-        <!-- Charging-mode row: title + description on the left, a RECOMMENDED pill on the right. -->
+        <!-- Charging-mode row: title + description on the left, a Recommended pill on the right. -->
         <DataTemplate x:Key="ChargeModeItemTemplate">
             <Grid>
                 <Grid.ColumnDefinitions>
@@ -15,37 +20,55 @@
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
                 <StackPanel Grid.Column="0">
-                    <TextBlock Text="{Binding Label}" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
+                    <TextBlock Text="{Binding Label}" Style="{StaticResource BodyText}"
+                               Foreground="{StaticResource TextPrimaryBrush}"/>
                     <TextBlock Text="{Binding Description}" Style="{StaticResource CaptionText}"
                                TextWrapping="Wrap" Margin="0,2,0,0"/>
                 </StackPanel>
                 <Border Grid.Column="1" VerticalAlignment="Top" Margin="10,1,0,0"
-                        Background="{StaticResource AccentBlueBrush}" CornerRadius="3" Padding="6,2"
+                        Background="{StaticResource ControlFillBrush}" BorderBrush="{StaticResource AccentGreenBrush}"
+                        BorderThickness="1" CornerRadius="4" Padding="6,1"
                         Visibility="{Binding Recommended, Converter={StaticResource BoolToVis}}">
-                    <TextBlock Text="RECOMMENDED" FontSize="9" FontWeight="SemiBold" Foreground="White"/>
+                    <TextBlock Text="Recommended" FontSize="11" Foreground="{StaticResource AccentGreenBrush}"/>
                 </Border>
             </Grid>
         </DataTemplate>
 
-        <!-- Selectable card row. Accent border marks the current selection. -->
+        <!-- Windows 11 radio row: a circle that fills with the accent when chosen, and the
+             whole row is the click target. -->
         <Style x:Key="ChargeModeItemStyle" TargetType="ListBoxItem">
-            <Setter Property="Margin" Value="0,0,0,8"/>
+            <Setter Property="Margin" Value="0,0,0,4"/>
             <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="ListBoxItem">
                         <Border x:Name="Bd" CornerRadius="6" Padding="14,12"
-                                Background="{StaticResource BgSurfaceBrush}"
+                                Background="{StaticResource ControlFillBrush}"
                                 BorderBrush="{StaticResource BorderBrush}" BorderThickness="1">
-                            <ContentPresenter/>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Grid Width="20" Height="20" VerticalAlignment="Top" Margin="0,1,14,0">
+                                    <Ellipse x:Name="Ring" Stroke="{StaticResource ToggleOffStrokeBrush}" StrokeThickness="1"/>
+                                    <Ellipse x:Name="Fill" Fill="{StaticResource AccentBlueBrush}" Opacity="0"/>
+                                    <Ellipse x:Name="Dot" Width="8" Height="8" Fill="{StaticResource TextOnAccentBrush}" Opacity="0"/>
+                                </Grid>
+                                <ContentPresenter Grid.Column="1"/>
+                            </Grid>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="Bd" Property="Background" Value="{StaticResource HoverBrush}"/>
                             </Trigger>
                             <Trigger Property="IsSelected" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="{StaticResource HoverBrush}"/>
                                 <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource AccentBlueBrush}"/>
+                                <Setter TargetName="Fill" Property="Opacity" Value="1"/>
+                                <Setter TargetName="Dot" Property="Opacity" Value="1"/>
+                                <Setter TargetName="Ring" Property="Opacity" Value="0"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -76,104 +99,81 @@
     </UserControl.Resources>
 
     <ScrollViewer VerticalScrollBarVisibility="Auto">
-        <StackPanel Margin="32,28,32,28">
+        <StackPanel Margin="32,24,32,28">
 
             <!-- ===== HEADER ===== -->
-            <StackPanel Margin="0,0,0,12">
-                <StackPanel Orientation="Horizontal">
-                    <TextBlock Text="Dell" Style="{StaticResource HeadingLarge}"/>
-                    <Border BorderBrush="{StaticResource AccentBlueBrush}" BorderThickness="1" CornerRadius="3"
-                            Padding="6,2" Margin="12,4,0,0" VerticalAlignment="Center" Height="20">
-                        <TextBlock Text="DELL" FontSize="9" FontWeight="SemiBold"
-                                   Foreground="{StaticResource AccentBlueBrush}" VerticalAlignment="Center"/>
-                    </Border>
-                </StackPanel>
-                <TextBlock Style="{StaticResource CaptionText}" Margin="0,4,0,0" TextWrapping="Wrap" MaxWidth="720">
+            <StackPanel Margin="0,0,0,8">
+                <TextBlock Text="Dell" Style="{StaticResource HeadingLarge}"/>
+                <TextBlock Style="{StaticResource CaptionText}" Margin="0,4,0,0" TextWrapping="Wrap" MaxWidth="720"
+                           HorizontalAlignment="Left">
                     <Run Text="Dell-specific tools and tweaks for your "/><Run Text="{Binding Model, Mode=OneWay}"/><Run Text="."/>
                 </TextBlock>
             </StackPanel>
 
             <!-- ══════════════════════════════════════════════ Dell Thermal Profile Card
-                 Entire card hidden unless this is a Dell whose BIOS exposes a thermal
-                 attribute (ThermalSupported) — or needs the provider installed. The
+                 Entire section hidden unless this is a Dell whose BIOS exposes a thermal
+                 attribute (ThermalSupported), or needs the provider installed. The
                  battery selector inside is further gated on IsLaptop so it never shows
                  on Dell desktops. -->
             <StackPanel Margin="0,0,0,16"
                         Visibility="{Binding ThermalCardVisible, Converter={StaticResource BoolToVis}}">
-                <Border Style="{StaticResource Card}">
-                    <StackPanel>
+                <TextBlock Text="Thermal" Style="{StaticResource SettingsGroupHeader}"/>
 
-                        <!-- Header -->
-                        <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-                            <TextBlock Text="Thermal Profile" Style="{StaticResource HeadingMedium}"/>
+                <ctl:SettingsCard Header="Thermal Profile">
+                    <ctl:SettingsCard.Description>
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource CardDescription}">
+                                Sets the same BIOS thermal mode as the Dell or MyDell app (Optimized, Cool,
+                                Quiet, Ultra Performance). Set it once and Systema applies your choice, then
+                                re-applies it automatically whenever you plug in or unplug.
+                            </TextBlock>
+
+                            <!-- Provider-missing guidance: shown when this is a Dell but the BIOS
+                                 WMI provider isn't installed. Points at the lightweight provider. -->
+                            <Border Visibility="{Binding ThermalNeedsProvider, Converter={StaticResource BoolToVis}}"
+                                    Background="#1AF59E0B" BorderBrush="{StaticResource AccentYellowBrush}"
+                                    BorderThickness="1" CornerRadius="4" Padding="12,10" Margin="0,10,0,0"
+                                    MaxWidth="680" HorizontalAlignment="Left">
+                                <StackPanel>
+                                    <TextBlock Text="{Binding ThermalStatus}" Style="{StaticResource CaptionText}"
+                                               Foreground="{StaticResource AccentYellowBrush}" TextWrapping="Wrap"/>
+                                    <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,8,0,0"
+                                               Foreground="{StaticResource TextSecondaryBrush}">
+                                        Search for "Dell Command Monitor download" and install the standalone package.
+                                        No reboot needed. Just reopen this tab and the selectors show up.
+                                    </TextBlock>
+                                </StackPanel>
+                            </Border>
                         </StackPanel>
-                        <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,0,0,16" MaxWidth="640">
-                            Sets the same BIOS thermal mode as the Dell or MyDell app (Optimized, Cool,
-                            Quiet, Ultra Performance). Set it once and Systema applies your choice, then
-                            re-applies it automatically whenever you plug in or unplug.
-                        </TextBlock>
+                    </ctl:SettingsCard.Description>
+                </ctl:SettingsCard>
 
-                        <!-- Provider-missing guidance — shown when this is a Dell but the BIOS
-                             WMI provider isn't installed. Points at the lightweight provider. -->
-                        <Border Visibility="{Binding ThermalNeedsProvider, Converter={StaticResource BoolToVis}}"
-                                Background="#1AF59E0B" BorderBrush="{StaticResource AccentYellowBrush}"
-                                BorderThickness="1" CornerRadius="6" Padding="12,10">
-                            <StackPanel>
-                                <TextBlock Text="{Binding ThermalStatus}" Style="{StaticResource CaptionText}"
-                                           Foreground="{StaticResource AccentYellowBrush}" TextWrapping="Wrap"/>
-                                <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,8,0,0"
-                                           Foreground="{StaticResource TextSecondaryBrush}">
-                                    Search for "Dell Command Monitor download" and install the standalone package.
-                                    No reboot needed. Just reopen this tab and the selectors show up.
-                                </TextBlock>
-                            </StackPanel>
-                        </Border>
+                <!-- Selectors: only when the provider is present (Supported). -->
+                <StackPanel Visibility="{Binding ThermalSupported, Converter={StaticResource BoolToVis}}">
 
-                        <!-- Selectors — only when the provider is present (Supported). -->
-                        <StackPanel Visibility="{Binding ThermalSupported, Converter={StaticResource BoolToVis}}">
+                    <!-- Plugged-in / desktop selector: always shown when supported -->
+                    <ctl:SettingsCard Header="When plugged in" Margin="24,0,0,4"
+                                      Description="Thermal mode applied on AC power (and on desktops).">
+                        <ComboBox Width="270" Style="{StaticResource DarkComboBox}"
+                                  ItemsSource="{Binding ThermalModes}"
+                                  ItemTemplate="{StaticResource ThermalModeItemTemplate}"
+                                  SelectedValuePath="Value"
+                                  SelectedValue="{Binding ThermalModeAc, Mode=TwoWay}"/>
+                    </ctl:SettingsCard>
 
-                        <!-- Plugged-in / desktop selector — always shown when supported -->
-                        <Grid Margin="0,0,0,12">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="270"/>
-                            </Grid.ColumnDefinitions>
-                            <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,16,0">
-                                <TextBlock Text="When plugged in" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                                <TextBlock Text="Thermal mode applied on AC power (and on desktops)."
-                                           Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,2,0,0"/>
-                            </StackPanel>
-                            <ComboBox Grid.Column="1" VerticalAlignment="Center"
-                                      Style="{StaticResource DarkComboBox}"
-                                      ItemsSource="{Binding ThermalModes}"
-                                      ItemTemplate="{StaticResource ThermalModeItemTemplate}"
-                                      SelectedValuePath="Value"
-                                      SelectedValue="{Binding ThermalModeAc, Mode=TwoWay}"/>
-                        </Grid>
-
-                        <!-- Battery selector — only on laptops (IsLaptop) -->
-                        <Grid Visibility="{Binding IsLaptop, Converter={StaticResource BoolToVis}}">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="270"/>
-                            </Grid.ColumnDefinitions>
-                            <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,16,0">
-                                <TextBlock Text="On battery" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                                <TextBlock Text="Thermal mode applied when you're on battery. Usually Optimized or Quiet for the best mix of heat and runtime."
-                                           Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,2,0,0"/>
-                            </StackPanel>
-                            <ComboBox Grid.Column="1" VerticalAlignment="Center"
-                                      Style="{StaticResource DarkComboBox}"
+                    <!-- Battery selector: only on laptops (IsLaptop) -->
+                    <Grid Visibility="{Binding IsLaptop, Converter={StaticResource BoolToVis}}">
+                        <ctl:SettingsCard Header="On battery" Margin="24,0,0,4"
+                                          Description="Thermal mode applied when you're on battery. Usually Optimized or Quiet for the best mix of heat and runtime.">
+                            <ComboBox Width="270" Style="{StaticResource DarkComboBox}"
                                       ItemsSource="{Binding ThermalModes}"
                                       ItemTemplate="{StaticResource ThermalModeItemTemplate}"
                                       SelectedValuePath="Value"
                                       SelectedValue="{Binding ThermalModeBattery, Mode=TwoWay}"/>
-                        </Grid>
+                        </ctl:SettingsCard>
+                    </Grid>
 
-                        </StackPanel><!-- end selectors (ThermalSupported) -->
-
-                    </StackPanel>
-                </Border>
+                </StackPanel><!-- end selectors (ThermalSupported) -->
             </StackPanel>
 
             <!-- ══════════════════════════════════════════════ Dell Charging Mode Card
@@ -183,95 +183,95 @@
                  owns charging (IsBatteryPauseActive) the whole control greys out. -->
             <StackPanel Margin="0,0,0,16"
                         Visibility="{Binding ChargingSupported, Converter={StaticResource BoolToVis}}">
-                <Border Style="{StaticResource Card}">
-                    <StackPanel>
+                <TextBlock Text="Battery" Style="{StaticResource SettingsGroupHeader}"/>
 
-                        <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-                            <TextBlock Text="Charging Mode" Style="{StaticResource HeadingMedium}"/>
-                        </StackPanel>
-                        <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,0,0,16" MaxWidth="640">
-                            Sets the same BIOS charging behaviour as the Dell or Dell Power Manager app.
-                            Capping the charge with Custom (for example 75 to 80 percent) reduces battery
-                            wear when you stay plugged in. Your choice is saved in the BIOS and sticks
-                            across reboots.
-                        </TextBlock>
+                <ctl:SettingsCard Header="Charging Mode">
+                    <ctl:SettingsCard.Description>
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource CardDescription}">
+                                Sets the same BIOS charging behaviour as the Dell or Dell Power Manager app.
+                                Capping the charge with Custom (for example 75 to 80 percent) reduces battery
+                                wear when you stay plugged in. Your choice is saved in the BIOS and sticks
+                                across reboots.
+                            </TextBlock>
 
-                        <!-- Interactive area + grey-out overlay share one cell. -->
-                        <Grid>
-                            <!-- Inner content: dims and disables while Game Boost owns charging. -->
-                            <StackPanel>
-                                <StackPanel.Style>
-                                    <Style TargetType="StackPanel">
-                                        <Style.Triggers>
-                                            <DataTrigger Binding="{Binding IsBatteryPauseActive}" Value="True">
-                                                <Setter Property="IsEnabled" Value="False"/>
-                                                <Setter Property="Opacity"   Value="0.4"/>
-                                            </DataTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </StackPanel.Style>
-
-                                <ListBox ItemsSource="{Binding ChargeModes}"
-                                         SelectedValuePath="Value"
-                                         SelectedValue="{Binding SelectedChargeMode, Mode=TwoWay}"
-                                         ItemTemplate="{StaticResource ChargeModeItemTemplate}"
-                                         ItemContainerStyle="{StaticResource ChargeModeItemStyle}"
-                                         Background="Transparent" BorderThickness="0"
-                                         HorizontalContentAlignment="Stretch"
-                                         ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                                         ScrollViewer.VerticalScrollBarVisibility="Disabled"/>
-
-                                <!-- Custom thresholds — only when Custom is selected. -->
-                                <Border Visibility="{Binding IsCustomMode, Converter={StaticResource BoolToVis}}"
-                                        Background="{StaticResource BgSurfaceBrush}" BorderBrush="{StaticResource BorderBrush}"
-                                        BorderThickness="1" CornerRadius="6" Padding="14,12" Margin="0,2,0,0">
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="*"/>
-                                        </Grid.ColumnDefinitions>
-                                        <StackPanel Grid.Column="0" Margin="0,0,10,0">
-                                            <TextBlock Text="Start charging (at or below)" Style="{StaticResource CaptionText}"/>
-                                            <ComboBox Margin="0,4,0,0" Style="{StaticResource DarkComboBox}"
-                                                      ItemsSource="{Binding ChargeStartOptions}"
-                                                      ItemStringFormat="{}{0}%"
-                                                      SelectedItem="{Binding CustomStart, Mode=TwoWay}"/>
-                                        </StackPanel>
-                                        <StackPanel Grid.Column="1" Margin="10,0,0,0">
-                                            <TextBlock Text="Stop charging (at or above)" Style="{StaticResource CaptionText}"/>
-                                            <ComboBox Margin="0,4,0,0" Style="{StaticResource DarkComboBox}"
-                                                      ItemsSource="{Binding ChargeStopOptions}"
-                                                      ItemStringFormat="{}{0}%"
-                                                      SelectedItem="{Binding CustomStop, Mode=TwoWay}"/>
-                                        </StackPanel>
-                                    </Grid>
-                                </Border>
-                            </StackPanel>
-
-                            <!-- Grey-out banner shown while Game Boost owns charging. -->
-                            <Border Visibility="{Binding IsBatteryPauseActive, Converter={StaticResource BoolToVis}}"
-                                    HorizontalAlignment="Center" VerticalAlignment="Center"
-                                    Background="{StaticResource BgCardBrush}" Opacity="0.96"
-                                    BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
-                                    CornerRadius="8" Padding="20,14">
+                            <!-- Interactive area + grey-out overlay share one cell. -->
+                            <Grid Margin="0,14,0,0">
+                                <!-- Inner content: dims and disables while Game Boost owns charging. -->
                                 <StackPanel>
-                                    <TextBlock Text="Battery Pause active" Style="{StaticResource BodyText}"
-                                               FontWeight="SemiBold" HorizontalAlignment="Center"/>
-                                    <TextBlock Text="Battery pause is on in Game Boost."
-                                               Style="{StaticResource CaptionText}"
-                                               Foreground="{StaticResource TextSecondaryBrush}"
-                                               HorizontalAlignment="Center" Margin="0,4,0,0"/>
-                                </StackPanel>
-                            </Border>
-                        </Grid>
+                                    <StackPanel.Style>
+                                        <Style TargetType="StackPanel">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsBatteryPauseActive}" Value="True">
+                                                    <Setter Property="IsEnabled" Value="False"/>
+                                                    <Setter Property="Opacity"   Value="0.4"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </StackPanel.Style>
 
-                    </StackPanel>
-                </Border>
+                                    <ListBox ItemsSource="{Binding ChargeModes}"
+                                             SelectedValuePath="Value"
+                                             SelectedValue="{Binding SelectedChargeMode, Mode=TwoWay}"
+                                             ItemTemplate="{StaticResource ChargeModeItemTemplate}"
+                                             ItemContainerStyle="{StaticResource ChargeModeItemStyle}"
+                                             Background="Transparent" BorderThickness="0"
+                                             HorizontalContentAlignment="Stretch"
+                                             ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                             ScrollViewer.VerticalScrollBarVisibility="Disabled"/>
+
+                                    <!-- Custom thresholds: only when Custom is selected. -->
+                                    <Border Visibility="{Binding IsCustomMode, Converter={StaticResource BoolToVis}}"
+                                            Background="{StaticResource BgSurfaceBrush}" BorderBrush="{StaticResource BorderBrush}"
+                                            BorderThickness="1" CornerRadius="6" Padding="14,12" Margin="0,4,0,0"
+                                            ctl:Motion.RevealOnShow="True">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0" Margin="0,0,10,0">
+                                                <TextBlock Text="Start charging (at or below)" Style="{StaticResource CaptionText}"/>
+                                                <ComboBox Margin="0,4,0,0" Style="{StaticResource DarkComboBox}"
+                                                          ItemsSource="{Binding ChargeStartOptions}"
+                                                          ItemStringFormat="{}{0}%"
+                                                          SelectedItem="{Binding CustomStart, Mode=TwoWay}"/>
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="1" Margin="10,0,0,0">
+                                                <TextBlock Text="Stop charging (at or above)" Style="{StaticResource CaptionText}"/>
+                                                <ComboBox Margin="0,4,0,0" Style="{StaticResource DarkComboBox}"
+                                                          ItemsSource="{Binding ChargeStopOptions}"
+                                                          ItemStringFormat="{}{0}%"
+                                                          SelectedItem="{Binding CustomStop, Mode=TwoWay}"/>
+                                            </StackPanel>
+                                        </Grid>
+                                    </Border>
+                                </StackPanel>
+
+                                <!-- Grey-out banner shown while Game Boost owns charging. -->
+                                <Border Visibility="{Binding IsBatteryPauseActive, Converter={StaticResource BoolToVis}}"
+                                        HorizontalAlignment="Center" VerticalAlignment="Center"
+                                        Background="{StaticResource BgCardBrush}" Opacity="0.96"
+                                        BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
+                                        CornerRadius="8" Padding="20,14">
+                                    <StackPanel>
+                                        <TextBlock Text="Battery Pause active" Style="{StaticResource BodyText}"
+                                                   FontWeight="SemiBold" HorizontalAlignment="Center"/>
+                                        <TextBlock Text="Battery pause is on in Game Boost."
+                                                   Style="{StaticResource CaptionText}"
+                                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                                   HorizontalAlignment="Center" Margin="0,4,0,0"/>
+                                    </StackPanel>
+                                </Border>
+                            </Grid>
+                        </StackPanel>
+                    </ctl:SettingsCard.Description>
+                </ctl:SettingsCard>
             </StackPanel>
 
             <!-- ===== STATUS ===== -->
             <TextBlock Text="{Binding StatusMessage}" Style="{StaticResource CaptionText}"
-                       Margin="0,12,0,0" TextWrapping="Wrap"/>
+                       Margin="2,4,0,0" TextWrapping="Wrap"/>
 
         </StackPanel>
     </ScrollViewer>
