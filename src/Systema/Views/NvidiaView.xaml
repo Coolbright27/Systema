@@ -2,7 +2,11 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:conv="clr-namespace:Systema.Core.Converters"
+             xmlns:ctl="clr-namespace:Systema.Controls"
              Background="Transparent">
+
+    <!-- Windows 11 Settings layout: one SettingsCard per driver setting, grouped under headers.
+         Same bindings and text as before; only the layout changed. -->
 
     <UserControl.Resources>
         <conv:BoolToVisibilityConverter x:Key="BoolToVis"/>
@@ -19,10 +23,10 @@
     </UserControl.Resources>
 
     <ScrollViewer VerticalScrollBarVisibility="Auto">
-        <StackPanel Margin="32,28,32,28">
+        <StackPanel Margin="32,24,32,28">
 
             <!-- ===== HEADER ===== -->
-            <Grid Margin="0,0,0,20">
+            <Grid Margin="0,0,0,8">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
@@ -42,24 +46,27 @@
                 </StackPanel>
             </Grid>
 
-            <!-- ===== REBOOT HINT ===== -->
-            <Border Margin="0,0,0,16" Padding="12,8" CornerRadius="6" Background="#1A38BDF8"
+            <!-- ===== REBOOT HINT (Windows 11 informational bar) ===== -->
+            <Border Margin="0,12,0,0" Padding="14,10" CornerRadius="6" Background="#1A60CDFF"
+                    BorderBrush="#3360CDFF" BorderThickness="1"
                     Visibility="{Binding ShowRebootHint, Converter={StaticResource BoolToVis}}">
-                <TextBlock TextWrapping="Wrap" Style="{StaticResource CaptionText}"
-                           Foreground="{StaticResource AccentBlueBrush}"
-                           Text="NVIDIA power changes take effect after you restart your PC."/>
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="&#x24D8;" FontSize="14" Foreground="{StaticResource AccentBlueBrush}"
+                               VerticalAlignment="Center" Margin="0,0,10,0"/>
+                    <TextBlock TextWrapping="Wrap" Style="{StaticResource CaptionText}" VerticalAlignment="Center"
+                               Foreground="{StaticResource TextPrimaryBrush}"
+                               Text="NVIDIA power changes take effect after you restart your PC."/>
+                </StackPanel>
             </Border>
 
-            <!-- ===== CARD: GPU Power Management (PowerMizer / render-standby equivalent) ===== -->
-            <Border Style="{StaticResource Card}" Margin="0,0,0,20">
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
-                    </Grid.ColumnDefinitions>
-                    <StackPanel Grid.Column="0" Margin="0,0,20,0">
-                        <TextBlock Text="GPU Power Management (Similar to RC6)" Style="{StaticResource HeadingMedium}" Margin="0,0,0,4"/>
-                        <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" MaxWidth="560">
+            <!-- ══════════════ POWER ══════════════ -->
+            <TextBlock Text="Power" Style="{StaticResource SettingsGroupHeader}"/>
+
+            <!-- ===== GPU Power Management (PowerMizer / render-standby equivalent) ===== -->
+            <ctl:SettingsCard Header="GPU Power Management (Similar to RC6)">
+                <ctl:SettingsCard.Description>
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource CardDescription}">
                             Controls how the NVIDIA GPU manages power when it's idle. This is the PowerMizer state,
                             NVIDIA's take on Intel's RC6 render standby, and it's a driver-registry setting
                             <Run FontWeight="SemiBold">the NVIDIA Control Panel doesn't expose</Run>. On lets the GPU
@@ -67,177 +74,133 @@
                             maximum performance," so it holds full clocks all the time, on both AC and battery.
                             <Run FontStyle="Italic">Takes effect after a restart.</Run>
                         </TextBlock>
-                        <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" MaxWidth="560" Margin="0,8,0,0"
-                                   Foreground="{StaticResource AccentYellowBrush}"
+                        <TextBlock Style="{StaticResource CardNoteWarn}"
                                    Text="Recommended On for laptops. Full clocks make more heat and drain more battery than a thermally limited laptop can sustain, so turning it Off often causes thermal throttling that makes things slower, not faster."/>
-                        <TextBlock Margin="0,8,0,0" Style="{StaticResource CaptionText}">
+                        <TextBlock Style="{StaticResource CardNote}">
                             <Run Text="Current: "/><Run Text="{Binding PowerSavingDetected, Mode=OneWay}"
                                  Foreground="{StaticResource AccentGreenBrush}" FontWeight="SemiBold"/>
                         </TextBlock>
                     </StackPanel>
-                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                        <CheckBox Style="{StaticResource ToggleSwitch}" HorizontalAlignment="Right"
-                                  IsChecked="{Binding PowerSavingOn, Mode=TwoWay}"/>
-                        <Button Content="Reset to Default" Style="{StaticResource GhostButton}"
-                                Margin="0,8,0,0" HorizontalAlignment="Right" FontSize="11" Padding="10,4"
-                                Command="{Binding ResetSettingCommand}" CommandParameter="PowerManagement"/>
-                    </StackPanel>
-                </Grid>
-            </Border>
+                </ctl:SettingsCard.Description>
+                <StackPanel>
+                    <CheckBox Style="{StaticResource ToggleSwitch}" HorizontalAlignment="Right"
+                              IsChecked="{Binding PowerSavingOn, Mode=TwoWay}"/>
+                    <Button Content="Reset to Default" Style="{StaticResource GhostButton}"
+                            Margin="0,8,0,0" HorizontalAlignment="Right" FontSize="11" Padding="10,4"
+                            Command="{Binding ResetSettingCommand}" CommandParameter="PowerManagement"/>
+                </StackPanel>
+            </ctl:SettingsCard>
 
             <!-- ===== POWER MANAGEMENT MODE ===== -->
-            <Border Style="{StaticResource Card}" Margin="0,0,0,20">
-                <StackPanel>
-                    <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                        <TextBlock Text="Power management mode" Style="{StaticResource HeadingMedium}"/>
-                        <!-- Hover for a second and the tooltip explains what the tag means. The
-                             delay keeps it from flashing up while the pointer crosses the card. -->
-                        <Border Background="#1A38BDF8" CornerRadius="4" Padding="6,1" Margin="8,1,0,0"
-                                VerticalAlignment="Center"
-                                ToolTipService.InitialShowDelay="1000"
-                                ToolTipService.ShowDuration="12000">
-                            <Border.ToolTip>
-                                <ToolTip>
-                                    <TextBlock TextWrapping="Wrap" MaxWidth="300"
-                                               Text="This one is experimental and still being tested. It might change, or be removed in a future update."/>
-                                </ToolTip>
-                            </Border.ToolTip>
-                            <TextBlock Text="EXPERIMENTAL" FontSize="9" FontWeight="SemiBold"
-                                       Foreground="{StaticResource AccentBlueBrush}"/>
+            <ctl:SettingsCard Header="Power management mode" Badge="Experimental">
+                <ctl:SettingsCard.Description>
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource CardDescription}">
+                            The same dropdown as Power management mode in the NVIDIA app's global settings. Optimal power
+                            lets the card drop its clocks whenever it can, Normal leaves the decision to the driver, and
+                            Prefer maximum performance holds full clocks all the time.
+                            <Run FontStyle="Italic">Applies straight away, no restart needed.</Run>
+                        </TextBlock>
+                        <TextBlock Style="{StaticResource CardNote}"
+                                   Text="Experimental: this one is still being tested. It might change, or be removed in a future update."/>
+
+                        <!-- Laptops only. On a thin chassis the fastest setting is often the slowest one:
+                             holding full clocks makes heat the cooler cannot shift, the card throttles, and
+                             the user ends up below where Optimal power would have left them. -->
+                        <Border Margin="0,10,0,0" Padding="12,8" CornerRadius="4" Background="#1AF59E0B"
+                                MaxWidth="680" HorizontalAlignment="Left"
+                                Visibility="{Binding IsLaptop, Converter={StaticResource BoolToVis}}">
+                            <TextBlock TextWrapping="Wrap"
+                                       Style="{StaticResource CaptionText}"
+                                       Foreground="{StaticResource AccentYellowBrush}">
+                                On a laptop, more power does not always mean more speed. Holding full clocks makes
+                                a lot of heat, and once the chassis gets hot the card throttles itself to cool down,
+                                so you can end up slower than Optimal power would have been. Save Prefer maximum
+                                performance for laptops that cool well and have room to breathe. On a bed, a couch,
+                                or a cramped desk, the gentler settings usually run faster.
+                            </TextBlock>
                         </Border>
                     </StackPanel>
-                    <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" MaxWidth="620" Margin="0,0,0,14">
-                        The same dropdown as Power management mode in the NVIDIA app's global settings. Optimal power
-                        lets the card drop its clocks whenever it can, Normal leaves the decision to the driver, and
-                        Prefer maximum performance holds full clocks all the time.
-                        <Run FontStyle="Italic">Applies straight away, no restart needed.</Run>
-                    </TextBlock>
+                </ctl:SettingsCard.Description>
+            </ctl:SettingsCard>
 
-                    <!-- Laptops only. On a thin chassis the fastest setting is often the slowest one:
-                         holding full clocks makes heat the cooler cannot shift, the card throttles, and
-                         the user ends up below where Optimal power would have left them. -->
-                    <Border Margin="0,0,0,14" Padding="12,8" CornerRadius="6" Background="#1AF59E0B"
-                            Visibility="{Binding IsLaptop, Converter={StaticResource BoolToVis}}">
-                        <TextBlock TextWrapping="Wrap" MaxWidth="620"
-                                   Style="{StaticResource CaptionText}"
-                                   Foreground="{StaticResource AccentYellowBrush}">
-                            On a laptop, more power does not always mean more speed. Holding full clocks makes
-                            a lot of heat, and once the chassis gets hot the card throttles itself to cool down,
-                            so you can end up slower than Optimal power would have been. Save Prefer maximum
-                            performance for laptops that cool well and have room to breathe. On a bed, a couch,
-                            or a cramped desk, the gentler settings usually run faster.
-                        </TextBlock>
-                    </Border>
+            <!-- Plugged in / desktop -->
+            <ctl:SettingsCard Header="When plugged in" Description="Used on AC power, and always on a desktop."
+                              Margin="24,0,0,4">
+                <ComboBox Width="270" Style="{StaticResource DarkComboBox}"
+                          ItemsSource="{Binding PowerModeOptions}"
+                          ItemTemplate="{StaticResource PowerModeItemTemplate}"
+                          SelectedValuePath="Value"
+                          SelectedValue="{Binding PowerModeAc, Mode=TwoWay}"/>
+            </ctl:SettingsCard>
 
-                    <!-- Plugged in / desktop -->
-                    <Grid Margin="0,0,0,12">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="270"/>
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,16,0">
-                            <TextBlock Text="When plugged in" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                            <TextBlock Text="Used on AC power, and always on a desktop."
-                                       Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,2,0,0"/>
+            <!-- On battery: laptops only -->
+            <Grid Visibility="{Binding IsLaptop, Converter={StaticResource BoolToVis}}">
+                <ctl:SettingsCard Header="On battery" Margin="24,0,0,4"
+                                  Description="Used when you're unplugged. Optimal power is usually the right pick here, since full clocks on battery mostly make heat and drain runtime.">
+                    <ComboBox Width="270" Style="{StaticResource DarkComboBox}"
+                              ItemsSource="{Binding PowerModeOptions}"
+                              ItemTemplate="{StaticResource PowerModeItemTemplate}"
+                              SelectedValuePath="Value"
+                              SelectedValue="{Binding PowerModeBattery, Mode=TwoWay}"/>
+                </ctl:SettingsCard>
+            </Grid>
+
+            <!-- ══════════════ FRAME RATE ══════════════ -->
+            <StackPanel Visibility="{Binding IsFpsCapAvailable, Converter={StaticResource BoolToVis}}">
+                <TextBlock Text="Frame rate" Style="{StaticResource SettingsGroupHeader}"/>
+
+                <ctl:SettingsCard Header="Max Frame Rate (FPS cap)">
+                    <ctl:SettingsCard.Description>
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource CardDescription}">
+                                Caps your framerate driver-wide with NVIDIA's own frame limiter, the
+                                <Run FontWeight="SemiBold">same setting the NVIDIA app uses</Run> for Max Frame Rate.
+                                A cap near your refresh rate cuts GPU heat, fan noise, and power draw with no visible
+                                downside. Allowed range is 20 to 999. Set it to 0 (or click Reset) to remove the cap.
+                            </TextBlock>
+
+                            <!-- Real current value, read live from the driver -->
+                            <TextBlock Style="{StaticResource CardNote}">
+                                <Run Text="{Binding FpsCapCurrentText, Mode=OneWay}"
+                                     Foreground="{StaticResource AccentGreenBrush}" FontWeight="SemiBold"/>
+                            </TextBlock>
+
+                            <TextBlock Text="FPS cap  (20 to 999, or 0 for off)" Style="{StaticResource CaptionText}" Margin="0,14,0,4"/>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBox Width="110"
+                                         Text="{Binding FpsCapInput, UpdateSourceTrigger=PropertyChanged}"
+                                         Style="{StaticResource DarkTextBox}"/>
+                                <Button Content="Monitor refresh rate" Command="{Binding UseMonitorRefreshCommand}"
+                                        Style="{StaticResource GhostButton}" Padding="12,8" Margin="8,0,0,0"/>
+                            </StackPanel>
+
+                            <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                                <Button Content="Apply" Command="{Binding ApplyFpsCapCommand}"
+                                        Style="{StaticResource PrimaryButton}" Margin="0,0,8,0"/>
+                                <Button Content="Reset" Command="{Binding ResetFpsCapCommand}"
+                                        Style="{StaticResource GhostButton}"/>
+                            </StackPanel>
                         </StackPanel>
-                        <ComboBox Grid.Column="1" VerticalAlignment="Center"
-                                  Style="{StaticResource DarkComboBox}"
-                                  ItemsSource="{Binding PowerModeOptions}"
-                                  ItemTemplate="{StaticResource PowerModeItemTemplate}"
-                                  SelectedValuePath="Value"
-                                  SelectedValue="{Binding PowerModeAc, Mode=TwoWay}"/>
-                    </Grid>
+                    </ctl:SettingsCard.Description>
+                </ctl:SettingsCard>
+            </StackPanel>
 
-                    <!-- On battery — laptops only -->
-                    <Grid Visibility="{Binding IsLaptop, Converter={StaticResource BoolToVis}}">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="270"/>
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,16,0">
-                            <TextBlock Text="On battery" Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                            <TextBlock Text="Used when you're unplugged. Optimal power is usually the right pick here, since full clocks on battery mostly make heat and drain runtime."
-                                       Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,2,0,0"/>
-                        </StackPanel>
-                        <ComboBox Grid.Column="1" VerticalAlignment="Center"
-                                  Style="{StaticResource DarkComboBox}"
-                                  ItemsSource="{Binding PowerModeOptions}"
-                                  ItemTemplate="{StaticResource PowerModeItemTemplate}"
-                                  SelectedValuePath="Value"
-                                  SelectedValue="{Binding PowerModeBattery, Mode=TwoWay}"/>
-                    </Grid>
-                </StackPanel>
-            </Border>
+            <!-- ══════════════ KEEP YOUR SETTINGS + REVERT ALL ══════════════ -->
+            <TextBlock Text="Keep your settings" Style="{StaticResource SettingsGroupHeader}"/>
 
-            <!-- ===== MAX FRAME RATE (FPS CAP) ===== -->
-            <Border Style="{StaticResource Card}" Margin="0,0,0,20"
-                    Visibility="{Binding IsFpsCapAvailable, Converter={StaticResource BoolToVis}}">
-                <StackPanel>
-                    <TextBlock Text="Max Frame Rate (FPS cap)" Style="{StaticResource HeadingMedium}" Margin="0,0,0,4"/>
-                    <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" MaxWidth="600">
-                        Caps your framerate driver-wide with NVIDIA's own frame limiter, the
-                        <Run FontWeight="SemiBold">same setting the NVIDIA app uses</Run> for Max Frame Rate.
-                        A cap near your refresh rate cuts GPU heat, fan noise, and power draw with no visible
-                        downside. Allowed range is 20 to 999. Set it to 0 (or click Reset) to remove the cap.
-                    </TextBlock>
+            <ctl:SettingsCard Header="Re-apply after driver updates"
+                              Description="NVIDIA driver updates can wipe this setting. When on, Systema re-applies your choice a few seconds after startup.">
+                <CheckBox Style="{StaticResource ToggleSwitch}"
+                          IsChecked="{Binding ReapplyAfterDriverUpdate, Mode=TwoWay}"/>
+            </ctl:SettingsCard>
 
-                    <!-- Real current value, read live from the driver -->
-                    <TextBlock Margin="0,10,0,0" Style="{StaticResource CaptionText}">
-                        <Run Text="{Binding FpsCapCurrentText, Mode=OneWay}"
-                             Foreground="{StaticResource AccentGreenBrush}" FontWeight="SemiBold"/>
-                    </TextBlock>
-
-                    <TextBlock Text="FPS cap  (20 to 999, or 0 for off)" Style="{StaticResource CaptionText}" Margin="0,14,0,4"/>
-                    <StackPanel Orientation="Horizontal">
-                        <TextBox Width="110"
-                                 Text="{Binding FpsCapInput, UpdateSourceTrigger=PropertyChanged}"
-                                 Style="{StaticResource DarkTextBox}"/>
-                        <Button Content="Monitor refresh rate" Command="{Binding UseMonitorRefreshCommand}"
-                                Style="{StaticResource GhostButton}" Padding="12,8" Margin="10,0,0,0"/>
-                    </StackPanel>
-
-                    <StackPanel Orientation="Horizontal" Margin="0,14,0,0">
-                        <Button Content="Apply" Command="{Binding ApplyFpsCapCommand}"
-                                Style="{StaticResource PrimaryButton}" Margin="0,0,10,0"/>
-                        <Button Content="Reset" Command="{Binding ResetFpsCapCommand}"
-                                Style="{StaticResource GhostButton}"/>
-                    </StackPanel>
-                </StackPanel>
-            </Border>
-
-            <!-- ===== PERSISTENCE + REVERT ALL ===== -->
-            <Border Style="{StaticResource Card}">
-                <StackPanel>
-                    <Grid Margin="0,0,0,12">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" Margin="0,0,20,0">
-                            <TextBlock Text="Re-apply after driver updates" Style="{StaticResource HeadingMedium}" Margin="0,0,0,4"/>
-                            <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" MaxWidth="560"
-                                       Text="NVIDIA driver updates can wipe this setting. When on, Systema re-applies your choice a few seconds after startup."/>
-                        </StackPanel>
-                        <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}" VerticalAlignment="Center"
-                                  IsChecked="{Binding ReapplyAfterDriverUpdate, Mode=TwoWay}"/>
-                    </Grid>
-
-                    <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,4,0,12"/>
-
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" VerticalAlignment="Center" Margin="0,0,20,0"
-                                   TextWrapping="Wrap" Style="{StaticResource CaptionText}"
-                                   Text="Restore every NVIDIA power setting to the driver's defaults."/>
-                        <Button Grid.Column="1" Content="Revert All Nvidia Settings to Default"
-                                Style="{StaticResource GhostButton}" Padding="14,8"
-                                Command="{Binding RevertAllCommand}"/>
-                    </Grid>
-                </StackPanel>
-            </Border>
+            <ctl:SettingsCard Header="Revert all"
+                              Description="Restore every NVIDIA power setting to the driver's defaults.">
+                <Button Content="Revert All Nvidia Settings to Default"
+                        Style="{StaticResource GhostButton}" Padding="14,8"
+                        Command="{Binding RevertAllCommand}"/>
+            </ctl:SettingsCard>
 
             <!-- ===== STATUS ===== -->
             <TextBlock Text="{Binding StatusMessage}" Style="{StaticResource CaptionText}"
