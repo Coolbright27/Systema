@@ -312,7 +312,7 @@
                              scrolls with the items. The indicator is drawn on a Canvas above the
                              list and moved by MainWindow.xaml.cs when ActiveSection changes. -->
                         <Grid>
-                        <StackPanel x:Name="NavList" Margin="8,12,8,0">
+                        <StackPanel x:Name="NavList" Margin="8,12,14,0">
                             <!-- Crisp vector line-icons. Shared style sets the stroke look; each
                                  Path supplies its own 24x24 geometry, scaled by a Viewbox so the
                                  stroke stays sharp at any DPI. -->
@@ -527,7 +527,7 @@
                                 Background="{StaticResource BgCardBrush}"
                                 BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="8">
                             <StackPanel>
-                                <TextBlock Text="Systema v0.7.349" FontSize="11" FontWeight="SemiBold"
+                                <TextBlock Text="Systema v0.7.350" FontSize="11" FontWeight="SemiBold"
                                            Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,7"/>
 
                                 <!-- Live status: green check + status text from the updater -->

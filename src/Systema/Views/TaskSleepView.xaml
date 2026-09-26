@@ -607,8 +607,10 @@
                          (around line 194) or every column label drifts off its
                          values. SINCE in particular needs the 110 px width because
                          the data row uses that slot for "Napping for Xm Ys" /
-                         skip-reason text, not just a short duration. -->
-                    <Grid Margin="0,0,0,6">
+                         skip-reason text, not just a short duration.
+                         The 14 px right margin here and on the rows keeps the "···" buttons
+                         clear of the scroll bar, which floats over the list's right edge. -->
+                    <Grid Margin="0,0,14,6">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="52"/>
@@ -649,7 +651,7 @@
                     <ScrollViewer MaxHeight="230"
                                   VerticalScrollBarVisibility="Auto"
                                   HorizontalScrollBarVisibility="Disabled">
-                        <ItemsControl ItemsSource="{Binding LiveProcesses}">
+                        <ItemsControl ItemsSource="{Binding LiveProcesses}" Margin="0,0,14,0">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
                                     <Grid Margin="0,0,0,4" MinHeight="24">

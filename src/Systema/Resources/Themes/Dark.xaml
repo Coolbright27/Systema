@@ -537,20 +537,79 @@
     <!-- ============================================================ -->
     <!--  SCROLLBAR                                                   -->
     <!-- ============================================================ -->
-    <!-- Reusable thumb: rounded pill that brightens on hover/drag and never
-         shrinks below a usable size on very long content (MinHeight/MinWidth). -->
+    <!-- Windows 11 scroll bars, as in the Settings app:
+           • they float over the content instead of taking a column of their own
+           • idle, the thumb is a 2px line; point at the bar and it widens to 6px on a
+             rounded track with small arrows, then narrows again shortly after you leave
+           • the whole bar fades out when you stop scrolling or moving the mouse over the
+             area (Controls/OverlayScroll.cs), unless Windows' "Always show scrollbars" is on
+         MinWidth/MinHeight are zeroed on purpose: WPF's built-in theme gives every
+         scroll bar a 17px minimum, which is what made the old 8px bars look chunky. -->
+    <Color x:Key="ScrollInkColor">#8BFFFFFF</Color>
+    <SolidColorBrush x:Key="ScrollInkBrush" Color="{StaticResource ScrollInkColor}"/>
+    <SolidColorBrush x:Key="ScrollInkHoverBrush" Color="#C5FFFFFF"/>
+    <SolidColorBrush x:Key="ScrollInkPressedBrush" Color="#E6FFFFFF"/>
+    <SolidColorBrush x:Key="ScrollTrackBrush" Color="#2C2C2C"/>
+    <StreamGeometry x:Key="ScrollArrowUp">M0,4 L4,0 L8,4 Z</StreamGeometry>
+    <StreamGeometry x:Key="ScrollArrowDown">M0,0 L8,0 L4,4 Z</StreamGeometry>
+    <StreamGeometry x:Key="ScrollArrowLeft">M4,0 L4,8 L0,4 Z</StreamGeometry>
+    <StreamGeometry x:Key="ScrollArrowRight">M0,0 L4,4 L0,8 Z</StreamGeometry>
+
     <Style x:Key="ScrollThumb" TargetType="Thumb">
+        <Setter Property="OverridesDefaultStyle" Value="True"/>
+        <Setter Property="Focusable" Value="False"/>
+        <Setter Property="IsTabStop" Value="False"/>
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Thumb">
-                    <Border x:Name="ThumbBorder" Background="#4D4D4D" CornerRadius="3"
-                            MinHeight="24" MinWidth="6"/>
+                    <Border x:Name="ThumbBorder" Background="{StaticResource ScrollInkBrush}" CornerRadius="3"/>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="ThumbBorder" Property="Background" Value="#626262"/>
+                            <Setter TargetName="ThumbBorder" Property="Background" Value="{StaticResource ScrollInkHoverBrush}"/>
                         </Trigger>
                         <Trigger Property="IsDragging" Value="True">
-                            <Setter TargetName="ThumbBorder" Property="Background" Value="#767676"/>
+                            <Setter TargetName="ThumbBorder" Property="Background" Value="{StaticResource ScrollInkPressedBrush}"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- The empty track either side of the thumb: click to page up or down. -->
+    <Style x:Key="ScrollPageButton" TargetType="RepeatButton">
+        <Setter Property="OverridesDefaultStyle" Value="True"/>
+        <Setter Property="Focusable" Value="False"/>
+        <Setter Property="IsTabStop" Value="False"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="RepeatButton">
+                    <Border Background="Transparent"/>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- The small arrows at each end. Content carries the arrow's geometry. -->
+    <Style x:Key="ScrollArrowButton" TargetType="RepeatButton">
+        <Setter Property="OverridesDefaultStyle" Value="True"/>
+        <Setter Property="Focusable" Value="False"/>
+        <Setter Property="IsTabStop" Value="False"/>
+        <Setter Property="Foreground" Value="{StaticResource ScrollInkBrush}"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="RepeatButton">
+                    <Border Background="Transparent">
+                        <Path Data="{Binding Content, RelativeSource={RelativeSource TemplatedParent}}"
+                              Fill="{TemplateBinding Foreground}" Stretch="Uniform"
+                              Width="7" Height="7" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter Property="Foreground" Value="{StaticResource ScrollInkHoverBrush}"/>
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter Property="Foreground" Value="{StaticResource ScrollInkPressedBrush}"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -560,42 +619,206 @@
 
     <Style TargetType="ScrollBar">
         <Setter Property="Background" Value="Transparent"/>
-        <Setter Property="Width" Value="8"/>
+        <Setter Property="Focusable" Value="False"/>
+        <Setter Property="IsTabStop" Value="False"/>
+        <Setter Property="MinWidth" Value="0"/>
+        <Setter Property="MinHeight" Value="0"/>
+        <Setter Property="Width" Value="12"/>
+        <Setter Property="Height" Value="Auto"/>
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="ScrollBar">
-                    <Grid>
-                        <Track x:Name="PART_Track" IsDirectionReversed="True">
-                            <Track.Thumb>
-                                <Thumb Style="{StaticResource ScrollThumb}"/>
-                            </Track.Thumb>
-                        </Track>
+                    <Grid Background="Transparent" SnapsToDevicePixels="True">
+                        <Border x:Name="TrackBg" Background="{StaticResource ScrollTrackBrush}" CornerRadius="6" Opacity="0"/>
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="12"/>
+                                <RowDefinition Height="*"/>
+                                <RowDefinition Height="12"/>
+                            </Grid.RowDefinitions>
+                            <RepeatButton x:Name="LineUp" Grid.Row="0" Opacity="0"
+                                          Style="{StaticResource ScrollArrowButton}"
+                                          Content="{StaticResource ScrollArrowUp}"
+                                          Command="ScrollBar.LineUpCommand"/>
+                            <Track x:Name="PART_Track" Grid.Row="1" IsDirectionReversed="True">
+                                <Track.DecreaseRepeatButton>
+                                    <RepeatButton Style="{StaticResource ScrollPageButton}" Command="ScrollBar.PageUpCommand"/>
+                                </Track.DecreaseRepeatButton>
+                                <Track.IncreaseRepeatButton>
+                                    <RepeatButton Style="{StaticResource ScrollPageButton}" Command="ScrollBar.PageDownCommand"/>
+                                </Track.IncreaseRepeatButton>
+                                <Track.Thumb>
+                                    <Thumb x:Name="Thumb" Style="{StaticResource ScrollThumb}"
+                                           Width="2" HorizontalAlignment="Center"/>
+                                </Track.Thumb>
+                            </Track>
+                            <RepeatButton x:Name="LineDown" Grid.Row="2" Opacity="0"
+                                          Style="{StaticResource ScrollArrowButton}"
+                                          Content="{StaticResource ScrollArrowDown}"
+                                          Command="ScrollBar.LineDownCommand"/>
+                        </Grid>
                     </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Trigger.EnterActions>
+                                <BeginStoryboard HandoffBehavior="SnapshotAndReplace">
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetName="Thumb" Storyboard.TargetProperty="Width"
+                                                         To="6" Duration="0:0:0.12"/>
+                                        <DoubleAnimation Storyboard.TargetName="TrackBg" Storyboard.TargetProperty="Opacity"
+                                                         To="1" Duration="0:0:0.12"/>
+                                        <DoubleAnimation Storyboard.TargetName="LineUp" Storyboard.TargetProperty="Opacity"
+                                                         To="1" Duration="0:0:0.12"/>
+                                        <DoubleAnimation Storyboard.TargetName="LineDown" Storyboard.TargetProperty="Opacity"
+                                                         To="1" Duration="0:0:0.12"/>
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </Trigger.EnterActions>
+                            <!-- Stays wide for half a second after the pointer leaves, like Windows. -->
+                            <Trigger.ExitActions>
+                                <BeginStoryboard HandoffBehavior="SnapshotAndReplace">
+                                    <Storyboard>
+                                        <DoubleAnimationUsingKeyFrames Storyboard.TargetName="Thumb" Storyboard.TargetProperty="Width">
+                                            <LinearDoubleKeyFrame KeyTime="0:0:0.5" Value="6"/>
+                                            <LinearDoubleKeyFrame KeyTime="0:0:0.65" Value="2"/>
+                                        </DoubleAnimationUsingKeyFrames>
+                                        <DoubleAnimationUsingKeyFrames Storyboard.TargetName="TrackBg" Storyboard.TargetProperty="Opacity">
+                                            <LinearDoubleKeyFrame KeyTime="0:0:0.5" Value="1"/>
+                                            <LinearDoubleKeyFrame KeyTime="0:0:0.65" Value="0"/>
+                                        </DoubleAnimationUsingKeyFrames>
+                                        <DoubleAnimationUsingKeyFrames Storyboard.TargetName="LineUp" Storyboard.TargetProperty="Opacity">
+                                            <LinearDoubleKeyFrame KeyTime="0:0:0.5" Value="1"/>
+                                            <LinearDoubleKeyFrame KeyTime="0:0:0.65" Value="0"/>
+                                        </DoubleAnimationUsingKeyFrames>
+                                        <DoubleAnimationUsingKeyFrames Storyboard.TargetName="LineDown" Storyboard.TargetProperty="Opacity">
+                                            <LinearDoubleKeyFrame KeyTime="0:0:0.5" Value="1"/>
+                                            <LinearDoubleKeyFrame KeyTime="0:0:0.65" Value="0"/>
+                                        </DoubleAnimationUsingKeyFrames>
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </Trigger.ExitActions>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
                 </ControlTemplate>
             </Setter.Value>
         </Setter>
-        <!-- Horizontal orientation: swap the dimensions and un-reverse the track
-             so dark-themed horizontal bars match (previously fell back to white
-             Win11 chrome). -->
         <Style.Triggers>
             <Trigger Property="Orientation" Value="Horizontal">
                 <Setter Property="Width" Value="Auto"/>
-                <Setter Property="Height" Value="8"/>
+                <Setter Property="Height" Value="12"/>
                 <Setter Property="Template">
                     <Setter.Value>
                         <ControlTemplate TargetType="ScrollBar">
-                            <Grid>
-                                <Track x:Name="PART_Track" IsDirectionReversed="False">
-                                    <Track.Thumb>
-                                        <Thumb Style="{StaticResource ScrollThumb}"/>
-                                    </Track.Thumb>
-                                </Track>
+                            <Grid Background="Transparent" SnapsToDevicePixels="True">
+                                <Border x:Name="TrackBg" Background="{StaticResource ScrollTrackBrush}" CornerRadius="6" Opacity="0"/>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="12"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="12"/>
+                                    </Grid.ColumnDefinitions>
+                                    <RepeatButton x:Name="LineLeft" Grid.Column="0" Opacity="0"
+                                                  Style="{StaticResource ScrollArrowButton}"
+                                                  Content="{StaticResource ScrollArrowLeft}"
+                                                  Command="ScrollBar.LineLeftCommand"/>
+                                    <Track x:Name="PART_Track" Grid.Column="1" IsDirectionReversed="False">
+                                        <Track.DecreaseRepeatButton>
+                                            <RepeatButton Style="{StaticResource ScrollPageButton}" Command="ScrollBar.PageLeftCommand"/>
+                                        </Track.DecreaseRepeatButton>
+                                        <Track.IncreaseRepeatButton>
+                                            <RepeatButton Style="{StaticResource ScrollPageButton}" Command="ScrollBar.PageRightCommand"/>
+                                        </Track.IncreaseRepeatButton>
+                                        <Track.Thumb>
+                                            <Thumb x:Name="Thumb" Style="{StaticResource ScrollThumb}"
+                                                   Height="2" VerticalAlignment="Center"/>
+                                        </Track.Thumb>
+                                    </Track>
+                                    <RepeatButton x:Name="LineRight" Grid.Column="2" Opacity="0"
+                                                  Style="{StaticResource ScrollArrowButton}"
+                                                  Content="{StaticResource ScrollArrowRight}"
+                                                  Command="ScrollBar.LineRightCommand"/>
+                                </Grid>
                             </Grid>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Trigger.EnterActions>
+                                        <BeginStoryboard HandoffBehavior="SnapshotAndReplace">
+                                            <Storyboard>
+                                                <DoubleAnimation Storyboard.TargetName="Thumb" Storyboard.TargetProperty="Height"
+                                                                 To="6" Duration="0:0:0.12"/>
+                                                <DoubleAnimation Storyboard.TargetName="TrackBg" Storyboard.TargetProperty="Opacity"
+                                                                 To="1" Duration="0:0:0.12"/>
+                                                <DoubleAnimation Storyboard.TargetName="LineLeft" Storyboard.TargetProperty="Opacity"
+                                                                 To="1" Duration="0:0:0.12"/>
+                                                <DoubleAnimation Storyboard.TargetName="LineRight" Storyboard.TargetProperty="Opacity"
+                                                                 To="1" Duration="0:0:0.12"/>
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </Trigger.EnterActions>
+                                    <Trigger.ExitActions>
+                                        <BeginStoryboard HandoffBehavior="SnapshotAndReplace">
+                                            <Storyboard>
+                                                <DoubleAnimationUsingKeyFrames Storyboard.TargetName="Thumb" Storyboard.TargetProperty="Height">
+                                                    <LinearDoubleKeyFrame KeyTime="0:0:0.5" Value="6"/>
+                                                    <LinearDoubleKeyFrame KeyTime="0:0:0.65" Value="2"/>
+                                                </DoubleAnimationUsingKeyFrames>
+                                                <DoubleAnimationUsingKeyFrames Storyboard.TargetName="TrackBg" Storyboard.TargetProperty="Opacity">
+                                                    <LinearDoubleKeyFrame KeyTime="0:0:0.5" Value="1"/>
+                                                    <LinearDoubleKeyFrame KeyTime="0:0:0.65" Value="0"/>
+                                                </DoubleAnimationUsingKeyFrames>
+                                                <DoubleAnimationUsingKeyFrames Storyboard.TargetName="LineLeft" Storyboard.TargetProperty="Opacity">
+                                                    <LinearDoubleKeyFrame KeyTime="0:0:0.5" Value="1"/>
+                                                    <LinearDoubleKeyFrame KeyTime="0:0:0.65" Value="0"/>
+                                                </DoubleAnimationUsingKeyFrames>
+                                                <DoubleAnimationUsingKeyFrames Storyboard.TargetName="LineRight" Storyboard.TargetProperty="Opacity">
+                                                    <LinearDoubleKeyFrame KeyTime="0:0:0.5" Value="1"/>
+                                                    <LinearDoubleKeyFrame KeyTime="0:0:0.65" Value="0"/>
+                                                </DoubleAnimationUsingKeyFrames>
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </Trigger.ExitActions>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
                         </ControlTemplate>
                     </Setter.Value>
                 </Setter>
             </Trigger>
         </Style.Triggers>
+    </Style>
+
+    <!-- Every ScrollViewer: content fills the whole area and the bars float on top at the
+         right and bottom edges (pages keep 32px side margins, so nothing sits under them).
+         Same part names and bindings as WPF's own template, so lists, text boxes and
+         dropdowns scroll exactly as before. -->
+    <Style TargetType="ScrollViewer">
+        <Setter Property="ctl:OverlayScroll.AutoHide" Value="True"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ScrollViewer">
+                    <Grid Background="{TemplateBinding Background}">
+                        <ScrollContentPresenter x:Name="PART_ScrollContentPresenter"
+                                                CanContentScroll="{TemplateBinding CanContentScroll}"
+                                                CanHorizontallyScroll="False" CanVerticallyScroll="False"
+                                                Content="{TemplateBinding Content}"
+                                                ContentTemplate="{TemplateBinding ContentTemplate}"
+                                                Margin="{TemplateBinding Padding}"/>
+                        <ScrollBar x:Name="PART_VerticalScrollBar" HorizontalAlignment="Right" Margin="0,2,1,2"
+                                   AutomationProperties.AutomationId="VerticalScrollBar" Cursor="Arrow"
+                                   Minimum="0" Maximum="{TemplateBinding ScrollableHeight}"
+                                   ViewportSize="{TemplateBinding ViewportHeight}"
+                                   Value="{Binding VerticalOffset, Mode=OneWay, RelativeSource={RelativeSource TemplatedParent}}"
+                                   Visibility="{TemplateBinding ComputedVerticalScrollBarVisibility}"/>
+                        <ScrollBar x:Name="PART_HorizontalScrollBar" Orientation="Horizontal"
+                                   VerticalAlignment="Bottom" Margin="2,0,2,1"
+                                   AutomationProperties.AutomationId="HorizontalScrollBar" Cursor="Arrow"
+                                   Minimum="0" Maximum="{TemplateBinding ScrollableWidth}"
+                                   ViewportSize="{TemplateBinding ViewportWidth}"
+                                   Value="{Binding HorizontalOffset, Mode=OneWay, RelativeSource={RelativeSource TemplatedParent}}"
+                                   Visibility="{TemplateBinding ComputedHorizontalScrollBarVisibility}"/>
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
     </Style>
 
     <!-- ============================================================ -->
