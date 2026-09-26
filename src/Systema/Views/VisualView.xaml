@@ -334,24 +334,14 @@
                                 Fine-tune each of the 15 Windows animation effects. The style picker above covers most people.
                             </TextBlock>
                         </StackPanel>
-                        <TextBlock Grid.Column="1" VerticalAlignment="Center" Margin="12,0,0,0"
-                                   Foreground="{StaticResource TextSecondaryBrush}" FontSize="12">
-                            <TextBlock.Style>
-                                <Style TargetType="TextBlock">
-                                    <Setter Property="Text" Value="&#x25BC;"/>
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding ShowIndividualControls}" Value="True">
-                                            <Setter Property="Text" Value="&#x25B2;"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </TextBlock.Style>
-                        </TextBlock>
+                        <Path Grid.Column="1" Style="{StaticResource ExpanderChevron}" Margin="12,0,2,0"
+                              ctl:Motion.Flipped="{Binding ShowIndividualControls}"/>
                     </Grid>
                 </Button>
             </Border>
 
-            <StackPanel Visibility="{Binding ShowIndividualControls, Converter={StaticResource BoolToVis}}">
+            <StackPanel ctl:Motion.RevealOnShow="True"
+                        Visibility="{Binding ShowIndividualControls, Converter={StaticResource BoolToVis}}">
 
                 <!-- Apply / Cancel: shown when changes are pending -->
                 <Border Style="{StaticResource ListRowCard}" BorderBrush="{StaticResource AccentYellowBrush}"

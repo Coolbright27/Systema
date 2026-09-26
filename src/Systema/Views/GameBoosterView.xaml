@@ -216,23 +216,12 @@
                             </Style>
                         </TextBlock.Style>
                     </TextBlock>
-                    <TextBlock FontSize="10" Margin="7,0,0,0" VerticalAlignment="Center"
-                               Foreground="{StaticResource TextSecondaryBrush}">
-                        <TextBlock.Style>
-                            <Style TargetType="TextBlock">
-                                <Setter Property="Text" Value="&#x25BC;"/>
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding ShowDetection}" Value="True">
-                                        <Setter Property="Text" Value="&#x25B2;"/>
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </TextBlock.Style>
-                    </TextBlock>
+                    <Path Style="{StaticResource ExpanderChevron}" Margin="9,1,0,0"
+                          ctl:Motion.Flipped="{Binding ShowDetection}"/>
                 </StackPanel>
             </Button>
 
-            <StackPanel Margin="0,4,0,0"
+            <StackPanel Margin="0,4,0,0" ctl:Motion.RevealOnShow="True"
                         Visibility="{Binding ShowDetection, Converter={StaticResource BoolToVis}}">
 
                 <ctl:SettingsCard Header="Fallback sweep">

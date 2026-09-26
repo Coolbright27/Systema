@@ -71,6 +71,38 @@ public partial class MainWindow : Window
         viewModel.PropertyChanged += OnViewModelPropertyChanged;
         Loaded += (_, _) => UpdateNavIndicator(animate: false);
         NavList.SizeChanged += (_, _) => UpdateNavIndicator(animate: false);
+
+        // Page motion (Controls/Motion.cs): cards cascade in when a page opens, and the page
+        // scrolls with an eased glide instead of WPF's 48 px jumps.
+        Systema.Controls.Motion.PageOpened();
+        PageHost.TargetUpdated += (_, _) => Systema.Controls.Motion.PageOpened();
+        PageHost.PreviewMouseWheel += PageHost_PreviewMouseWheel;
+    }
+
+    // ── Smooth page scrolling ────────────────────────────────────────────────
+    private void PageHost_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
+    {
+        try
+        {
+            var page = FindPageScroller(PageHost);
+            if (page != null && Systema.Controls.SmoothScroll.TryHandle(page, e)) e.Handled = true;
+        }
+        catch { /* fall back to WPF's own scrolling */ }
+    }
+
+    /// <summary>The page's own ScrollViewer: the first one under the page host, breadth-first.</summary>
+    private static WpfControls.ScrollViewer? FindPageScroller(DependencyObject root)
+    {
+        var queue = new System.Collections.Generic.Queue<DependencyObject>();
+        queue.Enqueue(root);
+        while (queue.Count > 0)
+        {
+            var d = queue.Dequeue();
+            if (d is WpfControls.ScrollViewer sv && !ReferenceEquals(d, root)) return sv;
+            int n = Media.VisualTreeHelper.GetChildrenCount(d);
+            for (int i = 0; i < n; i++) queue.Enqueue(Media.VisualTreeHelper.GetChild(d, i));
+        }
+        return null;
     }
 
     // ── Nav selection indicator ──────────────────────────────────────────────

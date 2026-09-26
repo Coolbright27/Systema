@@ -217,6 +217,20 @@
     <!-- ============================================================ -->
     <!--  EXPANDER BUTTON  (transparent, borderless section header)   -->
     <!-- ============================================================ -->
+    <!-- Windows 11 expander chevron. Pair with ctl:Motion.Flipped="{Binding IsOpen}" and it
+         turns to point up while the section is open. -->
+    <Style x:Key="ExpanderChevron" TargetType="Path">
+        <Setter Property="Data" Value="M 0 0 L 4.5 4.5 L 9 0"/>
+        <Setter Property="Width" Value="9"/>
+        <Setter Property="Height" Value="5"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+        <Setter Property="Stroke" Value="{StaticResource TextSecondaryBrush}"/>
+        <Setter Property="StrokeThickness" Value="1.2"/>
+        <Setter Property="StrokeStartLineCap" Value="Round"/>
+        <Setter Property="StrokeEndLineCap" Value="Round"/>
+        <Setter Property="StrokeLineJoin" Value="Round"/>
+    </Style>
+
     <Style x:Key="ExpanderButton" TargetType="Button">
         <Setter Property="Background"                 Value="Transparent"/>
         <Setter Property="BorderThickness"            Value="0"/>
@@ -337,6 +351,8 @@
         <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="CornerRadius" Value="8"/>
         <Setter Property="Padding" Value="20"/>
+        <!-- Fades and rises into place when its page opens (Controls/Motion.cs). -->
+        <Setter Property="ctl:Motion.Entrance" Value="True"/>
     </Style>
 
     <!-- ============================================================ -->
@@ -1105,6 +1121,7 @@
         <Setter Property="CornerRadius" Value="6"/>
         <Setter Property="Padding" Value="16,12"/>
         <Setter Property="Margin" Value="0,0,0,4"/>
+        <Setter Property="ctl:Motion.Entrance" Value="True"/>
     </Style>
 
     <!-- Group header above a run of cards: Windows 11 "Body Strong". -->
@@ -1150,6 +1167,7 @@
         <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
         <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="Padding" Value="18,14"/>
+        <Setter Property="ctl:Motion.Entrance" Value="True"/>
         <Setter Property="MinHeight" Value="68"/>
         <Setter Property="Margin" Value="0,0,0,4"/>
         <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
