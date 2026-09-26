@@ -40,6 +40,8 @@
 
     <Window.Resources>
         <conv:BoolToVisibilityConverter x:Key="BoolToVis"/>
+        <!-- Builds each page once and reuses it (Views/PageViewCache.cs), from the DataTemplates below. -->
+        <views:PageViewCache x:Key="PageViews"/>
         <DataTemplate DataType="{x:Type vm:DashboardViewModel}">
             <views:DashboardView/>
         </DataTemplate>
@@ -596,7 +598,7 @@
                      nothing and the periodic auto-refresh never re-animates the page. -->
                 <ContentControl x:Name="PageHost"
                                 Grid.Column="1"
-                                Content="{Binding CurrentView, NotifyOnTargetUpdated=True}"
+                                Content="{Binding CurrentView, NotifyOnTargetUpdated=True, Converter={StaticResource PageViews}}"
                                 Background="Transparent">
                     <ContentControl.RenderTransform>
                         <TranslateTransform/>

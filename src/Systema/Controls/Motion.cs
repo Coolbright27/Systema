@@ -47,10 +47,18 @@ public static class Motion
     // When the current page opened. Entrance only plays for cards that load right after that,
     // so a list that rebuilds its rows on a refresh timer never flickers them back in.
     private static long _pageOpenedAt = Environment.TickCount64;
+    private static bool _entranceAllowed = true;
     private const int EntranceWindowMs = 700;
 
-    /// <summary>Called by MainWindow each time a page is shown.</summary>
-    public static void PageOpened() => _pageOpenedAt = Environment.TickCount64;
+    /// <summary>
+    /// Called by MainWindow each time a page is shown. <paramref name="animate"/> is false for the
+    /// first page after launch, which appears without the cascade.
+    /// </summary>
+    public static void PageOpened(bool animate = true)
+    {
+        _pageOpenedAt = Environment.TickCount64;
+        _entranceAllowed = animate;
+    }
 
     private static void OnEntranceChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
     {
@@ -64,7 +72,7 @@ public static class Motion
         if (sender is not FrameworkElement fe) return;
         if ((bool)fe.GetValue(PlayedProperty)) return;     // once per element, not on every re-load
         fe.SetValue(PlayedProperty, true);
-        if (!Enabled || !fe.IsVisible) return;
+        if (!Enabled || !_entranceAllowed || !fe.IsVisible) return;
         if (Environment.TickCount64 - _pageOpenedAt > EntranceWindowMs) return;
 
         try
@@ -219,6 +227,14 @@ public static class SmoothScroll
         };
         page.BeginAnimation(OffsetProperty, anim);
         return true;
+    }
+
+    /// <summary>Stops any glide in progress and puts the page back at the top.</summary>
+    public static void ResetToTop(ScrollViewer page)
+    {
+        page.BeginAnimation(OffsetProperty, null);
+        page.SetValue(TargetProperty, double.NaN);
+        page.ScrollToVerticalOffset(0);
     }
 
     private static bool InnerScrollerWants(DependencyObject? source, ScrollViewer page, int delta)

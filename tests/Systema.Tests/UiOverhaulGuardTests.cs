@@ -232,7 +232,9 @@ public class UiOverhaulGuardTests
     public void PageChanges_Animate()
     {
         string shell = StripXmlComments(ReadSrc("Views", "MainWindow.xaml"));
-        Assert.Contains("{Binding CurrentView, NotifyOnTargetUpdated=True}", shell);
+        // The page host binds CurrentView (through PageViewCache) and still announces changes.
+        Assert.Contains("{Binding CurrentView, NotifyOnTargetUpdated=True", shell);
+        Assert.Contains("Converter={StaticResource PageViews}", shell);
         Assert.Contains(@"RoutedEvent=""Binding.TargetUpdated""", shell);
     }
 

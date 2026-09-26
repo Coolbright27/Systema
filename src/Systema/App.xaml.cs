@@ -356,6 +356,8 @@ public partial class App : Application
 
         // ── Start CrashGuard watchdog ──
         CrashGuard.Start();
+        // Shorter stalls ("hitches") go to the session log as [UiLag] lines (Core/UiLagMonitor.cs).
+        UiLagMonitor.Start(Dispatcher);
 
         if (!AdminCheckService.IsAdmin())
         {
@@ -870,9 +872,12 @@ public partial class App : Application
         // The view-model isn't built yet then, so there's nothing to show — ignore it.
         if (_mainVm == null) return;
 
+        var timer = System.Diagnostics.Stopwatch.StartNew();
+        bool built = false;
         if (_mainWindow == null)
         {
             _mainWindow = new MainWindow(_mainVm);
+            built = true;
             // MainWindow.OnClosing turns every close into a hide, so this should only ever fire
             // on a real exit. Belt and braces: a closed WPF Window can never be shown again, so
             // if anything does manage to close it, drop the reference and build a fresh one on
@@ -888,7 +893,9 @@ public partial class App : Application
             _mainWindow.WindowState = WindowState.Normal;
         _mainWindow.Activate();
 
-        Log.Info("App", "MainWindow shown");
+        // Timing, so a slow start can be pinned on building the window vs everything before it.
+        Log.Info("App", built ? $"MainWindow shown (built and laid out in {timer.ElapsedMilliseconds} ms)"
+                              : "MainWindow shown");
     }
 
     /// <summary>Called by MainWindow when the user hides it (minimize/close to tray).</summary>

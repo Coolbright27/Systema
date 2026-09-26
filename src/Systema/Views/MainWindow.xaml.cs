@@ -62,6 +62,8 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         ApplyWindowIcon();
+        // Pages are built once and reused; the cache needs to see this window's DataTemplates.
+        ((PageViewCache)Resources["PageViews"]).Owner = this;
         DataContext = viewModel;
         ClampToWorkArea();
 
@@ -73,10 +75,48 @@ public partial class MainWindow : Window
         NavList.SizeChanged += (_, _) => UpdateNavIndicator(animate: false);
 
         // Page motion (Controls/Motion.cs): cards cascade in when a page opens, and the page
-        // scrolls with an eased glide instead of WPF's 48 px jumps.
-        Systema.Controls.Motion.PageOpened();
-        PageHost.TargetUpdated += (_, _) => Systema.Controls.Motion.PageOpened();
+        // scrolls with an eased glide instead of WPF's 48 px jumps. The first page after launch
+        // skips the cascade: that's when the app is busiest, and it only adds work to startup.
+        Systema.Controls.Motion.PageOpened(animate: false);
+        PageHost.TargetUpdated += OnPageChanged;
         PageHost.PreviewMouseWheel += PageHost_PreviewMouseWheel;
+
+        // The hitch monitor only measures while the window is actually on screen.
+        IsVisibleChanged += (_, _) => UpdateLagMonitorVisibility();
+        StateChanged     += (_, _) => UpdateLagMonitorVisibility();
+        ContentRendered  += (_, _) =>
+        {
+            try
+            {
+                double sinceStart = (DateTime.Now - System.Diagnostics.Process.GetCurrentProcess().StartTime).TotalMilliseconds;
+                Systema.Services.LoggerService.Instance.Info("MainWindow", $"First frame on screen {sinceStart:F0} ms after launch");
+            }
+            catch { }
+        };
+    }
+
+    private void UpdateLagMonitorVisibility() =>
+        Systema.Core.UiLagMonitor.WindowVisible = IsVisible && WindowState != WindowState.Minimized;
+
+    private bool _firstPageShown;
+
+    private void OnPageChanged(object? sender, System.Windows.Data.DataTransferEventArgs e)
+    {
+        Systema.Controls.Motion.PageOpened(animate: _firstPageShown);
+        _firstPageShown = true;
+        Systema.Core.UiLagMonitor.CurrentPage = (DataContext as MainViewModel)?.ActiveSection;
+
+        // Pages are reused now (PageViewCache), so one you scrolled down on last time would
+        // otherwise reopen halfway down. Start every visit at the top, as before.
+        Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(() =>
+        {
+            try
+            {
+                var page = FindPageScroller(PageHost);
+                if (page != null) Systema.Controls.SmoothScroll.ResetToTop(page);
+            }
+            catch { /* cosmetic */ }
+        }));
     }
 
     // ── Smooth page scrolling ────────────────────────────────────────────────
