@@ -1285,6 +1285,17 @@
         <Setter Property="ctl:Motion.Entrance" Value="False"/>
     </Style>
 
+    <!-- The top row of a group that is always open (a setting with its own sub-settings under
+         it, like NVIDIA's power mode with plugged-in and battery pickers): a SettingsCard with no
+         chrome of its own, sitting inside an ExpanderCard above its ExpanderItem rows. -->
+    <Style x:Key="ExpanderHeaderCard" TargetType="ctl:SettingsCard" BasedOn="{StaticResource {x:Type ctl:SettingsCard}}">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="CornerRadius" Value="0"/>
+        <Setter Property="Margin" Value="0"/>
+        <Setter Property="ctl:Motion.Entrance" Value="False"/>
+    </Style>
+
     <!-- Free-form content inside an open expander (tables, number pickers), same inset and hairline -->
     <Style x:Key="ExpanderBlock" TargetType="Border">
         <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>

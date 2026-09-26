@@ -11,13 +11,25 @@
     <UserControl.Resources>
         <conv:BoolToVisibilityConverter x:Key="BoolToVis"/>
 
-        <!-- Mode name plus a short hint, same shape as the Dell thermal selector. -->
+        <!-- Mode name plus a short hint, same shape as the Dell thermal selector. The hint shows
+             in the open list only: the closed box has no ComboBoxItem above it, so the trigger
+             hides the hint there and the mode name is never cut off. -->
         <DataTemplate x:Key="PowerModeItemTemplate">
             <StackPanel Orientation="Horizontal">
                 <TextBlock Text="{Binding Label}" VerticalAlignment="Center"/>
                 <TextBlock Text="{Binding Note, StringFormat='({0})'}"
                            FontSize="10" Margin="6,0,0,0" VerticalAlignment="Center"
-                           Foreground="{StaticResource TextSecondaryBrush}"/>
+                           Foreground="{StaticResource TextSecondaryBrush}">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock">
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding RelativeSource={RelativeSource AncestorType=ComboBoxItem}}" Value="{x:Null}">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
             </StackPanel>
         </DataTemplate>
     </UserControl.Resources>
@@ -91,8 +103,12 @@
                 </StackPanel>
             </ctl:SettingsCard>
 
-            <!-- ===== POWER MANAGEMENT MODE ===== -->
-            <ctl:SettingsCard Header="Power management mode" Badge="Experimental">
+            <!-- ===== POWER MANAGEMENT MODE =====
+                 One group: the setting on top, its plugged-in and battery pickers as rows under it. -->
+            <Border Style="{StaticResource ExpanderCard}">
+            <StackPanel>
+            <ctl:SettingsCard Header="Power management mode" Badge="Experimental"
+                              Style="{StaticResource ExpanderHeaderCard}">
                 <ctl:SettingsCard.Description>
                     <StackPanel>
                         <TextBlock Style="{StaticResource CardDescription}">
@@ -126,8 +142,8 @@
 
             <!-- Plugged in / desktop -->
             <ctl:SettingsCard Header="When plugged in" Description="Used on AC power, and always on a desktop."
-                              Margin="24,0,0,4">
-                <ComboBox Width="270" Style="{StaticResource DarkComboBox}"
+                              Style="{StaticResource ExpanderItem}">
+                <ComboBox Width="300" Style="{StaticResource DarkComboBox}"
                           ItemsSource="{Binding PowerModeOptions}"
                           ItemTemplate="{StaticResource PowerModeItemTemplate}"
                           SelectedValuePath="Value"
@@ -136,15 +152,17 @@
 
             <!-- On battery: laptops only -->
             <Grid Visibility="{Binding IsLaptop, Converter={StaticResource BoolToVis}}">
-                <ctl:SettingsCard Header="On battery" Margin="24,0,0,4"
+                <ctl:SettingsCard Header="On battery" Style="{StaticResource ExpanderItem}"
                                   Description="Used when you're unplugged. Optimal power is usually the right pick here, since full clocks on battery mostly make heat and drain runtime.">
-                    <ComboBox Width="270" Style="{StaticResource DarkComboBox}"
+                    <ComboBox Width="300" Style="{StaticResource DarkComboBox}"
                               ItemsSource="{Binding PowerModeOptions}"
                               ItemTemplate="{StaticResource PowerModeItemTemplate}"
                               SelectedValuePath="Value"
                               SelectedValue="{Binding PowerModeBattery, Mode=TwoWay}"/>
                 </ctl:SettingsCard>
             </Grid>
+            </StackPanel>
+            </Border>
 
             <!-- ══════════════ FRAME RATE ══════════════ -->
             <StackPanel Visibility="{Binding IsFpsCapAvailable, Converter={StaticResource BoolToVis}}">

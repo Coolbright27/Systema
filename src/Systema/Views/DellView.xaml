@@ -90,6 +90,11 @@
                                 <DataTrigger Binding="{Binding Note}" Value="">
                                     <Setter Property="Visibility" Value="Collapsed"/>
                                 </DataTrigger>
+                                <!-- And in the closed box (no ComboBoxItem above it), so the mode
+                                     name is never cut off; the open list still shows the hint. -->
+                                <DataTrigger Binding="{Binding RelativeSource={RelativeSource AncestorType=ComboBoxItem}}" Value="{x:Null}">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                </DataTrigger>
                             </Style.Triggers>
                         </Style>
                     </TextBlock.Style>
@@ -119,7 +124,10 @@
                         Visibility="{Binding ThermalCardVisible, Converter={StaticResource BoolToVis}}">
                 <TextBlock Text="Thermal" Style="{StaticResource SettingsGroupHeader}"/>
 
-                <ctl:SettingsCard Header="Thermal Profile">
+                <!-- One group: the profile on top, its plugged-in and battery pickers as rows under it. -->
+                <Border Style="{StaticResource ExpanderCard}">
+                <StackPanel>
+                <ctl:SettingsCard Header="Thermal Profile" Style="{StaticResource ExpanderHeaderCard}">
                     <ctl:SettingsCard.Description>
                         <StackPanel>
                             <TextBlock Style="{StaticResource CardDescription}">
@@ -152,9 +160,9 @@
                 <StackPanel Visibility="{Binding ThermalSupported, Converter={StaticResource BoolToVis}}">
 
                     <!-- Plugged-in / desktop selector: always shown when supported -->
-                    <ctl:SettingsCard Header="When plugged in" Margin="24,0,0,4"
+                    <ctl:SettingsCard Header="When plugged in" Style="{StaticResource ExpanderItem}"
                                       Description="Thermal mode applied on AC power (and on desktops).">
-                        <ComboBox Width="270" Style="{StaticResource DarkComboBox}"
+                        <ComboBox Width="300" Style="{StaticResource DarkComboBox}"
                                   ItemsSource="{Binding ThermalModes}"
                                   ItemTemplate="{StaticResource ThermalModeItemTemplate}"
                                   SelectedValuePath="Value"
@@ -163,9 +171,9 @@
 
                     <!-- Battery selector: only on laptops (IsLaptop) -->
                     <Grid Visibility="{Binding IsLaptop, Converter={StaticResource BoolToVis}}">
-                        <ctl:SettingsCard Header="On battery" Margin="24,0,0,4"
+                        <ctl:SettingsCard Header="On battery" Style="{StaticResource ExpanderItem}"
                                           Description="Thermal mode applied when you're on battery. Usually Optimized or Quiet for the best mix of heat and runtime.">
-                            <ComboBox Width="270" Style="{StaticResource DarkComboBox}"
+                            <ComboBox Width="300" Style="{StaticResource DarkComboBox}"
                                       ItemsSource="{Binding ThermalModes}"
                                       ItemTemplate="{StaticResource ThermalModeItemTemplate}"
                                       SelectedValuePath="Value"
@@ -174,6 +182,8 @@
                     </Grid>
 
                 </StackPanel><!-- end selectors (ThermalSupported) -->
+                </StackPanel>
+                </Border>
             </StackPanel>
 
             <!-- ══════════════════════════════════════════════ Dell Charging Mode Card
