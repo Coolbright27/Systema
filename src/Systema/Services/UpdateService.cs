@@ -244,17 +244,23 @@ public class UpdateService : IDisposable
     public void StartAutoUpdate()
     {
         _cts = new CancellationTokenSource();
+        var token = _cts.Token;
 
-        // Prime the CPU performance counter — the very first NextValue() always
-        // returns 0, so we call it once here and discard the result.
-        try
+        _ = Task.Run(() =>
         {
-            _cpuCounter = new PerformanceCounter("Processor", "% Processor Time", "_Total");
-            _cpuCounter.NextValue();
-        }
-        catch { _cpuCounter = null; }
+            // Prime the CPU performance counter: the very first NextValue() always returns 0,
+            // so call it once and discard the result. Done here, on the worker, not on the
+            // caller's thread: the first PerformanceCounter a process creates loads the whole
+            // perf-counter subsystem, which took ~1.5 s and held up the main window at startup.
+            try
+            {
+                _cpuCounter = new PerformanceCounter("Processor", "% Processor Time", "_Total");
+                _cpuCounter.NextValue();
+            }
+            catch { _cpuCounter = null; }
 
-        _ = Task.Run(() => RunLoopAsync(_cts.Token));
+            return RunLoopAsync(token);
+        });
     }
 
     /// <summary>Stops the background loop and releases the CPU counter.</summary>

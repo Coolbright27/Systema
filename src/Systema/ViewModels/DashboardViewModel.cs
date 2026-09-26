@@ -359,8 +359,10 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
 
     private async Task InitAsync()
     {
+        // RefreshAsync starts the first Auto-Pilot status check itself (its 30 s gate is open at
+        // launch). Calling CheckAutoPilotStatusAsync here as well ran the whole check twice, side
+        // by side, on every start.
         await RefreshAsync();
-        await CheckAutoPilotStatusAsync();
     }
 
     // ── IAutoRefreshable — called every 1 s / 5 s by MainViewModel timer ─────
@@ -727,18 +729,25 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
                 });
             });
 
-            // All registry/powercfg calls are done.
-            // RunOnLargeStackAsync continuations run on a ThreadPool thread, so ALL
-            // Recommendation-only checks (registry reads, still on the background thread). These never
-            // touch `pending` — they're feed suggestions, not Auto-Pilot checklist items.
-            var extras = new List<AutoPilotItem>
+            // Recommendation-only checks. These never touch `pending`; they're feed suggestions,
+            // not Auto-Pilot checklist items.
+            //
+            // They MUST run on a worker thread too. The comment that used to sit here claimed the
+            // code after the await above already ran on the thread pool, but an await without
+            // ConfigureAwait(false) resumes on the UI thread. So the Dell BIOS thermal query (WMI,
+            // ~2.4 s), the NVIDIA/Intel reads and the rest ran on the UI thread: the window sat
+            // frozen for 5.5 s after launch (two overlapping checks), and Home hitched every 30 s.
+            var extras = new List<AutoPilotItem>();
+            await RunOnLargeStackAsync(() =>
+            {
+            extras.AddRange(new List<AutoPilotItem>
             {
                 new() { Label = "Disable Suggestions & nags",  IsDone = _win11.IsConsumerContentDisabled() },
                 new() { Label = "Disable web search in Start", IsDone = _win11.IsWebSearchDisabled() },
                 new() { Label = "Turn off Game Bar capture",  IsDone = _graphics.IsGameDvrDisabled() },
                 new() { Label = "GPU scheduling & windowed optimizations",
                         IsDone = !_graphics.IsHagsEnabled() && !_graphics.IsWindowedOptimizationsEnabled() },
-            };
+            });
 
             // NVIDIA LAPTOPS ONLY: cap FPS to the monitor's refresh rate. On a laptop, every frame
             // rendered above the panel's refresh rate is thrown away before it's ever shown — pure
@@ -827,6 +836,7 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
                     extras.Add(new() { Label = "Dell Ultra Performance on AC", IsDone = acIsUltra });
                 }
             }
+            });   // end of the worker-thread recommendation checks
 
             // ObservableCollection mutations and UI-property writes must be marshalled
             // back to the UI thread — otherwise WPF raises InvalidOperationException.

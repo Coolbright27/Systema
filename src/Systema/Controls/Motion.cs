@@ -183,25 +183,34 @@ public static class Motion
 }
 
 /// <summary>
-/// Eased mouse-wheel scrolling for a page. WPF jumps 48 px per wheel notch with no motion,
-/// which is most of why a page feels choppy next to Windows Settings. MainWindow routes the
-/// page's wheel events here; nested scrollers (a list, a multi-line text box) keep their own
-/// scrolling whenever they can still move in that direction.
+/// Eased mouse-wheel scrolling for a page, the way Windows 11 does it: every wheel click moves a
+/// target position, and once per rendered frame the page glides a fraction of the way there.
+///
+/// The first version started a fresh 250 ms animation on every wheel event. A touchpad, or a
+/// wheel spun quickly, sends dozens of events a second, and each restart threw away the speed
+/// the page had built up, so the glide stuttered. Chasing one moving target has no restarts:
+/// more clicks just move the target further and the page keeps flowing.
+///
+/// Offsets are whole pixels, so text never lands between pixels and shimmers mid-scroll. The
+/// frame hook only runs while a page is actually moving. MainWindow routes the page's wheel
+/// events here; nested scrollers (a list, a multi-line text box) keep their own scrolling
+/// whenever they can still move in that direction.
 /// </summary>
 public static class SmoothScroll
 {
-    private const double PixelsPerNotch = 72;           // one wheel click (Delta 120)
-    private static readonly TimeSpan Duration = TimeSpan.FromMilliseconds(250);
-    private static readonly IEasingFunction Ease = new CubicEase { EasingMode = EasingMode.EaseOut };
+    private const double PixelsPerNotch = 80;      // one wheel click (Delta 120)
+    private const double TimeConstant   = 0.075;   // seconds; ~95% of the way in ~225 ms
 
-    // Animated stand-in for VerticalOffset, which is read-only and can't be animated directly.
-    private static readonly DependencyProperty OffsetProperty = DependencyProperty.RegisterAttached(
-        "Offset", typeof(double), typeof(SmoothScroll),
-        new PropertyMetadata(0.0, (d, e) => ((ScrollViewer)d).ScrollToVerticalOffset((double)e.NewValue)));
+    private sealed class Glide
+    {
+        public double Target;
+        public double Current;
+        public double LastSet = double.NaN;
+        public long   LastTick;
+    }
 
-    // Where the current animation is heading, so quick successive notches add up.
-    private static readonly DependencyProperty TargetProperty = DependencyProperty.RegisterAttached(
-        "Target", typeof(double), typeof(SmoothScroll), new PropertyMetadata(double.NaN));
+    private static readonly Dictionary<ScrollViewer, Glide> Moving = new();
+    private static bool _hooked;
 
     /// <summary>
     /// Handles a wheel event for <paramref name="page"/>. Returns false (leave it to WPF) when
@@ -212,29 +221,78 @@ public static class SmoothScroll
         if (!Motion.Enabled || e.Delta == 0 || page.ScrollableHeight <= 0) return false;
         if (InnerScrollerWants(e.OriginalSource as DependencyObject, page, e.Delta)) return false;
 
-        double target = (double)page.GetValue(TargetProperty);
-        bool moving = !double.IsNaN(target);
-        double from = moving ? (double)page.GetValue(OffsetProperty) : page.VerticalOffset;
-        double to = Math.Clamp((moving ? target : from) - e.Delta / 120.0 * PixelsPerNotch,
-                               0, page.ScrollableHeight);
-        if (Math.Abs(to - from) < 0.5) return true;     // at the end already: swallow, don't bounce
-
-        page.SetValue(TargetProperty, to);
-        var anim = new DoubleAnimation(from, to, Duration) { EasingFunction = Ease };
-        anim.Completed += (_, _) =>
+        if (!Moving.TryGetValue(page, out var g))
         {
-            if ((double)page.GetValue(TargetProperty) == to) page.SetValue(TargetProperty, double.NaN);
-        };
-        page.BeginAnimation(OffsetProperty, anim);
+            g = new Glide { Current = page.VerticalOffset, Target = page.VerticalOffset,
+                            LastTick = System.Diagnostics.Stopwatch.GetTimestamp() };
+            Moving[page] = g;
+        }
+        g.Target = Math.Clamp(g.Target - e.Delta / 120.0 * PixelsPerNotch, 0, page.ScrollableHeight);
+        Hook();
         return true;
     }
+
+    /// <summary>Stops any glide on this page (the user grabbed the scrollbar or used the keyboard).</summary>
+    public static void Cancel(ScrollViewer page) => Moving.Remove(page);
 
     /// <summary>Stops any glide in progress and puts the page back at the top.</summary>
     public static void ResetToTop(ScrollViewer page)
     {
-        page.BeginAnimation(OffsetProperty, null);
-        page.SetValue(TargetProperty, double.NaN);
+        Cancel(page);
         page.ScrollToVerticalOffset(0);
+    }
+
+    private static void Hook()
+    {
+        if (_hooked) return;
+        _hooked = true;
+        CompositionTarget.Rendering += OnFrame;
+    }
+
+    private static void Unhook()
+    {
+        if (!_hooked) return;
+        _hooked = false;
+        CompositionTarget.Rendering -= OnFrame;
+    }
+
+    private static void OnFrame(object? sender, EventArgs e)
+    {
+        long now = System.Diagnostics.Stopwatch.GetTimestamp();
+        List<ScrollViewer>? done = null;
+
+        foreach (var (page, g) in Moving)
+        {
+            // Something else moved the page since the last frame (scrollbar drag, keyboard,
+            // BringIntoView): let it win instead of fighting it.
+            if (!double.IsNaN(g.LastSet) && Math.Abs(page.VerticalOffset - g.LastSet) > 2 &&
+                Math.Abs(page.VerticalOffset - g.Current) > 2)
+            {
+                (done ??= new()).Add(page);
+                continue;
+            }
+
+            double dt = Math.Min((now - g.LastTick) / (double)System.Diagnostics.Stopwatch.Frequency, 0.05);
+            g.LastTick = now;
+            g.Target = Math.Clamp(g.Target, 0, page.ScrollableHeight);   // a section may have closed
+            g.Current += (g.Target - g.Current) * (1 - Math.Exp(-dt / TimeConstant));
+
+            if (Math.Abs(g.Target - g.Current) < 0.5)
+            {
+                g.Current = g.Target;
+                (done ??= new()).Add(page);
+            }
+
+            double px = Math.Round(g.Current);
+            if (px != g.LastSet)
+            {
+                page.ScrollToVerticalOffset(px);
+                g.LastSet = px;
+            }
+        }
+
+        if (done != null) foreach (var p in done) Moving.Remove(p);
+        if (Moving.Count == 0) Unhook();
     }
 
     private static bool InnerScrollerWants(DependencyObject? source, ScrollViewer page, int delta)
