@@ -139,6 +139,70 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
     // already refreshes; the old page computed them and never showed them.
     [ObservableProperty] private string _homeHeadline = "Checking your PC…";
     [ObservableProperty] private string _homeSubline  = "";
+    /// <summary>True when the headline is flagging something to fix (shows the attention icon).</summary>
+    [ObservableProperty] private bool   _hasHomeIssues;
+
+    /// <summary>What Home's headline is built from. Plain values, so the wording is testable.</summary>
+    internal readonly record struct HomeFacts(
+        bool GameBoost, string? GameName, bool AutoPilotOn, bool IsAdmin, bool EngineOn,
+        string DataCollection, int Applied, int Total, int Resting);
+
+    /// <summary>
+    /// Home's headline and the line under it. Anything worth fixing is named, most important
+    /// first, with where to fix it: not running as administrator, the Systema Engine off, Windows
+    /// collecting data (No Telemetry Pro off or partly undone), and recommended optimizations
+    /// still off while Auto Pilot is off. A running game boost takes the headline instead, and
+    /// only a PC with nothing to flag is called in good shape.
+    /// </summary>
+    internal static (string Headline, string Subline, bool HasIssues) ComposeHomeStatus(HomeFacts f)
+    {
+        string resting = f.EngineOn && f.Resting > 0
+            ? $" {f.Resting} background app{(f.Resting == 1 ? " is" : "s are")} resting right now."
+            : "";
+
+        if (f.GameBoost)
+            return ($"Game Boost is running for {f.GameName ?? "your game"}.",
+                    "Background apps are resting and Windows is staying out of the way until the game closes.",
+                    false);
+
+        // (title, what to do) pairs, most important first.
+        var issues = new List<(string Title, string Fix)>();
+        if (!f.IsAdmin)
+            issues.Add(("Systema isn't running as administrator",
+                        "Restart it as administrator so it can change system settings."));
+        if (!f.EngineOn)
+            issues.Add(("The Systema Engine is off",
+                        "Background apps aren't being rested. Turn it on in Systema Engine."));
+        if (f.DataCollection == "On")
+            issues.Add(("Windows is collecting data about how you use your PC",
+                        "Turn on No Telemetry Pro in Cleanup & Privacy to stop it."));
+        else if (f.DataCollection == "Reduced")
+            issues.Add(("Windows data collection is only partly blocked",
+                        "Turn on No Telemetry Pro in Cleanup & Privacy to block the rest."));
+        int pending = f.Total - f.Applied;
+        if (!f.AutoPilotOn && f.Total > 0 && pending > 0)
+            issues.Add(($"{pending} recommended optimization{(pending == 1 ? " isn't" : "s aren't")} on",
+                        "Turn on Auto Pilot, or apply them one at a time from Suggestions."));
+
+        if (issues.Count == 1)
+            return (issues[0].Title + ".", issues[0].Fix + resting, true);
+
+        if (issues.Count > 1)
+            return ($"{issues.Count} things need your attention.",
+                    string.Join(" ", issues.Select(i => i.Title + ".")) + resting,
+                    true);
+
+        if (f.AutoPilotOn)
+            return ("Your PC is tuned and staying that way.",
+                    $"Auto Pilot is keeping {f.Applied} optimization{(f.Applied == 1 ? "" : "s")} in place and puts them back if anything changes them." + resting,
+                    false);
+
+        return f.Total > 0
+            ? ("Your PC is in great shape.",
+               $"All {f.Total} recommended optimizations are on. Turn on Auto Pilot to keep them that way." + resting,
+               false)
+            : ("Checking your PC…", "Checking which optimizations fit this PC…", false);
+    }
     /// <summary>Every app Task Sleep is resting right now (NappedAppCount stops at 8).</summary>
     [ObservableProperty] private int    _restingAppCount;
     [ObservableProperty] private string _coresParkedText = "—";
@@ -1259,27 +1323,19 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
                 BatteryText = $"{pct}%, {(plugged ? "plugged in" : "on battery")}";
             }
 
-            int applied = AutoPilotChecklist.Count(i => i.IsDone);
-            int total   = AutoPilotChecklist.Count;
-            if (GameBoostActive)
-            {
-                HomeHeadline = $"Game Boost is running for {ActivityFeed.PrettyGame(_gameBooster.ActiveGameName ?? "your game")}.";
-                HomeSubline  = "Background apps are resting and Windows is staying out of the way until the game closes.";
-            }
-            else if (AutoPilotModeEnabled)
-            {
-                HomeHeadline = "Your PC is tuned and staying that way.";
-                HomeSubline  = $"Auto Pilot is keeping {applied} optimization{(applied == 1 ? "" : "s")} in place and puts them back if anything changes them.";
-            }
-            else
-            {
-                HomeHeadline = "Your PC is running normally.";
-                HomeSubline  = total > 0
-                    ? $"{applied} of {total} recommended optimizations are on. Turn on Auto Pilot to apply the rest and keep them that way."
-                    : "Checking which optimizations fit this PC…";
-            }
-            if (TaskSleepActive && !GameBoostActive && RestingAppCount > 0)
-                HomeSubline += $" {RestingAppCount} background app{(RestingAppCount == 1 ? " is" : "s are")} resting right now.";
+            var status = ComposeHomeStatus(new HomeFacts(
+                GameBoost:      GameBoostActive,
+                GameName:       GameBoostActive ? ActivityFeed.PrettyGame(_gameBooster.ActiveGameName ?? "your game") : null,
+                AutoPilotOn:    AutoPilotModeEnabled,
+                IsAdmin:        IsAdministrator,
+                EngineOn:       TaskSleepActive,
+                DataCollection: DataCollectionStatus,
+                Applied:        AutoPilotChecklist.Count(i => i.IsDone),
+                Total:          AutoPilotChecklist.Count,
+                Resting:        RestingAppCount));
+            HomeHeadline  = status.Headline;
+            HomeSubline   = status.Subline;
+            HasHomeIssues = status.HasIssues;
 
             QueueParkingRead();
         }

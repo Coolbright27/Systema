@@ -303,8 +303,21 @@
                                                    Foreground="{StaticResource AccentGreenBrush}" VerticalAlignment="Center"/>
                                     </StackPanel>
                                 </Grid>
-                                <TextBlock Text="{Binding HomeHeadline, Mode=OneWay}" Style="{StaticResource HomeCardSubtitle}"
-                                           Foreground="{StaticResource TextPrimaryBrush}"/>
+                                <!-- Headline, with an amber attention mark while it's flagging something
+                                     to fix (Windows Settings' "Attention needed" look). -->
+                                <Grid Margin="0,6,0,0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Viewbox Width="16" Height="16" Margin="0,2,8,0" VerticalAlignment="Top"
+                                             Visibility="{Binding HasHomeIssues, Converter={StaticResource BoolToVis}}">
+                                        <Path Width="24" Height="24" Fill="{StaticResource AccentYellowBrush}"
+                                              Data="M12 2.5 L22.5 20.5 H1.5 Z M11 9 V14.5 H13 V9 Z M11 16.5 V18.5 H13 V16.5 Z"/>
+                                    </Viewbox>
+                                    <TextBlock Grid.Column="1" Text="{Binding HomeHeadline, Mode=OneWay}" Style="{StaticResource HomeCardSubtitle}"
+                                               Margin="0" Foreground="{StaticResource TextPrimaryBrush}"/>
+                                </Grid>
                                 <TextBlock Text="{Binding HomeSubline, Mode=OneWay}" Style="{StaticResource HomeCardSubtitle}"
                                            FontSize="13" Margin="0,4,0,0"/>
                             </StackPanel>
