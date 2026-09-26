@@ -49,6 +49,10 @@ public class SettingsCard : HeaderedContentControl
     public static readonly DependencyProperty ExtraBadgeBrushProperty = DependencyProperty.Register(
         nameof(ExtraBadgeBrush), typeof(System.Windows.Media.Brush), typeof(SettingsCard), new FrameworkPropertyMetadata(null));
 
+    public static readonly DependencyProperty CornerRadiusProperty = DependencyProperty.Register(
+        nameof(CornerRadius), typeof(CornerRadius), typeof(SettingsCard),
+        new FrameworkPropertyMetadata(new CornerRadius(6)));
+
     public static readonly DependencyProperty IconDataProperty = DependencyProperty.Register(
         nameof(IconData), typeof(Geometry), typeof(SettingsCard), new FrameworkPropertyMetadata(null));
 
@@ -86,6 +90,13 @@ public class SettingsCard : HeaderedContentControl
     {
         get => (System.Windows.Media.Brush?)GetValue(ExtraBadgeBrushProperty);
         set => SetValue(ExtraBadgeBrushProperty, value);
+    }
+
+    /// <summary>6 for a standalone card; 0 for a row inside an expander (ExpanderItem style).</summary>
+    public CornerRadius CornerRadius
+    {
+        get => (CornerRadius)GetValue(CornerRadiusProperty);
+        set => SetValue(CornerRadiusProperty, value);
     }
 
     /// <summary>Optional 24x24 line icon on the left, drawn with the theme's stroke.</summary>

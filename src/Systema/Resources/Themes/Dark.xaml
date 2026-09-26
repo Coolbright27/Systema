@@ -1183,7 +1183,7 @@
                     <Border Background="{TemplateBinding Background}"
                             BorderBrush="{TemplateBinding BorderBrush}"
                             BorderThickness="{TemplateBinding BorderThickness}"
-                            CornerRadius="6"
+                            CornerRadius="{TemplateBinding CornerRadius}"
                             Padding="{TemplateBinding Padding}"
                             MinHeight="{TemplateBinding MinHeight}">
                         <Grid>
@@ -1248,6 +1248,48 @@
                 </ControlTemplate>
             </Setter.Value>
         </Setter>
+    </Style>
+
+    <!-- ============================================================ -->
+    <!--  SETTINGS EXPANDER (Windows 11)                              -->
+    <!-- ============================================================ -->
+    <!-- A section that opens to show its settings: a card whose header row (an ExpanderButton
+         with a rotating chevron) sits above child rows split by hairlines. -->
+    <Style x:Key="ExpanderCard" TargetType="Border">
+        <Setter Property="Background" Value="{StaticResource BgCardBrush}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="CornerRadius" Value="6"/>
+        <Setter Property="Padding" Value="0"/>
+        <Setter Property="Margin" Value="0,0,0,4"/>
+        <Setter Property="ctl:Motion.Entrance" Value="True"/>
+    </Style>
+
+    <!-- Title in an expander's header row: same size and colour as a SettingsCard header -->
+    <Style x:Key="ExpanderHeaderTitle" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="{StaticResource MainFont}"/>
+        <Setter Property="FontSize" Value="14"/>
+        <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
+
+    <!-- A setting inside an open expander: square, transparent, a hairline above, and indented
+         a little so it reads as belonging to the header above it. -->
+    <Style x:Key="ExpanderItem" TargetType="ctl:SettingsCard" BasedOn="{StaticResource {x:Type ctl:SettingsCard}}">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderThickness" Value="0,1,0,0"/>
+        <Setter Property="CornerRadius" Value="0"/>
+        <Setter Property="Margin" Value="0"/>
+        <Setter Property="Padding" Value="34,12,18,12"/>
+        <Setter Property="MinHeight" Value="60"/>
+        <Setter Property="ctl:Motion.Entrance" Value="False"/>
+    </Style>
+
+    <!-- Free-form content inside an open expander (tables, number pickers), same inset and hairline -->
+    <Style x:Key="ExpanderBlock" TargetType="Border">
+        <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
+        <Setter Property="BorderThickness" Value="0,1,0,0"/>
+        <Setter Property="Padding" Value="34,14,18,14"/>
     </Style>
 
     <!-- ============================================================ -->
