@@ -10,6 +10,10 @@
     NVIDIA GPUs while Systema is running.
     Use WindowChrome (below) for custom chrome; use DWMWA_WINDOW_CORNER_PREFERENCE
     from MainWindow.xaml.cs for Win11 rounded corners. Never AllowsTransparency.
+
+    Mica (the wallpaper-tinted backdrop) IS used, on Windows 11 22H2+: the user asked for it on
+    2026-09-26 and waived the VSync rule for it. It's a DWM system backdrop, not a layered
+    window, and it's applied in MainWindow.xaml.cs (ApplyMica).
 -->
 <Window x:Class="Systema.Views.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -30,7 +34,9 @@
              CaptionHeight=0: our own title bar handles drag via MouseLeftButtonDown.
              ResizeBorderThickness=0: the window is fixed-size (ResizeMode=NoResize) so
              there is no resize grip.
-             GlassFrameThickness=0 + UseAeroCaptionButtons=False: no native caption. -->
+             GlassFrameThickness=0 + UseAeroCaptionButtons=False: no native caption.
+             With Mica, MainWindow.xaml.cs switches GlassFrameThickness to -1 so the backdrop
+             reaches the whole window. -->
         <WindowChrome CaptionHeight="0"
                       CornerRadius="0"
                       GlassFrameThickness="0"
@@ -184,7 +190,7 @@
     <!-- Rounded corners are provided by DWM on Win11 via DwmSetWindowAttribute in
          MainWindow.xaml.cs. No Border CornerRadius / DropShadowEffect here — both
          would require layered-window mode which breaks VSync system-wide. -->
-    <Border Background="{StaticResource BgPrimaryBrush}"
+    <Border x:Name="RootSurface" Background="{StaticResource BgPrimaryBrush}"
             BorderBrush="{StaticResource BorderBrush}"
             BorderThickness="1">
 
@@ -205,7 +211,7 @@
             <!-- ===== TITLE BAR ===== -->
             <!-- Windows 11 caption: same colour as the window, so the title bar, nav pane and
                  page read as one surface, the way the Settings app does. -->
-            <Border Grid.Row="0"
+            <Border x:Name="TitleBarSurface" Grid.Row="0"
                     Background="{StaticResource BgPrimaryBrush}"
                     MouseLeftButtonDown="TitleBar_MouseLeftButtonDown">
                 <Grid>
@@ -295,8 +301,8 @@
                 <!-- Windows 11 nav pane: it sits on the window base with no divider, exactly as
                      in the Settings app. No live BlurEffect or translucent overlay: a GPU
                      pixel-shader effect on an unsigned binary is a needless SmartScreen and
-                     Defender heuristic risk, and the Settings look doesn't need one. -->
-                <Border Grid.Column="0"
+                     Defender heuristic risk. The wallpaper tint comes from DWM's Mica instead. -->
+                <Border x:Name="SidebarSurface" Grid.Column="0"
                         Background="{StaticResource BgSidebarBrush}"
                         BorderThickness="0"
                         ClipToBounds="True">
@@ -524,10 +530,10 @@
                              Binds to the shared SettingsVm so the check/download/install state
                              is identical to the Settings → Updates card (single source of truth). -->
                         <Border Grid.Row="1" Margin="8,8,8,12" Padding="12,10"
-                                Background="{StaticResource BgCardBrush}"
+                                Background="{DynamicResource CardLayerBrush}"
                                 BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="8">
                             <StackPanel>
-                                <TextBlock Text="Systema v0.7.350" FontSize="11" FontWeight="SemiBold"
+                                <TextBlock Text="Systema v0.7.351" FontSize="11" FontWeight="SemiBold"
                                            Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,7"/>
 
                                 <!-- Live status: green check + status text from the updater -->

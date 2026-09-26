@@ -34,6 +34,24 @@ public partial class MainWindow : Window
     [DllImport("dwmapi.dll")]
     private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int attrValue, int attrSize);
 
+    // ── Mica (Windows 11 22H2+) ──────────────────────────────────────────────
+    // The wallpaper-tinted backdrop the Settings app uses. DWM draws it, and only while the window
+    // is active: unfocused, or with Transparency effects / Energy saver on, DWM paints the plain
+    // #202020 base instead, which is the colour this window used before.
+    //
+    // The user asked for real Mica on 2026-09-26 and waived the VSync rule for it. It is a DWM
+    // system backdrop, NOT a layered window: AllowsTransparency stays banned.
+    private const int DWMWA_USE_IMMERSIVE_DARK_MODE = 20;   // dark Mica, not the light one
+    private const int DWMWA_SYSTEMBACKDROP_TYPE     = 38;   // Windows 11 22H2 (build 22621) and later
+    private const int DWMSBT_MAINWINDOW             = 2;    // Mica
+    private static readonly bool MicaCapable = Environment.OSVersion.Version.Build >= 22621;
+
+    /// <summary>The Settings app's card fill (5% white). Over #202020 it's exactly #2B2B2B.</summary>
+    private static readonly Media.SolidColorBrush CardOverMica = Freeze(new Media.SolidColorBrush(Media.Color.FromArgb(0x0D, 0xFF, 0xFF, 0xFF)));
+    private static Media.SolidColorBrush Freeze(Media.SolidColorBrush b) { b.Freeze(); return b; }
+
+    public bool IsMicaOn { get; private set; }
+
     // ── Maximize work-area clamp ─────────────────────────────────────────────
     // A WindowStyle=None window maximizes to the full monitor by default, which
     // covers the taskbar and clips ~7px off each edge. Handling WM_GETMINMAXINFO
@@ -61,6 +79,7 @@ public partial class MainWindow : Window
     public MainWindow(MainViewModel viewModel)
     {
         InitializeComponent();
+        PrepareMica();
         ApplyWindowIcon();
         // Pages are built once and reused; the cache needs to see this window's DataTemplates.
         ((PageViewCache)Resources["PageViews"]).Owner = this;
@@ -298,8 +317,67 @@ public partial class MainWindow : Window
             int pref = (int)DWM_WINDOW_CORNER_PREFERENCE.DWMWCP_ROUND;
             DwmSetWindowAttribute(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, ref pref, sizeof(int));
             HwndSource.FromHwnd(hwnd)?.AddHook(WindowProc);
+            ApplyMica(hwnd);
         }
         catch { /* not supported on this Windows build — leave square */ }
+    }
+
+    /// <summary>
+    /// Before the window exists: give it a frame (DWM only draws a system backdrop behind a
+    /// framed window; WindowChrome still hides that frame) and extend the glass over the whole
+    /// window so the backdrop can reach every pixel.
+    /// </summary>
+    private void PrepareMica()
+    {
+        if (!MicaCapable) return;
+        WindowStyle = WindowStyle.SingleBorderWindow;
+        SetGlassFrame(-1);
+    }
+
+    private void SetGlassFrame(double thickness)
+    {
+        if (System.Windows.Shell.WindowChrome.GetWindowChrome(this) is not { } current) return;
+        var chrome = (System.Windows.Shell.WindowChrome)current.Clone();
+        chrome.GlassFrameThickness = new Thickness(thickness);
+        System.Windows.Shell.WindowChrome.SetWindowChrome(this, chrome);
+    }
+
+    /// <summary>
+    /// Turns Mica on, then clears the window's own base colour so it shows through. Nothing is
+    /// made see-through unless DWM accepted the backdrop, so a build without Mica keeps the
+    /// solid look instead of turning black.
+    /// </summary>
+    private void ApplyMica(IntPtr hwnd)
+    {
+        if (!MicaCapable) return;
+        var log = Services.LoggerService.Instance;
+        try
+        {
+            int dark = 1;
+            DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, ref dark, sizeof(int));
+            int backdrop = DWMSBT_MAINWINDOW;
+            int hr = DwmSetWindowAttribute(hwnd, DWMWA_SYSTEMBACKDROP_TYPE, ref backdrop, sizeof(int));
+            if (hr != 0)
+            {
+                SetGlassFrame(0);
+                log.Warn("MainWindow", $"Mica not available (DWM returned 0x{hr:X8}), keeping the solid background");
+                return;
+            }
+
+            if (HwndSource.FromHwnd(hwnd)?.CompositionTarget is { } target)
+                target.BackgroundColor = Media.Colors.Transparent;
+            Background                = Media.Brushes.Transparent;
+            RootSurface.Background    = Media.Brushes.Transparent;
+            TitleBarSurface.Background = Media.Brushes.Transparent;
+            SidebarSurface.Background = Media.Brushes.Transparent;
+            Resources["CardLayerBrush"] = CardOverMica;   // cards pick it up (DynamicResource)
+            IsMicaOn = true;
+            log.Info("MainWindow", "Mica backdrop on");
+        }
+        catch (Exception ex)
+        {
+            log.Warn("MainWindow", $"Mica setup failed, keeping the solid background: {ex.Message}");
+        }
     }
 
     private IntPtr WindowProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)

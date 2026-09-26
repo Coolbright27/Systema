@@ -33,7 +33,7 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border x:Name="bd" Background="{StaticResource BgCardBrush}"
+                        <Border x:Name="bd" Background="{DynamicResource CardLayerBrush}"
                                 BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="{TemplateBinding BorderThickness}"
                                 CornerRadius="8" Padding="16,14">

@@ -31,6 +31,10 @@
     <SolidColorBrush x:Key="BgSurfaceBrush" Color="{StaticResource BgSurfaceColor}"/>
     <SolidColorBrush x:Key="BgSidebarBrush" Color="{StaticResource BgSidebarColor}"/>
     <SolidColorBrush x:Key="BgCardBrush" Color="{StaticResource BgCardColor}"/>
+    <!-- Card fill for the main window. Solid here; with Mica on, MainWindow swaps in the Settings
+         app's own 5% white layer so the wallpaper tint shows through (5% white over #202020 is
+         exactly #2B2B2B, so an unfocused window looks the same). DynamicResource on purpose. -->
+    <SolidColorBrush x:Key="CardLayerBrush" Color="{StaticResource BgCardColor}"/>
     <SolidColorBrush x:Key="AccentBlueBrush" Color="{StaticResource AccentBlueColor}"/>
     <SolidColorBrush x:Key="AccentGreenBrush" Color="{StaticResource AccentGreenColor}"/>
     <SolidColorBrush x:Key="AccentYellowBrush" Color="{StaticResource AccentYellowColor}"/>
@@ -346,7 +350,7 @@
         <!-- Windows 11 settings card: #2B2B2B on the #202020 window, a hairline edge and
              8px corners. No shadow, no translucency: the lift in lightness is the whole
              separation, exactly as in the Settings app. -->
-        <Setter Property="Background" Value="{StaticResource BgCardBrush}"/>
+        <Setter Property="Background" Value="{DynamicResource CardLayerBrush}"/>
         <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
         <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="CornerRadius" Value="8"/>
@@ -1338,7 +1342,7 @@
     <!-- A row in a list page (apps to remove, startup apps): the card look without the
          header/description layout, for rows whose content is built by an ItemTemplate. -->
     <Style x:Key="ListRowCard" TargetType="Border">
-        <Setter Property="Background" Value="{StaticResource BgCardBrush}"/>
+        <Setter Property="Background" Value="{DynamicResource CardLayerBrush}"/>
         <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
         <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="CornerRadius" Value="6"/>
@@ -1386,7 +1390,7 @@
     </ctl:StringDescriptionSelector>
 
     <Style TargetType="ctl:SettingsCard">
-        <Setter Property="Background" Value="{StaticResource BgCardBrush}"/>
+        <Setter Property="Background" Value="{DynamicResource CardLayerBrush}"/>
         <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
         <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="Padding" Value="18,14"/>
@@ -1482,7 +1486,7 @@
     <!-- A section that opens to show its settings: a card whose header row (an ExpanderButton
          with a rotating chevron) sits above child rows split by hairlines. -->
     <Style x:Key="ExpanderCard" TargetType="Border">
-        <Setter Property="Background" Value="{StaticResource BgCardBrush}"/>
+        <Setter Property="Background" Value="{DynamicResource CardLayerBrush}"/>
         <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
         <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="CornerRadius" Value="6"/>

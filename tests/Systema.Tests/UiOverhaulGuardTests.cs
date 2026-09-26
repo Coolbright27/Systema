@@ -179,17 +179,56 @@ public class UiOverhaulGuardTests
 
     // ── 5. Never the VSync-breaking window modes ────────────────────────────────
     // AllowsTransparency makes the HWND layered, which disables MPO and Independent Flip for
-    // every window on the desktop. A Mica system backdrop is DWM work too. Neither is needed
-    // for the Windows 11 look, which is drawn in XAML.
+    // every window on the desktop. Still banned.
     [Fact]
-    public void MainWindow_NeverUsesLayeredTransparencyOrASystemBackdrop()
+    public void MainWindow_NeverUsesLayeredTransparency()
     {
         string shell = StripXmlComments(ReadSrc("Views", "MainWindow.xaml"));
         Assert.DoesNotContain(@"AllowsTransparency=""True""", shell);
 
         string code = ReadSrc("Views", "MainWindow.xaml.cs");
-        Assert.DoesNotContain("SYSTEMBACKDROP", code, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("AllowsTransparency = true", code);
         Assert.DoesNotContain("DWMWA_USE_HOSTBACKDROPBRUSH", code, StringComparison.OrdinalIgnoreCase);
+    }
+
+    // Mica was explicitly requested on 2026-09-26 with the VSync rule waived for it (0.7.351).
+    // What must hold: it's the Windows 11 22H2+ system backdrop, dark, and the window only goes
+    // see-through after DWM accepted it. Otherwise an older build would show a black window.
+    [Fact]
+    public void MainWindow_MicaIsSafeWhereItIsNotAvailable()
+    {
+        string code = ReadSrc("Views", "MainWindow.xaml.cs");
+        Assert.Contains("Environment.OSVersion.Version.Build >= 22621", code);
+        Assert.Contains("DWMWA_SYSTEMBACKDROP_TYPE     = 38", code);
+        Assert.Contains("DWMSBT_MAINWINDOW             = 2", code);
+
+        int apply = code.IndexOf("private void ApplyMica", StringComparison.Ordinal);
+        Assert.True(apply > 0);
+        string body = code[apply..];
+        int dark   = body.IndexOf("DWMWA_USE_IMMERSIVE_DARK_MODE, ref dark", StringComparison.Ordinal);
+        int mica   = body.IndexOf("DWMWA_SYSTEMBACKDROP_TYPE, ref backdrop", StringComparison.Ordinal);
+        int check  = body.IndexOf("if (hr != 0)", StringComparison.Ordinal);
+        int clear  = body.IndexOf("Background                = Media.Brushes.Transparent", StringComparison.Ordinal);
+        Assert.True(dark > 0 && dark < mica, "dark mode must be set before the backdrop, or Mica comes out light");
+        Assert.True(mica < check && check < clear, "the window must only go see-through after DWM accepted Mica");
+
+        foreach (var surface in new[] { "RootSurface", "TitleBarSurface", "SidebarSurface" })
+            Assert.Contains($"{surface}.Background", body);
+        Assert.Contains("Resources[\"CardLayerBrush\"] = CardOverMica", body);
+    }
+
+    // The card styles read CardLayerBrush dynamically so the main window's Mica swap reaches them;
+    // everything else (other windows, the Dell overlay banner) keeps a solid card.
+    [Fact]
+    public void Cards_ReadTheSwappableLayerBrush()
+    {
+        string dark = ReadSrc("Resources", "Themes", "Dark.xaml");
+        Assert.Contains("<SolidColorBrush x:Key=\"CardLayerBrush\" Color=\"{StaticResource BgCardColor}\"/>", dark);
+        Assert.Equal(4, Regex.Matches(dark, Regex.Escape("<Setter Property=\"Background\" Value=\"{DynamicResource CardLayerBrush}\"/>")).Count);
+        Assert.DoesNotContain("Value=\"{StaticResource BgCardBrush}\"", dark);
+
+        // The Dell banner floats over other content and must stay opaque.
+        Assert.Contains("Background=\"{StaticResource BgCardBrush}\" Opacity=\"0.96\"", ReadSrc("Views", "DellView.xaml"));
     }
 
     // ── 6. The Windows 11 design itself ─────────────────────────────────────────
