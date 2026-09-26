@@ -197,7 +197,9 @@ public class NvidiaPowerModeTests
 
         // ...on desktops with an NVIDIA card only. Holding full clocks on a laptop mostly makes
         // heat and drains the battery.
-        Assert.Contains("if (!_powerPlan.HasBattery() && _nvapi.IsAvailable())", dash);
+        Assert.Contains("if (RecommendationRules.WantsNvidiaMaxPerformanceMode(pc) && _nvapi.IsAvailable())", dash);
+        Assert.Contains("WantsNvidiaMaxPerformanceMode(PcProfile pc) => !pc.IsLaptop && pc.HasNvidiaGpu;",
+                        Read("src", "Systema", "Core", "RecommendationRules.cs"));
 
         // ...and NEVER applied by Auto-Pilot. Running a GPU at full clocks around the clock is a
         // trade to opt into, not something to do to someone silently. The apply-all pass runs

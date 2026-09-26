@@ -88,7 +88,7 @@
                 <!-- Recommended cleanup: single on/off toggle (drives the same
                      PrivacyCleanupApplied state the Dashboard reads). -->
                 <StackPanel Style="{StaticResource ManagedSection}">
-                    <ctl:SettingsCard Header="Service Cleanup">
+                    <ctl:SettingsCard Header="Service Cleanup" RecommendKey="PrivacyCleanup">
                         <ctl:SettingsCard.Description>
                             <StackPanel>
                                 <TextBlock Text="{Binding RecommendedSummaryText}" Style="{StaticResource CardDescription}"/>
@@ -118,7 +118,7 @@
                     <!-- No Telemetry Pro: kills ALL Windows telemetry (policy + services + tasks).
                          The plain summary leads; the channel-by-channel detail sits behind a
                          disclosure so the card stays scannable. -->
-                    <ctl:SettingsCard Header="No Telemetry Pro">
+                    <ctl:SettingsCard Header="No Telemetry Pro" RecommendKey="NoTelemetryPro">
                         <ctl:SettingsCard.Description>
                             <StackPanel>
                                 <TextBlock Text="Stops Windows collecting and sending data about how you use your PC. Fully reversible."

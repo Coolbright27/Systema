@@ -27,6 +27,7 @@
 using System.Collections;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Data;
 using System.Windows.Media;
 
 namespace Systema.Controls;
@@ -48,6 +49,13 @@ public class SettingsCard : HeaderedContentControl
 
     public static readonly DependencyProperty ExtraBadgeBrushProperty = DependencyProperty.Register(
         nameof(ExtraBadgeBrush), typeof(System.Windows.Media.Brush), typeof(SettingsCard), new FrameworkPropertyMetadata(null));
+
+    public static readonly DependencyProperty ExtraBadgeToolTipProperty = DependencyProperty.Register(
+        nameof(ExtraBadgeToolTip), typeof(object), typeof(SettingsCard), new FrameworkPropertyMetadata(null));
+
+    public static readonly DependencyProperty RecommendKeyProperty = DependencyProperty.Register(
+        nameof(RecommendKey), typeof(string), typeof(SettingsCard),
+        new FrameworkPropertyMetadata(null, OnRecommendKeyChanged));
 
     public static readonly DependencyProperty CornerRadiusProperty = DependencyProperty.Register(
         nameof(CornerRadius), typeof(CornerRadius), typeof(SettingsCard),
@@ -92,6 +100,24 @@ public class SettingsCard : HeaderedContentControl
         set => SetValue(ExtraBadgeBrushProperty, value);
     }
 
+    /// <summary>Hover text for the second badge, e.g. why this setting is recommended on this PC.</summary>
+    public object? ExtraBadgeToolTip
+    {
+        get => GetValue(ExtraBadgeToolTipProperty);
+        set => SetValue(ExtraBadgeToolTipProperty, value);
+    }
+
+    /// <summary>
+    /// A key from <see cref="Systema.Core.RecommendationRules"/>. The green pill then shows what's
+    /// recommended for THIS PC (or nothing), with the reason on hover. Replaces a hand-written
+    /// "Recommended" so the page, Auto Pilot and Home can't disagree.
+    /// </summary>
+    public string? RecommendKey
+    {
+        get => (string?)GetValue(RecommendKeyProperty);
+        set => SetValue(RecommendKeyProperty, value);
+    }
+
     /// <summary>6 for a standalone card; 0 for a row inside an expander (ExpanderItem style).</summary>
     public CornerRadius CornerRadius
     {
@@ -104,6 +130,22 @@ public class SettingsCard : HeaderedContentControl
     {
         get => (Geometry?)GetValue(IconDataProperty);
         set => SetValue(IconDataProperty, value);
+    }
+
+    private static void OnRecommendKeyChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        var card = (SettingsCard)d;
+        if (e.NewValue is not string key || key.Length == 0)
+        {
+            BindingOperations.ClearBinding(card, ExtraBadgeProperty);
+            BindingOperations.ClearBinding(card, ExtraBadgeToolTipProperty);
+            return;
+        }
+        var source = Systema.Core.Recommend.Instance;
+        BindingOperations.SetBinding(card, ExtraBadgeProperty,
+            new System.Windows.Data.Binding($"[{key}]") { Source = source, Mode = BindingMode.OneWay });
+        BindingOperations.SetBinding(card, ExtraBadgeToolTipProperty,
+            new System.Windows.Data.Binding($"[{key}.Why]") { Source = source, Mode = BindingMode.OneWay });
     }
 
     private static void OnDescriptionChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)

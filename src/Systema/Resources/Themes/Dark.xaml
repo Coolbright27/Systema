@@ -1210,6 +1210,7 @@
                                                    Foreground="{TemplateBinding BadgeBrush}"/>
                                     </Border>
                                     <Border x:Name="ExtraBadgePill" Margin="6,0,0,0" CornerRadius="4" Padding="6,1"
+                                            ToolTip="{TemplateBinding ExtraBadgeToolTip}" ToolTipService.InitialShowDelay="300"
                                             VerticalAlignment="Center" BorderThickness="1"
                                             BorderBrush="{TemplateBinding ExtraBadgeBrush}"
                                             Background="{StaticResource ControlFillBrush}">
@@ -1237,6 +1238,8 @@
                         </Trigger>
                         <Trigger Property="Badge" Value="{x:Null}">
                             <Setter TargetName="BadgePill" Property="Visibility" Value="Collapsed"/>
+                            <!-- Alone, the green pill keeps the first pill's gap from the header. -->
+                            <Setter TargetName="ExtraBadgePill" Property="Margin" Value="8,0,0,0"/>
                         </Trigger>
                         <Trigger Property="ExtraBadge" Value="{x:Null}">
                             <Setter TargetName="ExtraBadgePill" Property="Visibility" Value="Collapsed"/>

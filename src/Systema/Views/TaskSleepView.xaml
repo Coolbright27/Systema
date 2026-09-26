@@ -171,7 +171,7 @@
                                 ctl:Motion.RevealOnShow="True">
 
                         <!-- Master toggle -->
-                        <ctl:SettingsCard Header="Turn on Launch Boost" Style="{StaticResource ExpanderItem}">
+                        <ctl:SettingsCard Header="Turn on Launch Boost" Style="{StaticResource ExpanderItem}" RecommendKey="LaunchBoost">
                             <ctl:SettingsCard.Description>
                                 <TextBlock Style="{StaticResource CardDescription}">
                                     Gives apps a temporary priority boost the moment they launch so they open faster,
@@ -275,13 +275,13 @@
                                 ctl:Motion.RevealOnShow="True">
 
                         <!-- Foreground Priority Boost -->
-                        <ctl:SettingsCard Header="Foreground Priority Boost" Style="{StaticResource ExpanderItem}"
-                                          Badge="Safe" BadgeBrush="{StaticResource AccentGreenBrush}">
+                        <ctl:SettingsCard Header="Foreground Priority Boost" Style="{StaticResource ExpanderItem}" RecommendKey="ForegroundBoost"
+                                          Badge="Safe" BadgeBrush="{StaticResource TextSecondaryBrush}">
                             <ctl:SettingsCard.Description>
                                 <TextBlock Style="{StaticResource CardDescription}">
                                     Gives the app you're using a bigger share of CPU time so the active window stays
                                     snappy while background apps keep running.
-                                    <LineBreak/><Run FontWeight="SemiBold">Recommended on with Systema Engine:</Run> as the
+                                    <LineBreak/><Run FontWeight="SemiBold">With the Systema Engine:</Run> as the
                                     engine quiets background apps, this steers that freed-up CPU to the app you're actually
                                     using, so the two work together.
                                 </TextBlock>
@@ -291,13 +291,13 @@
                         </ctl:SettingsCard>
 
                         <!-- Instant App Focus -->
-                        <ctl:SettingsCard Header="Instant App Focus" Style="{StaticResource ExpanderItem}"
-                                          Badge="Safe" BadgeBrush="{StaticResource AccentGreenBrush}">
+                        <ctl:SettingsCard Header="Instant App Focus" Style="{StaticResource ExpanderItem}" RecommendKey="InstantAppFocus"
+                                          Badge="Safe" BadgeBrush="{StaticResource TextSecondaryBrush}">
                             <ctl:SettingsCard.Description>
                                 <TextBlock Style="{StaticResource CardDescription}">
                                     Removes Windows' delay before a launching or clicked app jumps to the front, so
                                     apps come to focus immediately instead of flashing in the taskbar.
-                                    <LineBreak/><Run FontWeight="SemiBold">Recommended on with Systema Engine:</Run> when the
+                                    <LineBreak/><Run FontWeight="SemiBold">With the Systema Engine:</Run> when the
                                     engine wakes a napped app, this lets it snap to the front instantly instead of feeling
                                     sluggish for a moment.
                                 </TextBlock>
@@ -307,14 +307,14 @@
                         </ctl:SettingsCard>
 
                         <!-- Instant Startup Apps -->
-                        <ctl:SettingsCard Header="Instant Startup Apps" Style="{StaticResource ExpanderItem}"
-                                          Badge="Safe" BadgeBrush="{StaticResource AccentGreenBrush}">
+                        <ctl:SettingsCard Header="Instant Startup Apps" Style="{StaticResource ExpanderItem}" RecommendKey="InstantStartupApps"
+                                          Badge="Safe" BadgeBrush="{StaticResource TextSecondaryBrush}">
                             <ctl:SettingsCard.Description>
                                 <TextBlock Style="{StaticResource CardDescription}">
                                     Removes the waiting period Windows imposes on your startup apps after a reboot or
                                     shutdown, so they launch immediately instead of trickling in ~10 seconds late.
                                     Takes effect on the next boot.
-                                    <LineBreak/><Run FontWeight="SemiBold">Recommended on with Systema Engine:</Run> your apps
+                                    <LineBreak/><Run FontWeight="SemiBold">With the Systema Engine:</Run> your apps
                                     start at full speed, and the engine then keeps the idle ones quiet, so you get fast startup without
                                     the lingering background bloat.
                                 </TextBlock>
@@ -324,7 +324,7 @@
                         </ctl:SettingsCard>
 
                         <!-- Maximum System Responsiveness: engine-gated with the boosts above. -->
-                        <ctl:SettingsCard Header="Maximum System Responsiveness" Style="{StaticResource ExpanderItem}"
+                        <ctl:SettingsCard Header="Maximum System Responsiveness" Style="{StaticResource ExpanderItem}" RecommendKey="MaxResponsiveness"
                                           Badge="Advanced" BadgeBrush="{StaticResource AccentYellowBrush}">
                             <ctl:SettingsCard.Description>
                                 <StackPanel>
@@ -332,7 +332,7 @@
                                         Sets the MMCSS SystemResponsiveness reserve to 0, handing the CPU quanta Windows normally
                                         holds back for background work to multimedia and foreground apps. You get steadier frame pacing
                                         under load. OFF restores the Windows default (20).
-                                        <LineBreak/><Run FontWeight="SemiBold">Recommended on with Systema Engine:</Run> it
+                                        <LineBreak/><Run FontWeight="SemiBold">With the Systema Engine:</Run> it
                                         reinforces what the engine is already doing, with less CPU reserved for background work and more
                                         for the app in front.
                                     </TextBlock>
@@ -344,15 +344,15 @@
                         </ctl:SettingsCard>
 
                         <!-- Network Throttling Off: pairs with Maximum System Responsiveness. -->
-                        <ctl:SettingsCard Header="Network Throttling Off" Style="{StaticResource ExpanderItem}"
-                                          Badge="Safe" BadgeBrush="{StaticResource AccentGreenBrush}">
+                        <ctl:SettingsCard Header="Network Throttling Off" Style="{StaticResource ExpanderItem}" RecommendKey="NetworkThrottlingOff"
+                                          Badge="Safe" BadgeBrush="{StaticResource TextSecondaryBrush}">
                             <ctl:SettingsCard.Description>
                                 <StackPanel>
                                     <TextBlock Style="{StaticResource CardDescription}">
                                         Windows throttles your network to ~10 packets/ms whenever audio or video is playing, to keep
                                         sound smooth. Turning that off hands the full network pipe to the app you're using, so
                                         downloads, streaming, and online games feel snappier. OFF restores the Windows default.
-                                        <LineBreak/><Run FontWeight="SemiBold">Recommended on with Systema Engine:</Run> it pairs with
+                                        <LineBreak/><Run FontWeight="SemiBold">With the Systema Engine:</Run> it pairs with
                                         Maximum System Responsiveness, the same multimedia profile, now without the network brake.
                                     </TextBlock>
                                     <TextBlock Text="⟳ Requires a restart to take effect." Style="{StaticResource CardNoteWarn}"/>
@@ -363,8 +363,8 @@
                         </ctl:SettingsCard>
 
                         <!-- Power Throttling On: lets Windows park background work on efficiency cores. -->
-                        <ctl:SettingsCard Header="Power Throttling On" Style="{StaticResource ExpanderItem}"
-                                          Badge="Safe" BadgeBrush="{StaticResource AccentGreenBrush}">
+                        <ctl:SettingsCard Header="Power Throttling On" Style="{StaticResource ExpanderItem}" RecommendKey="PowerThrottling"
+                                          Badge="Safe" BadgeBrush="{StaticResource TextSecondaryBrush}">
                             <ctl:SettingsCard.Description>
                                 <TextBlock Style="{StaticResource CardDescription}">
                                     Lets Windows quietly slow apps it decides are in the background so they draw less power. On a
@@ -379,14 +379,14 @@
                         </ctl:SettingsCard>
 
                         <!-- Fast App Close: snappier shutdown / sign-out. -->
-                        <ctl:SettingsCard Header="Fast App Close" Style="{StaticResource ExpanderItem}"
-                                          Badge="Safe" BadgeBrush="{StaticResource AccentGreenBrush}">
+                        <ctl:SettingsCard Header="Fast App Close" Style="{StaticResource ExpanderItem}" RecommendKey="FastAppClose"
+                                          Badge="Safe" BadgeBrush="{StaticResource TextSecondaryBrush}">
                             <ctl:SettingsCard.Description>
                                 <TextBlock Style="{StaticResource CardDescription}">
                                     Windows waits up to 20 seconds for an app to close when you shut down or sign out before
                                     nudging it. This trims that wait so shutdown and restart feel immediate, and apps still get a
                                     few seconds to save. OFF restores the Windows default.
-                                    <LineBreak/><Run FontWeight="SemiBold">Recommended on with Systema Engine:</Run> less waiting
+                                    <LineBreak/><Run FontWeight="SemiBold">With the Systema Engine:</Run> less waiting
                                     when you close things, matching the engine's snappy feel.
                                 </TextBlock>
                             </ctl:SettingsCard.Description>
@@ -395,8 +395,8 @@
                         </ctl:SettingsCard>
 
                         <!-- Keep Kernel in RAM: RAM-gated (default on at >= 14 GB, recommended 16 GB+). -->
-                        <ctl:SettingsCard Header="Keep Kernel in RAM" Style="{StaticResource ExpanderItem}"
-                                          Badge="Safe" BadgeBrush="{StaticResource AccentGreenBrush}">
+                        <ctl:SettingsCard Header="Keep Kernel in RAM" Style="{StaticResource ExpanderItem}" RecommendKey="KeepKernelInRam"
+                                          Badge="Safe" BadgeBrush="{StaticResource TextSecondaryBrush}">
                             <ctl:SettingsCard.Description>
                                 <StackPanel>
                                     <TextBlock Style="{StaticResource CardDescription}">
@@ -413,15 +413,15 @@
                         </ctl:SettingsCard>
 
                         <!-- Faster Shutdown: AutoEndTasks + HungAppTimeout reinforcement. -->
-                        <ctl:SettingsCard Header="Faster Shutdown" Style="{StaticResource ExpanderItem}"
-                                          Badge="Safe" BadgeBrush="{StaticResource AccentGreenBrush}">
+                        <ctl:SettingsCard Header="Faster Shutdown" Style="{StaticResource ExpanderItem}" RecommendKey="FasterShutdown"
+                                          Badge="Safe" BadgeBrush="{StaticResource TextSecondaryBrush}">
                             <ctl:SettingsCard.Description>
                                 <TextBlock Style="{StaticResource CardDescription}">
                                     Closes frozen apps automatically when you shut down or sign out (AutoEndTasks), instead of the
                                     "this app is preventing shutdown" prompt. Reinforced by shortening how long Windows waits before
                                     deciding an app is hung (HungAppTimeout → 1000 ms) so a slow app like Discord is force-closed
                                     before the prompt appears. Pairs with Fast App Close (2 s). OFF restores the Windows defaults.
-                                    <LineBreak/><Run FontWeight="SemiBold">Recommended on with Systema Engine:</Run> shutdown and
+                                    <LineBreak/><Run FontWeight="SemiBold">With the Systema Engine:</Run> shutdown and
                                     restart feel immediate, with no stuck-app prompts.
                                 </TextBlock>
                             </ctl:SettingsCard.Description>
@@ -430,15 +430,15 @@
                         </ctl:SettingsCard>
 
                         <!-- Input Hook Timeout: LowLevelHooksTimeout, enforced in the .DEFAULT hive too. -->
-                        <ctl:SettingsCard Header="Input Hook Timeout" Style="{StaticResource ExpanderItem}"
-                                          Badge="Safe" BadgeBrush="{StaticResource AccentGreenBrush}">
+                        <ctl:SettingsCard Header="Input Hook Timeout" Style="{StaticResource ExpanderItem}" RecommendKey="InputHookTimeout"
+                                          Badge="Safe" BadgeBrush="{StaticResource TextSecondaryBrush}">
                             <ctl:SettingsCard.Description>
                                 <TextBlock Style="{StaticResource CardDescription}">
                                     When a misbehaving app installs a keyboard/mouse hook and stalls, Windows freezes your input
                                     until it gives up (LowLevelHooksTimeout, ~5000 ms). This trims it to 1000 ms so input recovers
                                     in a second instead of five. To enforce it everywhere it also writes the same value to the
                                     system's .DEFAULT profile (used at the logon screen). It's safe and reversible. OFF restores the default.
-                                    <LineBreak/><Run FontWeight="SemiBold">Recommended on with Systema Engine:</Run> the mouse and
+                                    <LineBreak/><Run FontWeight="SemiBold">With the Systema Engine:</Run> the mouse and
                                     keyboard stay responsive even when an app misbehaves.
                                 </TextBlock>
                             </ctl:SettingsCard.Description>
@@ -447,15 +447,15 @@
                         </ctl:SettingsCard>
 
                         <!-- Faster Service Shutdown: WaitToKillServiceTimeout trim (service counterpart of Fast App Close). -->
-                        <ctl:SettingsCard Header="Faster Service Shutdown" Style="{StaticResource ExpanderItem}"
-                                          Badge="Safe" BadgeBrush="{StaticResource AccentGreenBrush}">
+                        <ctl:SettingsCard Header="Faster Service Shutdown" Style="{StaticResource ExpanderItem}" RecommendKey="ServiceShutdownFast"
+                                          Badge="Safe" BadgeBrush="{StaticResource TextSecondaryBrush}">
                             <ctl:SettingsCard.Description>
                                 <TextBlock Style="{StaticResource CardDescription}">
                                     On shutdown or restart Windows waits up to 5 seconds for each background service to stop before
                                     forcing it (WaitToKillServiceTimeout). This trims that to 2 seconds so reboots and shutdowns finish
                                     noticeably quicker, while still giving services a couple of seconds to flush. The service counterpart
                                     of Fast App Close. OFF restores the Windows default.
-                                    <LineBreak/><Run FontWeight="SemiBold">Recommended on with Systema Engine:</Run> quicker, cleaner
+                                    <LineBreak/><Run FontWeight="SemiBold">With the Systema Engine:</Run> quicker, cleaner
                                     shutdowns and restarts.
                                 </TextBlock>
                             </ctl:SettingsCard.Description>
@@ -464,8 +464,8 @@
                         </ctl:SettingsCard>
 
                         <!-- Disable Fast Startup: HiberbootEnabled=0 only (hibernate left intact so Sleep->Hibernate keeps working). -->
-                        <ctl:SettingsCard Header="Disable Fast Startup" Style="{StaticResource ExpanderItem}"
-                                          Badge="Safe" BadgeBrush="{StaticResource AccentGreenBrush}">
+                        <ctl:SettingsCard Header="Disable Fast Startup" Style="{StaticResource ExpanderItem}" RecommendKey="FastStartupOff"
+                                          Badge="Safe" BadgeBrush="{StaticResource TextSecondaryBrush}">
                             <ctl:SettingsCard.Description>
                                 <TextBlock Style="{StaticResource CardDescription}">
                                     Fast Startup makes "Shut down" a hybrid hibernate that reloads the old kernel and driver state on the
@@ -473,7 +473,7 @@
                                     it off makes every shutdown a clean cold boot, which fixes a whole class of "a restart fixes it"
                                     instability and lets driver/firmware updates apply correctly. Hibernation itself stays available,
                                     so Sleep → Hibernate keeps working, and sleep is unaffected. OFF restores the Windows default.
-                                    <LineBreak/><Run FontWeight="SemiBold">Recommended on with Systema Engine:</Run> cleaner, more
+                                    <LineBreak/><Run FontWeight="SemiBold">With the Systema Engine:</Run> cleaner, more
                                     stable shutdowns.
                                 </TextBlock>
                             </ctl:SettingsCard.Description>
@@ -482,8 +482,8 @@
                         </ctl:SettingsCard>
 
                         <!-- Disable background Store/UWP apps: BackgroundAccessApplications\GlobalUserDisabled. -->
-                        <ctl:SettingsCard Header="Disable background Store apps" Style="{StaticResource ExpanderItem}"
-                                          Badge="Safe" BadgeBrush="{StaticResource AccentGreenBrush}">
+                        <ctl:SettingsCard Header="Disable background Store apps" Style="{StaticResource ExpanderItem}" RecommendKey="BackgroundAppsOff"
+                                          Badge="Safe" BadgeBrush="{StaticResource TextSecondaryBrush}">
                             <ctl:SettingsCard.Description>
                                 <TextBlock Style="{StaticResource CardDescription}">
                                     Stops packaged Store and UWP apps (Xbox, Phone Link, Mail, Weather, etc.) from running tasks in the
@@ -491,7 +491,7 @@
                                     running. Windows 11 hid the global switch for this, so this is the clean way to control it. Trade-off:
                                     those apps won't update live tiles or push background notifications until you open them. OFF restores
                                     the Windows default.
-                                    <LineBreak/><Run FontWeight="SemiBold">Recommended on with Systema Engine:</Run> less background churn,
+                                    <LineBreak/><Run FontWeight="SemiBold">With the Systema Engine:</Run> less background churn,
                                     snappier foreground.
                                 </TextBlock>
                             </ctl:SettingsCard.Description>

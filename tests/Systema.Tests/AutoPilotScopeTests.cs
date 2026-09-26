@@ -53,7 +53,12 @@ public class AutoPilotScopeTests
         var dash = Read("src", "Systema", "ViewModels", "DashboardViewModel.cs");
         int step = dash.IndexOf("await _powerPlan.SetHighPerformanceAsync();", StringComparison.Ordinal);
         Assert.True(step > 0);
-        Assert.Contains("!_powerPlan.HasBattery()", dash[Math.Max(0, step - 600)..step]);
+        Assert.Contains("RecommendationRules.WantsHighPerformancePlan(pc)", dash[Math.Max(0, step - 600)..step]);
+
+        // ...and that rule is "not a laptop", where laptop means "has a battery".
+        var rules = Read("src", "Systema", "Core", "RecommendationRules.cs");
+        Assert.Contains("WantsHighPerformancePlan(PcProfile pc) => !pc.IsLaptop;", rules);
+        Assert.Contains("laptop = new PowerPlanService().HasBattery()", rules);
     }
 
     // "Intel GPU max performance" holds the iGPU at full clocks. That is more heat and more
@@ -67,7 +72,9 @@ public class AutoPilotScopeTests
         Assert.True(at > 0, "the Intel max performance suggestion moved or was renamed");
 
         // The nearest enclosing gate must exclude battery-powered machines.
-        Assert.Contains("!_powerPlan.HasBattery()", dash[Math.Max(0, at - 400)..at]);
+        Assert.Contains("RecommendationRules.WantsIntelMaxPerformance(pc)", dash[Math.Max(0, at - 400)..at]);
+        var rules = Read("src", "Systema", "Core", "RecommendationRules.cs");
+        Assert.Contains("WantsIntelMaxPerformance(PcProfile pc) => !pc.IsLaptop && pc.HasIntelIgpu;", rules);
 
         // Suggestions-only: it must never be added to the Apply-all list.
         Assert.DoesNotContain("recs.Add(new() { Label = \"Intel GPU max performance\"", dash);

@@ -535,16 +535,25 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
 
     // ── Auto-Pilot status check ───────────────────────────────────────────────
 
+    /// <summary>The profile loaded at startup, or a fresh detection if a check runs before it
+    /// lands. Worker threads only: detection queries WMI.</summary>
+    private static PcProfile CurrentPc() => Recommend.Instance.Profile ?? PcProfile.Detect();
+
     private async Task CheckAutoPilotStatusAsync()
     {
         try
         {
             var items   = new List<AutoPilotItem>();
             int pending = 0;
+            PcProfile pc = null!;
 
             // Run all checks on a background thread (some hit the registry / powercfg)
             await RunOnLargeStackAsync(() =>
             {
+                // Which checks apply depends on the PC (laptop or desktop, which GPUs). Same rules
+                // the Recommended pills on each page use, so the two never disagree.
+                pc = CurrentPc();
+
                 // 1. Page file
                 var (initMb, _, isManaged) = _memoryService.GetPagefileSettings();
                 var (recommended, ramMb)   = _memoryService.GetRecommendedPagefileWithRam();
@@ -611,7 +620,7 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
                 string plan  = _powerPlan.GetActivePlan();
                 ActivePlan = plan;
 
-                if (!_powerPlan.HasBattery())
+                if (RecommendationRules.WantsHighPerformancePlan(pc))
                 {
                     // Desktop: High Performance is the target plan.
                     bool isHighPerf = plan.Contains("High Performance", StringComparison.OrdinalIgnoreCase)
@@ -724,7 +733,7 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
                 //     driver integration (fixes flicker / stutter). Restart to apply.
                 //     Skipped entirely on NVIDIA, where it breaks VSync (see IsMpoAutoDisableUnsafe).
                 //     There it becomes the opposite item: MPO must be ON.
-                bool mpoUnsafe = _graphics.IsMpoAutoDisableUnsafe();
+                bool mpoUnsafe = !RecommendationRules.WantsMpoDisabled(pc);
                 bool mpoOk     = mpoUnsafe ? !_graphics.IsMpoDisabled() : _graphics.IsMpoDisabled();
                 if (!mpoOk) pending++;
                 items.Add(new AutoPilotItem
@@ -770,7 +779,7 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
                 // 17. Stable timer resolution — forces a global 0.5 ms timer, DESKTOPS ONLY. On a
                 //     laptop a forced high-resolution timer keeps the CPU out of deep idle states,
                 //     hurting battery and thermals, so it's not offered (checklist or feed) there.
-                if (!_powerPlan.HasBattery())
+                if (RecommendationRules.WantsTimerResolution(pc))
                 {
                     bool timerOk = _graphics.IsTimerResolutionForced();
                     if (!timerOk) pending++;
@@ -833,7 +842,7 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
             // rendered above the panel's refresh rate is thrown away before it's ever shown — pure
             // wasted GPU work that costs heat, fan noise, and battery. Desktops don't get this in
             // the feed (they're plugged in), and it's Recommended-only, never in the Apply-all pass.
-            if (_powerPlan.HasBattery() && _nvapi.IsAvailable())
+            if (RecommendationRules.WantsFpsCap(pc) && _nvapi.IsAvailable())
             {
                 int target = NvapiService.GetRefreshRateFpsTarget();   // refresh Hz snapped to a clean cap
                 if (target > 0)
@@ -849,7 +858,7 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
             // clocks ("prefer maximum performance"). Desktops have the power and cooling headroom to
             // make that a free win; on a laptop it causes thermal throttling (which is why laptops keep
             // it On), so this is Recommended-only and desktop-only, never in the Apply-all pass.
-            if (!_powerPlan.HasBattery())
+            if (RecommendationRules.WantsNvidiaFullClocks(pc))
             {
                 var nvAdapters = _nvidiaGpu.DetectNvidiaAdapters();
                 if (nvAdapters.Count > 0)
@@ -865,7 +874,7 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
             // Recommended-only, deliberately NOT in the Apply-all pass — holding full clocks
             // around the clock is a trade the user should opt into, not something Auto-Pilot does
             // to them.
-            if (!_powerPlan.HasBattery() && _nvapi.IsAvailable())
+            if (RecommendationRules.WantsNvidiaMaxPerformanceMode(pc) && _nvapi.IsAvailable())
             {
                 extras.Add(new() { Label = "NVIDIA power mode: maximum performance",
                                    IsDone = _nvapi.GetPowerMode() == NvapiService.PStateMaxPerf });
@@ -882,7 +891,7 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
             // Writes ONLY the single documented PowerPolicy flag (=2), which Reset removes, and
             // never any of the PSR2/DPST/DRRS/MSI values. Recommended-only, never in Apply-all.
             var intelAdapters = _intelGpu.DetectIntelAdapters();
-            if (intelAdapters.Count > 0 && !_powerPlan.HasBattery())
+            if (RecommendationRules.WantsIntelMaxPerformance(pc) && intelAdapters.Count > 0)
             {
                 string ip = intelAdapters[0].FullPath;
                 var pp = _intelGpu.ResolveFeature(ip, new[] { IntelGpuService.PowerPolicy });
@@ -894,7 +903,7 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
                 // explicit choice), and every value they write is in ManagedValueNames, so the tab's
                 // Reset fully heals it. Desktop-only: DPST/DRRS are laptop panel features, and a
                 // desktop has no battery to preserve.
-                if (!_powerPlan.HasBattery())
+                if (RecommendationRules.WantsIntelMaxPerformance(pc))
                 {
                     bool rc6Off  = _intelGpu.ResolveFeature(ip, new[] { IntelGpuService.RC6 }).Value == 0;
                     bool dpstOff = _intelGpu.ResolveFeature(ip, new[] { IntelGpuService.DpstEnable }).Value == 0;
@@ -992,6 +1001,7 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
         try
         {
             _log.Info("DashboardViewModel", "Auto-Pilot started");
+            var pc = await Task.Run(CurrentPc);
 
             // 1. Page file — set to recommended size based on installed RAM
             var (recommended, ramMb) = _memoryService.GetRecommendedPagefileWithRam();
@@ -1015,7 +1025,7 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
             //    Performance drains the battery; the Balanced-on-battery step below manages
             //    laptop power instead. Persisting PerformanceModeEnabled lets VisualViewModel
             //    re-apply HP at every subsequent startup (desktop only).
-            if (!_powerPlan.HasBattery())
+            if (RecommendationRules.WantsHighPerformancePlan(pc))
             {
                 await _powerPlan.SetHighPerformanceAsync();
                 _settings.PerformanceModeEnabled = true;
@@ -1095,7 +1105,7 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
             // this on every machine, which is exactly how it broke VSync. Auto-Pilot owns this
             // value, so on NVIDIA it now restores MPO rather than merely skipping it — otherwise
             // the machines it already broke would stay broken.
-            if (_graphics.IsMpoAutoDisableUnsafe())
+            if (!RecommendationRules.WantsMpoDisabled(pc))
             {
                 if (_graphics.IsMpoDisabled())
                 {
@@ -1131,7 +1141,7 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
 
             // 17. Stable timer resolution — DESKTOPS ONLY (a forced high-res timer keeps a laptop CPU
             //     out of deep idle, hurting battery/thermals). Restart to take effect.
-            if (!_powerPlan.HasBattery() && !_graphics.IsTimerResolutionForced())
+            if (RecommendationRules.WantsTimerResolution(pc) && !_graphics.IsTimerResolutionForced())
             {
                 _graphics.SetTimerResolution(true);
                 _log.Info("DashboardViewModel", "Stable timer resolution enabled (Auto-Pilot, desktop)");

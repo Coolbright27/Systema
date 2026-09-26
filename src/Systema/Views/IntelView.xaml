@@ -57,14 +57,14 @@
             <TextBlock Text="Performance" Style="{StaticResource SettingsGroupHeader}"/>
 
             <!-- ===== Power Policy ===== -->
-            <ctl:SettingsCard Header="Power Policy"
+            <ctl:SettingsCard Header="Power Policy" RecommendKey="IntelPowerPolicy"
                               Visibility="{Binding ShowPowerPolicy, Converter={StaticResource BoolToVis}}">
                 <ctl:SettingsCard.Description>
                     <StackPanel>
                         <TextBlock Style="{StaticResource CardDescription}">
                             Controls how the Intel graphics chip balances performance against power saving.
-                            <Run FontWeight="SemiBold">Recommended: Max Performance</Run> when you're plugged in, for the smoothest feel.
-                            Default just lets the driver decide. <Run FontStyle="Italic">Takes effect after a restart.</Run>
+                            Max Performance holds full clocks for the smoothest feel, and Default lets the driver decide.
+                            <Run FontStyle="Italic">Takes effect after a restart.</Run>
                         </TextBlock>
                         <TextBlock Style="{StaticResource CardNote}">
                             <Run Text="Current: "/><Run Text="{Binding PowerPolicyDetected, Mode=OneWay}"
@@ -81,14 +81,14 @@
             </ctl:SettingsCard>
 
             <!-- ===== RC6 Render Standby ===== -->
-            <ctl:SettingsCard Header="RC6 Render Standby"
+            <ctl:SettingsCard Header="RC6 Render Standby" RecommendKey="IntelRc6"
                               Visibility="{Binding ShowRc6, Converter={StaticResource BoolToVis}}">
                 <ctl:SettingsCard.Description>
                     <StackPanel>
                         <TextBlock Style="{StaticResource CardDescription}">
                             Lets the graphics chip briefly sleep when idle to save power and run cooler.
-                            <Run FontWeight="SemiBold">Recommended: On.</Run> Turn it Off only if you want the GPU to stay
-                            fully awake for maximum consistency (uses more power and runs warmer). <Run FontStyle="Italic">Takes effect after a restart.</Run>
+                            Off keeps the GPU fully awake for maximum consistency, which uses more power and runs warmer.
+                            <Run FontStyle="Italic">Takes effect after a restart.</Run>
                         </TextBlock>
                         <TextBlock Style="{StaticResource CardNote}">
                             <Run Text="Current: "/><Run Text="{Binding Rc6Detected, Mode=OneWay}"
@@ -112,14 +112,14 @@
             <TextBlock Text="Display and battery" Style="{StaticResource SettingsGroupHeader}"/>
 
             <!-- ===== Display Power Saving (DPST) ===== -->
-            <ctl:SettingsCard Header="Display Power Saving (DPST)"
+            <ctl:SettingsCard Header="Display Power Saving (DPST)" RecommendKey="IntelDpst"
                               Visibility="{Binding ShowDpst, Converter={StaticResource BoolToVis}}">
                 <ctl:SettingsCard.Description>
                     <StackPanel>
                         <TextBlock Style="{StaticResource CardDescription}">
-                            Dims and adjusts the backlight automatically to save battery. <Run FontWeight="SemiBold">Recommended: On</Run>
-                            for longer battery life. Turn it Off if the auto-dimming bugs you or you want steady
-                            brightness for photo or video work. <Run FontStyle="Italic">Takes effect after a restart.</Run>
+                            Dims and adjusts the backlight automatically for longer battery life. Turn it Off if the
+                            auto-dimming bugs you or you want steady brightness for photo or video work.
+                            <Run FontStyle="Italic">Takes effect after a restart.</Run>
                         </TextBlock>
                         <TextBlock Style="{StaticResource CardNote}">
                             <Run Text="Current: "/><Run Text="{Binding DpstDetected, Mode=OneWay}"
@@ -136,14 +136,14 @@
             </ctl:SettingsCard>
 
             <!-- ===== Dynamic Refresh Switching (DRRS) ===== -->
-            <ctl:SettingsCard Header="Dynamic Refresh Switching"
+            <ctl:SettingsCard Header="Dynamic Refresh Switching" RecommendKey="IntelDrrs"
                               Visibility="{Binding ShowDrrs, Converter={StaticResource BoolToVis}}">
                 <ctl:SettingsCard.Description>
                     <StackPanel>
                         <TextBlock Style="{StaticResource CardDescription}">
                             Lowers the built-in screen's refresh rate when the picture is static to save power.
-                            <Run FontWeight="SemiBold">Recommended: On</Run> for a laptop. Turn it Off if you notice a
-                            stutter when the refresh rate switches. <Run FontStyle="Italic">Takes effect after a restart.</Run>
+                            Turn it Off if you notice a stutter when the refresh rate switches.
+                            <Run FontStyle="Italic">Takes effect after a restart.</Run>
                         </TextBlock>
                         <TextBlock Style="{StaticResource CardNote}">
                             <Run Text="Current: "/><Run Text="{Binding DrrsDetected, Mode=OneWay}"
@@ -166,13 +166,13 @@
             </ctl:SettingsCard>
 
             <!-- ===== Frame Buffer Compression (FBC) ===== -->
-            <ctl:SettingsCard Header="Frame Buffer Compression"
+            <ctl:SettingsCard Header="Frame Buffer Compression" RecommendKey="IntelFbc"
                               Visibility="{Binding ShowFbc, Converter={StaticResource BoolToVis}}">
                 <ctl:SettingsCard.Description>
                     <StackPanel>
                         <TextBlock Style="{StaticResource CardDescription}">
-                            Compresses the screen image in memory to save power. <Run FontWeight="SemiBold">Recommended: On.</Run>
-                            Turn it Off only if you see faint flicker on the built-in display. <Run FontStyle="Italic">Takes effect after a restart.</Run>
+                            Compresses the screen image in memory to save power. Turn it Off only if you see faint
+                            flicker on the built-in display. <Run FontStyle="Italic">Takes effect after a restart.</Run>
                         </TextBlock>
                         <TextBlock Style="{StaticResource CardNote}">
                             <Run Text="Current: "/><Run Text="{Binding FbcDetected, Mode=OneWay}"

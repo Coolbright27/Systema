@@ -36,7 +36,7 @@
             </StackPanel>
 
             <!-- ═══════════ MASTER + MANUAL ═══════════ -->
-            <ctl:SettingsCard Header="Boost games automatically" Margin="0,16,0,4">
+            <ctl:SettingsCard Header="Boost games automatically" Margin="0,16,0,4" RecommendKey="GameBoost">
                 <ctl:SettingsCard.Description>
                     <TextBlock Style="{StaticResource CardDescription}"
                                Text="Systema notices a game within seconds of it opening and boosts on its own. Turn this off and Game Booster does nothing at all unless you press Boost right now."/>
@@ -106,7 +106,7 @@
 
             <TextBlock Text="Performance" Style="{StaticResource SettingsGroupHeader}" Margin="2,4,0,8"/>
 
-            <ctl:SettingsCard Header="Use the High performance power plan">
+            <ctl:SettingsCard Header="Use the High performance power plan" RecommendKey="BoostHighPerfPlan">
                 <ctl:SettingsCard.Description>
                     <TextBlock Style="{StaticResource CardDescription}"
                                Text="Stops Windows slowing your CPU down to save power while you play. Switches back when the game closes."/>

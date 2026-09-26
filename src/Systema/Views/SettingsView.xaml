@@ -75,7 +75,7 @@
             <TextBlock Text="Control whether Systema launches automatically when you sign in to Windows."
                        Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="2,0,0,8"/>
 
-            <ctl:SettingsCard Header="Launch on Windows startup"
+            <ctl:SettingsCard Header="Launch on Windows startup" RecommendKey="LaunchOnStartup"
                               Description="Systema will start automatically when you sign in. Task Sleep waits ~45 seconds after boot so normal startup processes aren't affected.">
                 <CheckBox IsChecked="{Binding StartWithWindows}" ToolTipService.ShowOnDisabled="True">
                     <CheckBox.Style>
@@ -268,7 +268,7 @@
             </ctl:SettingsCard>
 
             <!-- Version footer -->
-            <TextBlock Text="Systema v0.7.348  ·  For support visit discord.gg/yYhM7mdupH"
+            <TextBlock Text="Systema v0.7.349  ·  For support visit discord.gg/yYhM7mdupH"
                        Style="{StaticResource CaptionText}" Foreground="{StaticResource TextSecondaryBrush}"
                        TextWrapping="Wrap" Margin="2,24,0,0"/>
         </StackPanel>

@@ -161,7 +161,7 @@
             <!-- ══════════════════════════════ Power ══════════════════════════════ -->
             <TextBlock Text="Power" Style="{StaticResource SettingsGroupHeader}"/>
 
-            <ctl:SettingsCard Header="Performance mode">
+            <ctl:SettingsCard Header="Performance mode" RecommendKey="PerformanceMode">
                 <ctl:SettingsCard.Description>
                     <StackPanel>
                         <TextBlock Style="{StaticResource CardDescription}">
@@ -426,8 +426,8 @@
                 <!-- Windows, taskbar and text -->
                 <TextBlock Text="Windows, taskbar and text" Style="{StaticResource SettingsGroupHeader}" Margin="2,16,0,8"/>
 
-                <ctl:SettingsCard Header="Show content while moving windows"
-                                  Description="Shows the full window content while you drag it. Recommended to keep on. Turning it off shows only an outline.">
+                <ctl:SettingsCard Header="Show content while moving windows" RecommendKey="DragContents"
+                                  Description="Shows the full window content while you drag it. Turning it off shows only an outline.">
                     <CheckBox Style="{StaticResource ToggleSwitch}"
                               IsChecked="{Binding ShowDragContentsEnabled, Mode=TwoWay}"/>
                 </ctl:SettingsCard>
@@ -461,8 +461,8 @@
                             </Style.Triggers>
                         </Style>
                     </Grid.Style>
-                    <ctl:SettingsCard Header="Smooth text rendering (ClearType)"
-                                      Description="Makes text sharper and easier to read on screen. Strongly recommended to keep on.">
+                    <ctl:SettingsCard Header="Smooth text rendering (ClearType)" RecommendKey="ClearType"
+                                      Description="Makes text sharper and easier to read on screen.">
                         <CheckBox IsChecked="{Binding SmoothFontsEnabled, Mode=TwoWay}">
                             <CheckBox.Style>
                                 <Style TargetType="CheckBox" BasedOn="{StaticResource ToggleSwitch}">

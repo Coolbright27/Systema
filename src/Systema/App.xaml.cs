@@ -675,6 +675,16 @@ public partial class App : Application
 
             Log.Info("App", "All ViewModels constructed");
 
+            // What's recommended depends on this PC (laptop or desktop, RAM, GPUs). Read it off
+            // the UI thread, then every page's "Recommended" pill updates at once (Core/RecommendationRules.cs).
+            _ = System.Threading.Tasks.Task.Run(() =>
+            {
+                var pc = PcProfile.Detect();
+                Log.Info("App", $"PC profile: {(pc.IsLaptop ? "laptop" : "desktop")}, {pc.RamMb / 1024} GB RAM, " +
+                                $"NVIDIA={pc.HasNvidiaGpu}, Intel iGPU={pc.HasIntelIgpu}, hybrid CPU={pc.IsHybridCpu}");
+                Dispatcher.BeginInvoke(new Action(() => Recommend.Instance.SetProfile(pc)));
+            });
+
             // ── Wire GameBooster → TaskSleep game-mode suppression ──
             // When a game is detected (or manual boost starts), tell TaskSleep to stop
             // giving idle wakes to background processes so the CPU stays free for the game.

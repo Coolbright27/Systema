@@ -34,8 +34,7 @@
             <!-- ===== CALLS & PLAYBACK ===== -->
             <TextBlock Text="Calls and playback" Style="{StaticResource SettingsGroupHeader}"/>
 
-            <ctl:SettingsCard Header="Stop lowering other sounds during calls"
-                              Badge="Recommended" BadgeBrush="{StaticResource AccentGreenBrush}">
+            <ctl:SettingsCard Header="Stop lowering other sounds during calls" RecommendKey="DisableDucking">
                 <ctl:SettingsCard.Description>
                     <StackPanel>
                         <TextBlock Style="{StaticResource CardDescription}">
@@ -50,8 +49,7 @@
                           IsChecked="{Binding DisableDucking, Mode=TwoWay}"/>
             </ctl:SettingsCard>
 
-            <ctl:SettingsCard Header="Priority audio scheduling"
-                              Badge="Recommended" BadgeBrush="{StaticResource AccentGreenBrush}">
+            <ctl:SettingsCard Header="Priority audio scheduling" RecommendKey="AudioScheduling">
                 <ctl:SettingsCard.Description>
                     <StackPanel>
                         <TextBlock Style="{StaticResource CardDescription}">

@@ -36,8 +36,7 @@
             <!-- ===== FRAME PACING & DISPLAY ===== -->
             <TextBlock Text="Frame pacing and display" Style="{StaticResource SettingsGroupHeader}"/>
 
-            <ctl:SettingsCard Header="Disable Multi-Plane Overlay (MPO)"
-                              Badge="Recommended" BadgeBrush="{StaticResource AccentGreenBrush}">
+            <ctl:SettingsCard Header="Disable Multi-Plane Overlay (MPO)" RecommendKey="DisableMpo">
                 <ctl:SettingsCard.Description>
                     <StackPanel>
                         <TextBlock Style="{StaticResource CardDescription}">
@@ -57,7 +56,7 @@
                           IsChecked="{Binding DisableMpo, Mode=TwoWay}"/>
             </ctl:SettingsCard>
 
-            <ctl:SettingsCard Header="Hardware-accelerated GPU Scheduling">
+            <ctl:SettingsCard Header="Hardware-accelerated GPU Scheduling" RecommendKey="Hags">
                 <ctl:SettingsCard.Description>
                     <StackPanel>
                         <TextBlock Style="{StaticResource CardDescription}">
@@ -75,7 +74,7 @@
                           IsChecked="{Binding HardwareGpuScheduling, Mode=TwoWay}"/>
             </ctl:SettingsCard>
 
-            <ctl:SettingsCard Header="Optimizations for windowed games">
+            <ctl:SettingsCard Header="Optimizations for windowed games" RecommendKey="WindowedOptimizations">
                 <ctl:SettingsCard.Description>
                     <StackPanel>
                         <TextBlock Style="{StaticResource CardDescription}">
@@ -90,7 +89,7 @@
                           IsChecked="{Binding WindowedOptimizations, Mode=TwoWay}"/>
             </ctl:SettingsCard>
 
-            <ctl:SettingsCard Header="Turn off Game Bar capture">
+            <ctl:SettingsCard Header="Turn off Game Bar capture" RecommendKey="GameDvrOff">
                 <ctl:SettingsCard.Description>
                     <StackPanel>
                         <TextBlock Style="{StaticResource CardDescription}">
@@ -109,7 +108,7 @@
             <!-- ===== SCHEDULING & TIMING ===== -->
             <TextBlock Text="Scheduling and timing" Style="{StaticResource SettingsGroupHeader}"/>
 
-            <ctl:SettingsCard Header="Priority graphics scheduling">
+            <ctl:SettingsCard Header="Priority graphics scheduling" RecommendKey="PriorityGraphics">
                 <ctl:SettingsCard.Description>
                     <StackPanel>
                         <TextBlock Style="{StaticResource CardDescription}">
@@ -128,7 +127,7 @@
                           IsChecked="{Binding PriorityGraphicsScheduling, Mode=TwoWay}"/>
             </ctl:SettingsCard>
 
-            <ctl:SettingsCard Header="Stable timer resolution (0.5 ms)">
+            <ctl:SettingsCard Header="Stable timer resolution (0.5 ms)" RecommendKey="TimerResolution">
                 <ctl:SettingsCard.Description>
                     <StackPanel>
                         <TextBlock Style="{StaticResource CardDescription}">
@@ -160,7 +159,7 @@
             <!-- ===== STABILITY ===== -->
             <TextBlock Text="Stability" Style="{StaticResource SettingsGroupHeader}"/>
 
-            <ctl:SettingsCard Header="Extend GPU recovery timeout">
+            <ctl:SettingsCard Header="Extend GPU recovery timeout" RecommendKey="GpuRecoveryTimeout">
                 <ctl:SettingsCard.Description>
                     <StackPanel>
                         <TextBlock Style="{StaticResource CardDescription}">

@@ -63,10 +63,15 @@ public class MpoNvidiaGuardTests
         int idx = src.IndexOf("_graphics.SetMpoDisabled(true)", System.StringComparison.Ordinal);
         Assert.True(idx > 0, "expected Auto-Pilot to still manage MPO");
 
-        // The guard must appear before the first enabling call.
-        int gate = src.IndexOf("IsMpoAutoDisableUnsafe()", System.StringComparison.Ordinal);
+        // The guard must appear before the first enabling call. Auto-Pilot asks the shared rule
+        // (so the Graphics page's pill says the same thing), which is the same NVIDIA check.
+        int gate = src.IndexOf("RecommendationRules.WantsMpoDisabled(pc)", System.StringComparison.Ordinal);
         Assert.True(gate > 0 && gate < idx,
-            "Auto-Pilot disables MPO before checking IsMpoAutoDisableUnsafe — this is the NVIDIA VSync bug");
+            "Auto-Pilot disables MPO before checking WantsMpoDisabled — this is the NVIDIA VSync bug");
+
+        var rules = Read("src", "Systema", "Core", "RecommendationRules.cs");
+        Assert.Contains("WantsMpoDisabled(PcProfile pc) => !pc.HasNvidiaGpu;", rules);
+        Assert.Contains("nvidia = new NvidiaGpuService().DetectNvidiaAdapters().Count > 0", rules);
     }
 
     [Fact]

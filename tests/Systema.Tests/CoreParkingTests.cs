@@ -338,7 +338,7 @@ public class CoreParkingTests
         Assert.DoesNotContain("searcher.Get()", src);
 
         // One source of truth: the same enumeration that counts the E-cores.
-        int m = src.IndexOf("private static bool IsHybridCpu", StringComparison.Ordinal);
+        int m = src.IndexOf("static bool IsHybridCpu", StringComparison.Ordinal);
         Assert.True(m > 0);
         Assert.Contains("CountEcoreLogicalProcessors() > 0", src[m..(m + 900)]);
     }

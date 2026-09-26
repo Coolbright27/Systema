@@ -75,7 +75,7 @@
             <TextBlock Text="Power" Style="{StaticResource SettingsGroupHeader}"/>
 
             <!-- ===== GPU Power Management (PowerMizer / render-standby equivalent) ===== -->
-            <ctl:SettingsCard Header="GPU Power Management (Similar to RC6)">
+            <ctl:SettingsCard Header="GPU Power Management (Similar to RC6)" RecommendKey="NvidiaPowerManagement">
                 <ctl:SettingsCard.Description>
                     <StackPanel>
                         <TextBlock Style="{StaticResource CardDescription}">
@@ -86,8 +86,10 @@
                             maximum performance," so it holds full clocks all the time, on both AC and battery.
                             <Run FontStyle="Italic">Takes effect after a restart.</Run>
                         </TextBlock>
+                        <!-- Laptops only: a desktop is recommended Off (see the pill). -->
                         <TextBlock Style="{StaticResource CardNoteWarn}"
-                                   Text="Recommended On for laptops. Full clocks make more heat and drain more battery than a thermally limited laptop can sustain, so turning it Off often causes thermal throttling that makes things slower, not faster."/>
+                                   Visibility="{Binding IsLaptop, Converter={StaticResource BoolToVis}}"
+                                   Text="On a laptop, full clocks make more heat and drain more battery than the cooling can keep up with, so turning this Off often causes thermal throttling that makes things slower, not faster."/>
                         <TextBlock Style="{StaticResource CardNote}">
                             <Run Text="Current: "/><Run Text="{Binding PowerSavingDetected, Mode=OneWay}"
                                  Foreground="{StaticResource AccentGreenBrush}" FontWeight="SemiBold"/>
@@ -142,6 +144,7 @@
 
             <!-- Plugged in / desktop -->
             <ctl:SettingsCard Header="When plugged in" Description="Used on AC power, and always on a desktop."
+                              RecommendKey="NvidiaModePluggedIn"
                               Style="{StaticResource ExpanderItem}">
                 <ComboBox Width="300" Style="{StaticResource DarkComboBox}"
                           ItemsSource="{Binding PowerModeOptions}"
@@ -152,7 +155,7 @@
 
             <!-- On battery: laptops only -->
             <Grid Visibility="{Binding IsLaptop, Converter={StaticResource BoolToVis}}">
-                <ctl:SettingsCard Header="On battery" Style="{StaticResource ExpanderItem}"
+                <ctl:SettingsCard Header="On battery" Style="{StaticResource ExpanderItem}" RecommendKey="NvidiaModeBattery"
                                   Description="Used when you're unplugged. Optimal power is usually the right pick here, since full clocks on battery mostly make heat and drain runtime.">
                     <ComboBox Width="300" Style="{StaticResource DarkComboBox}"
                               ItemsSource="{Binding PowerModeOptions}"
@@ -168,7 +171,7 @@
             <StackPanel Visibility="{Binding IsFpsCapAvailable, Converter={StaticResource BoolToVis}}">
                 <TextBlock Text="Frame rate" Style="{StaticResource SettingsGroupHeader}"/>
 
-                <ctl:SettingsCard Header="Max Frame Rate (FPS cap)">
+                <ctl:SettingsCard Header="Max Frame Rate (FPS cap)" RecommendKey="NvidiaFpsCap">
                     <ctl:SettingsCard.Description>
                         <StackPanel>
                             <TextBlock Style="{StaticResource CardDescription}">

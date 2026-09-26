@@ -237,7 +237,7 @@ public class CoreParkingService
         return Math.Clamp(pct, 1, 100);
     }
     /// <summary>True when the CPU exposes more than one efficiency class (P-cores + E-cores).</summary>
-    private static bool IsHybridCpu()
+    internal static bool IsHybridCpu()
     {
         if (_isHybridCache is { } cached) return cached;
 

@@ -84,7 +84,7 @@
             <TextBlock Text="Updates and network" Style="{StaticResource SettingsGroupHeader}"/>
 
             <!-- ===== Block Windows Preview Updates ===== -->
-            <ctl:SettingsCard Header="Block Preview Updates" Badge="Safe"
+            <ctl:SettingsCard Header="Block Preview Updates" Badge="Safe" RecommendKey="PreviewUpdates"
                               BadgeBrush="{StaticResource TextSecondaryBrush}">
                 <ctl:SettingsCard.Description>
                     <StackPanel>
@@ -127,7 +127,7 @@
             </ctl:SettingsCard>
 
             <!-- ===== DNS Switcher ===== -->
-            <ctl:SettingsCard Header="DNS Switcher" Badge="Safe"
+            <ctl:SettingsCard Header="DNS Switcher" Badge="Safe" RecommendKey="Dns"
                               BadgeBrush="{StaticResource TextSecondaryBrush}">
                 <ctl:SettingsCard.Description>
                     <StackPanel>
@@ -180,9 +180,8 @@
             <TextBlock Text="Performance" Style="{StaticResource SettingsGroupHeader}"/>
 
             <!-- ===== Core Parking ===== -->
-            <ctl:SettingsCard Header="CPU Core Efficiency" Badge="Moderate"
-                              BadgeBrush="{StaticResource TextSecondaryBrush}"
-                              ExtraBadge="Recommended">
+            <ctl:SettingsCard Header="CPU Core Efficiency" Badge="Moderate" RecommendKey="CoreParking"
+                              BadgeBrush="{StaticResource TextSecondaryBrush}">
                 <ctl:SettingsCard.Description>
                     <StackPanel>
                         <TextBlock Style="{StaticResource CardDescription}">
@@ -228,7 +227,7 @@
             </ctl:SettingsCard>
 
             <!-- ===== Disable NTFS Last-Access Timestamps ===== -->
-            <ctl:SettingsCard Header="Disable NTFS Last-Access Timestamps" Badge="Safe"
+            <ctl:SettingsCard Header="Disable NTFS Last-Access Timestamps" Badge="Safe" RecommendKey="NtfsLastAccess"
                               BadgeBrush="{StaticResource TextSecondaryBrush}">
                 <ctl:SettingsCard.Description>
                     <StackPanel>
@@ -274,7 +273,7 @@
             <TextBlock Text="Start menu and tips" Style="{StaticResource SettingsGroupHeader}"/>
 
             <!-- ===== Disable Windows Suggestions & Nags ===== -->
-            <ctl:SettingsCard Header="Disable Suggestions &amp; Nags" Badge="Safe"
+            <ctl:SettingsCard Header="Disable Suggestions &amp; Nags" Badge="Safe" RecommendKey="Suggestions"
                               BadgeBrush="{StaticResource TextSecondaryBrush}">
                 <ctl:SettingsCard.Description>
                     <StackPanel>
@@ -314,7 +313,7 @@
             </ctl:SettingsCard>
 
             <!-- ===== Disable Bing / Web Results in Start Search ===== -->
-            <ctl:SettingsCard Header="Disable Web Search in Start" Badge="Safe"
+            <ctl:SettingsCard Header="Disable Web Search in Start" Badge="Safe" RecommendKey="WebSearch"
                               BadgeBrush="{StaticResource TextSecondaryBrush}">
                 <ctl:SettingsCard.Description>
                     <StackPanel>
