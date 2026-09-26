@@ -136,9 +136,6 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
     /// <summary>Home's "Today" list. Shared with the feed, which fills it from the log.</summary>
     public ObservableCollection<ActivityEntry> Activity => ActivityFeed.Instance.Entries;
 
-    /// <summary>Home's "I want…" goals. Set by App once every page ViewModel exists.</summary>
-    [ObservableProperty] private HomeGoalsViewModel? _goals;
-
     // Parked-core count comes from a performance counter. Reading it takes a few milliseconds,
     // so it runs off the UI thread and at most every few seconds.
     private DateTime _lastParkingRead = DateTime.MinValue;
