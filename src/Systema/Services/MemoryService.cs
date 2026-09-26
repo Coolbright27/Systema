@@ -224,20 +224,29 @@ public class MemoryService
         return (GetRecommendedPagefileMb(ramMb), ramMb);
     }
 
-    private static int GetRecommendedPagefileMb(long ramMb)
+    /// <summary>
+    /// The fixed page file sizes the Memory page offers, largest first (alongside "Windows
+    /// decides"). Every recommendation below is one of these, so Auto Pilot, the Home suggestion
+    /// and the dropdown always agree.
+    /// </summary>
+    public static readonly int[] PagefileSizeOptionsMb = { 32768, 16384, 12288, 8192, 4096 };
+
+    internal static int GetRecommendedPagefileMb(long ramMb)
     {
         // Tiered pagefile recommendations based on installed RAM.
         // Upper bounds are generous (+5 %) to absorb BIOS/reporting variance so a
         // nominally-16 GB system (which may report anywhere from 15.5–16.4 GB) always
         // lands in the correct tier.
-        if (ramMb < 9000)                        // < 8 GB  → 1.5× RAM, floor 4 GB
+        if (ramMb < 9000)                        // < 8 GB  → 1.5× RAM, rounded UP to an offered size (4 GB floor)
         {
-            int fallback = (int)Math.Min(ramMb * 1.5, 32768);
-            return Math.Max(fallback, 4096);
+            double want = ramMb * 1.5;
+            for (int i = PagefileSizeOptionsMb.Length - 1; i >= 0; i--)   // smallest first
+                if (PagefileSizeOptionsMb[i] >= want) return PagefileSizeOptionsMb[i];
+            return PagefileSizeOptionsMb[0];
         }
         if (ramMb < 17500)   return 32768;       //  8–16 GB  → 32 GB pagefile
-        if (ramMb < 27500)   return 24576;       // 16–24 GB  → 24 GB pagefile
-        return 16384;                            // 24 GB+    → 16 GB pagefile
+        return 16384;                            // 16 GB+    → 16 GB pagefile. The old 16–24 GB tier
+                                                 // (24 GB) isn't an offered size; 16 GB matches the tier above.
     }
 
     // ── Free RAM (EmptyWorkingSet + purge standby list) ───────────────────────

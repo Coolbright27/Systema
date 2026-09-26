@@ -246,24 +246,23 @@
                         <StackPanel>
                             <TextBlock Style="{StaticResource CardDescription}">
                                 Windows uses a file on disk as backup memory when RAM fills up. A fixed size avoids
-                                stutter from resizing on the fly. Most people can leave this alone. Requires a restart.
+                                stutter from resizing on the fly, and Windows decides lets it grow and shrink on its
+                                own. Most people can leave this alone. Requires a restart.
                             </TextBlock>
                             <TextBlock Text="{Binding CurrentPagefileText}" Style="{StaticResource CardNoteGood}"/>
                             <TextBlock Text="{Binding RecommendedPagefileText}" Style="{StaticResource CardNote}"
                                        Foreground="{StaticResource AccentBlueBrush}" Margin="0,2,0,0"/>
                         </StackPanel>
                     </ctl:SettingsCard.Description>
-                    <StackPanel>
-                        <TextBlock Text="Fixed size (MB)" Style="{StaticResource CaptionText}" Margin="0,0,0,4"/>
-                        <TextBox Text="{Binding PagefileInitialMb, UpdateSourceTrigger=PropertyChanged}"
-                                 Style="{StaticResource DarkTextBox}" Width="180" HorizontalAlignment="Left"
-                                 Margin="0,0,0,8"/>
-                        <StackPanel Orientation="Horizontal">
-                            <Button Content="Apply" Command="{Binding ConfigurePagefileCommand}"
-                                    Style="{StaticResource PrimaryButton}" Margin="0,0,8,0"/>
-                            <Button Content="Reset to default" Command="{Binding RevertPagefileCommand}"
-                                    Style="{StaticResource GhostButton}"/>
-                        </StackPanel>
+                    <!-- Pick a size, then Apply (it lights up only when the choice differs from
+                         what's set). "Windows decides" is Windows' own default, so there's no
+                         separate reset button. -->
+                    <StackPanel Orientation="Horizontal">
+                        <ComboBox Width="200" Style="{StaticResource DarkComboBox}" VerticalAlignment="Center"
+                                  ItemsSource="{Binding PagefileOptions}" DisplayMemberPath="Label"
+                                  SelectedItem="{Binding SelectedPagefileOption, Mode=TwoWay}"/>
+                        <Button Content="Apply" Command="{Binding ConfigurePagefileCommand}"
+                                Style="{StaticResource PrimaryButton}" Margin="8,0,0,0" VerticalAlignment="Center"/>
                     </StackPanel>
                 </ctl:SettingsCard>
             </StackPanel>

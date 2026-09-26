@@ -39,8 +39,21 @@ public partial class MemoryViewModel : ObservableObject, IAutoRefreshable, IDisp
 
     [ObservableProperty] private long _totalRamMb;
     [ObservableProperty] private long _availableRamMb;
-    /// <summary>Single static page-file size. Passed as both initial and maximum to the service.</summary>
-    [ObservableProperty] private int _pagefileInitialMb;
+    // ── Page file: a dropdown of fixed sizes plus "Windows decides" ──
+    /// <summary>The choices shown, largest first; Windows decides is last.</summary>
+    public ObservableCollection<PagefileOption> PagefileOptions { get; } = new();
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanApplyPagefile))]
+    [NotifyCanExecuteChangedFor(nameof(ConfigurePagefileCommand))]
+    private PagefileOption? _selectedPagefileOption;
+
+    // What is configured right now: 0 = Windows decides, above 0 = fixed size in MB, -1 = not read yet.
+    private int _appliedPagefileMb = -1;
+
+    /// <summary>Apply only lights up when the choice differs from what's already set.</summary>
+    public bool CanApplyPagefile => SelectedPagefileOption != null && SelectedPagefileOption.Mb != _appliedPagefileMb;
+
     [ObservableProperty] private string _recommendedPagefileText = string.Empty;
     [ObservableProperty] private ObservableCollection<StartupItem> _startupItems = new();
     [ObservableProperty] private string _currentPagefileText = string.Empty;
@@ -174,8 +187,9 @@ public partial class MemoryViewModel : ObservableObject, IAutoRefreshable, IDisp
         _startupService = startupService;
         _settings       = settings;
 
-        // Set RAM-based default immediately so the TextBox is pre-filled on open.
-        _pagefileInitialMb = _memoryService.GetRecommendedPagefileMb();
+        // Fill the page file dropdown straight away (recommended size selected) so it's never
+        // empty on open; the first refresh then selects what's actually configured.
+        RebuildPagefileOptions(applied: -1, recommended: _memoryService.GetRecommendedPagefileMb());
 
         SettingsService.AutoPilotModeChanged += OnAutoPilotModeChanged;
     }
@@ -220,7 +234,7 @@ public partial class MemoryViewModel : ObservableObject, IAutoRefreshable, IDisp
 
             // Update recommended text based on detected RAM
             int rec = _memoryService.GetRecommendedPagefileMb();
-            RecommendedPagefileText = $"Recommended for {TotalRamMb / 1024} GB RAM: {rec:N0} MB";
+            RecommendedPagefileText = $"Recommended for {TotalRamMb / 1024} GB RAM: {PagefileGb(rec)}";
 
             if (fullRefresh)
             {
@@ -230,17 +244,17 @@ public partial class MemoryViewModel : ObservableObject, IAutoRefreshable, IDisp
 
                 if (!isSystemManaged && init > 0)
                 {
-                    // Custom/static size configured — pre-fill with the existing value (use init).
-                    PagefileInitialMb = init;
+                    // A fixed size is configured: the dropdown opens on it.
+                    RebuildPagefileOptions(applied: init, recommended: rec);
                     string usageNote = allocMb > 0 ? $"  ·  {usedMb:N0} MB in use now" : string.Empty;
-                    CurrentPagefileText = $"Set to: {init:N0} MB static{usageNote}";
+                    CurrentPagefileText = $"Set to {PagefileGb(init)} fixed{usageNote}";
                 }
                 else
                 {
-                    // System-managed or no custom size — show recommended default as starting point.
-                    PagefileInitialMb = rec;
+                    // Windows manages it: the dropdown opens on "Windows decides".
+                    RebuildPagefileOptions(applied: 0, recommended: rec);
                     string runningNote = allocMb > 0 ? $"currently {allocMb:N0} MB" : "size varies";
-                    CurrentPagefileText = $"Windows managed  ·  {runningNote}";
+                    CurrentPagefileText = $"Windows decides  ·  {runningNote}";
                 }
 
                 // GetStartupItems() calls TaskScheduler COM APIs which can exhaust a small threadpool stack
@@ -264,65 +278,86 @@ public partial class MemoryViewModel : ObservableObject, IAutoRefreshable, IDisp
         }
     }
 
-    [RelayCommand]
+    /// <summary>
+    /// Applies the dropdown's choice: a fixed size (initial = maximum, so it never resizes on
+    /// the fly) or "Windows decides", which restores Windows' own system-managed default.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanApplyPagefile))]
     private async Task ConfigurePagefileAsync()
     {
-        if (PagefileInitialMb <= 0)
-        {
-            StatusMessage = "Page file size must be greater than 0.";
-            return;
-        }
+        var choice = SelectedPagefileOption;
+        if (choice == null) return;
 
         IsLoading = true;
-        StatusMessage = $"Setting static page file to {PagefileInitialMb:N0} MB...";
         try
         {
-            // Static = initial == maximum so the size never fluctuates.
-            var result = await _memoryService.ConfigurePagefileAsync(PagefileInitialMb, PagefileInitialMb);
-            StatusMessage = result.Message;
-            if (result.Success)
-                CurrentPagefileText = $"Set to: {PagefileInitialMb:N0} MB static (restart required)";
+            TweakResult result;
+            if (choice.Mb == 0)
+            {
+                StatusMessage = "Letting Windows decide the page file size...";
+                result = await _memoryService.RevertToManagedPagefileAsync();
+            }
             else
-                _log.Error("MemoryViewModel", $"Page file configuration failed: {result.Message}");
-        }
-        catch (Exception ex)
-        {
-            _log.Error("MemoryViewModel", "Page file configuration threw an unexpected exception", ex);
-            StatusMessage = $"Error: {ex.Message}";
-        }
-        finally { IsLoading = false; }
-    }
+            {
+                StatusMessage = $"Setting a fixed {PagefileGb(choice.Mb)} page file...";
+                result = await _memoryService.ConfigurePagefileAsync(choice.Mb, choice.Mb);
+            }
 
-    [RelayCommand]
-    private async Task RevertPagefileAsync()
-    {
-        IsLoading = true;
-        StatusMessage = "Resetting page file to the Windows default (system managed)...";
-        try
-        {
-            // "Reset to default" must restore Windows' ACTUAL default — automatic /
-            // system-managed paging (AutomaticManagedPagefile = 1), not a fixed size.
-            // The old code re-applied the recommended STATIC size, which on most PCs
-            // equals the current value, so the button appeared to do nothing.
-            var result = await _memoryService.RevertToManagedPagefileAsync();
             StatusMessage = result.Message;
             if (result.Success)
             {
-                // Show the recommended value in the box again (as a starting point if the
-                // user later wants a static size) and mark the page file as Windows-managed.
-                PagefileInitialMb   = _memoryService.GetRecommendedPagefileMb();
-                CurrentPagefileText = "Windows managed (restart required)";
+                _appliedPagefileMb = choice.Mb;
+                CurrentPagefileText = choice.Mb == 0
+                    ? "Windows decides (restart required)"
+                    : $"Set to {PagefileGb(choice.Mb)} fixed (restart required)";
+                OnPropertyChanged(nameof(CanApplyPagefile));
+                ConfigurePagefileCommand.NotifyCanExecuteChanged();
             }
             else
-                _log.Error("MemoryViewModel", $"Page file reset failed: {result.Message}");
+                _log.Error("MemoryViewModel", $"Page file change failed: {result.Message}");
         }
         catch (Exception ex)
         {
-            _log.Error("MemoryViewModel", "Page file reset threw an unexpected exception", ex);
+            _log.Error("MemoryViewModel", "Page file change threw an unexpected exception", ex);
             StatusMessage = $"Error: {ex.Message}";
         }
         finally { IsLoading = false; }
     }
+
+    /// <summary>
+    /// Rebuilds the dropdown and selects what's configured (<paramref name="applied"/>: 0 = Windows
+    /// decides, -1 = not read yet, which selects the recommended size). A fixed size that isn't
+    /// one of the offered ones (set by an older version, or by hand) is listed as "(current)" so
+    /// the dropdown always shows the truth.
+    /// </summary>
+    private void RebuildPagefileOptions(int applied, int recommended)
+    {
+        _appliedPagefileMb = applied;
+
+        var sizes = MemoryService.PagefileSizeOptionsMb.ToList();
+        if (applied > 0 && !sizes.Contains(applied)) sizes.Add(applied);
+        sizes.Sort((a, b) => b.CompareTo(a));
+
+        PagefileOptions.Clear();
+        foreach (int mb in sizes)
+        {
+            string label = PagefileGb(mb);
+            if (mb == recommended)                                   label += " (recommended)";
+            else if (!MemoryService.PagefileSizeOptionsMb.Contains(mb)) label += " (current)";
+            PagefileOptions.Add(new PagefileOption(mb, label));
+        }
+        PagefileOptions.Add(new PagefileOption(0, "Windows decides"));
+
+        int select = applied >= 0 ? applied : recommended;
+        SelectedPagefileOption = PagefileOptions.FirstOrDefault(o => o.Mb == select)
+                                 ?? PagefileOptions.FirstOrDefault(o => o.Mb == recommended);
+        OnPropertyChanged(nameof(CanApplyPagefile));
+        ConfigurePagefileCommand.NotifyCanExecuteChanged();
+    }
+
+    /// <summary>"16 GB", or "4.9 GB" for a size that isn't a whole number of gigabytes.</summary>
+    internal static string PagefileGb(int mb) =>
+        mb % 1024 == 0 ? $"{mb / 1024} GB" : $"{mb / 1024.0:0.#} GB";
 
     [RelayCommand]
     private async Task ToggleStartupItemAsync(StartupItem item)
@@ -387,3 +422,6 @@ public partial class MemoryViewModel : ObservableObject, IAutoRefreshable, IDisp
         }
     }
 }
+
+/// <summary>One choice in the page file dropdown. <see cref="Mb"/> 0 means "Windows decides".</summary>
+public sealed record PagefileOption(int Mb, string Label);
