@@ -5,12 +5,39 @@
              xmlns:ctl="clr-namespace:Systema.Controls"
              Background="Transparent">
 
-    <!-- Windows 11 Settings layout: the memory breakdown reads like Settings > System > Storage,
-         the startup list like Settings > Apps > Startup (one row per app: name and publisher on
-         the left, impact and switch on the right). Same bindings and text as before. -->
+    <!-- Windows 11 layout. The memory card is Task Manager's Performance > Memory view: title and
+         installed size, a one-minute usage graph on a grid, the composition bar (segments explained
+         on hover, as in Task Manager), and the figures underneath. The page file sits right under
+         it, then the startup list reads like Settings > Apps > Startup. -->
 
     <UserControl.Resources>
         <conv:BoolToVisibilityConverter x:Key="BoolToVis"/>
+
+        <!-- Task Manager's stat block: small grey label over a larger value -->
+        <Style x:Key="StatLabel" TargetType="TextBlock" BasedOn="{StaticResource CaptionText}">
+            <Setter Property="Margin" Value="0,0,0,2"/>
+        </Style>
+        <Style x:Key="StatValue" TargetType="TextBlock">
+            <Setter Property="FontFamily" Value="{StaticResource DisplayFont}"/>
+            <Setter Property="FontSize" Value="18"/>
+            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+            <Setter Property="Typography.NumeralAlignment" Value="Tabular"/>
+        </Style>
+        <!-- The hardware facts on the right: "Speed:  3200 MT/s" -->
+        <Style x:Key="HwLabel" TargetType="TextBlock" BasedOn="{StaticResource CaptionText}">
+            <Setter Property="Margin" Value="0,0,16,6"/>
+        </Style>
+        <Style x:Key="HwValue" TargetType="TextBlock" BasedOn="{StaticResource CaptionText}">
+            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+            <Setter Property="Margin" Value="0,0,0,6"/>
+        </Style>
+
+        <!-- One segment of the composition bar -->
+        <Style x:Key="CompositionSegment" TargetType="Border">
+            <Setter Property="BorderBrush" Value="#6660CDFF"/>
+            <Setter Property="BorderThickness" Value="1,0,0,0"/>
+            <Setter Property="ToolTipService.InitialShowDelay" Value="250"/>
+        </Style>
     </UserControl.Resources>
 
     <ScrollViewer VerticalScrollBarVisibility="Auto">
@@ -23,112 +50,181 @@
                            Style="{StaticResource CaptionText}" Margin="0,4,0,0" TextWrapping="Wrap"/>
             </StackPanel>
 
-            <!-- ===== LIVE MEMORY BREAKDOWN + TREND LINE ===== -->
-            <Border Style="{StaticResource ListRowCard}" Padding="20,18" Margin="0,16,0,4">
+            <!-- ===== MEMORY (Task Manager's Performance > Memory) ===== -->
+            <Border Style="{StaticResource ListRowCard}" Padding="22,18,22,20" Margin="0,16,0,4">
                 <StackPanel>
-                    <Grid Margin="0,0,0,13">
+
+                    <!-- Title and installed size -->
+                    <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                            <TextBlock Text="Free right now" Style="{StaticResource CaptionText}"/>
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="{Binding FreeRamGb}" FontSize="31" FontWeight="SemiBold"
-                                           Foreground="{StaticResource AccentGreenBrush}"/>
-                                <TextBlock VerticalAlignment="Bottom" Margin="7,0,0,6" FontSize="13"
-                                           Foreground="{StaticResource TextSecondaryBrush}">
-                                    <Run Text="GB of "/><Run Text="{Binding TotalRamGb, Mode=OneWay}"/><Run Text=" GB"/>
-                                </TextBlock>
-                            </StackPanel>
-                        </StackPanel>
-                        <!-- live memory-in-use trend line -->
-                        <StackPanel Grid.Column="1" VerticalAlignment="Center"
-                                    Visibility="{Binding HasSparkline, Converter={StaticResource BoolToVis}}">
-                            <TextBlock Text="Memory in use" Style="{StaticResource CaptionText}"
-                                       HorizontalAlignment="Right" Margin="0,0,2,3"/>
-                            <Grid Width="168" Height="46">
-                                <Polygon Points="{Binding SparklineArea}" Fill="#2E60CDFF"/>
-                                <Polyline Points="{Binding SparklinePoints}" Stroke="{StaticResource AccentBlueBrush}"
-                                          StrokeThickness="2" StrokeLineJoin="Round"/>
-                            </Grid>
-                        </StackPanel>
+                        <TextBlock Text="Memory" FontFamily="{StaticResource DisplayFont}" FontSize="24" FontWeight="SemiBold"
+                                   Foreground="{StaticResource TextPrimaryBrush}"/>
+                        <TextBlock Grid.Column="1" Text="{Binding InstalledText}" FontFamily="{StaticResource DisplayFont}"
+                                   FontSize="20" FontWeight="SemiBold" VerticalAlignment="Bottom"
+                                   Foreground="{StaticResource TextPrimaryBrush}"/>
                     </Grid>
 
-                    <!-- three-segment usage bar -->
-                    <Border CornerRadius="4" Height="12" ClipToBounds="True"
-                            BorderBrush="{StaticResource BorderBrush}" BorderThickness="1">
+                    <!-- Usage graph: the last minute, 0 at the bottom, all usable memory at the top -->
+                    <Grid Margin="0,16,0,4">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Memory usage" Style="{StaticResource CaptionText}"/>
+                        <TextBlock Grid.Column="1" Text="{Binding UsableText}" Style="{StaticResource CaptionText}"/>
+                    </Grid>
+                    <ctl:UsageGraph Height="160" Capacity="60"
+                                    Values="{Binding UsageHistoryValues}"
+                                    LineBrush="{StaticResource AccentBlueBrush}"
+                                    FillBrush="#2E60CDFF" GridBrush="#1760CDFF" FrameBrush="#6660CDFF"/>
+                    <Grid Margin="0,4,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="60 seconds" Style="{StaticResource CaptionText}"/>
+                        <TextBlock Grid.Column="1" Text="0" Style="{StaticResource CaptionText}"/>
+                    </Grid>
+
+                    <!-- Composition: In use | Modified | Standby | Free, hover a segment for what it means -->
+                    <TextBlock Text="Memory composition" Style="{StaticResource CaptionText}" Margin="0,14,0,4"/>
+                    <Border Height="32" BorderBrush="#6660CDFF" BorderThickness="1" SnapsToDevicePixels="True">
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="{Binding InUseStar}"/>
-                                <ColumnDefinition Width="{Binding CachedStar}"/>
+                                <ColumnDefinition Width="{Binding ModifiedStar}"/>
+                                <ColumnDefinition Width="{Binding StandbyStar}"/>
                                 <ColumnDefinition Width="{Binding FreeStar}"/>
                             </Grid.ColumnDefinitions>
-                            <Border Grid.Column="0" Background="{StaticResource AccentBlueBrush}"/>
-                            <Border Grid.Column="1" Background="#4A6A5C"/>
-                            <Border Grid.Column="2" Background="{StaticResource AccentGreenBrush}"/>
+                            <Border Grid.Column="0" Background="#4D60CDFF" ToolTip="{Binding InUseTip}"
+                                    ToolTipService.InitialShowDelay="250"/>
+                            <Border Grid.Column="1" Style="{StaticResource CompositionSegment}" Background="#3360CDFF"
+                                    ToolTip="{Binding ModifiedTip}"/>
+                            <Border Grid.Column="2" Style="{StaticResource CompositionSegment}" Background="#1760CDFF"
+                                    ToolTip="{Binding StandbyTip}"/>
+                            <Border Grid.Column="3" Style="{StaticResource CompositionSegment}" Background="Transparent"
+                                    ToolTip="{Binding FreeTip}"/>
                         </Grid>
                     </Border>
 
-                    <!-- legend -->
-                    <WrapPanel Margin="0,11,0,0">
-                        <StackPanel Orientation="Horizontal" Margin="0,0,18,0">
-                            <Ellipse Width="9" Height="9" Fill="{StaticResource AccentBlueBrush}" Margin="0,0,6,0" VerticalAlignment="Center"/>
-                            <TextBlock Style="{StaticResource CaptionText}"><Run Text="In use "/><Run Text="{Binding InUseGb, Mode=OneWay}" Foreground="{StaticResource TextPrimaryBrush}" FontWeight="SemiBold"/><Run Text=" GB"/></TextBlock>
+                    <!-- Figures: two columns of label-over-value, hardware facts on the right -->
+                    <Grid Margin="0,18,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" MinWidth="170"/>
+                            <ColumnDefinition Width="Auto" MinWidth="150"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <StackPanel Grid.Row="0" Grid.Column="0" Margin="0,0,24,14">
+                            <TextBlock Text="In use (Compressed)" Style="{StaticResource StatLabel}"/>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="{Binding InUseText}" Style="{StaticResource StatValue}"/>
+                                <TextBlock Text="{Binding CompressedText}" Style="{StaticResource StatValue}" Margin="6,0,0,0"
+                                           Visibility="{Binding HasCompressed, Converter={StaticResource BoolToVis}}"/>
+                            </StackPanel>
                         </StackPanel>
-                        <StackPanel Orientation="Horizontal" Margin="0,0,18,0"
-                                    Visibility="{Binding HasCached, Converter={StaticResource BoolToVis}}">
-                            <Ellipse Width="9" Height="9" Fill="#4A6A5C" Margin="0,0,6,0" VerticalAlignment="Center"/>
-                            <TextBlock Style="{StaticResource CaptionText}"><Run Text="Cached "/><Run Text="{Binding CachedGb, Mode=OneWay}" Foreground="{StaticResource TextPrimaryBrush}" FontWeight="SemiBold"/><Run Text=" GB"/></TextBlock>
+                        <StackPanel Grid.Row="0" Grid.Column="1" Margin="0,0,24,14">
+                            <TextBlock Text="Available" Style="{StaticResource StatLabel}"/>
+                            <TextBlock Text="{Binding AvailableText}" Style="{StaticResource StatValue}"/>
                         </StackPanel>
-                        <StackPanel Orientation="Horizontal" Margin="0,0,18,0">
-                            <Ellipse Width="9" Height="9" Fill="{StaticResource AccentGreenBrush}" Margin="0,0,6,0" VerticalAlignment="Center"/>
-                            <TextBlock Style="{StaticResource CaptionText}"><Run Text="Free "/><Run Text="{Binding FreeSegGb, Mode=OneWay}" Foreground="{StaticResource TextPrimaryBrush}" FontWeight="SemiBold"/><Run Text=" GB"/></TextBlock>
+                        <StackPanel Grid.Row="1" Grid.Column="0" Margin="0,0,24,14">
+                            <TextBlock Text="Committed" Style="{StaticResource StatLabel}"/>
+                            <TextBlock Text="{Binding CommittedText}" Style="{StaticResource StatValue}"/>
                         </StackPanel>
-                        <TextBlock Style="{StaticResource CaptionText}" VerticalAlignment="Center"
-                                   Foreground="{StaticResource TextSecondaryBrush}"
-                                   Visibility="{Binding HasCompressed, Converter={StaticResource BoolToVis}}">
-                            <Run Text="Compressed "/><Run Text="{Binding CompressedGb, Mode=OneWay}" Foreground="{StaticResource TextPrimaryBrush}" FontWeight="SemiBold"/><Run Text=" GB"/>
-                        </TextBlock>
-                    </WrapPanel>
+                        <StackPanel Grid.Row="1" Grid.Column="1" Margin="0,0,24,14">
+                            <TextBlock Text="Cached" Style="{StaticResource StatLabel}"/>
+                            <TextBlock Text="{Binding CachedText}" Style="{StaticResource StatValue}"/>
+                        </StackPanel>
+                        <StackPanel Grid.Row="2" Grid.Column="0" Margin="0,0,24,0">
+                            <TextBlock Text="Paged pool" Style="{StaticResource StatLabel}"/>
+                            <TextBlock Text="{Binding PagedPoolText}" Style="{StaticResource StatValue}"/>
+                        </StackPanel>
+                        <StackPanel Grid.Row="2" Grid.Column="1" Margin="0,0,24,0">
+                            <TextBlock Text="Non-paged pool" Style="{StaticResource StatLabel}"/>
+                            <TextBlock Text="{Binding NonPagedPoolText}" Style="{StaticResource StatValue}"/>
+                        </StackPanel>
+
+                        <!-- Hardware (each line only when Windows reports it) -->
+                        <Grid Grid.Row="0" Grid.RowSpan="3" Grid.Column="3" VerticalAlignment="Top">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            <TextBlock Grid.Row="0" Text="Speed:" Style="{StaticResource HwLabel}"
+                                       Visibility="{Binding HasMemorySpeed, Converter={StaticResource BoolToVis}}"/>
+                            <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding MemorySpeed}" Style="{StaticResource HwValue}"
+                                       Visibility="{Binding HasMemorySpeed, Converter={StaticResource BoolToVis}}"/>
+                            <TextBlock Grid.Row="1" Text="Slots used:" Style="{StaticResource HwLabel}"
+                                       Visibility="{Binding HasSlotsUsed, Converter={StaticResource BoolToVis}}"/>
+                            <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding SlotsUsed}" Style="{StaticResource HwValue}"
+                                       Visibility="{Binding HasSlotsUsed, Converter={StaticResource BoolToVis}}"/>
+                            <TextBlock Grid.Row="2" Text="Form factor:" Style="{StaticResource HwLabel}"
+                                       Visibility="{Binding HasFormFactor, Converter={StaticResource BoolToVis}}"/>
+                            <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding FormFactor}" Style="{StaticResource HwValue}"
+                                       Visibility="{Binding HasFormFactor, Converter={StaticResource BoolToVis}}"/>
+                            <TextBlock Grid.Row="3" Text="Hardware reserved:" Style="{StaticResource HwLabel}"
+                                       Visibility="{Binding HasHardwareReserved, Converter={StaticResource BoolToVis}}"/>
+                            <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding HardwareReserved}" Style="{StaticResource HwValue}"
+                                       Visibility="{Binding HasHardwareReserved, Converter={StaticResource BoolToVis}}"/>
+                        </Grid>
+                    </Grid>
                 </StackPanel>
             </Border>
 
-            <!-- ===== FREE UP MEMORY ===== -->
-            <ctl:SettingsCard Header="Free up memory">
-                <ctl:SettingsCard.Description>
-                    <StackPanel>
-                        <TextBlock Style="{StaticResource CardDescription}"
-                                   Text="Flushes background working sets and clears standby RAM so the app you're using gets it."/>
-                        <TextBlock Text="{Binding FreeRamStatus}">
-                            <TextBlock.Style>
-                                <Style TargetType="TextBlock" BasedOn="{StaticResource CardNoteGood}">
-                                    <Setter Property="Visibility" Value="Visible"/>
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding FreeRamStatus}" Value="">
-                                            <Setter Property="Visibility" Value="Collapsed"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </TextBlock.Style>
-                        </TextBlock>
+            <!-- ===== VIRTUAL MEMORY (PAGE FILE), right under the memory it backs ===== -->
+            <!-- Locked while Auto Pilot runs, exactly as before. -->
+            <StackPanel>
+                <StackPanel.Style>
+                    <Style TargetType="StackPanel">
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsAutoPilotActive}" Value="True">
+                                <Setter Property="IsEnabled" Value="False"/>
+                                <Setter Property="Opacity"   Value="0.4"/>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </StackPanel.Style>
+
+                <ctl:SettingsCard Header="Virtual memory (page file)">
+                    <ctl:SettingsCard.Description>
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource CardDescription}">
+                                Windows uses a file on disk as backup memory when RAM fills up. A fixed size avoids
+                                stutter from resizing on the fly, and Windows decides lets it grow and shrink on its
+                                own. Most people can leave this alone. Requires a restart.
+                            </TextBlock>
+                            <TextBlock Text="{Binding CurrentPagefileText}" Style="{StaticResource CardNoteGood}"/>
+                            <TextBlock Text="{Binding RecommendedPagefileText}" Style="{StaticResource CardNote}"
+                                       Foreground="{StaticResource AccentBlueBrush}" Margin="0,2,0,0"/>
+                        </StackPanel>
+                    </ctl:SettingsCard.Description>
+                    <!-- Pick a size, then Apply (it lights up only when the choice differs from
+                         what's set). "Windows decides" is Windows' own default, so there's no
+                         separate reset button. -->
+                    <StackPanel Orientation="Horizontal">
+                        <ComboBox Width="200" Style="{StaticResource DarkComboBox}" VerticalAlignment="Center"
+                                  ItemsSource="{Binding PagefileOptions}" DisplayMemberPath="Label"
+                                  SelectedItem="{Binding SelectedPagefileOption, Mode=TwoWay}"/>
+                        <Button Content="Apply" Command="{Binding ConfigurePagefileCommand}"
+                                Style="{StaticResource PrimaryButton}" Margin="8,0,0,0" VerticalAlignment="Center"/>
                     </StackPanel>
-                </ctl:SettingsCard.Description>
-                <Button Command="{Binding FreeRamCommand}" MinWidth="130">
-                    <Button.Style>
-                        <Style TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
-                            <Setter Property="Content"   Value="Free up memory"/>
-                            <Setter Property="IsEnabled" Value="True"/>
-                            <Style.Triggers>
-                                <DataTrigger Binding="{Binding IsFreeing}" Value="True">
-                                    <Setter Property="Content"   Value="Freeing up…"/>
-                                    <Setter Property="IsEnabled" Value="False"/>
-                                </DataTrigger>
-                            </Style.Triggers>
-                        </Style>
-                    </Button.Style>
-                </Button>
-            </ctl:SettingsCard>
+                </ctl:SettingsCard>
+            </StackPanel>
 
             <!-- ===== STARTUP ===== -->
             <TextBlock Text="Startup" Style="{StaticResource SettingsGroupHeader}"/>
@@ -224,48 +320,6 @@
                     </DataTemplate>
                 </ItemsControl.ItemTemplate>
             </ItemsControl>
-
-            <!-- ===== ADVANCED: VIRTUAL MEMORY (PAGE FILE) ===== -->
-            <TextBlock Text="Advanced" Style="{StaticResource SettingsGroupHeader}"/>
-
-            <!-- Locked while Auto Pilot runs, exactly as before. -->
-            <StackPanel>
-                <StackPanel.Style>
-                    <Style TargetType="StackPanel">
-                        <Style.Triggers>
-                            <DataTrigger Binding="{Binding IsAutoPilotActive}" Value="True">
-                                <Setter Property="IsEnabled" Value="False"/>
-                                <Setter Property="Opacity"   Value="0.4"/>
-                            </DataTrigger>
-                        </Style.Triggers>
-                    </Style>
-                </StackPanel.Style>
-
-                <ctl:SettingsCard Header="Virtual memory (page file)">
-                    <ctl:SettingsCard.Description>
-                        <StackPanel>
-                            <TextBlock Style="{StaticResource CardDescription}">
-                                Windows uses a file on disk as backup memory when RAM fills up. A fixed size avoids
-                                stutter from resizing on the fly, and Windows decides lets it grow and shrink on its
-                                own. Most people can leave this alone. Requires a restart.
-                            </TextBlock>
-                            <TextBlock Text="{Binding CurrentPagefileText}" Style="{StaticResource CardNoteGood}"/>
-                            <TextBlock Text="{Binding RecommendedPagefileText}" Style="{StaticResource CardNote}"
-                                       Foreground="{StaticResource AccentBlueBrush}" Margin="0,2,0,0"/>
-                        </StackPanel>
-                    </ctl:SettingsCard.Description>
-                    <!-- Pick a size, then Apply (it lights up only when the choice differs from
-                         what's set). "Windows decides" is Windows' own default, so there's no
-                         separate reset button. -->
-                    <StackPanel Orientation="Horizontal">
-                        <ComboBox Width="200" Style="{StaticResource DarkComboBox}" VerticalAlignment="Center"
-                                  ItemsSource="{Binding PagefileOptions}" DisplayMemberPath="Label"
-                                  SelectedItem="{Binding SelectedPagefileOption, Mode=TwoWay}"/>
-                        <Button Content="Apply" Command="{Binding ConfigurePagefileCommand}"
-                                Style="{StaticResource PrimaryButton}" Margin="8,0,0,0" VerticalAlignment="Center"/>
-                    </StackPanel>
-                </ctl:SettingsCard>
-            </StackPanel>
 
             <!-- Status line -->
             <TextBlock Text="{Binding StatusMessage}" Style="{StaticResource CaptionText}" Margin="2,14,0,0"/>

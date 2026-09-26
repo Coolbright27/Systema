@@ -60,91 +60,107 @@ public partial class MemoryViewModel : ObservableObject, IAutoRefreshable, IDisp
     [ObservableProperty] private bool _isLoading;
     [ObservableProperty] private string _statusMessage = string.Empty;
 
-    // Free RAM card
-    [ObservableProperty] private bool   _isFreeing;
-    [ObservableProperty] private string _freeRamStatus = string.Empty;
-
     public long UsedRamMb => TotalRamMb - AvailableRamMb;
     public double RamUsagePercent => TotalRamMb > 0 ? (double)UsedRamMb / TotalRamMb * 100 : 0;
-
-    // ── Friendly GB-formatted stats for the redesigned tiles ──
     public string UsedRamGb  => (UsedRamMb / 1024.0).ToString("0.0");
     public string FreeRamGb  => (AvailableRamMb / 1024.0).ToString("0.0");
     public string TotalRamGb => (TotalRamMb / 1024.0).ToString("0");
 
-    // ── Memory breakdown (In use / Cached / Free) for the hero bar ──
-    private long _inUseMb, _cachedMb, _freeSegMb;
+    // ── Task Manager-style memory card ───────────────────────────────────────
+    // Live figures from MemoryService.GetMemoryDetails (the same sources Task Manager reads),
+    // refreshed each tick while the page is open.
+    private MemoryDetails _details = new(0, 0, 0, 0, 0, 0, 0, 0, 0);
     private long _compressedMb = -1;
-    /// <summary>Star-proportioned column widths so the three-segment bar fills its track.</summary>
-    public GridLength InUseStar  => new(System.Math.Max(1, _inUseMb),  GridUnitType.Star);
-    public GridLength CachedStar => new(System.Math.Max(0, _cachedMb), GridUnitType.Star);
-    public GridLength FreeStar   => new(System.Math.Max(1, _freeSegMb), GridUnitType.Star);
-    public string InUseGb  => (_inUseMb  / 1024.0).ToString("0.0");
-    public string CachedGb => (_cachedMb / 1024.0).ToString("0.0");
-    public string FreeSegGb => (_freeSegMb / 1024.0).ToString("0.0");
-    public bool   HasCached     => _cachedMb > 0;
-    public bool   HasCompressed => _compressedMb >= 0;
-    public string CompressedGb  => (_compressedMb / 1024.0).ToString("0.0");
 
-    // ── Live memory-usage trend line (sampled each refresh tick while the tab is open) ──
-    private const int    SparkSamples = 48;
-    private const double SparkW = 168, SparkH = 46;
+    /// <summary>"1.5 GB"-style text, one decimal, the way Task Manager writes memory sizes.</summary>
+    internal static string Gb(long mb) => $"{mb / 1024.0:0.0} GB";
+
+    // Composition bar: star widths so the four segments fill the track in proportion.
+    public GridLength InUseStar    => new(Math.Max(1, _details.InUseMb),    GridUnitType.Star);
+    public GridLength ModifiedStar => new(Math.Max(0, _details.ModifiedMb), GridUnitType.Star);
+    public GridLength StandbyStar  => new(Math.Max(0, _details.StandbyMb),  GridUnitType.Star);
+    public GridLength FreeStar     => new(Math.Max(0, _details.FreeMb),     GridUnitType.Star);
+
+    // Composition bar tooltips (Task Manager explains the segments on hover, not with a legend).
+    public string InUseTip    => $"In use: {Gb(_details.InUseMb)}\nMemory used by processes, drivers and the system.";
+    public string ModifiedTip => $"Modified: {Gb(_details.ModifiedMb)}\nMemory whose contents must be written to disk before it can be reused.";
+    public string StandbyTip  => $"Standby: {Gb(_details.StandbyMb)}\nCached data not in use right now. Given to apps the moment they need it.";
+    public string FreeTip     => $"Free: {Gb(_details.FreeMb)}\nMemory not in use at all.";
+
+    // The stats block under the graph.
+    public string InUseText     => Gb(_details.InUseMb);
+    public bool   HasCompressed => _compressedMb >= 0;
+    public string CompressedText => _compressedMb >= 0 ? $"({Gb(_compressedMb)})" : "";
+    public string AvailableText => Gb(_details.AvailableMb);
+    public string CommittedText => _details.CommitLimitMb > 0
+        ? $"{_details.CommittedMb / 1024.0:0.0}/{_details.CommitLimitMb / 1024.0:0.0} GB" : "—";
+    public string CachedText       => Gb(_details.CachedMb);
+    public string PagedPoolText    => _details.PagedPoolMb > 0    ? Gb(_details.PagedPoolMb)    : "—";
+    public string NonPagedPoolText => _details.NonPagedPoolMb > 0 ? Gb(_details.NonPagedPoolMb) : "—";
+    /// <summary>The graph's top label: usable memory (what 100% on the graph means).</summary>
+    public string UsableText => Gb(TotalRamMb);
+
+    // Installed hardware (read once, in the background; blank lines are hidden).
+    [ObservableProperty] private string _installedText = "";
+    [ObservableProperty] [NotifyPropertyChangedFor(nameof(HasMemorySpeed))]      private string _memorySpeed = "";
+    [ObservableProperty] [NotifyPropertyChangedFor(nameof(HasSlotsUsed))]        private string _slotsUsed = "";
+    [ObservableProperty] [NotifyPropertyChangedFor(nameof(HasFormFactor))]       private string _formFactor = "";
+    [ObservableProperty] [NotifyPropertyChangedFor(nameof(HasHardwareReserved))] private string _hardwareReserved = "";
+    public bool HasMemorySpeed      => !string.IsNullOrEmpty(MemorySpeed);
+    public bool HasSlotsUsed        => !string.IsNullOrEmpty(SlotsUsed);
+    public bool HasFormFactor       => !string.IsNullOrEmpty(FormFactor);
+    public bool HasHardwareReserved => !string.IsNullOrEmpty(HardwareReserved);
+    private bool _hardwareRequested;
+
+    // ── Usage graph: the last minute, one sample per refresh tick ──
+    private const int GraphSamples = 60;
     private readonly Queue<double> _usageHistory = new();
-    [ObservableProperty] private PointCollection _sparklinePoints = new();
-    [ObservableProperty] private PointCollection _sparklineArea   = new();
-    /// <summary>True once we have enough samples to draw a line (hides the sparkline on first paint).</summary>
-    public bool HasSparkline => _usageHistory.Count >= 2;
+    /// <summary>Memory in use as a fraction of total (0..1), oldest first, for the UsageGraph.</summary>
+    [ObservableProperty] private double[] _usageHistoryValues = Array.Empty<double>();
 
     private int _tick;
 
     private void RaiseBreakdown()
     {
-        OnPropertyChanged(nameof(InUseStar));   OnPropertyChanged(nameof(CachedStar));  OnPropertyChanged(nameof(FreeStar));
-        OnPropertyChanged(nameof(InUseGb));     OnPropertyChanged(nameof(CachedGb));    OnPropertyChanged(nameof(FreeSegGb));
-        OnPropertyChanged(nameof(HasCached));
+        foreach (var name in new[]
+        {
+            nameof(InUseStar), nameof(ModifiedStar), nameof(StandbyStar), nameof(FreeStar),
+            nameof(InUseTip), nameof(ModifiedTip), nameof(StandbyTip), nameof(FreeTip),
+            nameof(InUseText), nameof(AvailableText), nameof(CommittedText), nameof(CachedText),
+            nameof(PagedPoolText), nameof(NonPagedPoolText), nameof(UsableText),
+        })
+            OnPropertyChanged(name);
     }
 
-    /// <summary>Pulls the In use / Cached / Free split and derives Total/Available from it, then
-    /// updates the trend line. Single source of the tab's live numbers, used by both the timer
-    /// refresh and the manual "Free up memory" action.</summary>
+    /// <summary>Pulls the live figures, derives Total/Available from them, and samples the graph.
+    /// Single source of the page's live numbers.</summary>
     private async Task RefreshBreakdownAsync()
     {
-        var (inUse, cached, freeSeg) = await Task.Run(() => _memoryService.GetMemoryBreakdown());
-        _inUseMb = inUse; _cachedMb = cached; _freeSegMb = freeSeg;
-        TotalRamMb     = inUse + cached + freeSeg;
-        AvailableRamMb = cached + freeSeg;
+        _details = await Task.Run(() => _memoryService.GetMemoryDetails());
+        TotalRamMb     = _details.TotalMb;
+        AvailableRamMb = _details.StandbyMb + _details.FreeMb;
         RaiseRamStats();
         RaiseBreakdown();
-        SampleSparkline();
+        SampleGraph();
+
+        if (!_hardwareRequested)
+        {
+            _hardwareRequested = true;
+            var hw = await Task.Run(() => _memoryService.GetMemoryHardware());
+            InstalledText    = Gb(hw.InstalledMb);
+            MemorySpeed      = hw.Speed;
+            SlotsUsed        = hw.SlotsUsed;
+            FormFactor       = hw.FormFactor;
+            HardwareReserved = hw.HardwareReserved;
+        }
     }
 
-    private void SampleSparkline()
+    private void SampleGraph()
     {
-        // Plot memory IN USE over time (Total − Available). Blue line to match the "In use"
-        // segment of the bar; a usage trend reads more naturally than a free-memory trend.
-        _usageHistory.Enqueue(UsedRamMb / 1024.0);
-        while (_usageHistory.Count > SparkSamples) _usageHistory.Dequeue();
-        OnPropertyChanged(nameof(HasSparkline));
-        if (_usageHistory.Count < 2) return;
-
-        double[] vals = _usageHistory.ToArray();
-        double min = vals.Min(), max = vals.Max(), range = max - min;
-        if (range < 0.15) { double mid = (min + max) / 2; min = mid - 0.5; max = mid + 0.5; range = max - min; }
-        double pad = range * 0.15; min -= pad; range += pad * 2;
-
-        var line = new PointCollection();
-        for (int i = 0; i < vals.Length; i++)
-        {
-            double x = (double)i / (vals.Length - 1) * SparkW;
-            double y = SparkH - (vals[i] - min) / range * SparkH;
-            line.Add(new System.Windows.Point(x, y));
-        }
-        var area = new PointCollection(line);
-        area.Add(new System.Windows.Point(SparkW, SparkH));
-        area.Add(new System.Windows.Point(0, SparkH));
-        line.Freeze(); area.Freeze();
-        SparklinePoints = line;
-        SparklineArea   = area;
+        if (TotalRamMb <= 0) return;
+        _usageHistory.Enqueue((double)UsedRamMb / TotalRamMb);
+        while (_usageHistory.Count > GraphSamples) _usageHistory.Dequeue();
+        UsageHistoryValues = _usageHistory.ToArray();
     }
 
     // ── "Speed up your startup" recommendation — currently-enabled High-impact apps ──
@@ -229,7 +245,7 @@ public partial class MemoryViewModel : ObservableObject, IAutoRefreshable, IDisp
             {
                 _compressedMb = await Task.Run(() => _memoryService.GetCompressedMemoryMb());
                 OnPropertyChanged(nameof(HasCompressed));
-                OnPropertyChanged(nameof(CompressedGb));
+                OnPropertyChanged(nameof(CompressedText));
             }
 
             // Update recommended text based on detected RAM
@@ -388,38 +404,6 @@ public partial class MemoryViewModel : ObservableObject, IAutoRefreshable, IDisp
         foreach (var item in StartupItems.Where(i => i.IsEnabled && i.ImpactLabel == "High").ToList())
             await ToggleStartupItemAsync(item);
         RaiseStartupRecommendation();
-    }
-
-    [RelayCommand]
-    private async Task FreeRamAsync()
-    {
-        if (IsFreeing) return;
-        IsFreeing     = true;
-        FreeRamStatus = "Flushing working sets and clearing standby RAM...";
-        try
-        {
-            var (freed, msg) = await Task.Run(() => _memoryService.FreeRam());
-            FreeRamStatus = msg;
-
-            // Refresh the breakdown + trend line immediately after
-            await RefreshBreakdownAsync();
-
-            // Clear status after 8 seconds so stale messages don't linger
-            _ = Task.Delay(8000).ContinueWith(_ =>
-                System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
-                {
-                    if (FreeRamStatus == msg) FreeRamStatus = string.Empty;
-                }));
-        }
-        catch (Exception ex)
-        {
-            _log.Error("MemoryViewModel", "FreeRam failed", ex);
-            FreeRamStatus = $"Error: {ex.Message}";
-        }
-        finally
-        {
-            IsFreeing = false;
-        }
     }
 }
 

@@ -37,3 +37,36 @@ public class MemoryBreakdownTests
         Assert.InRange(availFromBreakdown, avail - 1024, avail + 1024);
     }
 }
+
+/// <summary>
+/// The Task Manager-style Memory card (In use / Modified / Standby / Free, Committed, pools).
+/// Runs against the real machine, like the breakdown test above.
+/// </summary>
+public class MemoryDetailsTests
+{
+    [Fact]
+    public void GetMemoryDetails_SegmentsRebuildTheTotal_AndCommitMakesSense()
+    {
+        var svc = new MemoryService();
+        var (total, avail) = svc.GetRamStats();
+        var d = svc.GetMemoryDetails();
+
+        Assert.True(d.InUseMb >= 0 && d.ModifiedMb >= 0 && d.StandbyMb >= 0 && d.FreeMb >= 0);
+        Assert.Equal(total, d.TotalMb);                            // the four segments fill the bar exactly
+        Assert.InRange(d.StandbyMb + d.FreeMb, avail - 1024, avail + 1024);   // same offsets as the breakdown
+        Assert.Equal(d.StandbyMb + d.ModifiedMb, d.CachedMb);      // Task Manager's "Cached"
+
+        Assert.True(d.CommitLimitMb >= total / 2, "commit limit should be at least most of physical RAM");
+        Assert.InRange(d.CommittedMb, 1, d.CommitLimitMb);
+        Assert.True(d.PagedPoolMb > 0 && d.NonPagedPoolMb > 0, "kernel pools are never empty on a running system");
+    }
+
+    [Theory]
+    [InlineData(8,  "DIMM")]
+    [InlineData(12, "SODIMM")]
+    [InlineData(22, "Soldered")]
+    [InlineData(0,  "")]
+    [InlineData(-1, "")]
+    public void FormFactor_ReadsLikeTaskManager(int code, string name) =>
+        Assert.Equal(name, MemoryService.MemoryFormFactorName(code));
+}

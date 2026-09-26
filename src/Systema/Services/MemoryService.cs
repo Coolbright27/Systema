@@ -114,6 +114,135 @@ public class MemoryService
         return (Math.Max(0, totalMb - availMb), 0, availMb);
     }
 
+    // ── Task Manager-style memory details ─────────────────────────────────────
+
+    /// <summary>
+    /// Everything the Memory page's Task Manager-style card shows, from the same sources Task
+    /// Manager reads: the kernel's page lists (In use / Modified / Standby / Free) and
+    /// GetPerformanceInfo (committed, commit limit, paged and non-paged pool). All cheap calls,
+    /// no WMI, so this is safe to poll every second.
+    /// </summary>
+    public MemoryDetails GetMemoryDetails()
+    {
+        var (totalMb, availMb) = GetRamStats();
+        long modified = 0, standby = 0, free = availMb;
+
+        try
+        {
+            // SYSTEM_MEMORY_LIST_INFORMATION (x64): ZeroPageCount, FreePageCount, ModifiedPageCount,
+            // ModifiedNoWritePageCount, BadPageCount, PageCountByPriority[8], ... (see GetMemoryBreakdown).
+            const int bufLen = 176;
+            IntPtr buf = Marshal.AllocHGlobal(bufLen);
+            try
+            {
+                if (NtQuerySystemInformation(SystemMemoryListInformation, buf, bufLen, out _) == 0)
+                {
+                    long page = Environment.SystemPageSize;
+                    long standbyPages = 0;
+                    for (int i = 0; i < 8; i++) standbyPages += ReadPtr(buf, 5 + i);
+                    free     = (ReadPtr(buf, 0) + ReadPtr(buf, 1)) * page / (1024 * 1024);
+                    modified = (ReadPtr(buf, 2) + ReadPtr(buf, 3)) * page / (1024 * 1024);
+                    standby  = standbyPages * page / (1024 * 1024);
+                }
+            }
+            finally { Marshal.FreeHGlobal(buf); }
+        }
+        catch (Exception ex) { Log.Warn("MemoryService", $"GetMemoryDetails page lists failed: {ex.Message}"); }
+
+        // Clamp so the four segments always sum to Total even if counters lag slightly.
+        standby  = Math.Clamp(standby,  0, totalMb);
+        free     = Math.Clamp(free,     0, totalMb - standby);
+        modified = Math.Clamp(modified, 0, totalMb - standby - free);
+        long inUse = Math.Max(0, totalMb - standby - free - modified);
+
+        long committed = 0, commitLimit = 0, paged = 0, nonPaged = 0;
+        try
+        {
+            if (GetPerformanceInfo(out var pi, (uint)Marshal.SizeOf<PERFORMANCE_INFORMATION>()))
+            {
+                double pageMb = (ulong)pi.PageSize / (1024.0 * 1024.0);
+                committed   = (long)((ulong)pi.CommitTotal    * pageMb);
+                commitLimit = (long)((ulong)pi.CommitLimit    * pageMb);
+                paged       = (long)((ulong)pi.KernelPaged    * pageMb);
+                nonPaged    = (long)((ulong)pi.KernelNonpaged * pageMb);
+            }
+        }
+        catch (Exception ex) { Log.Warn("MemoryService", $"GetPerformanceInfo failed: {ex.Message}"); }
+
+        return new MemoryDetails(inUse, modified, standby, free, availMb,
+                                 committed, commitLimit, paged, nonPaged);
+    }
+
+    /// <summary>
+    /// The installed memory's hardware facts for the Memory card (speed, slots, form factor,
+    /// hardware reserved). WMI, so call it once, off the UI thread. Any part it can't read comes
+    /// back empty and the card simply leaves that line out.
+    /// </summary>
+    public MemoryHardware GetMemoryHardware()
+    {
+        long installedMb = 0;
+        try { if (GetPhysicallyInstalledSystemMemory(out ulong kb)) installedMb = (long)(kb / 1024); }
+        catch { }
+
+        string speed = "", slots = "", form = "";
+        try
+        {
+            int used = 0, mts = 0, formCode = -1;
+            using (var s = new ManagementObjectSearcher("SELECT Capacity, ConfiguredClockSpeed, Speed, FormFactor FROM Win32_PhysicalMemory"))
+            {
+                foreach (ManagementObject m in s.Get())
+                {
+                    if (Convert.ToUInt64(m["Capacity"] ?? 0UL) == 0) continue;
+                    used++;
+                    int clock = Convert.ToInt32(m["ConfiguredClockSpeed"] ?? 0);
+                    if (clock <= 0) clock = Convert.ToInt32(m["Speed"] ?? 0);
+                    mts = Math.Max(mts, clock);
+                    if (formCode < 0) formCode = Convert.ToInt32(m["FormFactor"] ?? 0);
+                }
+            }
+            int total = 0;
+            using (var s = new ManagementObjectSearcher("SELECT MemoryDevices FROM Win32_PhysicalMemoryArray"))
+                foreach (ManagementObject a in s.Get()) total += Convert.ToInt32(a["MemoryDevices"] ?? 0);
+
+            if (mts > 0)  speed = $"{mts} MT/s";
+            if (used > 0) slots = total >= used ? $"{used} of {total}" : $"{used}";
+            form = MemoryFormFactorName(formCode);
+        }
+        catch (Exception ex) { Log.Warn("MemoryService", $"GetMemoryHardware WMI failed: {ex.Message}"); }
+
+        var (totalMb, _) = GetRamStats();
+        long reservedMb = installedMb > totalMb ? installedMb - totalMb : 0;
+        return new MemoryHardware(installedMb > 0 ? installedMb : totalMb, speed, slots, form,
+                                  reservedMb > 0 ? $"{reservedMb:N0} MB" : "");
+    }
+
+    /// <summary>SMBIOS memory form factor, named the way Task Manager names it.</summary>
+    internal static string MemoryFormFactorName(int code) => code switch
+    {
+        7  => "SIMM",
+        8  => "DIMM",
+        11 => "RIMM",
+        12 => "SODIMM",
+        13 => "SRIMM",
+        21 or 22 or 23 => "Soldered",
+        _  => "",
+    };
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct PERFORMANCE_INFORMATION
+    {
+        public uint    cb;
+        public UIntPtr CommitTotal, CommitLimit, CommitPeak, PhysicalTotal, PhysicalAvailable,
+                       SystemCache, KernelTotal, KernelPaged, KernelNonpaged, PageSize;
+        public uint    HandleCount, ProcessCount, ThreadCount;
+    }
+
+    [DllImport("psapi.dll", SetLastError = true)]
+    private static extern bool GetPerformanceInfo(out PERFORMANCE_INFORMATION pPerformanceInformation, uint cb);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool GetPhysicallyInstalledSystemMemory(out ulong totalMemoryInKilobytes);
+
     /// <summary>
     /// Best-effort size of Windows' in-RAM compression store (the "Memory Compression" system
     /// process working set), in MB. Returns -1 when it can't be read (the process is hidden or
@@ -464,3 +593,16 @@ public class MemoryService
         });
     }
 }
+
+/// <summary>Live memory figures for the Memory page, all in MB (see MemoryService.GetMemoryDetails).</summary>
+public sealed record MemoryDetails(
+    long InUseMb, long ModifiedMb, long StandbyMb, long FreeMb, long AvailableMb,
+    long CommittedMb, long CommitLimitMb, long PagedPoolMb, long NonPagedPoolMb)
+{
+    public long TotalMb  => InUseMb + ModifiedMb + StandbyMb + FreeMb;
+    /// <summary>Task Manager's "Cached": standby plus modified pages.</summary>
+    public long CachedMb => StandbyMb + ModifiedMb;
+}
+
+/// <summary>Installed memory hardware for the Memory page; empty strings mean "couldn't read it".</summary>
+public sealed record MemoryHardware(long InstalledMb, string Speed, string SlotsUsed, string FormFactor, string HardwareReserved);

@@ -44,7 +44,6 @@ public static class SettingsSearchIndex
         new("Dashboard", "Suggestions for this PC", "recommendations suggested tips"),
 
         // Memory & Startup
-        new("Memory", "Free up memory", "ram clean cleaner purge standby"),
         new("Memory", "Speed up your startup", "boot login startup apps faster"),
         new("Memory", "All startup apps", "startup programs autostart run at login"),
         new("Memory", "Virtual memory (page file)", "pagefile page file swap virtual memory advanced"),
