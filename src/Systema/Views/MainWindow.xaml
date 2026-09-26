@@ -218,8 +218,14 @@
                     <!-- App mark + name in the Windows 11 caption style (12px, regular weight) -->
                     <StackPanel Grid.Column="0" Orientation="Horizontal"
                                 VerticalAlignment="Center" Margin="16,0">
-                        <Border Width="14" Height="14" CornerRadius="4" Margin="0,0,10,0"
-                                Background="{StaticResource AccentBlueBrush}"/>
+                        <!-- The Systema logo (the same logo.ico the tray and taskbar use, set in
+                             MainWindow.xaml.cs). The accent square only shows if it can't load. -->
+                        <Grid Width="16" Height="16" Margin="0,0,10,0" VerticalAlignment="Center">
+                            <Border x:Name="TitleLogoFallback" Width="14" Height="14" CornerRadius="4"
+                                    Background="{StaticResource AccentBlueBrush}"/>
+                            <Image x:Name="TitleLogo" Stretch="Uniform"
+                                   RenderOptions.BitmapScalingMode="HighQuality"/>
+                        </Grid>
                         <TextBlock Text="Systema" FontSize="12"
                                    FontFamily="{StaticResource SmallFont}"
                                    Foreground="{StaticResource TextPrimaryBrush}"

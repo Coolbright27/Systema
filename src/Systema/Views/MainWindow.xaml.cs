@@ -243,8 +243,24 @@ public partial class MainWindow : Window
                 if (best == null || frame.PixelWidth > best.PixelWidth) best = frame;
 
             if (best != null) Icon = best;
+
+            // Title bar logo: the smallest frame that still covers 16 px at this display's
+            // scale (16 at 100%, 24 at 150%, 32 at 200%...). Scaling a 256 px frame all the way
+            // down to 16 blurs it; starting from the nearest size keeps it crisp.
+            double scale = Media.VisualTreeHelper.GetDpi(this).DpiScaleX;
+            int needed = (int)Math.Ceiling(16 * scale);
+            System.Windows.Media.Imaging.BitmapFrame? small = null;
+            foreach (var frame in decoder.Frames)
+                if (frame.PixelWidth >= needed && (small == null || frame.PixelWidth < small.PixelWidth))
+                    small = frame;
+            small ??= best;
+            if (small != null)
+            {
+                TitleLogo.Source = small;
+                TitleLogoFallback.Visibility = Visibility.Collapsed;
+            }
         }
-        catch { /* cosmetic only — leave the default icon in place */ }
+        catch { /* cosmetic only — leave the default icon (and the accent square) in place */ }
     }
 
     /// <summary>
