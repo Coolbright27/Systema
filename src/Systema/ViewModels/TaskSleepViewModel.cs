@@ -107,9 +107,16 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
     /// <summary>Process names that Task Sleep will never touch, shown as the whitelist in the UI.</summary>
     public ObservableCollection<string> Whitelist { get; } = new();
 
-    [ObservableProperty] private string _whitelistNewApp = "";
-    [ObservableProperty] private string? _selectedRunningProcess;
-    [ObservableProperty] private List<string> _runningProcessNames = new();
+    /// <summary>Shown beside the Never-nap list's chevron: "None", "1 app", "3 apps".</summary>
+    public string NeverNapSummary => Whitelist.Count switch { 0 => "None", 1 => "1 app", var n => $"{n} apps" };
+
+    // "Add an app" picker (Core/RunningApps.cs decides what it lists)
+    [ObservableProperty] private bool   _showAppPicker;
+    [ObservableProperty] private bool   _pickerShowAll;
+    [ObservableProperty] private string _pickerSearch = "";
+    [ObservableProperty] private bool   _pickerCanAddTyped;
+    public ObservableCollection<RunningApp> PickerApps { get; } = new();
+    private List<RunningApp> _runningApps = new();
 
     // ── Tray Nap ──────────────────────────────────────────────────────────────
     [ObservableProperty] private bool _trayNapEnabled              = true;
@@ -254,7 +261,6 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
     public ObservableCollection<MonitorEvent>    RecentEvents  { get; } = new();
 
     private readonly DispatcherTimer _monitorTimer;
-    private readonly DispatcherTimer _processRefreshTimer;
     private readonly DispatcherTimer _reinforceTimer;
     private bool _isGameModeActive;
 
@@ -287,6 +293,10 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
 
         LoadSettings();
         LoadWhitelist();
+        Whitelist.CollectionChanged += (_, _) => OnPropertyChanged(nameof(NeverNapSummary));
+        // The picker's app icons load in the background; redraw it once they're in.
+        Core.Converters.ProcessIconConverter.IconsLoaded += () =>
+            Application.Current?.Dispatcher.BeginInvoke(() => { if (ShowAppPicker) RebuildPicker(); });
 
         // Push the fully-loaded settings to the service in one shot. During
         // LoadSettings the per-property OnChanged → PushSettings round-trips are
@@ -356,13 +366,6 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
         _reinforceTimer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(5) };
         _reinforceTimer.Tick += (_, _) => { if (IsEnabled) _ = ApplyResponsivenessAsync(); };
         _reinforceTimer.Start();
-
-        // Auto-refresh the running process picker every 15 s so newly-launched
-        // apps appear without the user having to click the refresh button.
-        RefreshRunning();
-        _processRefreshTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(15) };
-        _processRefreshTimer.Tick += (_, _) => RefreshRunning();
-        _processRefreshTimer.Start();
 
         _log.Info("TaskSleepViewModel", $"Initialized — enabled={IsEnabled}");
     }
@@ -916,11 +919,8 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
 
     partial void OnShowAllProcessesChanged(bool value) => RefreshMonitor();
 
-    partial void OnSelectedRunningProcessChanged(string? value)
-    {
-        if (!string.IsNullOrEmpty(value))
-            WhitelistNewApp = value;
-    }
+    partial void OnPickerShowAllChanged(bool value) => RebuildPicker();
+    partial void OnPickerSearchChanged(string value) => RebuildPicker();
 
     private void PushSettings()
     {
@@ -976,20 +976,66 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
 
     // ── Whitelist commands ────────────────────────────────────────────────────
 
-    [RelayCommand]
-    private void AddToWhitelist()
+    /// <summary>"Add an app": opens the picker on a fresh look at what's running (or closes it).
+    /// Concurrent so "Cancel" works even while that look is still running.</summary>
+    [RelayCommand(AllowConcurrentExecutions = true)]
+    private async Task ToggleAppPicker()
     {
-        string name = WhitelistNewApp.Trim()
-            .Replace(".exe", "", StringComparison.OrdinalIgnoreCase)
-            .ToLowerInvariant();
+        ShowAppPicker = !ShowAppPicker;
+        if (!ShowAppPicker) return;
 
-        if (string.IsNullOrEmpty(name)) return;
-        if (Whitelist.Any(n => n.Equals(name, StringComparison.OrdinalIgnoreCase))) return;
+        PickerSearch  = "";
+        PickerShowAll = false;
+        RebuildPicker();   // clears last time's rows while the new look runs
+        try { _runningApps = await Task.Run(RunningApps.Snapshot); }
+        catch (Exception ex) { _log.Warn("TaskSleepViewModel", $"Running apps snapshot failed: {ex.Message}"); }
+        RebuildPicker();
+    }
+
+    private void RebuildPicker()
+    {
+        var rows = RunningApps.Filter(_runningApps, PickerShowAll, PickerSearch, Whitelist);
+        PickerApps.Clear();
+        foreach (var r in rows) PickerApps.Add(r);
+
+        // Nothing running matches what they typed: offer to add the name anyway (an app that
+        // isn't open right now).
+        string typed = NeverNapName(PickerSearch);
+        PickerCanAddTyped = rows.Count == 0 && typed.Length > 0
+                         && !Whitelist.Any(n => n.Equals(typed, StringComparison.OrdinalIgnoreCase));
+    }
+
+    [RelayCommand]
+    private void AddPickedApp(RunningApp? app)
+    {
+        if (app != null && AddNeverNap(app.Name)) ShowAppPicker = false;
+    }
+
+    [RelayCommand]
+    private void AddTypedApp()
+    {
+        if (AddNeverNap(PickerSearch)) ShowAppPicker = false;
+    }
+
+    /// <summary>How a never-nap entry is stored: trimmed, no ".exe", lower case.</summary>
+    internal static string NeverNapName(string? raw)
+    {
+        string name = (raw ?? "").Trim();
+        if (name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)) name = name[..^4];
+        return name.Trim().ToLowerInvariant();
+    }
+
+    /// <summary>Adds an app to the never-nap list and wakes it if it's napping. False if empty or already listed.</summary>
+    private bool AddNeverNap(string raw)
+    {
+        string name = NeverNapName(raw);
+        if (name.Length == 0 || Whitelist.Any(n => n.Equals(name, StringComparison.OrdinalIgnoreCase)))
+            return false;
 
         Whitelist.Add(name);
-        WhitelistNewApp = "";
-        SelectedRunningProcess = null;
         SaveAndPushWhitelist();
+        _service.WakeProcess(name);   // same as adding it from the Live monitor
+        return true;
     }
 
     [RelayCommand]
@@ -1025,21 +1071,6 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
         }
         _service.WakeProcess(name); // also wake it immediately
         StatusMessage = $"Whitelisted {snapshot.Name} — it will never be napped again.";
-    }
-
-    [RelayCommand]
-    private void RefreshRunning()
-    {
-        try
-        {
-            RunningProcessNames = Process.GetProcesses()
-                .Select(p => p.ProcessName.ToLowerInvariant())
-                .Where(n => !string.IsNullOrEmpty(n))
-                .Distinct()
-                .OrderBy(n => n)
-                .ToList();
-        }
-        catch (Exception ex) { LoggerService.Instance.Warn("TaskSleepViewModel", $"RefreshRunning failed: {ex.Message}"); }
     }
 
     private void SaveAndPushWhitelist()
@@ -1418,7 +1449,6 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
         CommitPendingEditsAndSave();
 
         _monitorTimer.Stop();
-        _processRefreshTimer.Stop();
         _reinforceTimer.Stop();
         SystemEvents.PowerModeChanged -= OnPowerModeChangedForThrottling;
         _service.Dispose();

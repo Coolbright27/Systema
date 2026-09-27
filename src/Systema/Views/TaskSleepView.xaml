@@ -33,6 +33,30 @@
             <Setter Property="Content" Value="&#xE712;"/>
         </Style>
 
+        <!-- A whole-row button in the never-nap picker: no fill until hovered, like the app rows in
+             Windows' "Add apps" flyouts. Content stretches so the + sits at the far right. -->
+        <Style x:Key="PickerRowButton" TargetType="Button">
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
+            <Setter Property="FocusVisualStyle" Value="{StaticResource Win11FocusVisual}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bg" Background="Transparent" CornerRadius="4" Padding="8,6">
+                            <ContentPresenter/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bg" Property="Background" Value="{DynamicResource OverlaySubtleBrush}"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Bg" Property="Background" Value="{DynamicResource OverlayLightBrush}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <!-- Toggle-style radio button for aggressiveness selector -->
         <Style x:Key="ToggleRadio" TargetType="RadioButton">
             <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
@@ -1239,6 +1263,10 @@
             </Border>
 
             <!-- ===== NEVER-NAP LIST ===== -->
+            <!-- Laid out like Windows Security > Exclusions and Settings > Accounts > Other users: an
+                 "Add an app" row with its button, an inline picker of running apps while it's open
+                 (search, and a switch for every process), then one row per app on the list with its
+                 icon and a Remove button. What the picker lists is Core/RunningApps.cs. -->
             <Border Style="{StaticResource ExpanderCard}">
                 <StackPanel>
                     <Button Command="{Binding ToggleNeverNapSectionCommand}" Style="{StaticResource ExpanderButton}">
@@ -1246,118 +1274,205 @@
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
                             <StackPanel Grid.Column="0" VerticalAlignment="Center">
                                 <TextBlock Text="Never-nap list" Style="{StaticResource ExpanderHeaderTitle}"/>
                                 <TextBlock Text="Apps that are never put to sleep, no matter what."
                                            Style="{StaticResource CaptionText}" Margin="0,2,0,0" TextWrapping="Wrap"/>
                             </StackPanel>
-                            <Path Grid.Column="1" Style="{StaticResource ExpanderChevron}" Margin="16,0,0,0"
+                            <TextBlock Grid.Column="1" Text="{Binding NeverNapSummary}"
+                                       Style="{StaticResource BodyText}"
+                                       Foreground="{DynamicResource TextSecondaryBrush}"
+                                       VerticalAlignment="Center" Margin="16,0,0,0"/>
+                            <Path Grid.Column="2" Style="{StaticResource ExpanderChevron}" Margin="16,0,0,0"
                                   ctl:Motion.Flipped="{Binding ShowNeverNap}"/>
                         </Grid>
                     </Button>
 
-                    <Border Style="{StaticResource ExpanderBlock}" Padding="34,14,18,16"
-                            Visibility="{Binding ShowNeverNap, Converter={StaticResource BoolToVis}}"
-                            ctl:Motion.RevealOnShow="True">
-                    <StackPanel>
-                    <TextBlock Text="Apps on this list will never be put to sleep. You can also add apps directly from the live monitor using the ··· button next to any napping process."
-                               Style="{StaticResource CaptionText}"
-                               Foreground="{DynamicResource TextSecondaryBrush}"
-                               TextWrapping="Wrap" Margin="0,0,0,16"/>
+                    <StackPanel Visibility="{Binding ShowNeverNap, Converter={StaticResource BoolToVis}}"
+                                ctl:Motion.RevealOnShow="True">
 
-                    <!-- Whitelist items -->
-                    <ItemsControl ItemsSource="{Binding Whitelist}">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate>
-                                <Border BorderBrush="{DynamicResource BorderBrush}"
-                                        BorderThickness="0,0,0,1"
-                                        Padding="0,6">
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="Auto"/>
-                                        </Grid.ColumnDefinitions>
-                                        <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                                            <Border Background="{DynamicResource SuccessAlpha05Brush}" CornerRadius="4"
-                                                    Padding="6,2" Margin="0,0,8,0" VerticalAlignment="Center">
-                                                <TextBlock Text="PROTECTED" FontSize="9" FontWeight="Bold"
-                                                           Foreground="{DynamicResource AccentGreenBrush}"/>
-                                            </Border>
-                                            <TextBlock Text="{Binding}"
-                                                       Style="{StaticResource BodyText}"
-                                                       FontFamily="Cascadia Mono, Consolas, Courier New"
-                                                       FontSize="12"
-                                                       VerticalAlignment="Center"/>
-                                        </StackPanel>
-                                        <Button Grid.Column="1"
-                                                Content="Remove"
-                                                FontSize="11"
-                                                Background="Transparent"
-                                                BorderThickness="0"
-                                                Foreground="{DynamicResource TextSecondaryBrush}"
-                                                Padding="8,4"
-                                                VerticalAlignment="Center"
-                                                Command="{Binding DataContext.RemoveFromWhitelistCommand,
-                                                    RelativeSource={RelativeSource AncestorType=ItemsControl}}"
-                                                CommandParameter="{Binding}"/>
-                                    </Grid>
-                                </Border>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
+                        <!-- Add an app -->
+                        <ctl:SettingsCard Header="Add an app" Style="{StaticResource ExpanderItem}"
+                                          Description="Pick one that's running now. You can also add an app from the Live monitor's More menu.">
+                            <Button Command="{Binding ToggleAppPickerCommand}" MinWidth="96">
+                                <Button.Style>
+                                    <Style TargetType="Button" BasedOn="{StaticResource GhostButton}">
+                                        <Setter Property="Content" Value="Add app"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding ShowAppPicker}" Value="True">
+                                                <Setter Property="Content" Value="Cancel"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Button.Style>
+                            </Button>
+                        </ctl:SettingsCard>
 
-                    <!-- Empty state -->
-                    <TextBlock Text="No apps whitelisted yet.">
-                        <TextBlock.Style>
-                            <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionText}">
-                                <Setter Property="Visibility" Value="Collapsed"/>
-                                <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
-                                <Setter Property="Margin" Value="0,0,0,8"/>
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding Whitelist.Count}" Value="0">
-                                        <Setter Property="Visibility" Value="Visible"/>
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </TextBlock.Style>
-                    </TextBlock>
+                        <!-- The picker: running apps, a search box, and a switch to list every process -->
+                        <Border Style="{StaticResource ExpanderBlock}"
+                                Visibility="{Binding ShowAppPicker, Converter={StaticResource BoolToVis}}">
+                        <StackPanel>
+                            <Grid Margin="0,0,0,8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" MaxWidth="360"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
 
-                    <!-- Add to whitelist form -->
-                    <Border Height="1" Background="{DynamicResource BorderBrush}" Margin="0,12,0,12"/>
-                    <WrapPanel>
-                        <TextBox Width="180"
-                                 Text="{Binding WhitelistNewApp, UpdateSourceTrigger=PropertyChanged}"
-                                 Style="{StaticResource DarkTextBox}"
-                                 Height="32"
-                                 Margin="0,0,8,0"/>
+                                <!-- Search box, like Windows' own: hint text inside, magnifier at the right.
+                                     Its column stops at 360 px, so it sits at the left and shrinks on a narrow window. -->
+                                <Grid Grid.Column="0">
+                                    <TextBox x:Name="PickerSearchBox" Style="{StaticResource DarkTextBox}"
+                                             Text="{Binding PickerSearch, UpdateSourceTrigger=PropertyChanged}"
+                                             Padding="8,6,30,6" AutomationProperties.Name="Search running apps"
+                                             IsVisibleChanged="PickerSearchBox_IsVisibleChanged"/>
+                                    <TextBlock Text="Search running apps" IsHitTestVisible="False"
+                                               Margin="11,0,0,0" VerticalAlignment="Center">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock" BasedOn="{StaticResource BodyText}">
+                                                <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding PickerSearch}" Value="">
+                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                    <TextBlock Text="&#xE721;" FontFamily="{StaticResource IconFont}" FontSize="14"
+                                               Foreground="{DynamicResource TextSecondaryBrush}" IsHitTestVisible="False"
+                                               HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                </Grid>
 
-                        <ComboBox Width="180"
-                                  Height="32"
-                                  ItemsSource="{Binding RunningProcessNames}"
-                                  SelectedItem="{Binding SelectedRunningProcess, Mode=OneWayToSource}"
-                                  Margin="0,0,8,0"/>
+                                <StackPanel Grid.Column="2" Orientation="Horizontal" Margin="16,0,0,0">
+                                    <TextBlock Text="Show all processes" Style="{StaticResource BodyText}"
+                                               VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                    <CheckBox Style="{StaticResource ToggleSwitch}" Tag="NoStateLabel"
+                                              IsChecked="{Binding PickerShowAll, Mode=TwoWay}"
+                                              AutomationProperties.Name="Show all processes"
+                                              VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Grid>
 
-                        <Button Content="↻"
-                                Width="32" Height="32"
-                                FontSize="14"
-                                ToolTip="Refresh running processes list"
-                                Command="{Binding RefreshRunningCommand}"
-                                Style="{StaticResource GhostButton}"
-                                Margin="0,0,8,0"/>
+                            <!-- Click a row to add it. 14 px right margin clears the floating scroll bar. -->
+                            <ScrollViewer MaxHeight="288"
+                                          VerticalScrollBarVisibility="Auto"
+                                          HorizontalScrollBarVisibility="Disabled">
+                                <ItemsControl ItemsSource="{Binding PickerApps}" Margin="0,0,14,0">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Button Style="{StaticResource PickerRowButton}"
+                                                    Command="{Binding DataContext.AddPickedAppCommand,
+                                                        RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                    CommandParameter="{Binding}"
+                                                    AutomationProperties.Name="{Binding Name}">
+                                                <Grid MinHeight="32">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="Auto"/>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="Auto"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <Image Width="24" Height="24" VerticalAlignment="Center"
+                                                           Source="{Binding Converter={StaticResource ProcessIcon}}"
+                                                           RenderOptions.BitmapScalingMode="HighQuality"/>
+                                                    <StackPanel Grid.Column="1" Margin="12,0" VerticalAlignment="Center">
+                                                        <TextBlock Text="{Binding Name}" Style="{StaticResource BodyText}"
+                                                                   TextTrimming="CharacterEllipsis"/>
+                                                        <TextBlock Text="Background process">
+                                                            <TextBlock.Style>
+                                                                <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionText}">
+                                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding IsApp}" Value="False">
+                                                                            <Setter Property="Visibility" Value="Visible"/>
+                                                                        </DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </TextBlock.Style>
+                                                        </TextBlock>
+                                                    </StackPanel>
+                                                    <TextBlock Grid.Column="2" Text="&#xE710;" FontFamily="{StaticResource IconFont}"
+                                                               FontSize="14" Foreground="{DynamicResource TextSecondaryBrush}"
+                                                               VerticalAlignment="Center" Margin="0,0,4,0"/>
+                                                </Grid>
+                                            </Button>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
 
-                        <Button Content="Add to whitelist"
-                                Height="32"
-                                Padding="14,0"
-                                Style="{StaticResource PrimaryButton}"
-                                Command="{Binding AddToWhitelistCommand}"/>
-                    </WrapPanel>
-                    <TextBlock Text="Type a process name (without .exe) or pick from the running list, then click Add."
-                               Style="{StaticResource CaptionText}"
-                               Foreground="{DynamicResource TextSecondaryBrush}"
-                               Margin="0,6,0,0"/>
+                            <!-- Nothing running matches: offer to add the typed name anyway -->
+                            <StackPanel>
+                                <StackPanel.Style>
+                                    <Style TargetType="StackPanel">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding PickerApps.Count}" Value="0">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </StackPanel.Style>
+                                <TextBlock Text="No running apps match." Style="{StaticResource BodyText}"
+                                           Foreground="{DynamicResource TextSecondaryBrush}" Margin="8,4,0,8"/>
+                                <Button Style="{StaticResource GhostButton}" HorizontalAlignment="Left" Margin="8,0,0,4"
+                                        Command="{Binding AddTypedAppCommand}"
+                                        Visibility="{Binding PickerCanAddTyped, Converter={StaticResource BoolToVis}}">
+                                    <TextBlock Text="{Binding PickerSearch, StringFormat='Add “{0}” anyway'}"/>
+                                </Button>
+                            </StackPanel>
+                        </StackPanel>
+                        </Border>
+
+                        <!-- The apps on the list -->
+                        <ItemsControl ItemsSource="{Binding Whitelist}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0"
+                                            Padding="34,10,18,10">
+                                        <Grid MinHeight="36">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <Image Width="24" Height="24" VerticalAlignment="Center"
+                                                   Source="{Binding Converter={StaticResource ProcessIcon}}"
+                                                   RenderOptions.BitmapScalingMode="HighQuality"/>
+                                            <TextBlock Grid.Column="1" Text="{Binding}" Style="{StaticResource BodyText}"
+                                                       VerticalAlignment="Center" Margin="12,0"
+                                                       TextTrimming="CharacterEllipsis"/>
+                                            <Button Grid.Column="2" Content="Remove" MinWidth="96"
+                                                    Style="{StaticResource GhostButton}"
+                                                    VerticalAlignment="Center"
+                                                    Command="{Binding DataContext.RemoveFromWhitelistCommand,
+                                                        RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                    CommandParameter="{Binding}"/>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <!-- Empty list -->
+                        <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0" Padding="34,16,18,16">
+                            <Border.Style>
+                                <Style TargetType="Border">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding Whitelist.Count}" Value="0">
+                                            <Setter Property="Visibility" Value="Visible"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
+                            <TextBlock Text="No apps on the list yet." Style="{StaticResource BodyText}"
+                                       Foreground="{DynamicResource TextSecondaryBrush}"/>
+                        </Border>
                     </StackPanel>
-                    </Border>
                 </StackPanel>
             </Border>
 

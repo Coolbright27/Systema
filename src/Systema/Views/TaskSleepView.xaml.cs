@@ -36,4 +36,11 @@ public partial class TaskSleepView : UserControl
     {
         if (DataContext is TaskSleepViewModel vm) vm.LiveListFrozen = false;
     }
+
+    /// <summary>Opening the never-nap picker puts the cursor in its search box, ready to type.</summary>
+    private void PickerSearchBox_IsVisibleChanged(object sender, DependencyPropertyChangedEventArgs e)
+    {
+        if (e.NewValue is true && sender is System.Windows.Controls.TextBox box)
+            Dispatcher.BeginInvoke(() => box.Focus(), System.Windows.Threading.DispatcherPriority.Input);
+    }
 }
