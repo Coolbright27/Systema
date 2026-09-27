@@ -29,3 +29,6 @@ installer/Final/
 *.pfx
 *.snk
 .claude/
+
+# WPF markup-compile temp project, left behind when a build is interrupted
+*_wpftmp.csproj
