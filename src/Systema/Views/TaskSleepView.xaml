@@ -16,6 +16,50 @@
         <conv:BoolToIndexConverter x:Key="BoolToIndex"/>
         <conv:ProcessIconConverter x:Key="ProcessIcon"/>
         <conv:ActivityKindConverter x:Key="ActivityKind"/>
+        <conv:UnitLabelConverter x:Key="UnitLabel"/>
+
+        <!-- Advanced timing pickers: each says its unit in words ("5 minutes", "3%"), like the
+             dropdowns in Settings > System > Power, so a row needs no unit label beside it. -->
+        <Style x:Key="SecondsPicker" TargetType="ComboBox" BasedOn="{StaticResource DarkComboBox}">
+            <Setter Property="MinWidth" Value="150"/>
+            <Setter Property="ItemTemplate">
+                <Setter.Value>
+                    <DataTemplate><TextBlock Text="{Binding Converter={StaticResource UnitLabel}, ConverterParameter=seconds}"/></DataTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="MinutesPicker" TargetType="ComboBox" BasedOn="{StaticResource DarkComboBox}">
+            <Setter Property="MinWidth" Value="150"/>
+            <Setter Property="ItemTemplate">
+                <Setter.Value>
+                    <DataTemplate><TextBlock Text="{Binding Converter={StaticResource UnitLabel}, ConverterParameter=minutes}"/></DataTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="PercentPicker" TargetType="ComboBox" BasedOn="{StaticResource DarkComboBox}">
+            <Setter Property="MinWidth" Value="150"/>
+            <Setter Property="ItemTemplate">
+                <Setter.Value>
+                    <DataTemplate><TextBlock Text="{Binding Converter={StaticResource UnitLabel}, ConverterParameter=percent}"/></DataTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="AppsPicker" TargetType="ComboBox" BasedOn="{StaticResource DarkComboBox}">
+            <Setter Property="MinWidth" Value="150"/>
+            <Setter Property="ItemTemplate">
+                <Setter.Value>
+                    <DataTemplate><TextBlock Text="{Binding Converter={StaticResource UnitLabel}, ConverterParameter=apps}"/></DataTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- A plain group heading between rows inside an open expander (Windows' "Body Strong"),
+             in place of the old small uppercase labels. -->
+        <Style x:Key="ExpanderGroupHeading" TargetType="Border">
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+            <Setter Property="BorderThickness" Value="0,1,0,0"/>
+            <Setter Property="Padding" Value="34,18,18,6"/>
+        </Style>
 
         <!-- Windows 11's icon font (Segoe MDL2 Assets on Windows 10 has the same code points) -->
         <FontFamily x:Key="IconFont">Segoe Fluent Icons, Segoe MDL2 Assets</FontFamily>
@@ -898,7 +942,7 @@
 
                         <!-- Nap hidden apps -->
                         <ctl:SettingsCard Header="Nap hidden apps" Style="{StaticResource ExpanderItem}"
-                                          Description="Also sleeps apps that are open but fully covered by other windows, treating them just like a minimized app. An app has to stay fully covered for 5 minutes before it naps (change this under Wake Timing). They wake the instant they're uncovered or clicked, and the same protections apply: anything playing audio, busy in the background, recently used, or in the foreground is left awake. On by default.">
+                                          Description="Also sleeps apps that are open but fully covered by other windows, treating them just like a minimized app. An app has to stay fully covered for a few minutes before it naps (set how long under Advanced timing &amp; caps). They wake the instant they're uncovered or clicked, and the same protections apply: anything playing audio, busy in the background, recently used, or in the foreground is left awake. On by default.">
                             <CheckBox IsChecked="{Binding HiddenNapEnabled, Mode=TwoWay}"
                                       Style="{StaticResource ToggleSwitch}"/>
                         </ctl:SettingsCard>
@@ -946,6 +990,13 @@
             </Border>
 
             <!-- ===== ADVANCED TIMING & CAPS ===== -->
+            <!-- Windows 11 Settings rows under plain group headings: Protection, CPU limit, Brief wakes,
+                 Minimized and hidden apps, Tray apps. Each picker says its unit in words, so there's no
+                 unit column. What each setting does is checked against the engine:
+                   • elevated processes are skipped by a PERMANENT rule (SkipRules.cs), so it's shown as
+                     always on rather than a switch that did nothing;
+                   • "Deep sleep after" is one threshold for minimized AND tray apps (BuildSettings);
+                   • a deep-sleep wake is never more frequent than a regular one (Core/NapRules.cs). -->
             <Border Style="{StaticResource ExpanderCard}">
                 <StackPanel>
                     <Button Command="{Binding ToggleAdvancedSectionCommand}" Style="{StaticResource ExpanderButton}">
@@ -956,7 +1007,7 @@
                             </Grid.ColumnDefinitions>
                             <StackPanel Grid.Column="0" VerticalAlignment="Center">
                                 <TextBlock Text="Advanced timing &amp; caps" Style="{StaticResource ExpanderHeaderTitle}"/>
-                                <TextBlock Text="Protection guards, the hard CPU cap, and wake-timing controls for power users."
+                                <TextBlock Text="How hard sleeping apps are held back, and how often they wake to catch up."
                                            Style="{StaticResource CaptionText}" Margin="0,2,0,0" TextWrapping="Wrap"/>
                             </StackPanel>
                             <Path Grid.Column="1" Style="{StaticResource ExpanderChevron}" Margin="16,0,0,0"
@@ -967,297 +1018,145 @@
                     <StackPanel Visibility="{Binding ShowAdvancedSection, Converter={StaticResource BoolToVis}}"
                                 ctl:Motion.RevealOnShow="True">
 
-                        <!-- ── PROTECTION GUARDS ── -->
-                        <Border Style="{StaticResource ExpanderBlock}" Padding="34,14,18,6">
-                            <TextBlock Text="PROTECTION" Style="{StaticResource SectionLabel}"/>
+                        <!-- ── Protection ── -->
+                        <Border Style="{StaticResource ExpanderGroupHeading}">
+                            <TextBlock Text="Protection" Style="{StaticResource HeadingSmall}"/>
                         </Border>
 
-                        <!-- Elevated process guard -->
-                        <ctl:SettingsCard Header="Protect elevated processes" Style="{StaticResource ExpanderItem}"
-                                          Description="Admin processes like Hyper-V, Docker, WSL2, and elevated tools are automatically protected using Windows integrity levels.">
-                            <CheckBox IsChecked="{Binding ElevatedProcessGuardEnabled, Mode=TwoWay}"
-                                      Style="{StaticResource ToggleSwitch}"/>
+                        <ctl:SettingsCard Header="Apps running as administrator" Style="{StaticResource ExpanderItem}"
+                                          Description="Hyper-V, Docker, WSL and anything you run as administrator are never put to sleep. It's a safety rule, so it can't be turned off.">
+                            <TextBlock Text="Always on" Style="{StaticResource BodyText}"
+                                       Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center"/>
                         </ctl:SettingsCard>
 
-                        <!-- Multi-monitor awareness -->
                         <ctl:SettingsCard Header="Multi-monitor awareness" Style="{StaticResource ExpanderItem}"
-                                          Description="Apps visible on any monitor are protected, not just the one you're clicking in.">
+                                          Description="Apps you can see on any screen stay awake, not just the one you're working on.">
                             <CheckBox IsChecked="{Binding MultiMonitorAwarenessEnabled, Mode=TwoWay}"
                                       Style="{StaticResource ToggleSwitch}"/>
                         </ctl:SettingsCard>
 
-                        <!-- Process group awareness -->
                         <ctl:SettingsCard Header="App group awareness" Style="{StaticResource ExpanderItem}"
-                                          Description="When you're using an app, all of its processes stay awake (e.g. all Chrome tabs and renderers are protected when any Chrome window is focused).">
+                                          Description="While you use an app, all of its processes stay awake too, like every tab and helper of your browser.">
                             <CheckBox IsChecked="{Binding ProcessGroupAwarenessEnabled, Mode=TwoWay}"
                                       Style="{StaticResource ToggleSwitch}"/>
                         </ctl:SettingsCard>
 
-                        <!-- Tray deep sleep (a behavioural guard, so it lives with the others) -->
-                        <ctl:SettingsCard Header="Tray deep sleep" Style="{StaticResource ExpanderItem}"
-                                          Description="After a tray app has been idle for the deep-sleep threshold, stretch its wakes to a longer interval. Protects it from spurious activations while still giving it periodic runtime.">
-                            <CheckBox IsChecked="{Binding TrayDeepSleepEnabled, Mode=TwoWay}"
+                        <!-- ── CPU limit ── -->
+                        <Border Style="{StaticResource ExpanderGroupHeading}">
+                            <TextBlock Text="CPU limit" Style="{StaticResource HeadingSmall}"/>
+                        </Border>
+
+                        <ctl:SettingsCard Header="Hard CPU limit for sleeping apps" Style="{StaticResource ExpanderItem}"
+                                          Description="Windows itself holds each sleeping process to a small share of your processor, so a stuck app in the background can't slow you down. It counts per process, so an app made of several processes can add up higher in Task Manager.">
+                            <CheckBox IsChecked="{Binding NappedCpuCapEnabled, Mode=TwoWay}"
                                       Style="{StaticResource ToggleSwitch}"/>
                         </ctl:SettingsCard>
 
-                        <!-- Pause brief wakes during Game Mode -->
+                        <StackPanel Visibility="{Binding NappedCpuCapEnabled, Converter={StaticResource BoolToVis}}">
+                            <ctl:SettingsCard Header="Limit while asleep" Style="{StaticResource ExpanderItem}"
+                                              Description="The most CPU each sleeping process can use, as a share of your whole processor.">
+                                <ComboBox Style="{StaticResource PercentPicker}"
+                                          ItemsSource="{Binding CpuCapWhileSleepingOptions}"
+                                          SelectedItem="{Binding NappedCpuCapPercent, Mode=TwoWay}"/>
+                            </ctl:SettingsCard>
+
+                            <ctl:SettingsCard Header="Limit during a brief wake" Style="{StaticResource ExpanderItem}"
+                                              Description="A little more room while a sleeping app wakes to catch up. Higher catches up faster, lower saves more CPU.">
+                                <ComboBox Style="{StaticResource PercentPicker}"
+                                          ItemsSource="{Binding CpuCapBriefWakeOptions}"
+                                          SelectedItem="{Binding BriefWakeCpuCapPercent, Mode=TwoWay}"/>
+                            </ctl:SettingsCard>
+                        </StackPanel>
+
+                        <!-- ── Brief wakes ── -->
+                        <Border Style="{StaticResource ExpanderGroupHeading}">
+                            <TextBlock Text="Brief wakes" Style="{StaticResource HeadingSmall}"/>
+                        </Border>
+
+                        <ctl:SettingsCard Header="Apps waking at once" Style="{StaticResource ExpanderItem}"
+                                          Description="At most this many sleeping apps wake at the same time, so their wakes never pile up into a CPU spike.">
+                            <ComboBox Style="{StaticResource AppsPicker}"
+                                      ItemsSource="{Binding MaxConcurrentBriefWakeOptions}"
+                                      SelectedItem="{Binding MaxConcurrentBriefWakes, Mode=TwoWay}"/>
+                        </ctl:SettingsCard>
+
                         <ctl:SettingsCard Header="Pause brief wakes while gaming" Style="{StaticResource ExpanderItem}"
-                                          Description="When Game Booster is active, napped apps stay fully asleep with no periodic wakes, so 100% of the CPU goes to your game. Turn it off if you need background apps like Discord bots or streaming tools to keep running while gaming.">
+                                          Description="While Game Booster is active, sleeping apps stay fully asleep so your game gets the CPU. Turn this off if something in the background, like a Discord bot or a streaming tool, has to keep running while you play.">
                             <CheckBox IsChecked="{Binding SuppressBriefWakesDuringGameMode, Mode=TwoWay}"
                                       Style="{StaticResource ToggleSwitch}"/>
                         </ctl:SettingsCard>
 
-                        <!-- CPU cap and wake timing: the number pickers, unchanged -->
-                        <Border Style="{StaticResource ExpanderBlock}" Padding="34,16,18,8">
-                        <StackPanel>
+                        <ctl:SettingsCard Header="Deep sleep after" Style="{StaticResource ExpanderItem}"
+                                          Description="Once an app has slept this long, it wakes less often (the deep sleep times below). Applies to minimized, hidden and tray apps.">
+                            <ComboBox Style="{StaticResource MinutesPicker}"
+                                      ItemsSource="{Binding DeepSleepAfterOptions}"
+                                      SelectedItem="{Binding MinimizeDeepSleepThresholdMinutes, Mode=TwoWay}"/>
+                        </ctl:SettingsCard>
 
-                    <!-- ── CPU CAP ── -->
-                    <TextBlock Text="CPU CAP" Style="{StaticResource SectionLabel}" Margin="0,0,0,8"/>
-
-                    <Grid Margin="0,0,0,16">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" Margin="0,0,24,0">
-                            <TextBlock Text="Hard CPU limit for sleeping apps"
-                                       Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                            <TextBlock Text="Enforced by Windows at the kernel level, per process. Apps made of several processes (browsers, Spotify) add up, so their total in Task Manager can read higher than the cap."
-                                       Style="{StaticResource CaptionText}"
-                                       Foreground="{DynamicResource TextSecondaryBrush}"
-                                       TextWrapping="Wrap" Margin="0,3,0,0"/>
-                        </StackPanel>
-                        <CheckBox Grid.Column="1"
-                                  IsChecked="{Binding NappedCpuCapEnabled, Mode=TwoWay}"
-                                  Style="{StaticResource ToggleSwitch}"
-                                  VerticalAlignment="Top"/>
-                    </Grid>
-
-                    <!-- CPU cap sub-rows: all share 70px textbox + 50px unit column so they line up. -->
-                    <StackPanel Visibility="{Binding NappedCpuCapEnabled, Converter={StaticResource BoolToVis}}">
-                        <Grid Margin="16,0,0,10">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="70"/>
-                                <ColumnDefinition Width="50"/>
-                            </Grid.ColumnDefinitions>
-                            <TextBlock Text="Max CPU per process while sleeping"
-                                       Style="{StaticResource BodyText}"
-                                       VerticalAlignment="Center"/>
-                            <ComboBox Grid.Column="1"
-                                      Style="{StaticResource DarkComboBox}"
-                                      ItemsSource="{Binding CpuCapWhileSleepingOptions}"
-                                      SelectedItem="{Binding NappedCpuCapPercent, Mode=TwoWay}"
-                                      HorizontalAlignment="Stretch"/>
-                            <TextBlock Grid.Column="2" Text="%" VerticalAlignment="Center"
-                                       Margin="8,0,0,0" Style="{StaticResource BodyText}"
-                                       Foreground="{DynamicResource TextSecondaryBrush}"/>
-                        </Grid>
-
-                        <Grid Margin="16,0,0,16">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="70"/>
-                                <ColumnDefinition Width="50"/>
-                            </Grid.ColumnDefinitions>
-                            <StackPanel Grid.Column="0" Margin="0,0,12,0" VerticalAlignment="Center">
-                                <TextBlock Text="Max CPU per process during brief wakes"
-                                           Style="{StaticResource BodyText}"/>
-                                <TextBlock Text="The cap stays on while a sleeping app briefly wakes. It applies per process, so an app with many processes can total higher for a moment. Higher is more responsive, lower is less CPU use."
-                                           Style="{StaticResource CaptionText}"
-                                           Foreground="{DynamicResource TextSecondaryBrush}"
-                                           TextWrapping="Wrap" Margin="0,3,0,0"/>
-                            </StackPanel>
-                            <ComboBox Grid.Column="1"
-                                      Style="{StaticResource DarkComboBox}"
-                                      ItemsSource="{Binding CpuCapBriefWakeOptions}"
-                                      SelectedItem="{Binding BriefWakeCpuCapPercent, Mode=TwoWay}"
-                                      VerticalAlignment="Top"
-                                      HorizontalAlignment="Stretch"/>
-                            <TextBlock Grid.Column="2" Text="%" VerticalAlignment="Top"
-                                       Margin="8,8,0,0" Style="{StaticResource BodyText}"
-                                       Foreground="{DynamicResource TextSecondaryBrush}"/>
-                        </Grid>
-                    </StackPanel>
-
-                    <Grid Margin="0,0,0,16">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="70"/>
-                            <ColumnDefinition Width="50"/>
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" Margin="0,0,12,0" VerticalAlignment="Center">
-                            <TextBlock Text="Max simultaneous brief wakes"
-                                       Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
-                            <TextBlock Text="Limits how many sleeping apps can wake up at the same time to prevent CPU spikes."
-                                       Style="{StaticResource CaptionText}"
-                                       Foreground="{DynamicResource TextSecondaryBrush}"
-                                       TextWrapping="Wrap" Margin="0,3,0,0"/>
-                        </StackPanel>
-                        <ComboBox Grid.Column="1"
-                                  Style="{StaticResource DarkComboBox}"
-                                  ItemsSource="{Binding MaxConcurrentBriefWakeOptions}"
-                                  SelectedItem="{Binding MaxConcurrentBriefWakes, Mode=TwoWay}"
-                                  VerticalAlignment="Top"
-                                  HorizontalAlignment="Stretch"/>
-                        <TextBlock Grid.Column="2" Text="apps" VerticalAlignment="Top"
-                                   Margin="8,8,0,0" Style="{StaticResource BodyText}"
-                                   Foreground="{DynamicResource TextSecondaryBrush}"/>
-                    </Grid>
-
-                    <Border Height="1" Background="{DynamicResource BorderBrush}" Margin="0,0,0,16"/>
-
-                    <!-- ── WAKE TIMING ── -->
-                    <!-- Column layout: label fills, fixed 70px textbox, fixed 36px unit. -->
-                    <!-- Every row aligns on the right regardless of unit text width.     -->
-                    <!-- "Deep sleep after" sets the threshold for BOTH minimized and tray -->
-                    <!-- deep sleep — one setting, one row. "Deep wake every" shows only   -->
-                    <!-- when Tray Deep Sleep (in Protection) is enabled.                   -->
-                    <TextBlock Text="WAKE TIMING" Style="{StaticResource SectionLabel}" Margin="0,0,0,12"/>
-
-                    <TextBlock Text="Regular naps"
-                               Style="{StaticResource HeadingSmall}"
-                               Margin="0,0,0,12"/>
-
-                    <Grid Margin="0,0,0,10">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="70"/>
-                            <ColumnDefinition Width="36"/>
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Text="Brief wake every" Style="{StaticResource BodyText}" VerticalAlignment="Center"/>
-                        <ComboBox Grid.Column="1"
-                                  Style="{StaticResource DarkComboBox}"
-                                  ItemsSource="{Binding MinimizedBriefWakeIntervalOptions}"
-                                  SelectedItem="{Binding MinimizedBriefWakeIntervalSeconds, Mode=TwoWay}"
-                                  HorizontalAlignment="Stretch"/>
-                        <TextBlock Grid.Column="2" Text="sec" VerticalAlignment="Center"
-                                   Margin="8,0,0,0" Style="{StaticResource BodyText}"
-                                   Foreground="{DynamicResource TextSecondaryBrush}"/>
-                    </Grid>
-
-                    <Grid Margin="0,0,0,20">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="70"/>
-                            <ColumnDefinition Width="36"/>
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Text="Wake lasts for" Style="{StaticResource BodyText}" VerticalAlignment="Center"/>
-                        <ComboBox Grid.Column="1"
-                                  Style="{StaticResource DarkComboBox}"
-                                  ItemsSource="{Binding BriefWakeDurationOptions}"
-                                  SelectedItem="{Binding MinimizedBriefWakeDurationSeconds, Mode=TwoWay}"
-                                  HorizontalAlignment="Stretch"/>
-                        <TextBlock Grid.Column="2" Text="sec" VerticalAlignment="Center"
-                                   Margin="8,0,0,0" Style="{StaticResource BodyText}"
-                                   Foreground="{DynamicResource TextSecondaryBrush}"/>
-                    </Grid>
-
-                    <!-- Hidden apps — shown only when "Nap hidden apps" is on. Sets how long a window -->
-                    <!-- must stay fully covered before it becomes eligible to nap.                     -->
-                    <StackPanel Visibility="{Binding HiddenNapEnabled, Converter={StaticResource BoolToVis}}">
-                        <TextBlock Text="Hidden apps"
-                                   Style="{StaticResource HeadingSmall}"
-                                   Margin="0,0,0,12"/>
-
-                        <Grid Margin="0,0,0,20">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="70"/>
-                                <ColumnDefinition Width="36"/>
-                            </Grid.ColumnDefinitions>
-                            <TextBlock Text="Nap after being hidden for" Style="{StaticResource BodyText}" VerticalAlignment="Center"/>
-                            <ComboBox Grid.Column="1"
-                                      Style="{StaticResource DarkComboBox}"
-                                      ItemsSource="{Binding HiddenNapDelayOptions}"
-                                      SelectedItem="{Binding HiddenNapDelayMinutes, Mode=TwoWay}"
-                                      HorizontalAlignment="Stretch"/>
-                            <TextBlock Grid.Column="2" Text="min" VerticalAlignment="Center"
-                                       Margin="8,0,0,0" Style="{StaticResource BodyText}"
-                                       Foreground="{DynamicResource TextSecondaryBrush}"/>
-                        </Grid>
-                    </StackPanel>
-
-                    <TextBlock Text="Tray apps"
-                               Style="{StaticResource HeadingSmall}"
-                               Margin="0,0,0,12"/>
-
-                    <Grid Margin="0,0,0,10">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="70"/>
-                            <ColumnDefinition Width="36"/>
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Text="Brief wake every" Style="{StaticResource BodyText}" VerticalAlignment="Center"/>
-                        <ComboBox Grid.Column="1"
-                                  Style="{StaticResource DarkComboBox}"
-                                  ItemsSource="{Binding TrayBriefWakeIntervalOptions}"
-                                  SelectedItem="{Binding TrayBriefWakeIntervalMinutes, Mode=TwoWay}"
-                                  HorizontalAlignment="Stretch"/>
-                        <TextBlock Grid.Column="2" Text="min" VerticalAlignment="Center"
-                                   Margin="8,0,0,0" Style="{StaticResource BodyText}"
-                                   Foreground="{DynamicResource TextSecondaryBrush}"/>
-                    </Grid>
-
-                    <Grid Margin="0,0,0,20">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="70"/>
-                            <ColumnDefinition Width="36"/>
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Text="Wake lasts for" Style="{StaticResource BodyText}" VerticalAlignment="Center"/>
-                        <ComboBox Grid.Column="1"
-                                  Style="{StaticResource DarkComboBox}"
-                                  ItemsSource="{Binding BriefWakeDurationOptions}"
-                                  SelectedItem="{Binding TrayBriefWakeDurationSeconds, Mode=TwoWay}"
-                                  HorizontalAlignment="Stretch"/>
-                        <TextBlock Grid.Column="2" Text="sec" VerticalAlignment="Center"
-                                   Margin="8,0,0,0" Style="{StaticResource BodyText}"
-                                   Foreground="{DynamicResource TextSecondaryBrush}"/>
-                    </Grid>
-
-                    <!-- Deep sleep — shared threshold for minimized + tray apps. -->
-                    <TextBlock Text="Deep sleep"
-                               Style="{StaticResource HeadingSmall}"
-                               Margin="0,0,0,12"/>
-
-                    <Grid Margin="0,0,0,10">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="70"/>
-                            <ColumnDefinition Width="36"/>
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Text="Deep sleep after" Style="{StaticResource BodyText}" VerticalAlignment="Center"/>
-                        <ComboBox Grid.Column="1"
-                                  Style="{StaticResource DarkComboBox}"
-                                  ItemsSource="{Binding DeepSleepAfterOptions}"
-                                  SelectedItem="{Binding MinimizeDeepSleepThresholdMinutes, Mode=TwoWay}"
-                                  HorizontalAlignment="Stretch"/>
-                        <TextBlock Grid.Column="2" Text="min" VerticalAlignment="Center"
-                                   Margin="8,0,0,0" Style="{StaticResource BodyText}"
-                                   Foreground="{DynamicResource TextSecondaryBrush}"/>
-                    </Grid>
-
-                    <Grid Margin="0,0,0,10"
-                          Visibility="{Binding TrayDeepSleepEnabled, Converter={StaticResource BoolToVis}}">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="70"/>
-                            <ColumnDefinition Width="36"/>
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Text="Tray deep wake every" Style="{StaticResource BodyText}" VerticalAlignment="Center"/>
-                        <ComboBox Grid.Column="1"
-                                  Style="{StaticResource DarkComboBox}"
-                                  ItemsSource="{Binding TrayDeepWakeOptions}"
-                                  SelectedItem="{Binding TrayDeepSleepWakeIntervalMinutes, Mode=TwoWay}"
-                                  HorizontalAlignment="Stretch"/>
-                        <TextBlock Grid.Column="2" Text="min" VerticalAlignment="Center"
-                                   Margin="8,0,0,0" Style="{StaticResource BodyText}"
-                                   Foreground="{DynamicResource TextSecondaryBrush}"/>
-                    </Grid>
-
-                        </StackPanel>
+                        <!-- ── Minimized and hidden apps ── -->
+                        <Border Style="{StaticResource ExpanderGroupHeading}">
+                            <TextBlock Text="Minimized and hidden apps" Style="{StaticResource HeadingSmall}"/>
                         </Border>
+
+                        <ctl:SettingsCard Header="Wake every" Style="{StaticResource ExpanderItem}"
+                                          Description="A minimized or covered app gets a short wake this often, so messages and downloads keep moving.">
+                            <ComboBox Style="{StaticResource SecondsPicker}"
+                                      ItemsSource="{Binding MinimizedBriefWakeIntervalOptions}"
+                                      SelectedItem="{Binding MinimizedBriefWakeIntervalSeconds, Mode=TwoWay}"/>
+                        </ctl:SettingsCard>
+
+                        <ctl:SettingsCard Header="Each wake lasts" Style="{StaticResource ExpanderItem}">
+                            <ComboBox Style="{StaticResource SecondsPicker}"
+                                      ItemsSource="{Binding BriefWakeDurationOptions}"
+                                      SelectedItem="{Binding MinimizedBriefWakeDurationSeconds, Mode=TwoWay}"/>
+                        </ctl:SettingsCard>
+
+                        <ctl:SettingsCard Header="Wake every, in deep sleep" Style="{StaticResource ExpanderItem}"
+                                          Description="How often it wakes once it's in deep sleep. Never more often than the regular wake above.">
+                            <ComboBox Style="{StaticResource MinutesPicker}"
+                                      ItemsSource="{Binding MinimizedDeepWakeOptions}"
+                                      SelectedItem="{Binding MinimizeDeepSleepWakeIntervalMinutes, Mode=TwoWay}"/>
+                        </ctl:SettingsCard>
+
+                        <ctl:SettingsCard Header="Nap a covered app after" Style="{StaticResource ExpanderItem}"
+                                          Visibility="{Binding HiddenNapEnabled, Converter={StaticResource BoolToVis}}"
+                                          Description="How long a window has to stay fully behind other windows before it naps. A minimized app naps after 30 seconds.">
+                            <ComboBox Style="{StaticResource MinutesPicker}"
+                                      ItemsSource="{Binding HiddenNapDelayOptions}"
+                                      SelectedItem="{Binding HiddenNapDelayMinutes, Mode=TwoWay}"/>
+                        </ctl:SettingsCard>
+
+                        <!-- ── Tray apps ── -->
+                        <Border Style="{StaticResource ExpanderGroupHeading}">
+                            <TextBlock Text="Tray apps" Style="{StaticResource HeadingSmall}"/>
+                        </Border>
+
+                        <ctl:SettingsCard Header="Wake every" Style="{StaticResource ExpanderItem}"
+                                          Description="Apps with no open window, like chat and sync apps in the notification area, get a short wake this often.">
+                            <ComboBox Style="{StaticResource MinutesPicker}"
+                                      ItemsSource="{Binding TrayBriefWakeIntervalOptions}"
+                                      SelectedItem="{Binding TrayBriefWakeIntervalMinutes, Mode=TwoWay}"/>
+                        </ctl:SettingsCard>
+
+                        <ctl:SettingsCard Header="Each wake lasts" Style="{StaticResource ExpanderItem}">
+                            <ComboBox Style="{StaticResource SecondsPicker}"
+                                      ItemsSource="{Binding BriefWakeDurationOptions}"
+                                      SelectedItem="{Binding TrayBriefWakeDurationSeconds, Mode=TwoWay}"/>
+                        </ctl:SettingsCard>
+
+                        <ctl:SettingsCard Header="Deep sleep for tray apps" Style="{StaticResource ExpanderItem}"
+                                          Description="After the deep sleep time above, tray apps wake less often too.">
+                            <CheckBox IsChecked="{Binding TrayDeepSleepEnabled, Mode=TwoWay}"
+                                      Style="{StaticResource ToggleSwitch}"/>
+                        </ctl:SettingsCard>
+
+                        <ctl:SettingsCard Header="Wake every, in deep sleep" Style="{StaticResource ExpanderItem}"
+                                          Visibility="{Binding TrayDeepSleepEnabled, Converter={StaticResource BoolToVis}}"
+                                          Description="Never more often than the regular wake above.">
+                            <ComboBox Style="{StaticResource MinutesPicker}"
+                                      ItemsSource="{Binding TrayDeepWakeOptions}"
+                                      SelectedItem="{Binding TrayDeepSleepWakeIntervalMinutes, Mode=TwoWay}"/>
+                        </ctl:SettingsCard>
                     </StackPanel>
                 </StackPanel>
             </Border>

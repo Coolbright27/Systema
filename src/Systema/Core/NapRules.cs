@@ -152,7 +152,9 @@ internal static class BriefWakeSchedule
     /// <summary>
     /// Deep sleep: once an app has been napped past the threshold its brief wakes come less often.
     /// Minimized apps always use deep sleep past MinimizeDeepSleepThresholdMs; tray apps only when
-    /// "Tray deep sleep" is on.
+    /// "Tray deep sleep" is on. A deep wake is never MORE frequent than a regular one (0.7.363): the
+    /// intervals are set separately, and a deep interval shorter than the regular one used to make
+    /// "deep sleep" wake an app more often.
     /// </summary>
     public static BriefWakePlan For(NapReason kind, double nappedForMs, TaskSleepSettings s)
     {
@@ -160,13 +162,13 @@ internal static class BriefWakeSchedule
         {
             bool deep = s.TrayDeepSleepEnabled && nappedForMs >= s.TrayDeepSleepThresholdMs;
             return new(s.TrayBriefWakeDurationMs,
-                       deep ? s.TrayDeepSleepWakeIntervalMs : s.TrayBriefWakeIntervalMs,
+                       deep ? Math.Max(s.TrayDeepSleepWakeIntervalMs, s.TrayBriefWakeIntervalMs) : s.TrayBriefWakeIntervalMs,
                        deep ? "Tray Deep Wake" : "Tray Wake");
         }
 
         bool minDeep = nappedForMs >= s.MinimizeDeepSleepThresholdMs;
         return new(s.MinimizedBriefWakeDurationMs,
-                   minDeep ? s.MinimizeDeepSleepWakeIntervalMs : s.MinimizedBriefWakeIntervalMs,
+                   minDeep ? Math.Max(s.MinimizeDeepSleepWakeIntervalMs, s.MinimizedBriefWakeIntervalMs) : s.MinimizedBriefWakeIntervalMs,
                    minDeep ? "Deep Wake" : "Brief Wake");
     }
 }

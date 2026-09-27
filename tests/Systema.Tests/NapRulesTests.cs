@@ -162,6 +162,23 @@ public class NapRulesTests
         Assert.Equal(new BriefWakePlan(5_000, 120_000, "Tray Wake"), BriefWakeSchedule.For(NapReason.Tray, 10_000_000, s));
     }
 
+    // Deep sleep may only slow wakes down. Set its interval shorter than the regular one (tray apps
+    // every 30 min, deep wake every 5) and it keeps the regular interval instead of waking more often.
+    [Fact]
+    public void DeepSleep_NeverWakesMoreOftenThanARegularNap()
+    {
+        var s = new TaskSleepSettings
+        {
+            MinimizedBriefWakeIntervalMs = 300_000, MinimizeDeepSleepWakeIntervalMs = 120_000, MinimizeDeepSleepThresholdMs = 600_000,
+            TrayBriefWakeIntervalMs = 1_800_000, TrayDeepSleepWakeIntervalMs = 300_000,
+            TrayDeepSleepEnabled = true, TrayDeepSleepThresholdMs = 600_000,
+        };
+        Assert.Equal(300_000,   BriefWakeSchedule.For(NapReason.Minimized, 700_000, s).NextIntervalMs);
+        Assert.Equal(1_800_000, BriefWakeSchedule.For(NapReason.Tray,      700_000, s).NextIntervalMs);
+        Assert.Equal("Deep Wake",      BriefWakeSchedule.For(NapReason.Minimized, 700_000, s).EventLabel);
+        Assert.Equal("Tray Deep Wake", BriefWakeSchedule.For(NapReason.Tray,      700_000, s).EventLabel);
+    }
+
     // ── How the engine uses them ─────────────────────────────────────────
 
     private static string Engine()

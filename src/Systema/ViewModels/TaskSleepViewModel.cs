@@ -143,6 +143,7 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
     public int[] DeepSleepAfterOptions         { get; } = { 5, 10, 15, 20, 30, 45, 60 };         // minutes
     public int[] HiddenNapDelayOptions         { get; } = { 1, 2, 3, 5, 10, 15, 30 };            // minutes
     public int[] TrayDeepWakeOptions           { get; } = { 5, 10, 15, 20, 30, 60 };             // minutes
+    public int[] MinimizedDeepWakeOptions      { get; } = { 5, 10, 15, 20, 30, 60 };             // minutes
 
     // ── Launch Boost ──────────────────────────────────────────────────────────
     [ObservableProperty] private bool _launchBoostEnabled           = false;
@@ -862,6 +863,13 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
         set { MinimizeDeepSleepThresholdMs = Math.Max(value, 1) * 60_000; OnPropertyChanged(); }
     }
 
+    /// <summary>MinimizeDeepSleepWakeIntervalMs in whole minutes: how often a minimized app wakes once in deep sleep.</summary>
+    public int MinimizeDeepSleepWakeIntervalMinutes
+    {
+        get => MinimizeDeepSleepWakeIntervalMs / 60_000;
+        set { MinimizeDeepSleepWakeIntervalMs = Math.Max(value, 1) * 60_000; OnPropertyChanged(); }
+    }
+
     /// <summary>HiddenNapGraceMs in whole minutes for the "Nap after" dropdown.</summary>
     public int HiddenNapDelayMinutes
     {
@@ -1195,7 +1203,7 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
             MinimizedBriefWakeIntervalMs    = Math.Clamp(ReadInt(key, "MinimizedBriefWakeIntervalMs",    60_000), 1_000, 3_600_000);
             MinimizedBriefWakeDurationMs    = Math.Clamp(ReadInt(key, "MinimizedBriefWakeDurationMs",    10_000), 500, 300_000);
             MinimizeDeepSleepThresholdMs    = Math.Clamp(ReadInt(key, "MinimizeDeepSleepThresholdMs",   600_000), 60_000, 3_600_000);
-            MinimizeDeepSleepWakeIntervalMs = Math.Clamp(ReadInt(key, "MinimizeDeepSleepWakeIntervalMs", 300_000), 10_000, 3_600_000);
+            MinimizeDeepSleepWakeIntervalMs = Math.Clamp(ReadInt(key, "MinimizeDeepSleepWakeIntervalMs", 300_000), 60_000, 3_600_000);   // picked in minutes
             TrayNapEnabled              = ReadBool(key, "TrayNapEnabled",          true);
             TrayBriefWakeIntervalMs     = Math.Clamp(ReadInt(key, "TrayBriefWakeIntervalMs",  300_000), 1_000, 3_600_000);
             TrayBriefWakeDurationMs     = Math.Clamp(ReadInt(key, "TrayBriefWakeDurationMs",  10_000), 500, 300_000);

@@ -84,9 +84,47 @@ internal static class PageRender
         return Ancestors(header).OfType<Border>().First(b => b.Style == cardStyle);
     }
 
+    /// <summary>
+    /// Lets the dispatcher run for a moment so state animations finish (a toggle's thumb slides to
+    /// "On" through a storyboard; its "On" text is set instantly, so without this a preview shows
+    /// the text of one state over the look of the other).
+    /// </summary>
+    public static void Settle(int ms = 500)
+    {
+        var frame = new System.Windows.Threading.DispatcherFrame();
+        var timer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(ms) };
+        timer.Tick += (_, _) => { timer.Stop(); frame.Continue = false; };
+        timer.Start();
+        System.Windows.Threading.Dispatcher.PushFrame(frame);
+    }
+
+    /// <summary>
+    /// Runs the page's state animations to their end. WPF only advances animation clocks for trees
+    /// connected to a window, so the tree is attached for a moment to a window that is never shown
+    /// (no WS_VISIBLE, off-screen), then laid out at the desktop width again.
+    /// </summary>
+    private static void FinishAnimations(FrameworkElement root)
+    {
+        var p = new System.Windows.Interop.HwndSourceParameters("SystemaPreview")
+        {
+            WindowStyle = 0, PositionX = -32000, PositionY = -32000, Width = 1, Height = 1,
+        };
+        using (var src = new System.Windows.Interop.HwndSource(p) { SizeToContent = SizeToContent.WidthAndHeight })
+        {
+            src.RootVisual = root;
+            Settle();
+            src.RootVisual = null;
+        }
+        root.Measure(new Size(1000, 8000));
+        root.Arrange(new Rect(root.DesiredSize));
+        root.UpdateLayout();
+    }
+
     /// <summary>Saves an element as a PNG, painted over the window colour as it appears in the app.</summary>
     public static void SavePng(FrameworkElement element, string path)
     {
+        if (Ancestors(element).OfType<FrameworkElement>().LastOrDefault() is { } root)
+            FinishAnimations(root);
         var bounds = element.TransformToAncestor((Visual)Ancestors(element).Last()).TransformBounds(new Rect(element.RenderSize));
         var visual = new DrawingVisual();
         using (var dc = visual.RenderOpen())

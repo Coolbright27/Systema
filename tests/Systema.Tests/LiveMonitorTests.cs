@@ -167,6 +167,36 @@ public sealed class FakeEngine
     public bool   PickerCanAddTyped     { get; set; }
     public ObservableCollection<Systema.Core.RunningApp> PickerApps { get; } = new();
 
+    // Advanced timing & caps (the values from the user's screenshot, 2026-09-27)
+    public bool  ShowAdvancedSection                  { get; set; } = true;
+    public bool  MultiMonitorAwarenessEnabled         { get; set; } = true;
+    public bool  ProcessGroupAwarenessEnabled         { get; set; } = true;
+    public bool  NappedCpuCapEnabled                  { get; set; } = true;
+    public int[] CpuCapWhileSleepingOptions           { get; } = { 1, 2, 3, 5, 8, 10 };
+    public int   NappedCpuCapPercent                  { get; set; } = 1;
+    public int[] CpuCapBriefWakeOptions               { get; } = { 3, 5, 7, 8, 10, 15, 20 };
+    public int   BriefWakeCpuCapPercent               { get; set; } = 3;
+    public int[] MaxConcurrentBriefWakeOptions        { get; } = { 1, 2, 3, 4, 5, 8 };
+    public int   MaxConcurrentBriefWakes              { get; set; } = 3;
+    public bool  SuppressBriefWakesDuringGameMode     { get; set; } = true;
+    public int[] DeepSleepAfterOptions                { get; } = { 5, 10, 15, 20, 30, 45, 60 };
+    public int   MinimizeDeepSleepThresholdMinutes    { get; set; } = 5;
+    public int[] MinimizedBriefWakeIntervalOptions    { get; } = { 30, 45, 60, 90, 120, 180, 300 };
+    public int   MinimizedBriefWakeIntervalSeconds    { get; set; } = 300;
+    public int[] BriefWakeDurationOptions             { get; } = { 5, 10, 15, 20, 30 };
+    public int   MinimizedBriefWakeDurationSeconds    { get; set; } = 5;
+    public int[] MinimizedDeepWakeOptions             { get; } = { 5, 10, 15, 20, 30, 60 };
+    public int   MinimizeDeepSleepWakeIntervalMinutes { get; set; } = 5;
+    public bool  HiddenNapEnabled                     { get; set; } = true;
+    public int[] HiddenNapDelayOptions                { get; } = { 1, 2, 3, 5, 10, 15, 30 };
+    public int   HiddenNapDelayMinutes                { get; set; } = 2;
+    public int[] TrayBriefWakeIntervalOptions         { get; } = { 1, 2, 5, 10, 15, 30 };
+    public int   TrayBriefWakeIntervalMinutes         { get; set; } = 30;
+    public int   TrayBriefWakeDurationSeconds         { get; set; } = 5;
+    public bool  TrayDeepSleepEnabled                 { get; set; } = true;
+    public int[] TrayDeepWakeOptions                  { get; } = { 5, 10, 15, 20, 30, 60 };
+    public int   TrayDeepSleepWakeIntervalMinutes     { get; set; } = 60;
+
     private static int Pid(string name) =>
         System.Diagnostics.Process.GetProcessesByName(name).FirstOrDefault()?.Id ?? Environment.ProcessId;
 

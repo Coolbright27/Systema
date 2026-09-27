@@ -409,7 +409,7 @@ TaskSleepView.xaml | binding BriefWakeDurationOptions | 2
 TaskSleepView.xaml | binding CanUseLaunchBoost | 1
 TaskSleepView.xaml | binding CanUseResponsiveness | 1
 TaskSleepView.xaml | binding CompressDeepSleep | 1
-TaskSleepView.xaml | binding Converter | 3
+TaskSleepView.xaml | binding Converter | 7
 TaskSleepView.xaml | binding CoreLabel | 1
 TaskSleepView.xaml | binding CpuCapBriefWakeOptions | 1
 TaskSleepView.xaml | binding CpuCapWhileSleepingOptions | 1
@@ -419,7 +419,6 @@ TaskSleepView.xaml | binding DataContext.AddPickedAppCommand | 1
 TaskSleepView.xaml | binding DataContext.RemoveFromWhitelistCommand | 1
 TaskSleepView.xaml | binding DeepSleepAfterOptions | 1
 TaskSleepView.xaml | binding Detail | 3
-TaskSleepView.xaml | binding ElevatedProcessGuardEnabled | 1
 TaskSleepView.xaml | binding FastAppCloseEnabled | 1
 TaskSleepView.xaml | binding FastStartupOffEnabled | 1
 TaskSleepView.xaml | binding FasterShutdownEnabled | 1
@@ -448,10 +447,12 @@ TaskSleepView.xaml | binding MaxConcurrentBriefWakeOptions | 1
 TaskSleepView.xaml | binding MaxConcurrentBriefWakes | 1
 TaskSleepView.xaml | binding MaxResponsivenessEnabled | 1
 TaskSleepView.xaml | binding MinimizeDeepSleepThresholdMinutes | 1
+TaskSleepView.xaml | binding MinimizeDeepSleepWakeIntervalMinutes | 1
 TaskSleepView.xaml | binding MinimizeNapEnabled | 1
 TaskSleepView.xaml | binding MinimizedBriefWakeDurationSeconds | 1
 TaskSleepView.xaml | binding MinimizedBriefWakeIntervalOptions | 1
 TaskSleepView.xaml | binding MinimizedBriefWakeIntervalSeconds | 1
+TaskSleepView.xaml | binding MinimizedDeepWakeOptions | 1
 TaskSleepView.xaml | binding MultiMonitorAwarenessEnabled | 1
 TaskSleepView.xaml | binding Name | 3
 TaskSleepView.xaml | binding NappedCpuCapEnabled | 2
