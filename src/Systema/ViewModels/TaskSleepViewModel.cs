@@ -225,10 +225,8 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
     [ObservableProperty] private int  _idleNapAfterMs                = 120_000;
 
     // ── UI Display ──────────────────────────────────────────────────────────
-    [ObservableProperty] private string _cpuFreedDisplay  = "";
-    [ObservableProperty] private bool   _cpuFreedVisible  = false;
     [ObservableProperty] private bool   _showAllProcesses = false;
-    [ObservableProperty] private string _systemCpuDisplay      = "System CPU: —";
+    [ObservableProperty] private string _systemCpuDisplay      = "System CPU —";
     [ObservableProperty] private string _throttledCountDisplay = "0 napping";
 
     // ── UI State ──────────────────────────────────────────────────────────────
@@ -931,26 +929,33 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
         SaveSettings();
     }
 
+    /// <summary>
+    /// Holds the live list still while a row's "More" menu is open. The list is rebuilt every
+    /// 2 s, which would swap the row out from under the open menu. Set by the view.
+    /// </summary>
+    public bool LiveListFrozen { get; set; }
+
     private void RefreshMonitor()
     {
         var snapshot = _service.GetLatestSnapshot();
 
-        SystemCpuDisplay = snapshot != null ? $"System CPU: {snapshot.SystemCpuPercent:F0}%" : "System CPU: —";
+        SystemCpuDisplay = snapshot != null ? $"System CPU {snapshot.SystemCpuPercent:F0}%" : "System CPU —";
         int nSleeping = snapshot?.TotalThrottled ?? 0;
         int nPending  = snapshot?.Processes.Count(p => p.IsPendingNap) ?? 0;
         AppsNappingCount = nSleeping;
         ActiveAppsCount  = snapshot?.Processes.Count(p => !p.IsThrottled) ?? 0;
-        ThrottledCountDisplay = nSleeping > 0
-            ? (nPending > 0 ? $"{nSleeping} napping, {nPending} pending" : $"{nSleeping} napping")
-            : (nPending > 0 ? $"{nPending} pending nap" : "all awake");
-        CpuFreedDisplay = IsEnabled ? "Task Sleep is improving system responsiveness" : "";
-        CpuFreedVisible = IsEnabled;
+        // Shown beside the Live monitor's chevron, the way Settings shows a section's state.
+        ThrottledCountDisplay = !IsEnabled ? "Off"
+            : nSleeping > 0
+                ? (nPending > 0 ? $"{nSleeping} napping, {nPending} pending" : $"{nSleeping} napping")
+                : (nPending > 0 ? $"{nPending} pending" : "All awake");
 
         if (snapshot == null || !IsEnabled)
         {
             LiveProcesses.Clear();
             return;
         }
+        if (LiveListFrozen) return;
 
         // Update live process list — default view shows throttled AND pending-nap processes
         var procs = ShowAllProcesses
