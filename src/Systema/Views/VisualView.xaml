@@ -25,7 +25,7 @@
         <!-- Selectable "visual style" card. Selected state = accent border (driven per-card
              by an ActivePreset DataTrigger). -->
         <Style x:Key="StyleCard" TargetType="Button">
-            <Setter Property="BorderBrush"                Value="{StaticResource BorderBrush}"/>
+            <Setter Property="BorderBrush"                Value="{DynamicResource BorderBrush}"/>
             <Setter Property="BorderThickness"            Value="1"/>
             <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
             <Setter Property="VerticalContentAlignment"   Value="Top"/>
@@ -40,7 +40,7 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="bd" Property="BorderBrush" Value="{StaticResource AccentBlueBrush}"/>
+                                <Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource AccentBlueBrush}"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -53,7 +53,7 @@
         <Style x:Key="BatterySegment" TargetType="Button">
             <Setter Property="FontSize"   Value="13"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="Padding"    Value="16,7"/>
             <Setter Property="Template">
@@ -65,7 +65,7 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="bd" Property="Background" Value="#22FFFFFF"/>
+                                <Setter TargetName="bd" Property="Background" Value="{DynamicResource OverlayStrongBrush}"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -102,7 +102,7 @@
                         <Style TargetType="Button" BasedOn="{StaticResource StyleCard}">
                             <Style.Triggers>
                                 <DataTrigger Binding="{Binding ActivePreset}" Value="none">
-                                    <Setter Property="BorderBrush"     Value="{StaticResource AccentBlueBrush}"/>
+                                    <Setter Property="BorderBrush"     Value="{DynamicResource AccentBlueBrush}"/>
                                     <Setter Property="BorderThickness" Value="2"/>
                                 </DataTrigger>
                             </Style.Triggers>
@@ -122,7 +122,7 @@
                         <Style TargetType="Button" BasedOn="{StaticResource StyleCard}">
                             <Style.Triggers>
                                 <DataTrigger Binding="{Binding ActivePreset}" Value="speed">
-                                    <Setter Property="BorderBrush"     Value="{StaticResource AccentBlueBrush}"/>
+                                    <Setter Property="BorderBrush"     Value="{DynamicResource AccentBlueBrush}"/>
                                     <Setter Property="BorderThickness" Value="2"/>
                                 </DataTrigger>
                             </Style.Triggers>
@@ -142,7 +142,7 @@
                         <Style TargetType="Button" BasedOn="{StaticResource StyleCard}">
                             <Style.Triggers>
                                 <DataTrigger Binding="{Binding ActivePreset}" Value="default">
-                                    <Setter Property="BorderBrush"     Value="{StaticResource AccentBlueBrush}"/>
+                                    <Setter Property="BorderBrush"     Value="{DynamicResource AccentBlueBrush}"/>
                                     <Setter Property="BorderThickness" Value="2"/>
                                 </DataTrigger>
                             </Style.Triggers>
@@ -174,7 +174,7 @@
                                    Text="On a laptop this can backfire. Full speed makes more heat, and once the chip gets too hot it throttles itself harder than it would have, so you can end up slower as well as warmer and shorter on battery. Only turn it on if your laptop cools well and sits out in the open, not on a bed, a couch, or your lap."/>
                         <TextBlock Style="{StaticResource CardNote}">
                             <Run Text="Active plan: "/><Run Text="{Binding ActivePowerPlan, Mode=OneWay}"
-                                                            Foreground="{StaticResource AccentBlueBrush}" FontWeight="SemiBold"/>
+                                                            Foreground="{DynamicResource AccentBlueBrush}" FontWeight="SemiBold"/>
                         </TextBlock>
                     </StackPanel>
                 </ctl:SettingsCard.Description>
@@ -183,11 +183,11 @@
                         <TextBlock.Style>
                             <Style TargetType="TextBlock">
                                 <Setter Property="Text"       Value="Off"/>
-                                <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
                                 <Style.Triggers>
                                     <DataTrigger Binding="{Binding PerformanceModeEnabled}" Value="True">
                                         <Setter Property="Text"       Value="On"/>
-                                        <Setter Property="Foreground" Value="{StaticResource AccentGreenBrush}"/>
+                                        <Setter Property="Foreground" Value="{DynamicResource AccentGreenBrush}"/>
                                     </DataTrigger>
                                 </Style.Triggers>
                             </Style>
@@ -223,8 +223,8 @@
 
                             <!-- Off · Balanced no turbo · Max life segmented control -->
                             <Border CornerRadius="6" Padding="3" HorizontalAlignment="Left" Margin="0,12,0,0"
-                                    Background="{StaticResource BgSurfaceBrush}"
-                                    BorderBrush="{StaticResource BorderBrush}" BorderThickness="1">
+                                    Background="{DynamicResource BgSurfaceBrush}"
+                                    BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
                                 <StackPanel Orientation="Horizontal">
                                     <!-- Shown only when Performance Mode is on: keep full speed on battery too. -->
                                     <Button Command="{Binding SetBatteryModeCommand}" CommandParameter="performance" Content="Performance"
@@ -233,8 +233,8 @@
                                             <Style TargetType="Button" BasedOn="{StaticResource BatterySegment}">
                                                 <Style.Triggers>
                                                     <DataTrigger Binding="{Binding ActiveBatteryMode}" Value="performance">
-                                                        <Setter Property="Background" Value="#3322C55E"/>
-                                                        <Setter Property="Foreground" Value="{StaticResource AccentGreenBrush}"/>
+                                                        <Setter Property="Background" Value="{DynamicResource SuccessAlpha20Brush}"/>
+                                                        <Setter Property="Foreground" Value="{DynamicResource AccentGreenBrush}"/>
                                                     </DataTrigger>
                                                 </Style.Triggers>
                                             </Style>
@@ -245,8 +245,8 @@
                                             <Style TargetType="Button" BasedOn="{StaticResource BatterySegment}">
                                                 <Style.Triggers>
                                                     <DataTrigger Binding="{Binding ActiveBatteryMode}" Value="">
-                                                        <Setter Property="Background" Value="#3360CDFF"/>
-                                                        <Setter Property="Foreground" Value="{StaticResource AccentBlueBrush}"/>
+                                                        <Setter Property="Background" Value="{DynamicResource AccentAlpha20Brush}"/>
+                                                        <Setter Property="Foreground" Value="{DynamicResource AccentBlueBrush}"/>
                                                     </DataTrigger>
                                                 </Style.Triggers>
                                             </Style>
@@ -257,8 +257,8 @@
                                             <Style TargetType="Button" BasedOn="{StaticResource BatterySegment}">
                                                 <Style.Triggers>
                                                     <DataTrigger Binding="{Binding ActiveBatteryMode}" Value="balanced">
-                                                        <Setter Property="Background" Value="#3360CDFF"/>
-                                                        <Setter Property="Foreground" Value="{StaticResource AccentBlueBrush}"/>
+                                                        <Setter Property="Background" Value="{DynamicResource AccentAlpha20Brush}"/>
+                                                        <Setter Property="Foreground" Value="{DynamicResource AccentBlueBrush}"/>
                                                     </DataTrigger>
                                                 </Style.Triggers>
                                             </Style>
@@ -269,8 +269,8 @@
                                             <Style TargetType="Button" BasedOn="{StaticResource BatterySegment}">
                                                 <Style.Triggers>
                                                     <DataTrigger Binding="{Binding ActiveBatteryMode}" Value="max">
-                                                        <Setter Property="Background" Value="#3360CDFF"/>
-                                                        <Setter Property="Foreground" Value="{StaticResource AccentBlueBrush}"/>
+                                                        <Setter Property="Background" Value="{DynamicResource AccentAlpha20Brush}"/>
+                                                        <Setter Property="Foreground" Value="{DynamicResource AccentBlueBrush}"/>
                                                     </DataTrigger>
                                                 </Style.Triggers>
                                             </Style>
@@ -300,12 +300,12 @@
                             </TextBlock>
 
                             <!-- AC-power notice: only when a mode is set but the cap is dormant -->
-                            <Border Background="#1AF59E0B" BorderBrush="{StaticResource AccentYellowBrush}"
+                            <Border Background="{DynamicResource CautionAlpha10Brush}" BorderBrush="{DynamicResource AccentYellowBrush}"
                                     BorderThickness="1" CornerRadius="4" Padding="12,8" Margin="0,10,0,0"
                                     HorizontalAlignment="Left" MaxWidth="680"
                                     Visibility="{Binding IsOnAcWithBatteryPlanActive, Converter={StaticResource BoolToVis}}">
                                 <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap"
-                                           Foreground="{StaticResource AccentYellowBrush}">
+                                           Foreground="{DynamicResource AccentYellowBrush}">
                                     <Run FontWeight="SemiBold" Text="On AC: "/>
                                     <Run Text="the CPU cap is set but dormant. It activates automatically the next time you unplug."/>
                                 </TextBlock>
@@ -342,7 +342,7 @@
                         Visibility="{Binding ShowIndividualControls, Converter={StaticResource BoolToVis}}">
 
                 <!-- Apply / Cancel: shown when changes are pending -->
-                <Border Style="{StaticResource ListRowCard}" BorderBrush="{StaticResource AccentYellowBrush}"
+                <Border Style="{StaticResource ListRowCard}" BorderBrush="{DynamicResource AccentYellowBrush}"
                         Visibility="{Binding HasPendingChanges, Converter={StaticResource BoolToVis}}">
                     <StackPanel Orientation="Horizontal">
                         <Button Content="Apply changes" Style="{StaticResource PrimaryButton}"
@@ -350,7 +350,7 @@
                         <Button Content="Cancel" Style="{StaticResource GhostButton}"
                                 Command="{Binding CancelChangesCommand}"/>
                         <TextBlock Text="You have unsaved changes." Style="{StaticResource CaptionText}"
-                                   Foreground="{StaticResource AccentYellowBrush}"
+                                   Foreground="{DynamicResource AccentYellowBrush}"
                                    VerticalAlignment="Center" Margin="12,0,0,0"/>
                     </StackPanel>
                 </Border>

@@ -57,9 +57,6 @@ public partial class MainWindow : Window
     [DllImport("user32.dll")] private static extern int SetWindowLong(IntPtr hwnd, int index, int value);
     [DllImport("user32.dll")] private static extern bool SetWindowPos(IntPtr hwnd, IntPtr after, int x, int y, int cx, int cy, uint flags);
 
-    /// <summary>The Settings app's card fill (5% white). Over #202020 it's exactly #2B2B2B.</summary>
-    private static readonly Media.SolidColorBrush CardOverMica = Freeze(new Media.SolidColorBrush(Media.Color.FromArgb(0x0D, 0xFF, 0xFF, 0xFF)));
-    private static Media.SolidColorBrush Freeze(Media.SolidColorBrush b) { b.Freeze(); return b; }
 
     public bool IsMicaOn { get; private set; }
 
@@ -91,6 +88,7 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         PrepareMica();
+        ThemeManager.Changed += OnThemeChanged;   // both live as long as the app
         ApplyWindowIcon();
         // Pages are built once and reused; the cache needs to see this window's DataTemplates.
         ((PageViewCache)Resources["PageViews"]).Owner = this;
@@ -328,6 +326,8 @@ public partial class MainWindow : Window
             int pref = (int)DWM_WINDOW_CORNER_PREFERENCE.DWMWCP_ROUND;
             DwmSetWindowAttribute(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, ref pref, sizeof(int));
             HwndSource.FromHwnd(hwnd)?.AddHook(WindowProc);
+            // If Systema started in the tray, this window didn't exist to hear a theme change.
+            ThemeManager.Refresh();
             ApplyMica(hwnd);
         }
         catch { /* not supported on this Windows build — leave square */ }
@@ -364,7 +364,8 @@ public partial class MainWindow : Window
         var log = Services.LoggerService.Instance;
         try
         {
-            int dark = 1;
+            // Dark or light Mica, to match the theme ThemeManager picked (it follows Windows).
+            int dark = ThemeManager.IsLight ? 0 : 1;
             DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, ref dark, sizeof(int));
             int backdrop = DWMSBT_MAINWINDOW;
             int hr = DwmSetWindowAttribute(hwnd, DWMWA_SYSTEMBACKDROP_TYPE, ref backdrop, sizeof(int));
@@ -383,7 +384,9 @@ public partial class MainWindow : Window
             RootSurface.Background    = Media.Brushes.Transparent;
             TitleBarSurface.Background = Media.Brushes.Transparent;
             SidebarSurface.Background = Media.Brushes.Transparent;
-            Resources["CardLayerBrush"] = CardOverMica;   // cards pick it up (DynamicResource)
+            // The Settings app's card layer for this theme (5% white on dark, 70% white on light);
+            // cards pick it up through DynamicResource. OnThemeChanged swaps it with the theme.
+            Resources["CardLayerBrush"] = TryFindResource("CardOverMicaBrush");
             IsMicaOn = true;
             log.Info("MainWindow", "Mica backdrop on");
         }
@@ -404,8 +407,34 @@ public partial class MainWindow : Window
 
     private const int WM_STYLECHANGING = 0x007C;
 
+    // Windows broadcasts these when the user changes light/dark mode or the accent colour.
+    // Top-level windows get them even while hidden, so the theme follows along in the tray too.
+    private const int WM_SETTINGCHANGE              = 0x001A;
+    private const int WM_DWMCOLORIZATIONCOLORCHANGED = 0x0320;
+
+    /// <summary>After a live theme change: Mica's light/dark variant and the card layer over it.</summary>
+    private void OnThemeChanged()
+    {
+        if (!IsMicaOn) return;   // without Mica every surface is a DynamicResource already
+        try
+        {
+            var hwnd = new WindowInteropHelper(this).Handle;
+            int dark = ThemeManager.IsLight ? 0 : 1;
+            DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, ref dark, sizeof(int));
+            Resources["CardLayerBrush"] = TryFindResource("CardOverMicaBrush");
+        }
+        catch { /* cosmetic */ }
+    }
+
     private IntPtr WindowProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
+        if ((msg == WM_SETTINGCHANGE && lParam != IntPtr.Zero && Marshal.PtrToStringUni(lParam) == "ImmersiveColorSet")
+            || msg == WM_DWMCOLORIZATIONCOLORCHANGED)
+        {
+            // Let Windows finish writing the new values before reading them.
+            Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(ThemeManager.Refresh));
+        }
+
         // Keep the native caption buttons away if anything (WPF included) later rewrites the
         // window style. STYLESTRUCT is { styleOld, styleNew }.
         if (msg == WM_STYLECHANGING && IsMicaOn && wParam.ToInt64() == GWL_STYLE)

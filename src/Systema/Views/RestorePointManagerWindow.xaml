@@ -5,7 +5,7 @@
         Height="540" Width="780"
         MinHeight="400" MinWidth="600"
         WindowStartupLocation="CenterOwner"
-        Background="{StaticResource BgPrimaryBrush}"
+        Background="{DynamicResource BgPrimaryBrush}"
         WindowStyle="SingleBorderWindow"
         ResizeMode="CanResize"
         ShowInTaskbar="False">
@@ -44,7 +44,7 @@
         </StackPanel>
 
         <!-- Restore point list -->
-        <Border Grid.Row="4" Background="{StaticResource BgCardBrush}"
+        <Border Grid.Row="4" Background="{DynamicResource BgCardBrush}"
                 CornerRadius="10" Padding="0">
             <Grid>
                 <Grid.RowDefinitions>
@@ -53,8 +53,8 @@
                 </Grid.RowDefinitions>
 
                 <!-- Column headers -->
-                <Border Grid.Row="0" Background="{StaticResource BgSurfaceBrush}"
-                        BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1"
+                <Border Grid.Row="0" Background="{DynamicResource BgSurfaceBrush}"
+                        BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1"
                         Padding="16,10" CornerRadius="10,10,0,0">
                     <Grid>
                         <Grid.ColumnDefinitions>
@@ -88,7 +88,7 @@
                         <ItemsControl x:Name="PointsList" Visibility="Collapsed">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
-                                    <Border Padding="16,10" BorderBrush="{StaticResource BorderBrush}"
+                                    <Border Padding="16,10" BorderBrush="{DynamicResource BorderBrush}"
                                             BorderThickness="0,0,0,1">
                                         <Grid>
                                             <Grid.ColumnDefinitions>

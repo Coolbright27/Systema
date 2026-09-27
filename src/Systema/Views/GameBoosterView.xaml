@@ -63,7 +63,7 @@
                         <TextBlock Style="{StaticResource CardDescription}"
                                    Text="Turns everything on straight away, even without a game. Handy for streaming or heavy work. Stops on its own after 6 hours."/>
                         <TextBlock Text="{Binding ManualBoostTimeRemaining}" Style="{StaticResource CardNote}"
-                                   Foreground="{StaticResource AccentBlueBrush}"/>
+                                   Foreground="{DynamicResource AccentBlueBrush}"/>
                     </StackPanel>
                 </ctl:SettingsCard.Description>
                 <!-- A switch, not a button: ManualBoostEnabled's change handler is the ONLY
@@ -76,7 +76,7 @@
             <!-- Live state, only while something is actually boosting. -->
             <Border Visibility="{Binding BoostActive, Converter={StaticResource BoolToVis}}"
                     CornerRadius="6" Padding="18,12" Margin="0,0,0,4"
-                    Background="#16232A" BorderBrush="#2C4C57" BorderThickness="1">
+                    Background="{DynamicResource InfoBannerBrush}" BorderBrush="{DynamicResource InfoBannerStrokeBrush}" BorderThickness="1">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto"/>
@@ -84,7 +84,7 @@
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
                     <Ellipse Width="7" Height="7" VerticalAlignment="Center" Margin="0,0,11,0"
-                             Fill="{StaticResource AccentGreenBrush}"/>
+                             Fill="{DynamicResource AccentGreenBrush}"/>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
                         <TextBlock Style="{StaticResource BodyText}" FontWeight="SemiBold">
                             <Run Text="Boosting "/><Run Text="{Binding ActiveGameName, Mode=OneWay}"/>
@@ -204,7 +204,7 @@
             <Button Command="{Binding ToggleDetectionCommand}" Style="{StaticResource ExpanderButton}"
                     HorizontalContentAlignment="Stretch" Margin="0,18,0,0">
                 <StackPanel Orientation="Horizontal" Margin="2,6,2,6">
-                    <TextBlock FontSize="12.5" Foreground="{StaticResource AccentBlueBrush}">
+                    <TextBlock FontSize="12.5" Foreground="{DynamicResource AccentBlueBrush}">
                         <TextBlock.Style>
                             <Style TargetType="TextBlock">
                                 <Setter Property="Text" Value="Advanced"/>
@@ -246,7 +246,7 @@
                                     <Style.Triggers>
                                         <DataTrigger Binding="{Binding GamesInstalled}" Value="True">
                                             <Setter Property="Text"       Value="Games found"/>
-                                            <Setter Property="Foreground" Value="{StaticResource AccentGreenBrush}"/>
+                                            <Setter Property="Foreground" Value="{DynamicResource AccentGreenBrush}"/>
                                         </DataTrigger>
                                     </Style.Triggers>
                                 </Style>

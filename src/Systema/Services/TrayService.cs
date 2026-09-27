@@ -92,13 +92,23 @@ public sealed class TrayService : IDisposable
     //
     // The colour table still matters: the stock one paints a light IMAGE MARGIN gutter down
     // the left edge, which gives the game away even after the background is darkened.
-    private static readonly System.Drawing.Color MenuBack = System.Drawing.Color.FromArgb(0x2C, 0x2C, 0x2C);   // PopupBrush
-    private static readonly System.Drawing.Color MenuText = System.Drawing.Color.FromArgb(0xFF, 0xFF, 0xFF);
+    // Windows 11 flyout colours for the current theme (ThemeManager follows Windows light/dark).
+    private static bool Light => Systema.Core.ThemeManager.IsLight;
+    private static System.Drawing.Color Rgb(byte r, byte g, byte b) => System.Drawing.Color.FromArgb(r, g, b);
+    private static System.Drawing.Color MenuBack    => Light ? Rgb(0xF9, 0xF9, 0xF9) : Rgb(0x2C, 0x2C, 0x2C);   // PopupBrush
+    private static System.Drawing.Color MenuText    => Light ? Rgb(0x1B, 0x1B, 0x1B) : Rgb(0xFF, 0xFF, 0xFF);
+    private static System.Drawing.Color MenuTextDim => Light ? Rgb(0x86, 0x86, 0x86) : Rgb(0x9A, 0x9A, 0x9A);
+    private static System.Drawing.Color MenuHover   => Light ? Rgb(0xEC, 0xEC, 0xEC) : Rgb(0x38, 0x38, 0x38);
+    private static System.Drawing.Color MenuLine    => Light ? Rgb(0xE0, 0xE0, 0xE0) : Rgb(0x3D, 0x3D, 0x3D);
+    private static int MenuBorderColorRef           => Light ? 0x00E0E0E0 : 0x003A3A3A;   // COLORREF, PopupStrokeBrush
+    private static System.Drawing.Color MenuAccent
+    {
+        get { var a = Systema.Core.ThemeManager.Accent; return Rgb(a.R, a.G, a.B); }
+    }
     private static readonly System.Drawing.Font  MenuFont = new("Segoe UI", 9f);
 
     private sealed class SystemaMenuColors : ProfessionalColorTable
     {
-        private static readonly System.Drawing.Color Line = System.Drawing.Color.FromArgb(0x3D, 0x3D, 0x3D);
 
         public override System.Drawing.Color ToolStripDropDownBackground        => MenuBack;
         public override System.Drawing.Color MenuBorder                         => MenuBack;
@@ -110,15 +120,12 @@ public sealed class TrayService : IDisposable
         public override System.Drawing.Color ImageMarginRevealedGradientBegin   => MenuBack;
         public override System.Drawing.Color ImageMarginRevealedGradientMiddle  => MenuBack;
         public override System.Drawing.Color ImageMarginRevealedGradientEnd     => MenuBack;
-        public override System.Drawing.Color SeparatorDark                      => Line;
-        public override System.Drawing.Color SeparatorLight                     => Line;
+        public override System.Drawing.Color SeparatorDark                      => MenuLine;
+        public override System.Drawing.Color SeparatorLight                     => MenuLine;
     }
 
     private sealed class SystemaMenuRenderer : ToolStripProfessionalRenderer
     {
-        private static readonly System.Drawing.Color TextDim = System.Drawing.Color.FromArgb(0x9A, 0x9A, 0x9A);
-        private static readonly System.Drawing.Color Hover   = System.Drawing.Color.FromArgb(0x38, 0x38, 0x38);   // 6% white over the menu
-        private static readonly System.Drawing.Color Accent  = System.Drawing.Color.FromArgb(0x60, 0xCD, 0xFF);   // AccentBlueBrush
 
         public SystemaMenuRenderer() : base(new SystemaMenuColors()) { RoundedEdges = false; }
 
@@ -133,7 +140,7 @@ public sealed class TrayService : IDisposable
             var r = new Rectangle(4, 1, e.Item.Width - 8, e.Item.Height - 2);
             e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
             using var path = RoundedRect(r, 4);
-            using var brush = new SolidBrush(Hover);
+            using var brush = new SolidBrush(MenuHover);
             e.Graphics.FillPath(brush, path);
         }
 
@@ -153,20 +160,20 @@ public sealed class TrayService : IDisposable
         {
             // Disabled items (Exit stays enabled; this covers any future dimmed entry) and
             // the right-aligned status hints both read as secondary text.
-            e.TextColor = e.Item.Enabled ? MenuText : TextDim;
+            e.TextColor = e.Item.Enabled ? MenuText : MenuTextDim;
             base.OnRenderItemText(e);
         }
 
         protected override void OnRenderArrow(ToolStripArrowRenderEventArgs e)
         {
-            e.ArrowColor = TextDim;          // submenu chevron
+            e.ArrowColor = MenuTextDim;          // submenu chevron
             base.OnRenderArrow(e);
         }
 
         protected override void OnRenderItemCheck(ToolStripItemImageRenderEventArgs e)
         {
             // Tint the checkmark to the single accent instead of the system blue.
-            using var pen = new Pen(Accent, 1.8f);
+            using var pen = new Pen(MenuAccent, 1.8f);
             var r = e.ImageRectangle;
             int cx = r.Left + r.Width / 2, cy = r.Top + r.Height / 2;
             e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
@@ -430,6 +437,17 @@ public sealed class TrayService : IDisposable
         foreach (ToolStripItem item in powerItem.DropDownItems)
             item.Padding = new Padding(0, 4, 0, 4);
 
+        // Follow Windows light/dark: re-check the theme (the main window may not exist yet to hear
+        // a change) and repaint in the current colours each time the menu opens.
+        menu.Opening += (_, _) =>
+        {
+            try { System.Windows.Application.Current?.Dispatcher.Invoke(Systema.Core.ThemeManager.Refresh); } catch { }
+            foreach (var dd in new ToolStripDropDown[] { menu, powerItem.DropDown })
+            {
+                dd.BackColor = MenuBack;
+                dd.ForeColor = MenuText;
+            }
+        };
         menu.Opening += (_, _) => MenuOpening?.Invoke();
         return menu;
     }
@@ -451,7 +469,7 @@ public sealed class TrayService : IDisposable
             if (!dropDown.IsHandleCreated) return;
             int round = DWMWCP_ROUND;
             DwmSetWindowAttribute(dropDown.Handle, DWMWA_WINDOW_CORNER_PREFERENCE, ref round, sizeof(int));
-            int border = 0x003A3A3A;   // COLORREF (0x00BBGGRR): PopupStrokeBrush
+            int border = MenuBorderColorRef;   // COLORREF (0x00BBGGRR)
             DwmSetWindowAttribute(dropDown.Handle, DWMWA_BORDER_COLOR, ref border, sizeof(int));
         }
         catch { /* older Windows: square corners */ }

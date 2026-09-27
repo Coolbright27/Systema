@@ -30,6 +30,7 @@ public partial class RestorePointManagerWindow : Window
     {
         _service = service;
         InitializeComponent();
+        Systema.Core.ThemeManager.FollowTheme(this);   // title bar light or dark with Windows
         Loaded += async (_, _) => await LoadPointsAsync();
     }
 
@@ -212,6 +213,7 @@ internal class RestorePointNameDialog : Window
 
     public RestorePointNameDialog()
     {
+        Systema.Core.ThemeManager.FollowTheme(this);
         Title  = "Create Restore Point";
         Width  = 440;
         Height = 200;

@@ -33,11 +33,11 @@
                     <ControlTemplate TargetType="Button">
                         <Grid>
                             <Border x:Name="bd" Background="{DynamicResource CardLayerBrush}"
-                                    BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
+                                    BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
                                     CornerRadius="6" Padding="18,14" MinHeight="68">
                                 <ContentPresenter VerticalAlignment="Center"/>
                             </Border>
-                            <Border x:Name="Hover" CornerRadius="6" Background="{StaticResource ControlFillBrush}"
+                            <Border x:Name="Hover" CornerRadius="6" Background="{DynamicResource ControlFillBrush}"
                                     Opacity="0" IsHitTestVisible="False"/>
                         </Grid>
                         <ControlTemplate.Triggers>
@@ -60,7 +60,7 @@
                                 </Trigger.ExitActions>
                             </Trigger>
                             <Trigger Property="IsKeyboardFocused" Value="True">
-                                <Setter TargetName="bd" Property="BorderBrush" Value="{StaticResource TextPrimaryBrush}"/>
+                                <Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource TextPrimaryBrush}"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -95,10 +95,10 @@
                                     <Ellipse Width="8" Height="8" VerticalAlignment="Center" Margin="0,0,7,0">
                                         <Ellipse.Style>
                                             <Style TargetType="Ellipse">
-                                                <Setter Property="Fill" Value="{StaticResource TextSecondaryBrush}"/>
+                                                <Setter Property="Fill" Value="{DynamicResource TextSecondaryBrush}"/>
                                                 <Style.Triggers>
                                                     <DataTrigger Binding="{Binding PrivacyCleanupApplied}" Value="True">
-                                                        <Setter Property="Fill" Value="{StaticResource AccentGreenBrush}"/>
+                                                        <Setter Property="Fill" Value="{DynamicResource AccentGreenBrush}"/>
                                                     </DataTrigger>
                                                 </Style.Triggers>
                                             </Style>
@@ -127,7 +127,7 @@
                                 <Button Command="{Binding ToggleTelemetryDetailsCommand}" Style="{StaticResource ExpanderButton}"
                                         HorizontalAlignment="Left" HorizontalContentAlignment="Left" Margin="-4,6,0,0">
                                     <StackPanel Orientation="Horizontal" Margin="4,3">
-                                        <TextBlock FontSize="12.5" Foreground="{StaticResource AccentBlueBrush}"
+                                        <TextBlock FontSize="12.5" Foreground="{DynamicResource AccentBlueBrush}"
                                                    VerticalAlignment="Center">
                                             <TextBlock.Style>
                                                 <Style TargetType="TextBlock">
@@ -181,7 +181,7 @@
                                     <TextBlock Style="{StaticResource CardDescription}" Margin="0,4,0,0"
                                                Text="&#x2022;  Typing, handwriting, and app inventory collection"/>
                                     <TextBlock Style="{StaticResource CardDescription}" Margin="0,8,0,0"
-                                               Foreground="{StaticResource TextTertiaryBrush}"
+                                               Foreground="{DynamicResource TextTertiaryBrush}"
                                                Text="Windows Pro and Education get the fuller policy set."/>
                                 </StackPanel>
 
@@ -190,10 +190,10 @@
                                     <Ellipse Width="8" Height="8" VerticalAlignment="Center" Margin="0,0,7,0">
                                         <Ellipse.Style>
                                             <Style TargetType="Ellipse">
-                                                <Setter Property="Fill" Value="{StaticResource TextSecondaryBrush}"/>
+                                                <Setter Property="Fill" Value="{DynamicResource TextSecondaryBrush}"/>
                                                 <Style.Triggers>
                                                     <DataTrigger Binding="{Binding NoTelemetryPro}" Value="True">
-                                                        <Setter Property="Fill" Value="{StaticResource AccentGreenBrush}"/>
+                                                        <Setter Property="Fill" Value="{DynamicResource AccentGreenBrush}"/>
                                                     </DataTrigger>
                                                 </Style.Triggers>
                                             </Style>
@@ -223,11 +223,11 @@
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <StackPanel Grid.Column="0" Margin="0,0,8,0">
-                            <TextBlock Text="Services" Style="{StaticResource BodyText}" Foreground="{StaticResource TextPrimaryBrush}"/>
+                            <TextBlock Text="Services" Style="{StaticResource BodyText}" Foreground="{DynamicResource TextPrimaryBrush}"/>
                             <TextBlock Text="Open the Windows Services app" Style="{StaticResource CaptionText}" Margin="0,2,0,0"/>
                         </StackPanel>
                         <TextBlock Grid.Column="1" Text="&#x2197;" FontSize="16" VerticalAlignment="Center"
-                                   Foreground="{StaticResource TextSecondaryBrush}"/>
+                                   Foreground="{DynamicResource TextSecondaryBrush}"/>
                     </Grid>
                 </Button>
 
@@ -239,11 +239,11 @@
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <StackPanel Grid.Column="0" Margin="0,0,8,0">
-                            <TextBlock Text="Windows extras" Style="{StaticResource BodyText}" Foreground="{StaticResource TextPrimaryBrush}"/>
+                            <TextBlock Text="Windows extras" Style="{StaticResource BodyText}" Foreground="{DynamicResource TextPrimaryBrush}"/>
                             <TextBlock Text="Add or remove in Windows" Style="{StaticResource CaptionText}" Margin="0,2,0,0"/>
                         </StackPanel>
                         <TextBlock Grid.Column="1" Text="&#x2197;" FontSize="16" VerticalAlignment="Center"
-                                   Foreground="{StaticResource TextSecondaryBrush}"/>
+                                   Foreground="{DynamicResource TextSecondaryBrush}"/>
                     </Grid>
                 </Button>
             </StackPanel>

@@ -29,7 +29,7 @@
 
             <!-- ===== INFO CARD ===== -->
             <ctl:SettingsCard Header="Safe Pre-installed App List" Margin="0,16,0,4"
-                              Badge="Safe" BadgeBrush="{StaticResource AccentGreenBrush}">
+                              Badge="Safe" BadgeBrush="{DynamicResource AccentGreenBrush}">
                 <ctl:SettingsCard.Description>
                     <TextBlock Style="{StaticResource CardDescription}">
                         Every app on this list has been verified safe to remove. None of them are
@@ -84,10 +84,10 @@
                                      ConverterParameter=Invert}">
                     <StackPanel HorizontalAlignment="Center">
                         <TextBlock Text="✓" FontSize="36" HorizontalAlignment="Center"
-                                   Foreground="{StaticResource AccentGreenBrush}" Margin="0,0,0,8"/>
+                                   Foreground="{DynamicResource AccentGreenBrush}" Margin="0,0,0,8"/>
                         <TextBlock Text="No removable pre-installed apps found. Your system looks clean."
                                    Style="{StaticResource BodyText}" HorizontalAlignment="Center"
-                                   Foreground="{StaticResource TextSecondaryBrush}"/>
+                                   Foreground="{DynamicResource TextSecondaryBrush}"/>
                     </StackPanel>
                 </Border>
 

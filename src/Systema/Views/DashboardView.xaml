@@ -36,13 +36,13 @@
             <Setter Property="FontFamily" Value="{StaticResource DisplayFont}"/>
             <Setter Property="FontSize" Value="20"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
             <Setter Property="TextWrapping" Value="Wrap"/>
         </Style>
         <Style x:Key="HomeCardSubtitle" TargetType="TextBlock">
             <Setter Property="FontFamily" Value="{StaticResource MainFont}"/>
             <Setter Property="FontSize" Value="14"/>
-            <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
             <Setter Property="TextWrapping" Value="Wrap"/>
             <Setter Property="Margin" Value="0,6,0,0"/>
         </Style>
@@ -52,7 +52,7 @@
         </Style>
         <!-- One row inside a card, with the hairline above it -->
         <Style x:Key="HomeRow" TargetType="Border">
-            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
             <Setter Property="BorderThickness" Value="0,1,0,0"/>
             <Setter Property="Padding" Value="24,0"/>
             <Setter Property="MinHeight" Value="64"/>
@@ -64,7 +64,7 @@
             <Setter Property="Stretch" Value="Uniform"/>
             <Setter Property="Margin" Value="0,0,16,0"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
-            <Setter Property="Stroke" Value="{StaticResource TextPrimaryBrush}"/>
+            <Setter Property="Stroke" Value="{DynamicResource TextPrimaryBrush}"/>
             <Setter Property="StrokeThickness" Value="1.4"/>
             <Setter Property="StrokeLineJoin" Value="Round"/>
             <Setter Property="StrokeStartLineCap" Value="Round"/>
@@ -74,7 +74,7 @@
         <Style x:Key="HomeRowValue" TargetType="TextBlock">
             <Setter Property="FontFamily" Value="{StaticResource MainFont}"/>
             <Setter Property="FontSize" Value="14"/>
-            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
             <Setter Property="Margin" Value="16,0,0,0"/>
             <Setter Property="Typography.NumeralAlignment" Value="Tabular"/>
@@ -84,19 +84,19 @@
              lights up under the pointer, inset so it never covers the card's rounded edge.
              Declared here, not inline, like every style that carries a ControlTemplate. -->
         <Style x:Key="HomeRowButton" TargetType="Button">
-            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
             <Setter Property="FontSize" Value="14"/>
             <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
             <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,1,0,0" Background="Transparent">
+                        <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0" Background="Transparent">
                             <Grid MinHeight="60">
                                 <Border x:Name="Hover" Margin="6,4" CornerRadius="4"
-                                        Background="{StaticResource ControlFillBrush}" Opacity="0"/>
+                                        Background="{DynamicResource ControlFillBrush}" Opacity="0"/>
                                 <Border x:Name="Focus" Margin="6,4" CornerRadius="4" BorderThickness="2"
-                                        BorderBrush="{StaticResource TextPrimaryBrush}" Opacity="0"/>
+                                        BorderBrush="{DynamicResource TextPrimaryBrush}" Opacity="0"/>
                                 <Grid Margin="24,0">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*"/>
@@ -105,7 +105,7 @@
                                     <ContentPresenter VerticalAlignment="Center"/>
                                     <Path x:Name="Chevron" Grid.Column="1" Data="M 0 0 L 4.5 4.5 L 0 9" Width="5" Height="9"
                                           Margin="16,0,0,0" VerticalAlignment="Center"
-                                          Stroke="{StaticResource TextSecondaryBrush}" StrokeThickness="1.2"
+                                          Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1.2"
                                           StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"/>
                                 </Grid>
                             </Grid>
@@ -147,7 +147,7 @@
             <Setter Property="FontFamily" Value="{StaticResource MainFont}"/>
             <Setter Property="FontSize" Value="14"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
         </Style>
     </UserControl.Resources>
 
@@ -166,7 +166,7 @@
 
                 <!-- Wallpaper thumbnail, with a plain accent tile underneath for when there's no image -->
                 <Border Grid.Column="0" Width="120" Height="75" CornerRadius="6" ClipToBounds="True"
-                        BorderBrush="{StaticResource BorderBrush}" BorderThickness="1">
+                        BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
                     <Border.Background>
                         <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
                             <GradientStop Color="#1E3A5F" Offset="0"/>
@@ -175,7 +175,7 @@
                     </Border.Background>
                     <Grid>
                         <Viewbox Width="26" Height="26">
-                            <Path Width="24" Height="24" Fill="{StaticResource AccentBlueBrush}"
+                            <Path Width="24" Height="24" Fill="{DynamicResource AccentBlueBrush}"
                                   Data="M12 3 L13.6 9.4 L20 11 L13.6 12.6 L12 19 L10.4 12.6 L4 11 L10.4 9.4 Z"/>
                         </Viewbox>
                         <Image Source="{Binding WallpaperImage}" Stretch="UniformToFill"
@@ -185,19 +185,19 @@
 
                 <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="16,0,16,0">
                     <TextBlock Text="{Binding DeviceName, Mode=OneWay}" FontFamily="{StaticResource DisplayFont}"
-                               FontSize="18" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}"
+                               FontSize="18" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}"
                                TextTrimming="CharacterEllipsis"/>
                     <TextBlock Text="{Binding DeviceModel, Mode=OneWay}" Style="{StaticResource BodyText}"
                                Margin="0,2,0,0" TextTrimming="CharacterEllipsis"/>
-                    <TextBlock Text="Systema v0.7.353" FontSize="13" Margin="0,4,0,0"
-                               Foreground="{StaticResource AccentBlueBrush}" FontFamily="{StaticResource SmallFont}"/>
+                    <TextBlock Text="Systema v0.7.354" FontSize="13" Margin="0,4,0,0"
+                               Foreground="{DynamicResource AccentBlueBrush}" FontFamily="{StaticResource SmallFont}"/>
                 </StackPanel>
 
                 <!-- Status items, like "Windows Update · Attention needed" in Settings -->
                 <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
                     <StackPanel Orientation="Horizontal" Margin="0,0,28,0">
                         <Viewbox Width="22" Height="22" VerticalAlignment="Center" Margin="0,0,12,0">
-                            <Path Width="24" Height="24" Fill="{StaticResource AccentBlueBrush}"
+                            <Path Width="24" Height="24" Fill="{DynamicResource AccentBlueBrush}"
                                   Data="M12 3 L13.6 9.4 L20 11 L13.6 12.6 L12 19 L10.4 12.6 L4 11 L10.4 9.4 Z"/>
                         </Viewbox>
                         <StackPanel VerticalAlignment="Center">
@@ -207,16 +207,16 @@
                                 <Ellipse Width="6" Height="6" VerticalAlignment="Center" Margin="0,0,6,0">
                                     <Ellipse.Style>
                                         <Style TargetType="Ellipse">
-                                            <Setter Property="Fill" Value="{StaticResource TextTertiaryBrush}"/>
+                                            <Setter Property="Fill" Value="{DynamicResource TextTertiaryBrush}"/>
                                             <Style.Triggers>
                                                 <DataTrigger Binding="{Binding AutoPilotActive}" Value="True">
-                                                    <Setter Property="Fill" Value="{StaticResource AccentGreenBrush}"/>
+                                                    <Setter Property="Fill" Value="{DynamicResource AccentGreenBrush}"/>
                                                 </DataTrigger>
                                             </Style.Triggers>
                                         </Style>
                                     </Ellipse.Style>
                                 </Ellipse>
-                                <TextBlock FontSize="12" Foreground="{StaticResource TextSecondaryBrush}">
+                                <TextBlock FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}">
                                     <TextBlock.Style>
                                         <Style TargetType="TextBlock">
                                             <Setter Property="Text" Value="Off"/>
@@ -234,7 +234,7 @@
 
                     <StackPanel Orientation="Horizontal">
                         <Viewbox Width="22" Height="22" VerticalAlignment="Center" Margin="0,0,12,0">
-                            <Path Width="24" Height="24" Stroke="{StaticResource TextPrimaryBrush}" StrokeThickness="1.5"
+                            <Path Width="24" Height="24" Stroke="{DynamicResource TextPrimaryBrush}" StrokeThickness="1.5"
                                   StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
                                   Data="M12 3 L19 6 V11.5 C19 16 16 19.5 12 21 C8 19.5 5 16 5 11.5 V6 L12 3 Z M9.3 12 L11 13.7 L14.7 10"/>
                         </Viewbox>
@@ -244,16 +244,16 @@
                                 <Ellipse Width="6" Height="6" VerticalAlignment="Center" Margin="0,0,6,0">
                                     <Ellipse.Style>
                                         <Style TargetType="Ellipse">
-                                            <Setter Property="Fill" Value="{StaticResource AccentYellowBrush}"/>
+                                            <Setter Property="Fill" Value="{DynamicResource AccentYellowBrush}"/>
                                             <Style.Triggers>
                                                 <DataTrigger Binding="{Binding IsAdministrator}" Value="True">
-                                                    <Setter Property="Fill" Value="{StaticResource AccentGreenBrush}"/>
+                                                    <Setter Property="Fill" Value="{DynamicResource AccentGreenBrush}"/>
                                                 </DataTrigger>
                                             </Style.Triggers>
                                         </Style>
                                     </Ellipse.Style>
                                 </Ellipse>
-                                <TextBlock FontSize="12" Foreground="{StaticResource TextSecondaryBrush}">
+                                <TextBlock FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}">
                                     <TextBlock.Style>
                                         <Style TargetType="TextBlock">
                                             <Setter Property="Text" Value="Some tweaks need admin"/>
@@ -299,10 +299,10 @@
                                     <!-- Static dot on purpose: an endlessly pulsing animation would keep the
                                          render thread busy for as long as Home is open. -->
                                     <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,0">
-                                        <Ellipse Width="7" Height="7" Fill="{StaticResource AccentGreenBrush}"
+                                        <Ellipse Width="7" Height="7" Fill="{DynamicResource AccentGreenBrush}"
                                                  Margin="0,0,6,0" VerticalAlignment="Center"/>
                                         <TextBlock Text="Live" FontSize="12" FontWeight="SemiBold"
-                                                   Foreground="{StaticResource AccentGreenBrush}" VerticalAlignment="Center"/>
+                                                   Foreground="{DynamicResource AccentGreenBrush}" VerticalAlignment="Center"/>
                                     </StackPanel>
                                 </Grid>
                                 <!-- Headline, with an amber attention mark while it's flagging something
@@ -314,11 +314,11 @@
                                     </Grid.ColumnDefinitions>
                                     <Viewbox Width="16" Height="16" Margin="0,2,8,0" VerticalAlignment="Top"
                                              Visibility="{Binding HasHomeIssues, Converter={StaticResource BoolToVis}}">
-                                        <Path Width="24" Height="24" Fill="{StaticResource AccentYellowBrush}"
+                                        <Path Width="24" Height="24" Fill="{DynamicResource AccentYellowBrush}"
                                               Data="M12 2.5 L22.5 20.5 H1.5 Z M11 9 V14.5 H13 V9 Z M11 16.5 V18.5 H13 V16.5 Z"/>
                                     </Viewbox>
                                     <TextBlock Grid.Column="1" Text="{Binding HomeHeadline, Mode=OneWay}" Style="{StaticResource HomeCardSubtitle}"
-                                               Margin="0" Foreground="{StaticResource TextPrimaryBrush}"/>
+                                               Margin="0" Foreground="{DynamicResource TextPrimaryBrush}"/>
                                 </Grid>
                                 <TextBlock Text="{Binding HomeSubline, Mode=OneWay}" Style="{StaticResource HomeCardSubtitle}"
                                            FontSize="13" Margin="0,4,0,0"/>
@@ -334,7 +334,7 @@
                                     <Path Style="{StaticResource HomeRowIcon}"
                                           Data="M20 14.5 A8 8 0 1 1 9.5 4 A6.5 6.5 0 0 0 20 14.5 Z"/>
                                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                        <TextBlock Text="Apps resting" Style="{StaticResource BodyText}" Foreground="{StaticResource TextPrimaryBrush}"/>
+                                        <TextBlock Text="Apps resting" Style="{StaticResource BodyText}" Foreground="{DynamicResource TextPrimaryBrush}"/>
                                         <TextBlock Text="Background apps Systema has put to sleep" Style="{StaticResource CaptionText}"
                                                    TextTrimming="CharacterEllipsis"/>
                                     </StackPanel>
@@ -352,7 +352,7 @@
                                     <Path Style="{StaticResource HomeRowIcon}"
                                           Data="M7 7 H17 V17 H7 Z M10 10 H14 V14 H10 Z M9.5 3 V7 M14.5 3 V7 M9.5 17 V21 M14.5 17 V21 M3 9.5 H7 M3 14.5 H7 M17 9.5 H21 M17 14.5 H21"/>
                                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                        <TextBlock Text="Cores parked" Style="{StaticResource BodyText}" Foreground="{StaticResource TextPrimaryBrush}"/>
+                                        <TextBlock Text="Cores parked" Style="{StaticResource BodyText}" Foreground="{DynamicResource TextPrimaryBrush}"/>
                                         <TextBlock Text="Idle CPU cores asleep to save power and heat" Style="{StaticResource CaptionText}"
                                                    TextTrimming="CharacterEllipsis"/>
                                     </StackPanel>
@@ -370,7 +370,7 @@
                                     <Path Style="{StaticResource HomeRowIcon}"
                                           Data="M3 7 H21 V15 H3 Z M6.5 15 V18 M10.5 15 V18 M13.5 15 V18 M17.5 15 V18 M7 10 V12 M11 10 V12 M15 10 V12"/>
                                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                        <TextBlock Text="Memory in use" Style="{StaticResource BodyText}" Foreground="{StaticResource TextPrimaryBrush}"/>
+                                        <TextBlock Text="Memory in use" Style="{StaticResource BodyText}" Foreground="{DynamicResource TextPrimaryBrush}"/>
                                         <TextBlock Text="Used out of total RAM" Style="{StaticResource CaptionText}"
                                                    TextTrimming="CharacterEllipsis"/>
                                     </StackPanel>
@@ -389,7 +389,7 @@
                                     <Path Style="{StaticResource HomeRowIcon}"
                                           Data="M3.5 8 H17.5 A1 1 0 0 1 18.5 9 V15 A1 1 0 0 1 17.5 16 H3.5 A1 1 0 0 1 2.5 15 V9 A1 1 0 0 1 3.5 8 Z M18.5 10.5 H20.5 V13.5 H18.5 M6 11 V13 M9 11 V13"/>
                                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                        <TextBlock Text="Battery" Style="{StaticResource BodyText}" Foreground="{StaticResource TextPrimaryBrush}"/>
+                                        <TextBlock Text="Battery" Style="{StaticResource BodyText}" Foreground="{DynamicResource TextPrimaryBrush}"/>
                                         <TextBlock Text="Charge level and power source" Style="{StaticResource CaptionText}"
                                                    TextTrimming="CharacterEllipsis"/>
                                     </StackPanel>
@@ -407,7 +407,7 @@
                                     <Path Style="{StaticResource HomeRowIcon}"
                                           Data="M2.5 12 C5.5 6.5 18.5 6.5 21.5 12 C18.5 17.5 5.5 17.5 2.5 12 Z M12 9.5 A2.5 2.5 0 1 1 11.99 9.5 Z"/>
                                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                        <TextBlock Text="Data collection" Style="{StaticResource BodyText}" Foreground="{StaticResource TextPrimaryBrush}"/>
+                                        <TextBlock Text="Data collection" Style="{StaticResource BodyText}" Foreground="{DynamicResource TextPrimaryBrush}"/>
                                         <TextBlock Text="{Binding DataCollectionDetail, Mode=OneWay}" Style="{StaticResource CaptionText}"
                                                    TextTrimming="CharacterEllipsis"/>
                                     </StackPanel>
@@ -436,15 +436,15 @@
                                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                         <Viewbox Width="15" Height="15" Margin="0,0,8,0" VerticalAlignment="Center">
                                             <Path Width="24" Height="24" Stretch="Uniform"
-                                                  Stroke="{StaticResource TextSecondaryBrush}" StrokeThickness="1.7"
+                                                  Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1.7"
                                                   StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
                                                   Data="M4 13 h3 l3 3 h4 l3 -3 h3 M5 19 h14 a2 2 0 0 0 2 -2 v-11 a2 2 0 0 0 -2 -2 h-14 a2 2 0 0 0 -2 2 v11 a2 2 0 0 0 2 2 z"/>
                                         </Viewbox>
                                         <TextBlock Text="Dismissed" FontSize="13" VerticalAlignment="Center"/>
-                                        <Border CornerRadius="9" Background="#1A60CDFF" Padding="7,1" Margin="8,0,0,0"
+                                        <Border CornerRadius="9" Background="{DynamicResource AccentAlpha10Brush}" Padding="7,1" Margin="8,0,0,0"
                                                 MinWidth="20" VerticalAlignment="Center">
                                             <TextBlock Text="{Binding DismissedCount}" FontSize="11" FontWeight="SemiBold"
-                                                       HorizontalAlignment="Center" Foreground="{StaticResource AccentBlueBrush}"/>
+                                                       HorizontalAlignment="Center" Foreground="{DynamicResource AccentBlueBrush}"/>
                                         </Border>
                                     </StackPanel>
                                 </Button>
@@ -455,9 +455,9 @@
                                 <Border Style="{StaticResource HomeRow}" Padding="24,18,24,18">
                                     <StackPanel>
                                         <Border CornerRadius="4" Padding="7,2" HorizontalAlignment="Left"
-                                                Background="#1A22C55E" BorderBrush="{StaticResource AccentGreenBrush}" BorderThickness="1">
+                                                Background="{DynamicResource SuccessAlpha10Brush}" BorderBrush="{DynamicResource AccentGreenBrush}" BorderThickness="1">
                                             <TextBlock Text="{Binding CurrentRecommendation.Safety}" FontSize="10" FontWeight="SemiBold"
-                                                       Foreground="{StaticResource AccentGreenBrush}"/>
+                                                       Foreground="{DynamicResource AccentGreenBrush}"/>
                                         </Border>
 
                                         <TextBlock Text="{Binding CurrentRecommendation.Title}" Style="{StaticResource HeadingSmall}"
@@ -465,18 +465,18 @@
 
                                         <TextBlock Text="{Binding CurrentRecommendation.WhyBody}" Style="{StaticResource BodyText}"
                                                    TextWrapping="Wrap" Margin="0,6,0,0"
-                                                   Foreground="{StaticResource TextSecondaryBrush}"/>
+                                                   Foreground="{DynamicResource TextSecondaryBrush}"/>
 
                                         <!-- Trade-off pulled out of the paragraph so the caveat is not buried -->
                                         <Border CornerRadius="6" Padding="13,10" Margin="0,14,0,0"
-                                                Background="#14F59E0B" BorderBrush="#3AF59E0B" BorderThickness="1"
+                                                Background="{DynamicResource CautionAlpha08Brush}" BorderBrush="{DynamicResource CautionAlpha23Brush}" BorderThickness="1"
                                                 Visibility="{Binding CurrentRecommendation.HasTradeoff, Converter={StaticResource BoolToVis}}">
                                             <StackPanel>
                                                 <TextBlock Text="Trade-off" FontSize="12" FontWeight="SemiBold"
-                                                           Foreground="{StaticResource AccentYellowBrush}"/>
+                                                           Foreground="{DynamicResource AccentYellowBrush}"/>
                                                 <TextBlock Text="{Binding CurrentRecommendation.Tradeoff}" FontSize="13"
                                                            TextWrapping="Wrap" Margin="0,4,0,0"
-                                                           Foreground="{StaticResource TextSecondaryBrush}"/>
+                                                           Foreground="{DynamicResource TextSecondaryBrush}"/>
                                             </StackPanel>
                                         </Border>
                                     </StackPanel>
@@ -505,7 +505,7 @@
                                                     Command="{Binding PrevRecCommand}" IsEnabled="{Binding CanGoPrevRec}"/>
                                             <TextBlock Text="{Binding RecPositionText}" FontSize="12" Margin="10,0,10,0"
                                                        VerticalAlignment="Center" MinWidth="40" TextAlignment="Center"
-                                                       Foreground="{StaticResource TextSecondaryBrush}"/>
+                                                       Foreground="{DynamicResource TextSecondaryBrush}"/>
                                             <Button Style="{StaticResource GhostButton}" Content="&#x203A;" Padding="12,0"
                                                     FontSize="17" ToolTip="Next suggestion"
                                                     Command="{Binding NextRecCommand}" IsEnabled="{Binding CanGoNextRec}"/>
@@ -522,15 +522,15 @@
                                         <ColumnDefinition Width="Auto"/>
                                         <ColumnDefinition Width="*"/>
                                     </Grid.ColumnDefinitions>
-                                    <Border Width="36" Height="36" CornerRadius="18" Background="#1A22C55E"
+                                    <Border Width="36" Height="36" CornerRadius="18" Background="{DynamicResource SuccessAlpha10Brush}"
                                             VerticalAlignment="Center" Margin="0,0,16,0">
                                         <TextBlock Text="&#x2713;" FontSize="16" FontWeight="Bold"
-                                                   Foreground="{StaticResource AccentGreenBrush}"
+                                                   Foreground="{DynamicResource AccentGreenBrush}"
                                                    HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                     </Border>
                                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                         <TextBlock Text="You're all set" Style="{StaticResource BodyText}"
-                                                   FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}"/>
+                                                   FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}"/>
                                         <TextBlock Text="Auto Pilot is keeping your PC tuned. We'll add a suggestion here if something new comes up."
                                                    Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,2,0,0"/>
                                     </StackPanel>
@@ -561,17 +561,17 @@
                                         <ColumnDefinition Width="Auto"/>
                                     </Grid.ColumnDefinitions>
                                     <Viewbox Grid.Column="0" Width="20" Height="20" Margin="0,0,16,0" VerticalAlignment="Center">
-                                        <Path Width="24" Height="24" Fill="{StaticResource AccentBlueBrush}"
+                                        <Path Width="24" Height="24" Fill="{DynamicResource AccentBlueBrush}"
                                               Data="M12 3 L13.6 9.4 L20 11 L13.6 12.6 L12 19 L10.4 12.6 L4 11 L10.4 9.4 Z"/>
                                     </Viewbox>
                                     <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,16,0">
-                                        <TextBlock Text="Auto Pilot" Style="{StaticResource BodyText}" Foreground="{StaticResource TextPrimaryBrush}"/>
+                                        <TextBlock Text="Auto Pilot" Style="{StaticResource BodyText}" Foreground="{DynamicResource TextPrimaryBrush}"/>
                                         <TextBlock Text="{Binding AutoPilotStatusLine}" Style="{StaticResource CaptionText}"
                                                    TextWrapping="Wrap"/>
                                     </StackPanel>
                                     <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
                                         <TextBlock FontSize="14" Margin="0,0,12,0" VerticalAlignment="Center"
-                                                   Foreground="{StaticResource TextPrimaryBrush}">
+                                                   Foreground="{DynamicResource TextPrimaryBrush}">
                                             <TextBlock.Style>
                                                 <Style TargetType="TextBlock">
                                                     <Setter Property="Text" Value="Off"/>
@@ -597,7 +597,7 @@
                                         <ColumnDefinition Width="Auto"/>
                                     </Grid.ColumnDefinitions>
                                     <TextBlock Grid.Column="0" FontSize="14" VerticalAlignment="Center"
-                                               Foreground="{StaticResource TextPrimaryBrush}">
+                                               Foreground="{DynamicResource TextPrimaryBrush}">
                                         <TextBlock.Style>
                                             <Style TargetType="TextBlock">
                                                 <Setter Property="Text" Value="Show details"/>
@@ -612,7 +612,7 @@
                                     <!-- Windows 11 expander chevron: rotates to point up while open -->
                                     <Path Grid.Column="1" Data="M 0 0 L 4.5 4.5 L 9 0" Width="9" Height="5"
                                           VerticalAlignment="Center" RenderTransformOrigin="0.5,0.5"
-                                          Stroke="{StaticResource TextSecondaryBrush}" StrokeThickness="1.2"
+                                          Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1.2"
                                           StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round">
                                         <Path.RenderTransform>
                                             <RotateTransform Angle="0"/>
@@ -688,11 +688,11 @@
                                                     <TextBlock.Style>
                                                         <Style TargetType="TextBlock">
                                                             <Setter Property="Text"       Value="&#x25CB;"/>
-                                                            <Setter Property="Foreground" Value="{StaticResource TextTertiaryBrush}"/>
+                                                            <Setter Property="Foreground" Value="{DynamicResource TextTertiaryBrush}"/>
                                                             <Style.Triggers>
                                                                 <DataTrigger Binding="{Binding IsDone}" Value="True">
                                                                     <Setter Property="Text"       Value="&#x2713;"/>
-                                                                    <Setter Property="Foreground" Value="{StaticResource AccentGreenBrush}"/>
+                                                                    <Setter Property="Foreground" Value="{DynamicResource AccentGreenBrush}"/>
                                                                 </DataTrigger>
                                                             </Style.Triggers>
                                                         </Style>
@@ -702,10 +702,10 @@
                                                            TextWrapping="Wrap">
                                                     <TextBlock.Style>
                                                         <Style TargetType="TextBlock">
-                                                            <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+                                                            <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
                                                             <Style.Triggers>
                                                                 <DataTrigger Binding="{Binding IsDone}" Value="True">
-                                                                    <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+                                                                    <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
                                                                 </DataTrigger>
                                                             </Style.Triggers>
                                                         </Style>
@@ -769,7 +769,7 @@
                                 <TextBlock Text="Today" Style="{StaticResource HomeCardTitle}"/>
                                 <TextBlock Text="What Systema did for you" Style="{StaticResource HomeCardSubtitle}"/>
                             </StackPanel>
-                            <Border BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,1,0,0">
+                            <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0">
                                 <Grid>
                                     <ItemsControl ItemsSource="{Binding Activity}" Margin="0,8">
                                         <!-- Rows past the first 10 hide until "Show more". -->
@@ -807,7 +807,7 @@
                                                     </Grid.Triggers>
                                                     <TextBlock Grid.Column="0" Text="{Binding TimeText, Mode=OneWay}"
                                                                Style="{StaticResource CaptionText}" Margin="0,2,0,0"
-                                                               Foreground="{StaticResource TextTertiaryBrush}"/>
+                                                               Foreground="{DynamicResource TextTertiaryBrush}"/>
                                                     <TextBlock Grid.Column="1" Text="{Binding Text, Mode=OneWay}"
                                                                Style="{StaticResource BodyText}" TextWrapping="Wrap"/>
                                                 </Grid>
@@ -840,7 +840,7 @@
                                         <ColumnDefinition Width="Auto"/>
                                     </Grid.ColumnDefinitions>
                                     <TextBlock Grid.Column="0" FontSize="14" VerticalAlignment="Center"
-                                               Foreground="{StaticResource TextPrimaryBrush}">
+                                               Foreground="{DynamicResource TextPrimaryBrush}">
                                         <TextBlock.Style>
                                             <Style TargetType="TextBlock">
                                                 <Setter Property="Text" Value="Show more"/>
@@ -867,12 +867,12 @@
                     Click="GetHelp_Click" ToolTip="Opens the Systema Discord">
                 <StackPanel Orientation="Horizontal">
                     <Viewbox Width="18" Height="18" Margin="0,0,12,0" VerticalAlignment="Center">
-                        <Path Width="24" Height="24" Stroke="{StaticResource TextPrimaryBrush}" StrokeThickness="1.5"
+                        <Path Width="24" Height="24" Stroke="{DynamicResource TextPrimaryBrush}" StrokeThickness="1.5"
                               StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
                               Data="M12 21 A9 9 0 1 1 12 3 A9 9 0 1 1 12 21 Z M9.5 9.5 A2.5 2.5 0 1 1 12 12 V13.5 M12 16.8 V17"/>
                     </Viewbox>
                     <TextBlock Text="Get help" FontSize="14" VerticalAlignment="Center"
-                               Foreground="{StaticResource AccentBlueBrush}"/>
+                               Foreground="{DynamicResource AccentBlueBrush}"/>
                 </StackPanel>
             </Button>
 

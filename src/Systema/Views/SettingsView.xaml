@@ -18,7 +18,7 @@
             <Style.Triggers>
                 <DataTrigger Binding="{Binding UpdateAvailable}" Value="True">
                     <Setter Property="Badge" Value="Update available"/>
-                    <Setter Property="BadgeBrush" Value="{StaticResource AccentGreenBrush}"/>
+                    <Setter Property="BadgeBrush" Value="{DynamicResource AccentGreenBrush}"/>
                 </DataTrigger>
             </Style.Triggers>
         </Style>
@@ -44,11 +44,11 @@
                     <StackPanel>
                         <TextBlock Text="When enabled, Systema will apply tweaks without creating a restore point first."
                                    Style="{StaticResource CardDescription}"/>
-                        <Border Margin="0,10,0,0" Padding="12,8" Background="#1AEF4444" CornerRadius="4"
+                        <Border Margin="0,10,0,0" Padding="12,8" Background="{DynamicResource CriticalAlpha10Brush}" CornerRadius="4"
                                 MaxWidth="680" HorizontalAlignment="Left"
                                 Visibility="{Binding SkipRestorePoint, Converter={StaticResource GlobalBoolToVis}}">
                             <TextBlock TextWrapping="Wrap" Style="{StaticResource CaptionText}"
-                                       Foreground="{StaticResource AccentRedBrush}">
+                                       Foreground="{DynamicResource AccentRedBrush}">
                                 ⚠  Restore points are turned off. If something goes wrong after applying tweaks, you won't be able to roll back automatically.
                             </TextBlock>
                         </Border>
@@ -143,15 +143,15 @@
                         <TextBlock Style="{StaticResource CardDescription}">
                             <Run Text="Current version: "/>
                             <Run Text="{Binding CurrentVersionString, Mode=OneTime}"
-                                 Foreground="{StaticResource AccentBlueBrush}"/>
+                                 Foreground="{DynamicResource AccentBlueBrush}"/>
                         </TextBlock>
                         <TextBlock Text="{Binding UpdateStatus}" Margin="0,3,0,0">
                             <TextBlock.Style>
                                 <Style TargetType="TextBlock" BasedOn="{StaticResource CardDescription}">
-                                    <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+                                    <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
                                     <Style.Triggers>
                                         <DataTrigger Binding="{Binding UpdateAvailable}" Value="True">
-                                            <Setter Property="Foreground" Value="{StaticResource AccentGreenBrush}"/>
+                                            <Setter Property="Foreground" Value="{DynamicResource AccentGreenBrush}"/>
                                         </DataTrigger>
                                     </Style.Triggers>
                                 </Style>
@@ -171,8 +171,8 @@
                                 </Style>
                             </Grid.Style>
                             <ProgressBar Value="{Binding DownloadProgress}" Minimum="0" Maximum="100"
-                                         Height="4" Background="#22FFFFFF"
-                                         Foreground="{StaticResource AccentBlueBrush}"/>
+                                         Height="4" Background="{DynamicResource OverlayStrongBrush}"
+                                         Foreground="{DynamicResource AccentBlueBrush}"/>
                         </Grid>
                     </StackPanel>
                 </ctl:SettingsCard.Description>
@@ -208,7 +208,7 @@
             <TextBlock Text="Backup and support" Style="{StaticResource SettingsGroupHeader}"/>
 
             <ctl:SettingsCard Header="Export / Import Settings" Badge="Backup"
-                              BadgeBrush="{StaticResource TextSecondaryBrush}">
+                              BadgeBrush="{DynamicResource TextSecondaryBrush}">
                 <ctl:SettingsCard.Description>
                     <StackPanel>
                         <TextBlock Style="{StaticResource CardDescription}">
@@ -245,7 +245,7 @@
             </ctl:SettingsCard>
 
             <ctl:SettingsCard Header="Diagnostic Report" Badge="Diagnostic"
-                              BadgeBrush="{StaticResource TextSecondaryBrush}">
+                              BadgeBrush="{DynamicResource TextSecondaryBrush}">
                 <ctl:SettingsCard.Description>
                     <TextBlock Style="{StaticResource CardDescription}">
                         Creates a report of recent errors and session activity that you can paste into Discord for support. Nothing is sent automatically.
@@ -264,12 +264,12 @@
                 <Button Content="Reset to Defaults"
                         Command="{Binding ResetAllSettingsCommand}"
                         Style="{StaticResource GhostButton}"
-                        Foreground="{StaticResource AccentRedBrush}"/>
+                        Foreground="{DynamicResource AccentRedBrush}"/>
             </ctl:SettingsCard>
 
             <!-- Version footer -->
-            <TextBlock Text="Systema v0.7.353  ·  For support visit discord.gg/yYhM7mdupH"
-                       Style="{StaticResource CaptionText}" Foreground="{StaticResource TextSecondaryBrush}"
+            <TextBlock Text="Systema v0.7.354  ·  For support visit discord.gg/yYhM7mdupH"
+                       Style="{StaticResource CaptionText}" Foreground="{DynamicResource TextSecondaryBrush}"
                        TextWrapping="Wrap" Margin="2,24,0,0"/>
         </StackPanel>
     </ScrollViewer>

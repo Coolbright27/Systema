@@ -358,6 +358,8 @@ public partial class App : Application
         CrashGuard.Start();
         // Shorter stalls ("hitches") go to the session log as [UiLag] lines (Core/UiLagMonitor.cs).
         UiLagMonitor.Start(Dispatcher);
+        // Light or dark, and the accent colour, from Windows (before any themed window exists).
+        ThemeManager.Initialize();
 
         if (!AdminCheckService.IsAdmin())
         {

@@ -5,6 +5,9 @@
     <Application.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
+                <!-- Slot 0 is the palette. ThemeManager replaces it with Palette.Light.xaml when
+                     Windows is in light mode (and swaps it live when that changes). -->
+                <ResourceDictionary Source="Resources/Themes/Palette.Dark.xaml"/>
                 <ResourceDictionary Source="Resources/Themes/Dark.xaml"/>
             </ResourceDictionary.MergedDictionaries>
 
@@ -14,17 +17,9 @@
             <conv:SafetyLevelToBadgeConverter x:Key="GlobalSafetyBadge"/>
             <conv:EqualityConverter x:Key="GlobalEquality"/>
 
-            <!--
-                Override the system "Window" brush key so any control that uses
-                SystemColors.WindowBrushKey for its popup/dropdown background
-                (notably ComboBox) renders dark instead of bright white.
-                Lives at app scope so all ComboBoxes pick it up automatically —
-                this previously lived inside the DarkComboBox style as a
-                <Setter Property="Resources"> block, which is invalid because
-                FrameworkElement.Resources is not a DependencyProperty and
-                caused a fatal XamlParseException during template load.
-            -->
-            <SolidColorBrush x:Key="{x:Static SystemColors.WindowBrushKey}" Color="#2C2C2C"/>
+            <!-- The SystemColors.WindowBrushKey override (ComboBox popups) now lives in each
+                 palette, so it follows the theme. It must stay at app scope, never in a style's
+                 Resources setter (that threw a XamlParseException once). -->
         </ResourceDictionary>
     </Application.Resources>
 </Application>

@@ -82,7 +82,8 @@ public class WindowsNativeTests
         var tray = Read("Services", "TrayService.cs");
         Assert.DoesNotContain("FromArgb(0x1E, 0x22, 0x27)", tray);   // old background
         Assert.DoesNotContain("FromArgb(0x38, 0xBD, 0xF8)", tray);   // old accent
-        Assert.Contains("FromArgb(0x2C, 0x2C, 0x2C)", tray);         // PopupBrush
+        Assert.Contains("Rgb(0x2C, 0x2C, 0x2C)", tray);              // PopupBrush, dark
+        Assert.Contains("Rgb(0xF9, 0xF9, 0xF9)", tray);              // PopupBrush, light
         Assert.Contains("menu.HandleCreated += (_, _) => RoundCorners(menu)", tray);
         Assert.Contains("DWMWA_WINDOW_CORNER_PREFERENCE", tray);
 

@@ -140,7 +140,7 @@
                                    Text="Keeps the CPU waking more often, so it can increase heat and power draw (worst on a laptop or on battery). Turn it on only if the smoother FPS is worth that to you."/>
                         <TextBlock Style="{StaticResource CardNote}">
                             <Run Text="Current: "/><Run Text="{Binding TimerResolutionDisplay, Mode=OneWay}"
-                                 Foreground="{StaticResource AccentGreenBrush}" FontWeight="SemiBold"/>
+                                 Foreground="{DynamicResource AccentGreenBrush}" FontWeight="SemiBold"/>
                         </TextBlock>
                         <!-- State-aware system-wide status: pending restart vs active for every process -->
                         <TextBlock Text="⟳  Restart your PC so it applies system-wide." Style="{StaticResource CardNoteWarn}"

@@ -20,7 +20,7 @@
         <Style x:Key="StatValue" TargetType="TextBlock">
             <Setter Property="FontFamily" Value="{StaticResource DisplayFont}"/>
             <Setter Property="FontSize" Value="18"/>
-            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
             <Setter Property="Typography.NumeralAlignment" Value="Tabular"/>
         </Style>
         <!-- The hardware facts on the right: "Speed:  3200 MT/s" -->
@@ -28,13 +28,13 @@
             <Setter Property="Margin" Value="0,0,16,6"/>
         </Style>
         <Style x:Key="HwValue" TargetType="TextBlock" BasedOn="{StaticResource CaptionText}">
-            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
             <Setter Property="Margin" Value="0,0,0,6"/>
         </Style>
 
         <!-- One segment of the composition bar -->
         <Style x:Key="CompositionSegment" TargetType="Border">
-            <Setter Property="BorderBrush" Value="#6660CDFF"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentAlpha40Brush}"/>
             <Setter Property="BorderThickness" Value="1,0,0,0"/>
             <Setter Property="ToolTipService.InitialShowDelay" Value="250"/>
         </Style>
@@ -61,10 +61,10 @@
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <TextBlock Text="Memory" FontFamily="{StaticResource DisplayFont}" FontSize="24" FontWeight="SemiBold"
-                                   Foreground="{StaticResource TextPrimaryBrush}"/>
+                                   Foreground="{DynamicResource TextPrimaryBrush}"/>
                         <TextBlock Grid.Column="1" Text="{Binding InstalledText}" FontFamily="{StaticResource DisplayFont}"
                                    FontSize="20" FontWeight="SemiBold" VerticalAlignment="Bottom"
-                                   Foreground="{StaticResource TextPrimaryBrush}"/>
+                                   Foreground="{DynamicResource TextPrimaryBrush}"/>
                     </Grid>
 
                     <!-- Usage graph: the last minute, 0 at the bottom, all usable memory at the top -->
@@ -78,8 +78,8 @@
                     </Grid>
                     <ctl:UsageGraph Height="160" Capacity="60"
                                     Values="{Binding UsageHistoryValues}"
-                                    LineBrush="{StaticResource AccentBlueBrush}"
-                                    FillBrush="#2E60CDFF" GridBrush="#1760CDFF" FrameBrush="#6660CDFF"/>
+                                    LineBrush="{DynamicResource AccentBlueBrush}"
+                                    FillBrush="{DynamicResource AccentAlpha18Brush}" GridBrush="{DynamicResource AccentAlpha09Brush}" FrameBrush="{DynamicResource AccentAlpha40Brush}"/>
                     <Grid Margin="0,4,0,0">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
@@ -91,7 +91,7 @@
 
                     <!-- Composition: In use | Modified | Standby | Free, hover a segment for what it means -->
                     <TextBlock Text="Memory composition" Style="{StaticResource CaptionText}" Margin="0,14,0,4"/>
-                    <Border Height="32" BorderBrush="#6660CDFF" BorderThickness="1" SnapsToDevicePixels="True">
+                    <Border Height="32" BorderBrush="{DynamicResource AccentAlpha40Brush}" BorderThickness="1" SnapsToDevicePixels="True">
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="{Binding InUseStar}"/>
@@ -99,11 +99,11 @@
                                 <ColumnDefinition Width="{Binding StandbyStar}"/>
                                 <ColumnDefinition Width="{Binding FreeStar}"/>
                             </Grid.ColumnDefinitions>
-                            <Border Grid.Column="0" Background="#4D60CDFF" ToolTip="{Binding InUseTip}"
+                            <Border Grid.Column="0" Background="{DynamicResource AccentAlpha30Brush}" ToolTip="{Binding InUseTip}"
                                     ToolTipService.InitialShowDelay="250"/>
-                            <Border Grid.Column="1" Style="{StaticResource CompositionSegment}" Background="#3360CDFF"
+                            <Border Grid.Column="1" Style="{StaticResource CompositionSegment}" Background="{DynamicResource AccentAlpha20Brush}"
                                     ToolTip="{Binding ModifiedTip}"/>
-                            <Border Grid.Column="2" Style="{StaticResource CompositionSegment}" Background="#1760CDFF"
+                            <Border Grid.Column="2" Style="{StaticResource CompositionSegment}" Background="{DynamicResource AccentAlpha09Brush}"
                                     ToolTip="{Binding StandbyTip}"/>
                             <Border Grid.Column="3" Style="{StaticResource CompositionSegment}" Background="Transparent"
                                     ToolTip="{Binding FreeTip}"/>
@@ -210,7 +210,7 @@
                             </TextBlock>
                             <TextBlock Text="{Binding CurrentPagefileText}" Style="{StaticResource CardNoteGood}"/>
                             <TextBlock Text="{Binding RecommendedPagefileText}" Style="{StaticResource CardNote}"
-                                       Foreground="{StaticResource AccentBlueBrush}" Margin="0,2,0,0"/>
+                                       Foreground="{DynamicResource AccentBlueBrush}" Margin="0,2,0,0"/>
                         </StackPanel>
                     </ctl:SettingsCard.Description>
                     <!-- Pick a size, then Apply (it lights up only when the choice differs from
@@ -230,15 +230,15 @@
             <TextBlock Text="Startup" Style="{StaticResource SettingsGroupHeader}"/>
 
             <!-- Speed-up recommendation: outlined in the accent so it stands out from the list -->
-            <ctl:SettingsCard Header="Speed up your startup" BorderBrush="{StaticResource AccentBlueBrush}"
+            <ctl:SettingsCard Header="Speed up your startup" BorderBrush="{DynamicResource AccentBlueBrush}"
                               Visibility="{Binding HasStartupRecommendation, Converter={StaticResource BoolToVis}}">
                 <ctl:SettingsCard.Description>
                     <StackPanel>
                         <TextBlock Text="{Binding StartupRecommendationText}" Style="{StaticResource CardDescription}"
-                                   Foreground="{StaticResource AccentBlueBrush}" FontWeight="SemiBold"/>
+                                   Foreground="{DynamicResource AccentBlueBrush}" FontWeight="SemiBold"/>
                         <TextBlock Style="{StaticResource CardNote}">
                             <Run Text="These apps make your PC slower to get ready after you turn it on: "/>
-                            <Run Text="{Binding HighImpactNames, Mode=OneWay}" Foreground="{StaticResource TextPrimaryBrush}"/>
+                            <Run Text="{Binding HighImpactNames, Mode=OneWay}" Foreground="{DynamicResource TextPrimaryBrush}"/>
                             <Run Text=". You can still open them anytime."/>
                         </TextBlock>
                     </StackPanel>
@@ -277,13 +277,13 @@
                                         Margin="0,0,20,0">
                                     <Border.Style>
                                         <Style TargetType="Border">
-                                            <Setter Property="Background" Value="#2222C55E"/>
+                                            <Setter Property="Background" Value="{DynamicResource SuccessAlpha13Brush}"/>
                                             <Style.Triggers>
                                                 <DataTrigger Binding="{Binding ImpactLabel}" Value="High">
-                                                    <Setter Property="Background" Value="#22EF4444"/>
+                                                    <Setter Property="Background" Value="{DynamicResource CriticalAlpha13Brush}"/>
                                                 </DataTrigger>
                                                 <DataTrigger Binding="{Binding ImpactLabel}" Value="Medium">
-                                                    <Setter Property="Background" Value="#22F59E0B"/>
+                                                    <Setter Property="Background" Value="{DynamicResource CautionAlpha13Brush}"/>
                                                 </DataTrigger>
                                             </Style.Triggers>
                                         </Style>
@@ -292,15 +292,15 @@
                                         <TextBlock.Style>
                                             <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionText}">
                                                 <Setter Property="Text"       Value="Low impact"/>
-                                                <Setter Property="Foreground" Value="{StaticResource AccentGreenBrush}"/>
+                                                <Setter Property="Foreground" Value="{DynamicResource AccentGreenBrush}"/>
                                                 <Style.Triggers>
                                                     <DataTrigger Binding="{Binding ImpactLabel}" Value="High">
                                                         <Setter Property="Text"       Value="High impact"/>
-                                                        <Setter Property="Foreground" Value="{StaticResource AccentRedBrush}"/>
+                                                        <Setter Property="Foreground" Value="{DynamicResource AccentRedBrush}"/>
                                                     </DataTrigger>
                                                     <DataTrigger Binding="{Binding ImpactLabel}" Value="Medium">
                                                         <Setter Property="Text"       Value="Medium impact"/>
-                                                        <Setter Property="Foreground" Value="{StaticResource AccentYellowBrush}"/>
+                                                        <Setter Property="Foreground" Value="{DynamicResource AccentYellowBrush}"/>
                                                     </DataTrigger>
                                                 </Style.Triggers>
                                             </Style>

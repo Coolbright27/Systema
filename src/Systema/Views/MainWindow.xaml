@@ -24,7 +24,7 @@
         Title="Systema" Height="820" Width="1280"
         WindowStyle="None"
         ResizeMode="NoResize"
-        Background="{StaticResource BgPrimaryBrush}"
+        Background="{DynamicResource BgPrimaryBrush}"
         WindowStartupLocation="CenterScreen"
         Activated="Window_Activated"
         Deactivated="Window_Deactivated"
@@ -95,10 +95,10 @@
         <!-- The search box in the title bar. It's a button that opens the palette, like the
              Settings app's search, so the title bar keeps no live text field. -->
         <Style x:Key="TitleSearchBox" TargetType="Button">
-            <Setter Property="Background" Value="{StaticResource ControlFillBrush}"/>
-            <Setter Property="BorderBrush" Value="{StaticResource ControlStrokeBrush}"/>
+            <Setter Property="Background" Value="{DynamicResource ControlFillBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource ControlStrokeBrush}"/>
             <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
             <Setter Property="FontFamily" Value="{StaticResource MainFont}"/>
             <Setter Property="FontSize" Value="13"/>
             <Setter Property="Cursor" Value="IBeam"/>
@@ -114,10 +114,10 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Chrome" Property="Background" Value="{StaticResource ControlFillHoverBrush}"/>
+                                <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource ControlFillHoverBrush}"/>
                             </Trigger>
                             <Trigger Property="IsKeyboardFocused" Value="True">
-                                <Setter TargetName="Chrome" Property="BorderBrush" Value="{StaticResource TextPrimaryBrush}"/>
+                                <Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource TextPrimaryBrush}"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -129,9 +129,9 @@
         <Style x:Key="SearchInputBox" TargetType="TextBox">
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
-            <Setter Property="CaretBrush" Value="{StaticResource TextPrimaryBrush}"/>
-            <Setter Property="SelectionBrush" Value="{StaticResource AccentBlueBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
+            <Setter Property="CaretBrush" Value="{DynamicResource TextPrimaryBrush}"/>
+            <Setter Property="SelectionBrush" Value="{DynamicResource AccentBlueBrush}"/>
             <Setter Property="SelectionOpacity" Value="0.35"/>
             <Setter Property="FontFamily" Value="{StaticResource MainFont}"/>
             <Setter Property="FontSize" Value="15"/>
@@ -151,7 +151,7 @@
         <Style x:Key="SearchResultsList" TargetType="ListBox">
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
             <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled"/>
             <Setter Property="ItemContainerStyle">
                 <Setter.Value>
@@ -165,15 +165,15 @@
                                         <Border x:Name="Bg" CornerRadius="4" Background="Transparent"/>
                                         <Border x:Name="Pill" Width="3" Height="16" CornerRadius="1.5"
                                                 HorizontalAlignment="Left" VerticalAlignment="Center"
-                                                Background="{StaticResource AccentBlueBrush}" Opacity="0"/>
+                                                Background="{DynamicResource AccentBlueBrush}" Opacity="0"/>
                                         <ContentPresenter Margin="{TemplateBinding Padding}"/>
                                     </Grid>
                                     <ControlTemplate.Triggers>
                                         <Trigger Property="IsMouseOver" Value="True">
-                                            <Setter TargetName="Bg" Property="Background" Value="{StaticResource PopupItemHoverBrush}"/>
+                                            <Setter TargetName="Bg" Property="Background" Value="{DynamicResource PopupItemHoverBrush}"/>
                                         </Trigger>
                                         <Trigger Property="IsSelected" Value="True">
-                                            <Setter TargetName="Bg" Property="Background" Value="{StaticResource SubtleSelectedBrush}"/>
+                                            <Setter TargetName="Bg" Property="Background" Value="{DynamicResource SubtleSelectedBrush}"/>
                                             <Setter TargetName="Pill" Property="Opacity" Value="1"/>
                                         </Trigger>
                                     </ControlTemplate.Triggers>
@@ -189,8 +189,8 @@
     <!-- Rounded corners are provided by DWM on Win11 via DwmSetWindowAttribute in
          MainWindow.xaml.cs. No Border CornerRadius / DropShadowEffect here — both
          would require layered-window mode which breaks VSync system-wide. -->
-    <Border x:Name="RootSurface" Background="{StaticResource BgPrimaryBrush}"
-            BorderBrush="{StaticResource BorderBrush}"
+    <Border x:Name="RootSurface" Background="{DynamicResource BgPrimaryBrush}"
+            BorderBrush="{DynamicResource BorderBrush}"
             BorderThickness="1">
 
         <Grid>
@@ -211,7 +211,7 @@
             <!-- Windows 11 caption: same colour as the window, so the title bar, nav pane and
                  page read as one surface, the way the Settings app does. -->
             <Border x:Name="TitleBarSurface" Grid.Row="0"
-                    Background="{StaticResource BgPrimaryBrush}"
+                    Background="{DynamicResource BgPrimaryBrush}"
                     MouseLeftButtonDown="TitleBar_MouseLeftButtonDown">
                 <Grid>
                     <Grid.ColumnDefinitions>
@@ -227,18 +227,18 @@
                              MainWindow.xaml.cs). The accent square only shows if it can't load. -->
                         <Grid Width="16" Height="16" Margin="0,0,10,0" VerticalAlignment="Center">
                             <Border x:Name="TitleLogoFallback" Width="14" Height="14" CornerRadius="4"
-                                    Background="{StaticResource AccentBlueBrush}"/>
+                                    Background="{DynamicResource AccentBlueBrush}"/>
                             <Image x:Name="TitleLogo" Stretch="Uniform"
                                    RenderOptions.BitmapScalingMode="HighQuality"/>
                         </Grid>
                         <TextBlock Text="Systema" FontSize="12"
                                    FontFamily="{StaticResource SmallFont}"
-                                   Foreground="{StaticResource TextPrimaryBrush}"
+                                   Foreground="{DynamicResource TextPrimaryBrush}"
                                    VerticalAlignment="Center"
                                    Margin="0,0,8,0"/>
                         <TextBlock Text="Beta" FontSize="12"
                                    FontFamily="{StaticResource SmallFont}"
-                                   Foreground="{StaticResource TextTertiaryBrush}"
+                                   Foreground="{DynamicResource TextTertiaryBrush}"
                                    VerticalAlignment="Center"/>
                     </StackPanel>
 
@@ -257,7 +257,7 @@
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
                             <Path Grid.Column="0" Width="14" Height="14" Stretch="Uniform" Margin="0,0,8,0"
-                                  Stroke="{StaticResource TextSecondaryBrush}" StrokeThickness="1.5"
+                                  Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1.5"
                                   StrokeStartLineCap="Round" StrokeEndLineCap="Round" VerticalAlignment="Center">
                                 <Path.Data>
                                     <GeometryGroup>
@@ -267,10 +267,10 @@
                                 </Path.Data>
                             </Path>
                             <TextBlock Grid.Column="1" Text="Search settings" VerticalAlignment="Center"
-                                       Foreground="{StaticResource TextSecondaryBrush}"/>
-                            <Border Grid.Column="2" BorderBrush="{StaticResource ControlStrokeBrush}" BorderThickness="1"
+                                       Foreground="{DynamicResource TextSecondaryBrush}"/>
+                            <Border Grid.Column="2" BorderBrush="{DynamicResource ControlStrokeBrush}" BorderThickness="1"
                                     CornerRadius="3" Padding="5,0" VerticalAlignment="Center">
-                                <TextBlock Text="Ctrl K" FontSize="11" Foreground="{StaticResource TextTertiaryBrush}"/>
+                                <TextBlock Text="Ctrl K" FontSize="11" Foreground="{DynamicResource TextTertiaryBrush}"/>
                             </Border>
                         </Grid>
                     </Button>
@@ -302,7 +302,7 @@
                      pixel-shader effect on an unsigned binary is a needless SmartScreen and
                      Defender heuristic risk. The wallpaper tint comes from DWM's Mica instead. -->
                 <Border x:Name="SidebarSurface" Grid.Column="0"
-                        Background="{StaticResource BgSidebarBrush}"
+                        Background="{DynamicResource BgSidebarBrush}"
                         BorderThickness="0"
                         ClipToBounds="True">
                     <Grid>
@@ -323,7 +323,7 @@
                                  stroke stays sharp at any DPI. -->
                             <StackPanel.Resources>
                                 <Style x:Key="NavIcon" TargetType="Path">
-                                    <Setter Property="Stroke" Value="{StaticResource TextPrimaryBrush}"/>
+                                    <Setter Property="Stroke" Value="{DynamicResource TextPrimaryBrush}"/>
                                     <Setter Property="StrokeThickness" Value="1.5"/>
                                     <Setter Property="StrokeLineJoin" Value="Round"/>
                                     <Setter Property="StrokeStartLineCap" Value="Round"/>
@@ -453,7 +453,7 @@
                             </Button>
 
                             <!-- Separator before hardware section -->
-                            <Border Height="1" Background="{StaticResource BorderBrush}" Margin="8,12"
+                            <Border Height="1" Background="{DynamicResource BorderBrush}" Margin="8,12"
                                     Visibility="{Binding HasOnDeviceSections, Converter={StaticResource BoolToVis}}"/>
 
                             <!-- Intel Graphics — monitor -->
@@ -496,7 +496,7 @@
                             </Button>
 
                             <!-- Separator before Settings -->
-                            <Border Height="1" Background="{StaticResource BorderBrush}" Margin="8,12"/>
+                            <Border Height="1" Background="{DynamicResource BorderBrush}" Margin="8,12"/>
 
                             <!-- Settings — gear -->
                             <Button Command="{Binding NavigateCommand}" CommandParameter="Settings"
@@ -516,7 +516,7 @@
                         <Canvas x:Name="NavCanvas" IsHitTestVisible="False">
                             <Border x:Name="NavIndicator" Canvas.Left="11" Width="3" Height="16"
                                     CornerRadius="1.5" Opacity="0"
-                                    Background="{StaticResource AccentBlueBrush}">
+                                    Background="{DynamicResource AccentBlueBrush}">
                                 <Border.RenderTransform>
                                     <TranslateTransform x:Name="NavIndicatorShift"/>
                                 </Border.RenderTransform>
@@ -530,16 +530,16 @@
                              is identical to the Settings → Updates card (single source of truth). -->
                         <Border Grid.Row="1" Margin="8,8,8,12" Padding="12,10"
                                 Background="{DynamicResource CardLayerBrush}"
-                                BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="8">
+                                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="8">
                             <StackPanel>
-                                <TextBlock Text="Systema v0.7.353" FontSize="11" FontWeight="SemiBold"
-                                           Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,7"/>
+                                <TextBlock Text="Systema v0.7.354" FontSize="11" FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextPrimaryBrush}" Margin="0,0,0,7"/>
 
                                 <!-- Live status: green check + status text from the updater -->
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,9">
                                     <Viewbox Width="13" Height="13" Margin="0,0,6,0" VerticalAlignment="Top">
                                         <Path Data="M3 12.5 L9 18 L21 5"
-                                              Stroke="{StaticResource AccentGreenBrush}" StrokeThickness="2.6"
+                                              Stroke="{DynamicResource AccentGreenBrush}" StrokeThickness="2.6"
                                               StrokeLineJoin="Round" StrokeStartLineCap="Round"
                                               StrokeEndLineCap="Round" Fill="Transparent"/>
                                     </Viewbox>
@@ -547,7 +547,7 @@
                                          ("v0.7.25…") reads as broken, two short lines do not. -->
                                     <TextBlock Text="{Binding SettingsVm.UpdateStatus}"
                                                Style="{StaticResource CaptionText}"
-                                               Foreground="{StaticResource TextSecondaryBrush}"
+                                               Foreground="{DynamicResource TextSecondaryBrush}"
                                                TextWrapping="Wrap" MaxWidth="139"
                                                VerticalAlignment="Center"
                                                ToolTip="{Binding SettingsVm.UpdateStatus}"/>
@@ -565,7 +565,7 @@
                                         Command="{Binding SettingsVm.InstallNowCommand}"
                                         Visibility="{Binding SettingsVm.IsReadyToInstall, Converter={StaticResource BoolToVis}}"/>
 
-                                <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,10,0,8"/>
+                                <Border Height="1" Background="{DynamicResource BorderBrush}" Margin="0,10,0,8"/>
 
                                 <!-- Download + Discord (moved here from the title bar) -->
                                 <Grid>
@@ -578,9 +578,9 @@
                                             Margin="0,0,3,0" ToolTip="Open the Systema releases page on GitHub">
                                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                                             <TextBlock Text="&#xE896;" FontFamily="Segoe MDL2 Assets" FontSize="11"
-                                                       Margin="0,0,5,0" Foreground="{StaticResource TextSecondaryBrush}"
+                                                       Margin="0,0,5,0" Foreground="{DynamicResource TextSecondaryBrush}"
                                                        VerticalAlignment="Center"/>
-                                            <TextBlock Text="Download" Foreground="{StaticResource TextSecondaryBrush}"
+                                            <TextBlock Text="Download" Foreground="{DynamicResource TextSecondaryBrush}"
                                                        VerticalAlignment="Center"/>
                                         </StackPanel>
                                     </Button>
@@ -589,9 +589,9 @@
                                             Margin="3,0,0,0" ToolTip="Join the Systema Discord">
                                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                                             <TextBlock Text="&#xE8BD;" FontFamily="Segoe MDL2 Assets" FontSize="11"
-                                                       Margin="0,0,5,0" Foreground="{StaticResource TextSecondaryBrush}"
+                                                       Margin="0,0,5,0" Foreground="{DynamicResource TextSecondaryBrush}"
                                                        VerticalAlignment="Center"/>
-                                            <TextBlock Text="Discord" Foreground="{StaticResource TextSecondaryBrush}"
+                                            <TextBlock Text="Discord" Foreground="{DynamicResource TextSecondaryBrush}"
                                                        VerticalAlignment="Center"/>
                                         </StackPanel>
                                     </Button>
@@ -645,8 +645,8 @@
                   Background="#66000000"
                   MouseLeftButtonDown="SearchOverlay_MouseLeftButtonDown">
                 <Border x:Name="SearchPanel" Width="560" VerticalAlignment="Top" Margin="0,52,0,0"
-                        Background="{StaticResource PopupBrush}"
-                        BorderBrush="{StaticResource PopupStrokeBrush}"
+                        Background="{DynamicResource PopupBrush}"
+                        BorderBrush="{DynamicResource PopupStrokeBrush}"
                         BorderThickness="1" CornerRadius="8">
                     <Border.RenderTransform>
                         <TranslateTransform x:Name="SearchPanelShift"/>
@@ -658,7 +658,7 @@
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
                             <Path Grid.Column="0" Width="16" Height="16" Stretch="Uniform" Margin="0,0,12,0"
-                                  Stroke="{StaticResource TextSecondaryBrush}" StrokeThickness="1.5"
+                                  Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1.5"
                                   StrokeStartLineCap="Round" StrokeEndLineCap="Round" VerticalAlignment="Center">
                                 <Path.Data>
                                     <GeometryGroup>
@@ -670,13 +670,13 @@
                             <TextBlock x:Name="SearchPlaceholder" Grid.Column="1"
                                        Text="Search settings, or type what you want"
                                        FontSize="15" VerticalAlignment="Center" IsHitTestVisible="False"
-                                       Foreground="{StaticResource TextTertiaryBrush}"/>
+                                       Foreground="{DynamicResource TextTertiaryBrush}"/>
                             <TextBox x:Name="SearchInput" Grid.Column="1"
                                      Style="{StaticResource SearchInputBox}"
                                      TextChanged="SearchInput_TextChanged"
                                      PreviewKeyDown="SearchInput_PreviewKeyDown"/>
                         </Grid>
-                        <Border Height="1" Background="{StaticResource PopupStrokeBrush}"/>
+                        <Border Height="1" Background="{DynamicResource PopupStrokeBrush}"/>
                         <ListBox x:Name="SearchResults" MaxHeight="360" Margin="6"
                                  Style="{StaticResource SearchResultsList}"
                                  PreviewMouseLeftButtonUp="SearchResults_PreviewMouseLeftButtonUp">
@@ -689,10 +689,10 @@
                                         </Grid.ColumnDefinitions>
                                         <TextBlock Text="{Binding Title, Mode=OneWay}" FontSize="14"
                                                    TextTrimming="CharacterEllipsis"
-                                                   Foreground="{StaticResource TextPrimaryBrush}"/>
+                                                   Foreground="{DynamicResource TextPrimaryBrush}"/>
                                         <TextBlock Grid.Column="1" Text="{Binding Where, Mode=OneWay}"
                                                    FontSize="12" Margin="16,0,0,0" VerticalAlignment="Center"
-                                                   Foreground="{StaticResource TextTertiaryBrush}"/>
+                                                   Foreground="{DynamicResource TextTertiaryBrush}"/>
                                     </Grid>
                                 </DataTemplate>
                             </ListBox.ItemTemplate>

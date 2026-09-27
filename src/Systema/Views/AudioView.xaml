@@ -119,7 +119,7 @@
             </ctl:SettingsCard>
 
             <TextBlock Text="{Binding StatusMessage}" Style="{StaticResource CaptionText}"
-                       Foreground="{StaticResource AccentGreenBrush}" TextWrapping="Wrap" Margin="2,12,0,0"/>
+                       Foreground="{DynamicResource AccentGreenBrush}" TextWrapping="Wrap" Margin="2,12,0,0"/>
 
         </StackPanel>
     </ScrollViewer>

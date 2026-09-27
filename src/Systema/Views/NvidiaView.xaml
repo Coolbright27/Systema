@@ -19,7 +19,7 @@
                 <TextBlock Text="{Binding Label}" VerticalAlignment="Center"/>
                 <TextBlock Text="{Binding Note, StringFormat='({0})'}"
                            FontSize="10" Margin="6,0,0,0" VerticalAlignment="Center"
-                           Foreground="{StaticResource TextSecondaryBrush}">
+                           Foreground="{DynamicResource TextSecondaryBrush}">
                     <TextBlock.Style>
                         <Style TargetType="TextBlock">
                             <Style.Triggers>
@@ -46,7 +46,7 @@
                 <StackPanel Grid.Column="0">
                     <TextBlock Text="Nvidia Graphics" Style="{StaticResource HeadingLarge}"/>
                     <TextBlock Text="{Binding AdapterName}" Style="{StaticResource CaptionText}"
-                               Foreground="{StaticResource TextSecondaryBrush}" Margin="0,4,0,0"/>
+                               Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,4,0,0"/>
                 </StackPanel>
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                     <Button Content="Open NVIDIA Control Panel"
@@ -59,14 +59,14 @@
             </Grid>
 
             <!-- ===== REBOOT HINT (Windows 11 informational bar) ===== -->
-            <Border Margin="0,12,0,0" Padding="14,10" CornerRadius="6" Background="#1A60CDFF"
-                    BorderBrush="#3360CDFF" BorderThickness="1"
+            <Border Margin="0,12,0,0" Padding="14,10" CornerRadius="6" Background="{DynamicResource AccentAlpha10Brush}"
+                    BorderBrush="{DynamicResource AccentAlpha20Brush}" BorderThickness="1"
                     Visibility="{Binding ShowRebootHint, Converter={StaticResource BoolToVis}}">
                 <StackPanel Orientation="Horizontal">
-                    <TextBlock Text="&#x24D8;" FontSize="14" Foreground="{StaticResource AccentBlueBrush}"
+                    <TextBlock Text="&#x24D8;" FontSize="14" Foreground="{DynamicResource AccentBlueBrush}"
                                VerticalAlignment="Center" Margin="0,0,10,0"/>
                     <TextBlock TextWrapping="Wrap" Style="{StaticResource CaptionText}" VerticalAlignment="Center"
-                               Foreground="{StaticResource TextPrimaryBrush}"
+                               Foreground="{DynamicResource TextPrimaryBrush}"
                                Text="NVIDIA power changes take effect after you restart your PC."/>
                 </StackPanel>
             </Border>
@@ -92,7 +92,7 @@
                                    Text="On a laptop, full clocks make more heat and drain more battery than the cooling can keep up with, so turning this Off often causes thermal throttling that makes things slower, not faster."/>
                         <TextBlock Style="{StaticResource CardNote}">
                             <Run Text="Current: "/><Run Text="{Binding PowerSavingDetected, Mode=OneWay}"
-                                 Foreground="{StaticResource AccentGreenBrush}" FontWeight="SemiBold"/>
+                                 Foreground="{DynamicResource AccentGreenBrush}" FontWeight="SemiBold"/>
                         </TextBlock>
                     </StackPanel>
                 </ctl:SettingsCard.Description>
@@ -125,12 +125,12 @@
                         <!-- Laptops only. On a thin chassis the fastest setting is often the slowest one:
                              holding full clocks makes heat the cooler cannot shift, the card throttles, and
                              the user ends up below where Optimal power would have left them. -->
-                        <Border Margin="0,10,0,0" Padding="12,8" CornerRadius="4" Background="#1AF59E0B"
+                        <Border Margin="0,10,0,0" Padding="12,8" CornerRadius="4" Background="{DynamicResource CautionAlpha10Brush}"
                                 MaxWidth="680" HorizontalAlignment="Left"
                                 Visibility="{Binding IsLaptop, Converter={StaticResource BoolToVis}}">
                             <TextBlock TextWrapping="Wrap"
                                        Style="{StaticResource CaptionText}"
-                                       Foreground="{StaticResource AccentYellowBrush}">
+                                       Foreground="{DynamicResource AccentYellowBrush}">
                                 On a laptop, more power does not always mean more speed. Holding full clocks makes
                                 a lot of heat, and once the chassis gets hot the card throttles itself to cool down,
                                 so you can end up slower than Optimal power would have been. Save Prefer maximum
@@ -184,7 +184,7 @@
                             <!-- Real current value, read live from the driver -->
                             <TextBlock Style="{StaticResource CardNote}">
                                 <Run Text="{Binding FpsCapCurrentText, Mode=OneWay}"
-                                     Foreground="{StaticResource AccentGreenBrush}" FontWeight="SemiBold"/>
+                                     Foreground="{DynamicResource AccentGreenBrush}" FontWeight="SemiBold"/>
                             </TextBlock>
 
                             <TextBlock Text="FPS cap  (20 to 999, or 0 for off)" Style="{StaticResource CaptionText}" Margin="0,14,0,4"/>
@@ -225,7 +225,7 @@
 
             <!-- ===== STATUS ===== -->
             <TextBlock Text="{Binding StatusMessage}" Style="{StaticResource CaptionText}"
-                       Foreground="{StaticResource TextSecondaryBrush}" TextWrapping="Wrap" Margin="2,14,0,0"/>
+                       Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" Margin="2,14,0,0"/>
 
         </StackPanel>
     </ScrollViewer>

@@ -45,6 +45,11 @@ public class UiOverhaulGuardTests
     public void EveryResourceKeyUsedInXaml_IsDefined()
     {
         var global = KeysIn(ReadSrc("Resources", "Themes", "Dark.xaml"));
+        // Colours live in the palettes; a key must exist in BOTH so neither theme misses it.
+        var dark  = KeysIn(ReadSrc("Resources", "Themes", "Palette.Dark.xaml"));
+        var light = KeysIn(ReadSrc("Resources", "Themes", "Palette.Light.xaml"));
+        dark.IntersectWith(light);
+        global.UnionWith(dark);
         global.UnionWith(KeysIn(ReadSrc("App.xaml")));
         var hostKeys = KeysIn(ReadSrc("Views", "MainWindow.xaml"));
 
@@ -214,7 +219,8 @@ public class UiOverhaulGuardTests
 
         foreach (var surface in new[] { "RootSurface", "TitleBarSurface", "SidebarSurface" })
             Assert.Contains($"{surface}.Background", body);
-        Assert.Contains("Resources[\"CardLayerBrush\"] = CardOverMica", body);
+        Assert.Contains("Resources[\"CardLayerBrush\"] = TryFindResource(\"CardOverMicaBrush\")", body);
+        Assert.Contains("int dark = ThemeManager.IsLight ? 0 : 1;", body);   // light Mica in light mode
     }
 
     // With the glass extended, DWM paints Windows' own caption buttons, and its close X showed
@@ -240,12 +246,13 @@ public class UiOverhaulGuardTests
     public void Cards_ReadTheSwappableLayerBrush()
     {
         string dark = ReadSrc("Resources", "Themes", "Dark.xaml");
-        Assert.Contains("<SolidColorBrush x:Key=\"CardLayerBrush\" Color=\"{StaticResource BgCardColor}\"/>", dark);
+        foreach (var p in new[] { "Palette.Dark.xaml", "Palette.Light.xaml" })
+            Assert.Contains("<SolidColorBrush x:Key=\"CardLayerBrush\" Color=\"{StaticResource BgCardColor}\"/>", ReadSrc("Resources", "Themes", p));
         Assert.Equal(4, Regex.Matches(dark, Regex.Escape("<Setter Property=\"Background\" Value=\"{DynamicResource CardLayerBrush}\"/>")).Count);
         Assert.DoesNotContain("Value=\"{StaticResource BgCardBrush}\"", dark);
 
         // The Dell banner floats over other content and must stay opaque.
-        Assert.Contains("Background=\"{StaticResource BgCardBrush}\" Opacity=\"0.96\"", ReadSrc("Views", "DellView.xaml"));
+        Assert.Contains("Background=\"{DynamicResource BgCardBrush}\" Opacity=\"0.96\"", ReadSrc("Views", "DellView.xaml"));
     }
 
     // ── 6. The Windows 11 design itself ─────────────────────────────────────────
@@ -298,9 +305,10 @@ public class UiOverhaulGuardTests
     public void Theme_UsesWindows11Values()
     {
         string theme = StripXmlComments(ReadSrc("Resources", "Themes", "Dark.xaml"));
-        Assert.Contains(@"<Color x:Key=""AccentBlueColor"">#60CDFF</Color>", theme);
-        Assert.Contains(@"<Color x:Key=""BgPrimaryColor"">#202020</Color>", theme);
-        Assert.Contains(@"<Color x:Key=""BgCardColor"">#2B2B2B</Color>", theme);
+        string palette = StripXmlComments(ReadSrc("Resources", "Themes", "Palette.Dark.xaml"));
+        Assert.Contains(@"<Color x:Key=""AccentBlueColor"">#60CDFF</Color>", palette);
+        Assert.Contains(@"<Color x:Key=""BgPrimaryColor"">#202020</Color>", palette);
+        Assert.Contains(@"<Color x:Key=""BgCardColor"">#2B2B2B</Color>", palette);
 
         // WinUI toggle geometry: 40x20 track with a 12px thumb.
         int t = theme.IndexOf(@"x:Key=""ToggleSwitch""", StringComparison.Ordinal);
@@ -318,7 +326,7 @@ public class UiOverhaulGuardTests
     [Fact]
     public void StatusColours_AreUnchanged()
     {
-        string theme = StripXmlComments(ReadSrc("Resources", "Themes", "Dark.xaml"));
+        string theme = StripXmlComments(ReadSrc("Resources", "Themes", "Palette.Dark.xaml"));
         Assert.Contains(@"<Color x:Key=""AccentGreenColor"">#22C55E</Color>", theme);
         Assert.Contains(@"<Color x:Key=""AccentYellowColor"">#F59E0B</Color>", theme);
         Assert.Contains(@"<Color x:Key=""AccentRedColor"">#EF4444</Color>", theme);

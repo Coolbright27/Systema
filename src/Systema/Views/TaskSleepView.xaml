@@ -16,7 +16,7 @@
 
         <!-- Toggle-style radio button for aggressiveness selector -->
         <Style x:Key="ToggleRadio" TargetType="RadioButton">
-            <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
             <Setter Property="FontSize" Value="12"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="HorizontalContentAlignment" Value="Center"/>
@@ -24,17 +24,17 @@
                 <Setter.Value>
                     <ControlTemplate TargetType="RadioButton">
                         <Border x:Name="bg" CornerRadius="6" Padding="10,8"
-                                Background="#12FFFFFF" BorderThickness="1" BorderBrush="#18FFFFFF">
+                                Background="{DynamicResource OverlaySubtleBrush}" BorderThickness="1" BorderBrush="{DynamicResource OverlayStrokeBrush}">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="bg" Property="Background" Value="#1AFFFFFF"/>
+                                <Setter TargetName="bg" Property="Background" Value="{DynamicResource OverlayLightBrush}"/>
                             </Trigger>
                             <Trigger Property="IsChecked" Value="True">
-                                <Setter TargetName="bg" Property="Background" Value="{StaticResource AccentBlueBrush}"/>
-                                <Setter TargetName="bg" Property="BorderBrush" Value="#7395B5"/>
-                                <Setter Property="Foreground" Value="White"/>
+                                <Setter TargetName="bg" Property="Background" Value="{DynamicResource AccentBlueBrush}"/>
+                                <Setter TargetName="bg" Property="BorderBrush" Value="{DynamicResource TextInfoBrush}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource TextOnAccentBrush}"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -75,10 +75,10 @@
                             <Ellipse Width="9" Height="9" VerticalAlignment="Center" Margin="0,0,10,0">
                                 <Ellipse.Style>
                                     <Style TargetType="Ellipse">
-                                        <Setter Property="Fill" Value="{StaticResource TextSecondaryBrush}"/>
+                                        <Setter Property="Fill" Value="{DynamicResource TextSecondaryBrush}"/>
                                         <Style.Triggers>
                                             <DataTrigger Binding="{Binding IsEnabled}" Value="True">
-                                                <Setter Property="Fill" Value="{StaticResource AccentGreenBrush}"/>
+                                                <Setter Property="Fill" Value="{DynamicResource AccentGreenBrush}"/>
                                             </DataTrigger>
                                         </Style.Triggers>
                                     </Style>
@@ -106,18 +106,18 @@
                             <ColumnDefinition Width="8"/>
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
-                        <Border Grid.Column="0" Background="{StaticResource ControlFillBrush}" CornerRadius="6" Padding="14,10">
+                        <Border Grid.Column="0" Background="{DynamicResource ControlFillBrush}" CornerRadius="6" Padding="14,10">
                             <StackPanel>
                                 <TextBlock Text="Apps napping" Style="{StaticResource CaptionText}"/>
                                 <TextBlock Text="{Binding AppsNappingCount}" FontSize="22" FontWeight="SemiBold"
-                                           Foreground="{StaticResource AccentBlueBrush}"/>
+                                           Foreground="{DynamicResource AccentBlueBrush}"/>
                             </StackPanel>
                         </Border>
-                        <Border Grid.Column="2" Background="{StaticResource ControlFillBrush}" CornerRadius="6" Padding="14,10">
+                        <Border Grid.Column="2" Background="{DynamicResource ControlFillBrush}" CornerRadius="6" Padding="14,10">
                             <StackPanel>
                                 <TextBlock Text="Active apps" Style="{StaticResource CaptionText}"/>
                                 <TextBlock Text="{Binding ActiveAppsCount}" FontSize="22" FontWeight="SemiBold"
-                                           Foreground="{StaticResource AccentGreenBrush}"/>
+                                           Foreground="{DynamicResource AccentGreenBrush}"/>
                             </StackPanel>
                         </Border>
                     </Grid>
@@ -152,10 +152,10 @@
                             <StackPanel Grid.Column="0" VerticalAlignment="Center">
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock Text="Launch Boost" Style="{StaticResource ExpanderHeaderTitle}"/>
-                                    <Border BorderBrush="{StaticResource AccentGreenBrush}" BorderThickness="1" CornerRadius="4"
-                                            Background="{StaticResource ControlFillBrush}"
+                                    <Border BorderBrush="{DynamicResource AccentGreenBrush}" BorderThickness="1" CornerRadius="4"
+                                            Background="{DynamicResource ControlFillBrush}"
                                             Padding="6,1" Margin="8,0,0,0" VerticalAlignment="Center">
-                                        <TextBlock Text="Safe" FontSize="11" Foreground="{StaticResource AccentGreenBrush}"/>
+                                        <TextBlock Text="Safe" FontSize="11" Foreground="{DynamicResource AccentGreenBrush}"/>
                                     </Border>
                                 </StackPanel>
                                 <TextBlock Text="Opens apps faster with a short priority boost at launch."
@@ -226,7 +226,7 @@
                                 <ctl:SettingsCard.Description>
                                     <TextBlock Text="Advanced. Raises GPU scheduling priority. It can affect VSync or frame pacing on some systems, so it's off by default."
                                                Style="{StaticResource CardDescription}"
-                                               Foreground="{StaticResource AccentYellowBrush}"/>
+                                               Foreground="{DynamicResource AccentYellowBrush}"/>
                                 </ctl:SettingsCard.Description>
                                 <CheckBox Style="{StaticResource ToggleSwitch}"
                                           IsChecked="{Binding LaunchBoostGpu, Mode=TwoWay}"/>
@@ -275,7 +275,7 @@
 
                         <!-- Foreground Priority Boost -->
                         <ctl:SettingsCard Header="Foreground Priority Boost" Style="{StaticResource ExpanderItem}" RecommendKey="ForegroundBoost"
-                                          Badge="Safe" BadgeBrush="{StaticResource TextSecondaryBrush}">
+                                          Badge="Safe" BadgeBrush="{DynamicResource TextSecondaryBrush}">
                             <ctl:SettingsCard.Description>
                                 <TextBlock Style="{StaticResource CardDescription}">
                                     Gives the app you're using a bigger share of CPU time so the active window stays
@@ -291,7 +291,7 @@
 
                         <!-- Instant App Focus -->
                         <ctl:SettingsCard Header="Instant App Focus" Style="{StaticResource ExpanderItem}" RecommendKey="InstantAppFocus"
-                                          Badge="Safe" BadgeBrush="{StaticResource TextSecondaryBrush}">
+                                          Badge="Safe" BadgeBrush="{DynamicResource TextSecondaryBrush}">
                             <ctl:SettingsCard.Description>
                                 <TextBlock Style="{StaticResource CardDescription}">
                                     Removes Windows' delay before a launching or clicked app jumps to the front, so
@@ -307,7 +307,7 @@
 
                         <!-- Instant Startup Apps -->
                         <ctl:SettingsCard Header="Instant Startup Apps" Style="{StaticResource ExpanderItem}" RecommendKey="InstantStartupApps"
-                                          Badge="Safe" BadgeBrush="{StaticResource TextSecondaryBrush}">
+                                          Badge="Safe" BadgeBrush="{DynamicResource TextSecondaryBrush}">
                             <ctl:SettingsCard.Description>
                                 <TextBlock Style="{StaticResource CardDescription}">
                                     Removes the waiting period Windows imposes on your startup apps after a reboot or
@@ -324,7 +324,7 @@
 
                         <!-- Maximum System Responsiveness: engine-gated with the boosts above. -->
                         <ctl:SettingsCard Header="Maximum System Responsiveness" Style="{StaticResource ExpanderItem}" RecommendKey="MaxResponsiveness"
-                                          Badge="Advanced" BadgeBrush="{StaticResource AccentYellowBrush}">
+                                          Badge="Advanced" BadgeBrush="{DynamicResource AccentYellowBrush}">
                             <ctl:SettingsCard.Description>
                                 <StackPanel>
                                     <TextBlock Style="{StaticResource CardDescription}">
@@ -344,7 +344,7 @@
 
                         <!-- Network Throttling Off: pairs with Maximum System Responsiveness. -->
                         <ctl:SettingsCard Header="Network Throttling Off" Style="{StaticResource ExpanderItem}" RecommendKey="NetworkThrottlingOff"
-                                          Badge="Safe" BadgeBrush="{StaticResource TextSecondaryBrush}">
+                                          Badge="Safe" BadgeBrush="{DynamicResource TextSecondaryBrush}">
                             <ctl:SettingsCard.Description>
                                 <StackPanel>
                                     <TextBlock Style="{StaticResource CardDescription}">
@@ -363,7 +363,7 @@
 
                         <!-- Power Throttling On: lets Windows park background work on efficiency cores. -->
                         <ctl:SettingsCard Header="Power Throttling On" Style="{StaticResource ExpanderItem}" RecommendKey="PowerThrottling"
-                                          Badge="Safe" BadgeBrush="{StaticResource TextSecondaryBrush}">
+                                          Badge="Safe" BadgeBrush="{DynamicResource TextSecondaryBrush}">
                             <ctl:SettingsCard.Description>
                                 <TextBlock Style="{StaticResource CardDescription}">
                                     Lets Windows quietly slow apps it decides are in the background so they draw less power. On a
@@ -379,7 +379,7 @@
 
                         <!-- Fast App Close: snappier shutdown / sign-out. -->
                         <ctl:SettingsCard Header="Fast App Close" Style="{StaticResource ExpanderItem}" RecommendKey="FastAppClose"
-                                          Badge="Safe" BadgeBrush="{StaticResource TextSecondaryBrush}">
+                                          Badge="Safe" BadgeBrush="{DynamicResource TextSecondaryBrush}">
                             <ctl:SettingsCard.Description>
                                 <TextBlock Style="{StaticResource CardDescription}">
                                     Windows waits up to 20 seconds for an app to close when you shut down or sign out before
@@ -395,7 +395,7 @@
 
                         <!-- Keep Kernel in RAM: RAM-gated (default on at >= 14 GB, recommended 16 GB+). -->
                         <ctl:SettingsCard Header="Keep Kernel in RAM" Style="{StaticResource ExpanderItem}" RecommendKey="KeepKernelInRam"
-                                          Badge="Safe" BadgeBrush="{StaticResource TextSecondaryBrush}">
+                                          Badge="Safe" BadgeBrush="{DynamicResource TextSecondaryBrush}">
                             <ctl:SettingsCard.Description>
                                 <StackPanel>
                                     <TextBlock Style="{StaticResource CardDescription}">
@@ -413,7 +413,7 @@
 
                         <!-- Faster Shutdown: AutoEndTasks + HungAppTimeout reinforcement. -->
                         <ctl:SettingsCard Header="Faster Shutdown" Style="{StaticResource ExpanderItem}" RecommendKey="FasterShutdown"
-                                          Badge="Safe" BadgeBrush="{StaticResource TextSecondaryBrush}">
+                                          Badge="Safe" BadgeBrush="{DynamicResource TextSecondaryBrush}">
                             <ctl:SettingsCard.Description>
                                 <TextBlock Style="{StaticResource CardDescription}">
                                     Closes frozen apps automatically when you shut down or sign out (AutoEndTasks), instead of the
@@ -430,7 +430,7 @@
 
                         <!-- Input Hook Timeout: LowLevelHooksTimeout, enforced in the .DEFAULT hive too. -->
                         <ctl:SettingsCard Header="Input Hook Timeout" Style="{StaticResource ExpanderItem}" RecommendKey="InputHookTimeout"
-                                          Badge="Safe" BadgeBrush="{StaticResource TextSecondaryBrush}">
+                                          Badge="Safe" BadgeBrush="{DynamicResource TextSecondaryBrush}">
                             <ctl:SettingsCard.Description>
                                 <TextBlock Style="{StaticResource CardDescription}">
                                     When a misbehaving app installs a keyboard/mouse hook and stalls, Windows freezes your input
@@ -447,7 +447,7 @@
 
                         <!-- Faster Service Shutdown: WaitToKillServiceTimeout trim (service counterpart of Fast App Close). -->
                         <ctl:SettingsCard Header="Faster Service Shutdown" Style="{StaticResource ExpanderItem}" RecommendKey="ServiceShutdownFast"
-                                          Badge="Safe" BadgeBrush="{StaticResource TextSecondaryBrush}">
+                                          Badge="Safe" BadgeBrush="{DynamicResource TextSecondaryBrush}">
                             <ctl:SettingsCard.Description>
                                 <TextBlock Style="{StaticResource CardDescription}">
                                     On shutdown or restart Windows waits up to 5 seconds for each background service to stop before
@@ -464,7 +464,7 @@
 
                         <!-- Disable Fast Startup: HiberbootEnabled=0 only (hibernate left intact so Sleep->Hibernate keeps working). -->
                         <ctl:SettingsCard Header="Disable Fast Startup" Style="{StaticResource ExpanderItem}" RecommendKey="FastStartupOff"
-                                          Badge="Safe" BadgeBrush="{StaticResource TextSecondaryBrush}">
+                                          Badge="Safe" BadgeBrush="{DynamicResource TextSecondaryBrush}">
                             <ctl:SettingsCard.Description>
                                 <TextBlock Style="{StaticResource CardDescription}">
                                     Fast Startup makes "Shut down" a hybrid hibernate that reloads the old kernel and driver state on the
@@ -482,7 +482,7 @@
 
                         <!-- Disable background Store/UWP apps: BackgroundAccessApplications\GlobalUserDisabled. -->
                         <ctl:SettingsCard Header="Disable background Store apps" Style="{StaticResource ExpanderItem}" RecommendKey="BackgroundAppsOff"
-                                          Badge="Safe" BadgeBrush="{StaticResource TextSecondaryBrush}">
+                                          Badge="Safe" BadgeBrush="{DynamicResource TextSecondaryBrush}">
                             <ctl:SettingsCard.Description>
                                 <TextBlock Style="{StaticResource CardDescription}">
                                     Stops packaged Store and UWP apps (Xbox, Phone Link, Mail, Weather, etc.) from running tasks in the
@@ -543,22 +543,22 @@
                                        VerticalAlignment="Center"/>
                             <!-- System CPU pill -->
                             <Border CornerRadius="10" Padding="8,3"
-                                    Background="#12FFFFFF"
+                                    Background="{DynamicResource OverlaySubtleBrush}"
                                     Margin="12,0,8,0"
                                     VerticalAlignment="Center">
                                 <TextBlock Text="{Binding SystemCpuDisplay}"
                                            FontSize="11" FontWeight="SemiBold"
-                                           Foreground="{StaticResource TextSecondaryBrush}"/>
+                                           Foreground="{DynamicResource TextSecondaryBrush}"/>
                             </Border>
                             <!-- Napping count pill -->
                             <Border CornerRadius="10" Padding="8,3"
                                     VerticalAlignment="Center">
                                 <Border.Style>
                                     <Style TargetType="Border">
-                                        <Setter Property="Background" Value="#12FFFFFF"/>
+                                        <Setter Property="Background" Value="{DynamicResource OverlaySubtleBrush}"/>
                                         <Style.Triggers>
                                             <DataTrigger Binding="{Binding ThrottledCountDisplay}" Value="all awake">
-                                                <Setter Property="Background" Value="#0C22C55E"/>
+                                                <Setter Property="Background" Value="{DynamicResource SuccessAlpha05Brush}"/>
                                             </DataTrigger>
                                         </Style.Triggers>
                                     </Style>
@@ -567,10 +567,10 @@
                                            FontSize="11" FontWeight="SemiBold">
                                     <TextBlock.Style>
                                         <Style TargetType="TextBlock">
-                                            <Setter Property="Foreground" Value="{StaticResource AccentYellowBrush}"/>
+                                            <Setter Property="Foreground" Value="{DynamicResource AccentYellowBrush}"/>
                                             <Style.Triggers>
                                                 <DataTrigger Binding="{Binding ThrottledCountDisplay}" Value="all awake">
-                                                    <Setter Property="Foreground" Value="{StaticResource AccentGreenBrush}"/>
+                                                    <Setter Property="Foreground" Value="{DynamicResource AccentGreenBrush}"/>
                                                 </DataTrigger>
                                             </Style.Triggers>
                                         </Style>
@@ -579,20 +579,20 @@
                             </Border>
                             <!-- CPU freed pill — hidden when nothing is napped -->
                             <Border CornerRadius="10" Padding="8,3"
-                                    Background="#0C22C55E"
+                                    Background="{DynamicResource SuccessAlpha05Brush}"
                                     Margin="8,0,0,0"
                                     VerticalAlignment="Center"
                                     Visibility="{Binding CpuFreedVisible, Converter={StaticResource BoolToVis}}">
                                 <TextBlock Text="{Binding CpuFreedDisplay}"
                                            FontSize="11" FontWeight="SemiBold"
-                                           Foreground="{StaticResource AccentGreenBrush}"/>
+                                           Foreground="{DynamicResource AccentGreenBrush}"/>
                             </Border>
                         </WrapPanel>
 
                         <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                             <TextBlock Text="Show all"
                                        Style="{StaticResource CaptionText}"
-                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                       Foreground="{DynamicResource TextSecondaryBrush}"
                                        VerticalAlignment="Center"
                                        Margin="0,0,8,0"/>
                             <CheckBox IsChecked="{Binding ShowAllProcesses, Mode=TwoWay}"
@@ -620,31 +620,31 @@
                         </Grid.ColumnDefinitions>
                         <TextBlock Grid.Column="0" Text="PROCESS"
                                    Style="{StaticResource CaptionText}"
-                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                   Foreground="{DynamicResource TextSecondaryBrush}"
                                    FontWeight="SemiBold"/>
                         <TextBlock Grid.Column="1" Text="CPU%"
                                    Style="{StaticResource CaptionText}"
-                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                   Foreground="{DynamicResource TextSecondaryBrush}"
                                    FontWeight="SemiBold"
                                    TextAlignment="Right"/>
                         <TextBlock Grid.Column="2" Text="STATUS"
                                    Style="{StaticResource CaptionText}"
-                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                   Foreground="{DynamicResource TextSecondaryBrush}"
                                    FontWeight="SemiBold"
                                    Margin="10,0,0,0"/>
                         <TextBlock Grid.Column="3" Text="AFFINITY"
                                    Style="{StaticResource CaptionText}"
-                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                   Foreground="{DynamicResource TextSecondaryBrush}"
                                    FontWeight="SemiBold"
                                    Margin="6,0,0,0"/>
                         <TextBlock Grid.Column="4" Text="SINCE"
                                    Style="{StaticResource CaptionText}"
-                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                   Foreground="{DynamicResource TextSecondaryBrush}"
                                    FontWeight="SemiBold"
                                    Margin="6,0,0,0"/>
                     </Grid>
 
-                    <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,0,0,6"/>
+                    <Border Height="1" Background="{DynamicResource BorderBrush}" Margin="0,0,0,6"/>
 
                     <!-- Process rows -->
                     <ScrollViewer MaxHeight="230"
@@ -683,7 +683,7 @@
                                         <TextBlock Grid.Column="1"
                                                    Text="{Binding CpuPercent, StringFormat={}{0:F1}}"
                                                    Style="{StaticResource CaptionText}"
-                                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                                   Foreground="{DynamicResource TextSecondaryBrush}"
                                                    TextAlignment="Right"
                                                    VerticalAlignment="Center"/>
 
@@ -698,16 +698,16 @@
                                                     <Setter Property="Background" Value="Transparent"/>
                                                     <Style.Triggers>
                                                         <DataTrigger Binding="{Binding StatusLabel}" Value="Napping">
-                                                            <Setter Property="Background" Value="#332B1A"/>
+                                                            <Setter Property="Background" Value="{DynamicResource BadgeNappingBrush}"/>
                                                         </DataTrigger>
                                                         <DataTrigger Binding="{Binding StatusLabel}" Value="Active">
-                                                            <Setter Property="Background" Value="#1F2A35"/>
+                                                            <Setter Property="Background" Value="{DynamicResource BadgeActiveBrush}"/>
                                                         </DataTrigger>
                                                         <DataTrigger Binding="{Binding StatusLabel}" Value="Pending">
-                                                            <Setter Property="Background" Value="#1F2A35"/>
+                                                            <Setter Property="Background" Value="{DynamicResource BadgeActiveBrush}"/>
                                                         </DataTrigger>
                                                         <DataTrigger Binding="{Binding StatusLabel}" Value="Deep Sleep">
-                                                            <Setter Property="Background" Value="#1F1F2A"/>
+                                                            <Setter Property="Background" Value="{DynamicResource BadgePendingBrush}"/>
                                                         </DataTrigger>
                                                     </Style.Triggers>
                                                 </Style>
@@ -716,19 +716,19 @@
                                                        FontSize="11" FontWeight="SemiBold">
                                                 <TextBlock.Style>
                                                     <Style TargetType="TextBlock">
-                                                        <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+                                                        <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
                                                         <Style.Triggers>
                                                             <DataTrigger Binding="{Binding StatusLabel}" Value="Napping">
-                                                                <Setter Property="Foreground" Value="{StaticResource AccentYellowBrush}"/>
+                                                                <Setter Property="Foreground" Value="{DynamicResource AccentYellowBrush}"/>
                                                             </DataTrigger>
                                                             <DataTrigger Binding="{Binding StatusLabel}" Value="Active">
-                                                                <Setter Property="Foreground" Value="{StaticResource AccentBlueBrush}"/>
+                                                                <Setter Property="Foreground" Value="{DynamicResource AccentBlueBrush}"/>
                                                             </DataTrigger>
                                                             <DataTrigger Binding="{Binding StatusLabel}" Value="Pending">
-                                                                <Setter Property="Foreground" Value="{StaticResource AccentBlueBrush}"/>
+                                                                <Setter Property="Foreground" Value="{DynamicResource AccentBlueBrush}"/>
                                                             </DataTrigger>
                                                             <DataTrigger Binding="{Binding StatusLabel}" Value="Deep Sleep">
-                                                                <Setter Property="Foreground" Value="#7395B5"/>
+                                                                <Setter Property="Foreground" Value="{DynamicResource TextInfoBrush}"/>
                                                             </DataTrigger>
                                                         </Style.Triggers>
                                                     </Style>
@@ -739,13 +739,13 @@
                                         <TextBlock Grid.Column="3"
                                                    Text="{Binding CoreLabel}"
                                                    Style="{StaticResource CaptionText}"
-                                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                                   Foreground="{DynamicResource TextSecondaryBrush}"
                                                    Margin="6,0,0,0"
                                                    VerticalAlignment="Center"/>
 
                                         <!-- Duration when napping; skip reason when not -->
                                         <TextBlock Grid.Column="4"
-                                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                                   Foreground="{DynamicResource TextSecondaryBrush}"
                                                    Margin="6,0,0,0"
                                                    VerticalAlignment="Center"
                                                    TextTrimming="CharacterEllipsis"
@@ -768,7 +768,7 @@
                                                 FontSize="14"
                                                 Background="Transparent"
                                                 BorderThickness="0"
-                                                Foreground="{StaticResource TextSecondaryBrush}"
+                                                Foreground="{DynamicResource TextSecondaryBrush}"
                                                 Padding="0" Margin="4,0,0,0"
                                                 VerticalAlignment="Center"
                                                 HorizontalAlignment="Center"
@@ -810,7 +810,7 @@
                         <TextBlock.Style>
                             <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionText}">
                                 <Setter Property="Visibility" Value="Collapsed"/>
-                                <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
                                 <Setter Property="Margin" Value="0,6,0,0"/>
                                 <Style.Triggers>
                                     <DataTrigger Binding="{Binding IsEnabled}" Value="False">
@@ -826,7 +826,7 @@
                         <TextBlock.Style>
                             <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionText}">
                                 <Setter Property="Visibility" Value="Collapsed"/>
-                                <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
                                 <Setter Property="Margin" Value="0,6,0,0"/>
                                 <Style.Triggers>
                                     <MultiDataTrigger>
@@ -843,7 +843,7 @@
                         </TextBlock.Style>
                     </TextBlock>
 
-                    <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,14,0,12"/>
+                    <Border Height="1" Background="{DynamicResource BorderBrush}" Margin="0,14,0,12"/>
 
                     <!-- Recent Activity -->
                     <TextBlock Text="RECENT ACTIVITY"
@@ -861,7 +861,7 @@
                                         <!-- Timestamp -->
                                         <TextBlock Text="{Binding Timestamp, StringFormat={}{0:HH:mm:ss}}"
                                                    Style="{StaticResource CaptionText}"
-                                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                                   Foreground="{DynamicResource TextSecondaryBrush}"
                                                    VerticalAlignment="Center"
                                                    Width="56"
                                                    Margin="0,0,8,0"/>
@@ -872,52 +872,52 @@
                                                 VerticalAlignment="Center">
                                             <Border.Style>
                                                 <Style TargetType="Border">
-                                                    <Setter Property="Background" Value="#1F1F22"/>
+                                                    <Setter Property="Background" Value="{DynamicResource BadgeNeutralBrush}"/>
                                                     <Style.Triggers>
                                                         <DataTrigger Binding="{Binding Action}" Value="Napping">
-                                                            <Setter Property="Background" Value="#332B1A"/>
+                                                            <Setter Property="Background" Value="{DynamicResource BadgeNappingBrush}"/>
                                                         </DataTrigger>
                                                         <DataTrigger Binding="{Binding Action}" Value="Minimize Nap">
-                                                            <Setter Property="Background" Value="#332B1A"/>
+                                                            <Setter Property="Background" Value="{DynamicResource BadgeNappingBrush}"/>
                                                         </DataTrigger>
                                                         <DataTrigger Binding="{Binding Action}" Value="Tray Nap">
-                                                            <Setter Property="Background" Value="#332B1A"/>
+                                                            <Setter Property="Background" Value="{DynamicResource BadgeNappingBrush}"/>
                                                         </DataTrigger>
                                                         <DataTrigger Binding="{Binding Action}" Value="Smart Nap">
-                                                            <Setter Property="Background" Value="#332B1A"/>
+                                                            <Setter Property="Background" Value="{DynamicResource BadgeNappingBrush}"/>
                                                         </DataTrigger>
                                                         <DataTrigger Binding="{Binding Action}" Value="Child Nap">
-                                                            <Setter Property="Background" Value="#332B1A"/>
+                                                            <Setter Property="Background" Value="{DynamicResource BadgeNappingBrush}"/>
                                                         </DataTrigger>
                                                         <DataTrigger Binding="{Binding Action}" Value="Re-napping">
-                                                            <Setter Property="Background" Value="#332B1A"/>
+                                                            <Setter Property="Background" Value="{DynamicResource BadgeNappingBrush}"/>
                                                         </DataTrigger>
                                                         <DataTrigger Binding="{Binding Action}" Value="Tray Re-nap">
-                                                            <Setter Property="Background" Value="#332B1A"/>
+                                                            <Setter Property="Background" Value="{DynamicResource BadgeNappingBrush}"/>
                                                         </DataTrigger>
                                                         <DataTrigger Binding="{Binding Action}" Value="Brief Wake">
-                                                            <Setter Property="Background" Value="#1F2A35"/>
+                                                            <Setter Property="Background" Value="{DynamicResource BadgeActiveBrush}"/>
                                                         </DataTrigger>
                                                         <DataTrigger Binding="{Binding Action}" Value="Deep Wake">
-                                                            <Setter Property="Background" Value="#1F1F2A"/>
+                                                            <Setter Property="Background" Value="{DynamicResource BadgePendingBrush}"/>
                                                         </DataTrigger>
                                                         <DataTrigger Binding="{Binding Action}" Value="Tray Wake">
-                                                            <Setter Property="Background" Value="#1F2A35"/>
+                                                            <Setter Property="Background" Value="{DynamicResource BadgeActiveBrush}"/>
                                                         </DataTrigger>
                                                         <DataTrigger Binding="{Binding Action}" Value="Tray Deep Wake">
-                                                            <Setter Property="Background" Value="#1F1F2A"/>
+                                                            <Setter Property="Background" Value="{DynamicResource BadgePendingBrush}"/>
                                                         </DataTrigger>
                                                         <DataTrigger Binding="{Binding Action}" Value="Woke up">
-                                                            <Setter Property="Background" Value="#1A2620"/>
+                                                            <Setter Property="Background" Value="{DynamicResource BadgeGoodBrush}"/>
                                                         </DataTrigger>
                                                         <DataTrigger Binding="{Binding Action}" Value="Re-enforced">
-                                                            <Setter Property="Background" Value="#1F2A35"/>
+                                                            <Setter Property="Background" Value="{DynamicResource BadgeActiveBrush}"/>
                                                         </DataTrigger>
                                                         <DataTrigger Binding="{Binding Action}" Value="Auto-whitelisted">
-                                                            <Setter Property="Background" Value="#1A2620"/>
+                                                            <Setter Property="Background" Value="{DynamicResource BadgeGoodBrush}"/>
                                                         </DataTrigger>
                                                         <DataTrigger Binding="{Binding Action}" Value="Error">
-                                                            <Setter Property="Background" Value="#2A1A1C"/>
+                                                            <Setter Property="Background" Value="{DynamicResource BadgeBadBrush}"/>
                                                         </DataTrigger>
                                                     </Style.Triggers>
                                                 </Style>
@@ -926,52 +926,52 @@
                                                        FontSize="11" FontWeight="SemiBold">
                                                 <TextBlock.Style>
                                                     <Style TargetType="TextBlock">
-                                                        <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+                                                        <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
                                                         <Style.Triggers>
                                                             <DataTrigger Binding="{Binding Action}" Value="Napping">
-                                                                <Setter Property="Foreground" Value="{StaticResource AccentYellowBrush}"/>
+                                                                <Setter Property="Foreground" Value="{DynamicResource AccentYellowBrush}"/>
                                                             </DataTrigger>
                                                             <DataTrigger Binding="{Binding Action}" Value="Minimize Nap">
-                                                                <Setter Property="Foreground" Value="{StaticResource AccentYellowBrush}"/>
+                                                                <Setter Property="Foreground" Value="{DynamicResource AccentYellowBrush}"/>
                                                             </DataTrigger>
                                                             <DataTrigger Binding="{Binding Action}" Value="Tray Nap">
-                                                                <Setter Property="Foreground" Value="{StaticResource AccentYellowBrush}"/>
+                                                                <Setter Property="Foreground" Value="{DynamicResource AccentYellowBrush}"/>
                                                             </DataTrigger>
                                                             <DataTrigger Binding="{Binding Action}" Value="Smart Nap">
-                                                                <Setter Property="Foreground" Value="{StaticResource AccentYellowBrush}"/>
+                                                                <Setter Property="Foreground" Value="{DynamicResource AccentYellowBrush}"/>
                                                             </DataTrigger>
                                                             <DataTrigger Binding="{Binding Action}" Value="Child Nap">
-                                                                <Setter Property="Foreground" Value="{StaticResource AccentYellowBrush}"/>
+                                                                <Setter Property="Foreground" Value="{DynamicResource AccentYellowBrush}"/>
                                                             </DataTrigger>
                                                             <DataTrigger Binding="{Binding Action}" Value="Re-napping">
-                                                                <Setter Property="Foreground" Value="{StaticResource AccentYellowBrush}"/>
+                                                                <Setter Property="Foreground" Value="{DynamicResource AccentYellowBrush}"/>
                                                             </DataTrigger>
                                                             <DataTrigger Binding="{Binding Action}" Value="Tray Re-nap">
-                                                                <Setter Property="Foreground" Value="{StaticResource AccentYellowBrush}"/>
+                                                                <Setter Property="Foreground" Value="{DynamicResource AccentYellowBrush}"/>
                                                             </DataTrigger>
                                                             <DataTrigger Binding="{Binding Action}" Value="Brief Wake">
-                                                                <Setter Property="Foreground" Value="{StaticResource AccentBlueBrush}"/>
+                                                                <Setter Property="Foreground" Value="{DynamicResource AccentBlueBrush}"/>
                                                             </DataTrigger>
                                                             <DataTrigger Binding="{Binding Action}" Value="Deep Wake">
-                                                                <Setter Property="Foreground" Value="#7395B5"/>
+                                                                <Setter Property="Foreground" Value="{DynamicResource TextInfoBrush}"/>
                                                             </DataTrigger>
                                                             <DataTrigger Binding="{Binding Action}" Value="Tray Wake">
-                                                                <Setter Property="Foreground" Value="{StaticResource AccentBlueBrush}"/>
+                                                                <Setter Property="Foreground" Value="{DynamicResource AccentBlueBrush}"/>
                                                             </DataTrigger>
                                                             <DataTrigger Binding="{Binding Action}" Value="Tray Deep Wake">
-                                                                <Setter Property="Foreground" Value="#7395B5"/>
+                                                                <Setter Property="Foreground" Value="{DynamicResource TextInfoBrush}"/>
                                                             </DataTrigger>
                                                             <DataTrigger Binding="{Binding Action}" Value="Woke up">
-                                                                <Setter Property="Foreground" Value="{StaticResource AccentGreenBrush}"/>
+                                                                <Setter Property="Foreground" Value="{DynamicResource AccentGreenBrush}"/>
                                                             </DataTrigger>
                                                             <DataTrigger Binding="{Binding Action}" Value="Re-enforced">
-                                                                <Setter Property="Foreground" Value="{StaticResource AccentBlueBrush}"/>
+                                                                <Setter Property="Foreground" Value="{DynamicResource AccentBlueBrush}"/>
                                                             </DataTrigger>
                                                             <DataTrigger Binding="{Binding Action}" Value="Auto-whitelisted">
-                                                                <Setter Property="Foreground" Value="{StaticResource AccentGreenBrush}"/>
+                                                                <Setter Property="Foreground" Value="{DynamicResource AccentGreenBrush}"/>
                                                             </DataTrigger>
                                                             <DataTrigger Binding="{Binding Action}" Value="Error">
-                                                                <Setter Property="Foreground" Value="#EF4444"/>
+                                                                <Setter Property="Foreground" Value="{DynamicResource AccentRedBrush}"/>
                                                             </DataTrigger>
                                                         </Style.Triggers>
                                                     </Style>
@@ -991,7 +991,7 @@
                                                    VerticalAlignment="Center">
                                             <TextBlock.Style>
                                                 <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionText}">
-                                                    <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+                                                    <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
                                                     <Style.Triggers>
                                                         <DataTrigger Binding="{Binding Detail}" Value="">
                                                             <Setter Property="Visibility" Value="Collapsed"/>
@@ -1012,7 +1012,7 @@
                         <TextBlock.Style>
                             <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionText}">
                                 <Setter Property="Visibility" Value="Collapsed"/>
-                                <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
                                 <Style.Triggers>
                                     <DataTrigger Binding="{Binding RecentEvents.Count}" Value="0">
                                         <Setter Property="Visibility" Value="Visible"/>
@@ -1025,7 +1025,7 @@
                     <!-- Status message -->
                     <TextBlock Text="{Binding StatusMessage}"
                                Style="{StaticResource CaptionText}"
-                               Foreground="{StaticResource TextSecondaryBrush}"
+                               Foreground="{DynamicResource TextSecondaryBrush}"
                                Margin="0,10,0,0"/>
 
                     </StackPanel>
@@ -1190,7 +1190,7 @@
                                        Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
                             <TextBlock Text="Enforced by Windows at the kernel level, per process. Apps made of several processes (browsers, Spotify) add up, so their total in Task Manager can read higher than the cap."
                                        Style="{StaticResource CaptionText}"
-                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                       Foreground="{DynamicResource TextSecondaryBrush}"
                                        TextWrapping="Wrap" Margin="0,3,0,0"/>
                         </StackPanel>
                         <CheckBox Grid.Column="1"
@@ -1217,7 +1217,7 @@
                                       HorizontalAlignment="Stretch"/>
                             <TextBlock Grid.Column="2" Text="%" VerticalAlignment="Center"
                                        Margin="8,0,0,0" Style="{StaticResource BodyText}"
-                                       Foreground="{StaticResource TextSecondaryBrush}"/>
+                                       Foreground="{DynamicResource TextSecondaryBrush}"/>
                         </Grid>
 
                         <Grid Margin="16,0,0,16">
@@ -1231,7 +1231,7 @@
                                            Style="{StaticResource BodyText}"/>
                                 <TextBlock Text="The cap stays on while a sleeping app briefly wakes. It applies per process, so an app with many processes can total higher for a moment. Higher is more responsive, lower is less CPU use."
                                            Style="{StaticResource CaptionText}"
-                                           Foreground="{StaticResource TextSecondaryBrush}"
+                                           Foreground="{DynamicResource TextSecondaryBrush}"
                                            TextWrapping="Wrap" Margin="0,3,0,0"/>
                             </StackPanel>
                             <ComboBox Grid.Column="1"
@@ -1242,7 +1242,7 @@
                                       HorizontalAlignment="Stretch"/>
                             <TextBlock Grid.Column="2" Text="%" VerticalAlignment="Top"
                                        Margin="8,8,0,0" Style="{StaticResource BodyText}"
-                                       Foreground="{StaticResource TextSecondaryBrush}"/>
+                                       Foreground="{DynamicResource TextSecondaryBrush}"/>
                         </Grid>
                     </StackPanel>
 
@@ -1257,7 +1257,7 @@
                                        Style="{StaticResource BodyText}" FontWeight="SemiBold"/>
                             <TextBlock Text="Limits how many sleeping apps can wake up at the same time to prevent CPU spikes."
                                        Style="{StaticResource CaptionText}"
-                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                       Foreground="{DynamicResource TextSecondaryBrush}"
                                        TextWrapping="Wrap" Margin="0,3,0,0"/>
                         </StackPanel>
                         <ComboBox Grid.Column="1"
@@ -1268,10 +1268,10 @@
                                   HorizontalAlignment="Stretch"/>
                         <TextBlock Grid.Column="2" Text="apps" VerticalAlignment="Top"
                                    Margin="8,8,0,0" Style="{StaticResource BodyText}"
-                                   Foreground="{StaticResource TextSecondaryBrush}"/>
+                                   Foreground="{DynamicResource TextSecondaryBrush}"/>
                     </Grid>
 
-                    <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,0,0,16"/>
+                    <Border Height="1" Background="{DynamicResource BorderBrush}" Margin="0,0,0,16"/>
 
                     <!-- ── WAKE TIMING ── -->
                     <!-- Column layout: label fills, fixed 70px textbox, fixed 36px unit. -->
@@ -1299,7 +1299,7 @@
                                   HorizontalAlignment="Stretch"/>
                         <TextBlock Grid.Column="2" Text="sec" VerticalAlignment="Center"
                                    Margin="8,0,0,0" Style="{StaticResource BodyText}"
-                                   Foreground="{StaticResource TextSecondaryBrush}"/>
+                                   Foreground="{DynamicResource TextSecondaryBrush}"/>
                     </Grid>
 
                     <Grid Margin="0,0,0,20">
@@ -1316,7 +1316,7 @@
                                   HorizontalAlignment="Stretch"/>
                         <TextBlock Grid.Column="2" Text="sec" VerticalAlignment="Center"
                                    Margin="8,0,0,0" Style="{StaticResource BodyText}"
-                                   Foreground="{StaticResource TextSecondaryBrush}"/>
+                                   Foreground="{DynamicResource TextSecondaryBrush}"/>
                     </Grid>
 
                     <!-- Hidden apps — shown only when "Nap hidden apps" is on. Sets how long a window -->
@@ -1340,7 +1340,7 @@
                                       HorizontalAlignment="Stretch"/>
                             <TextBlock Grid.Column="2" Text="min" VerticalAlignment="Center"
                                        Margin="8,0,0,0" Style="{StaticResource BodyText}"
-                                       Foreground="{StaticResource TextSecondaryBrush}"/>
+                                       Foreground="{DynamicResource TextSecondaryBrush}"/>
                         </Grid>
                     </StackPanel>
 
@@ -1362,7 +1362,7 @@
                                   HorizontalAlignment="Stretch"/>
                         <TextBlock Grid.Column="2" Text="min" VerticalAlignment="Center"
                                    Margin="8,0,0,0" Style="{StaticResource BodyText}"
-                                   Foreground="{StaticResource TextSecondaryBrush}"/>
+                                   Foreground="{DynamicResource TextSecondaryBrush}"/>
                     </Grid>
 
                     <Grid Margin="0,0,0,20">
@@ -1379,7 +1379,7 @@
                                   HorizontalAlignment="Stretch"/>
                         <TextBlock Grid.Column="2" Text="sec" VerticalAlignment="Center"
                                    Margin="8,0,0,0" Style="{StaticResource BodyText}"
-                                   Foreground="{StaticResource TextSecondaryBrush}"/>
+                                   Foreground="{DynamicResource TextSecondaryBrush}"/>
                     </Grid>
 
                     <!-- Deep sleep — shared threshold for minimized + tray apps. -->
@@ -1401,7 +1401,7 @@
                                   HorizontalAlignment="Stretch"/>
                         <TextBlock Grid.Column="2" Text="min" VerticalAlignment="Center"
                                    Margin="8,0,0,0" Style="{StaticResource BodyText}"
-                                   Foreground="{StaticResource TextSecondaryBrush}"/>
+                                   Foreground="{DynamicResource TextSecondaryBrush}"/>
                     </Grid>
 
                     <Grid Margin="0,0,0,10"
@@ -1419,7 +1419,7 @@
                                   HorizontalAlignment="Stretch"/>
                         <TextBlock Grid.Column="2" Text="min" VerticalAlignment="Center"
                                    Margin="8,0,0,0" Style="{StaticResource BodyText}"
-                                   Foreground="{StaticResource TextSecondaryBrush}"/>
+                                   Foreground="{DynamicResource TextSecondaryBrush}"/>
                     </Grid>
 
                         </StackPanel>
@@ -1453,14 +1453,14 @@
                     <StackPanel>
                     <TextBlock Text="Apps on this list will never be put to sleep. You can also add apps directly from the live monitor using the ··· button next to any napping process."
                                Style="{StaticResource CaptionText}"
-                               Foreground="{StaticResource TextSecondaryBrush}"
+                               Foreground="{DynamicResource TextSecondaryBrush}"
                                TextWrapping="Wrap" Margin="0,0,0,16"/>
 
                     <!-- Whitelist items -->
                     <ItemsControl ItemsSource="{Binding Whitelist}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
-                                <Border BorderBrush="{StaticResource BorderBrush}"
+                                <Border BorderBrush="{DynamicResource BorderBrush}"
                                         BorderThickness="0,0,0,1"
                                         Padding="0,6">
                                     <Grid>
@@ -1469,10 +1469,10 @@
                                             <ColumnDefinition Width="Auto"/>
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                                            <Border Background="#0C22C55E" CornerRadius="4"
+                                            <Border Background="{DynamicResource SuccessAlpha05Brush}" CornerRadius="4"
                                                     Padding="6,2" Margin="0,0,8,0" VerticalAlignment="Center">
                                                 <TextBlock Text="PROTECTED" FontSize="9" FontWeight="Bold"
-                                                           Foreground="{StaticResource AccentGreenBrush}"/>
+                                                           Foreground="{DynamicResource AccentGreenBrush}"/>
                                             </Border>
                                             <TextBlock Text="{Binding}"
                                                        Style="{StaticResource BodyText}"
@@ -1485,7 +1485,7 @@
                                                 FontSize="11"
                                                 Background="Transparent"
                                                 BorderThickness="0"
-                                                Foreground="{StaticResource TextSecondaryBrush}"
+                                                Foreground="{DynamicResource TextSecondaryBrush}"
                                                 Padding="8,4"
                                                 VerticalAlignment="Center"
                                                 Command="{Binding DataContext.RemoveFromWhitelistCommand,
@@ -1502,7 +1502,7 @@
                         <TextBlock.Style>
                             <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionText}">
                                 <Setter Property="Visibility" Value="Collapsed"/>
-                                <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
                                 <Setter Property="Margin" Value="0,0,0,8"/>
                                 <Style.Triggers>
                                     <DataTrigger Binding="{Binding Whitelist.Count}" Value="0">
@@ -1514,7 +1514,7 @@
                     </TextBlock>
 
                     <!-- Add to whitelist form -->
-                    <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,12,0,12"/>
+                    <Border Height="1" Background="{DynamicResource BorderBrush}" Margin="0,12,0,12"/>
                     <WrapPanel>
                         <TextBox Width="180"
                                  Text="{Binding WhitelistNewApp, UpdateSourceTrigger=PropertyChanged}"
@@ -1544,7 +1544,7 @@
                     </WrapPanel>
                     <TextBlock Text="Type a process name (without .exe) or pick from the running list, then click Add."
                                Style="{StaticResource CaptionText}"
-                               Foreground="{StaticResource TextSecondaryBrush}"
+                               Foreground="{DynamicResource TextSecondaryBrush}"
                                Margin="0,6,0,0"/>
                     </StackPanel>
                     </Border>

@@ -21,15 +21,15 @@
                 </Grid.ColumnDefinitions>
                 <StackPanel Grid.Column="0">
                     <TextBlock Text="{Binding Label}" Style="{StaticResource BodyText}"
-                               Foreground="{StaticResource TextPrimaryBrush}"/>
+                               Foreground="{DynamicResource TextPrimaryBrush}"/>
                     <TextBlock Text="{Binding Description}" Style="{StaticResource CaptionText}"
                                TextWrapping="Wrap" Margin="0,2,0,0"/>
                 </StackPanel>
                 <Border Grid.Column="1" VerticalAlignment="Top" Margin="10,1,0,0"
-                        Background="{StaticResource ControlFillBrush}" BorderBrush="{StaticResource AccentGreenBrush}"
+                        Background="{DynamicResource ControlFillBrush}" BorderBrush="{DynamicResource AccentGreenBrush}"
                         BorderThickness="1" CornerRadius="4" Padding="6,1"
                         Visibility="{Binding Recommended, Converter={StaticResource BoolToVis}}">
-                    <TextBlock Text="Recommended" FontSize="11" Foreground="{StaticResource AccentGreenBrush}"/>
+                    <TextBlock Text="Recommended" FontSize="11" Foreground="{DynamicResource AccentGreenBrush}"/>
                 </Border>
             </Grid>
         </DataTemplate>
@@ -44,27 +44,27 @@
                 <Setter.Value>
                     <ControlTemplate TargetType="ListBoxItem">
                         <Border x:Name="Bd" CornerRadius="6" Padding="14,12"
-                                Background="{StaticResource ControlFillBrush}"
-                                BorderBrush="{StaticResource BorderBrush}" BorderThickness="1">
+                                Background="{DynamicResource ControlFillBrush}"
+                                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
                             <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="Auto"/>
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
                                 <Grid Width="20" Height="20" VerticalAlignment="Top" Margin="0,1,14,0">
-                                    <Ellipse x:Name="Ring" Stroke="{StaticResource ToggleOffStrokeBrush}" StrokeThickness="1"/>
-                                    <Ellipse x:Name="Fill" Fill="{StaticResource AccentBlueBrush}" Opacity="0"/>
-                                    <Ellipse x:Name="Dot" Width="8" Height="8" Fill="{StaticResource TextOnAccentBrush}" Opacity="0"/>
+                                    <Ellipse x:Name="Ring" Stroke="{DynamicResource ToggleOffStrokeBrush}" StrokeThickness="1"/>
+                                    <Ellipse x:Name="Fill" Fill="{DynamicResource AccentBlueBrush}" Opacity="0"/>
+                                    <Ellipse x:Name="Dot" Width="8" Height="8" Fill="{DynamicResource TextOnAccentBrush}" Opacity="0"/>
                                 </Grid>
                                 <ContentPresenter Grid.Column="1"/>
                             </Grid>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="{StaticResource HoverBrush}"/>
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource HoverBrush}"/>
                             </Trigger>
                             <Trigger Property="IsSelected" Value="True">
-                                <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource AccentBlueBrush}"/>
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource AccentBlueBrush}"/>
                                 <Setter TargetName="Fill" Property="Opacity" Value="1"/>
                                 <Setter TargetName="Dot" Property="Opacity" Value="1"/>
                                 <Setter TargetName="Ring" Property="Opacity" Value="0"/>
@@ -81,7 +81,7 @@
                 <TextBlock Text="{Binding Label}" VerticalAlignment="Center"/>
                 <TextBlock Text="{Binding Note, StringFormat='({0})'}"
                            FontSize="10" Margin="6,0,0,0" VerticalAlignment="Center"
-                           Foreground="{StaticResource TextSecondaryBrush}">
+                           Foreground="{DynamicResource TextSecondaryBrush}">
                     <TextBlock.Style>
                         <Style TargetType="TextBlock">
                             <Style.Triggers>
@@ -138,14 +138,14 @@
                             <!-- Provider-missing guidance: shown when this is a Dell but the BIOS
                                  WMI provider isn't installed. Points at the lightweight provider. -->
                             <Border Visibility="{Binding ThermalNeedsProvider, Converter={StaticResource BoolToVis}}"
-                                    Background="#1AF59E0B" BorderBrush="{StaticResource AccentYellowBrush}"
+                                    Background="{DynamicResource CautionAlpha10Brush}" BorderBrush="{DynamicResource AccentYellowBrush}"
                                     BorderThickness="1" CornerRadius="4" Padding="12,10" Margin="0,10,0,0"
                                     MaxWidth="680" HorizontalAlignment="Left">
                                 <StackPanel>
                                     <TextBlock Text="{Binding ThermalStatus}" Style="{StaticResource CaptionText}"
-                                               Foreground="{StaticResource AccentYellowBrush}" TextWrapping="Wrap"/>
+                                               Foreground="{DynamicResource AccentYellowBrush}" TextWrapping="Wrap"/>
                                     <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,8,0,0"
-                                               Foreground="{StaticResource TextSecondaryBrush}">
+                                               Foreground="{DynamicResource TextSecondaryBrush}">
                                         Search for "Dell Command Monitor download" and install the standalone package.
                                         No reboot needed. Just reopen this tab and the selectors show up.
                                     </TextBlock>
@@ -231,7 +231,7 @@
 
                                     <!-- Custom thresholds: only when Custom is selected. -->
                                     <Border Visibility="{Binding IsCustomMode, Converter={StaticResource BoolToVis}}"
-                                            Background="{StaticResource BgSurfaceBrush}" BorderBrush="{StaticResource BorderBrush}"
+                                            Background="{DynamicResource BgSurfaceBrush}" BorderBrush="{DynamicResource BorderBrush}"
                                             BorderThickness="1" CornerRadius="6" Padding="14,12" Margin="0,4,0,0"
                                             ctl:Motion.RevealOnShow="True">
                                         <Grid>
@@ -260,15 +260,15 @@
                                 <!-- Grey-out banner shown while Game Boost owns charging. -->
                                 <Border Visibility="{Binding IsBatteryPauseActive, Converter={StaticResource BoolToVis}}"
                                         HorizontalAlignment="Center" VerticalAlignment="Center"
-                                        Background="{StaticResource BgCardBrush}" Opacity="0.96"
-                                        BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
+                                        Background="{DynamicResource BgCardBrush}" Opacity="0.96"
+                                        BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
                                         CornerRadius="8" Padding="20,14">
                                     <StackPanel>
                                         <TextBlock Text="Battery Pause active" Style="{StaticResource BodyText}"
                                                    FontWeight="SemiBold" HorizontalAlignment="Center"/>
                                         <TextBlock Text="Battery pause is on in Game Boost."
                                                    Style="{StaticResource CaptionText}"
-                                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                                   Foreground="{DynamicResource TextSecondaryBrush}"
                                                    HorizontalAlignment="Center" Margin="0,4,0,0"/>
                                     </StackPanel>
                                 </Border>

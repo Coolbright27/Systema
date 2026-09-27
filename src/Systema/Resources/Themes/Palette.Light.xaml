@@ -1,0 +1,101 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- ============================================================ -->
+    <!--  PALETTE — Windows 11 light                                  -->
+    <!-- ============================================================ -->
+    <!-- The same keys as Palette.Dark.xaml, with Windows 11 light-theme values (WinUI's light
+         resources): #F3F3F3 window, near-white cards, near-black text, the light accent shade, and
+         Windows' own light status colours (#0F7B0F / #9D5D00 / #C42B1C) and InfoBar tints.
+         Translucent overlays are black here where the dark palette's are white. -->
+    <Color x:Key="BgPrimaryColor">#F3F3F3</Color>
+    <Color x:Key="BgSurfaceColor">#FFFFFF</Color>
+    <Color x:Key="BgSidebarColor">#F3F3F3</Color>
+    <Color x:Key="BgCardColor">#FBFBFB</Color>      <!-- 70% white over #F3F3F3 -->
+    <Color x:Key="AccentBlueColor">#005FB8</Color>  <!-- replaced by the user's accent -->
+    <Color x:Key="AccentGreenColor">#0F7B0F</Color>
+    <Color x:Key="AccentYellowColor">#9D5D00</Color>
+    <Color x:Key="AccentRedColor">#C42B1C</Color>
+    <Color x:Key="TextPrimaryColor">#1B1B1B</Color>
+    <Color x:Key="TextSecondaryColor">#5C5C5C</Color>
+    <Color x:Key="TextTertiaryColor">#868686</Color>
+    <Color x:Key="DisabledColor">#9B9B9B</Color>
+    <Color x:Key="BorderColor">#E5E5E5</Color>
+    <Color x:Key="HoverColor">#EAEAEA</Color>
+
+    <SolidColorBrush x:Key="BgPrimaryBrush" Color="{StaticResource BgPrimaryColor}"/>
+    <SolidColorBrush x:Key="BgSurfaceBrush" Color="{StaticResource BgSurfaceColor}"/>
+    <SolidColorBrush x:Key="BgSidebarBrush" Color="{StaticResource BgSidebarColor}"/>
+    <SolidColorBrush x:Key="BgCardBrush" Color="{StaticResource BgCardColor}"/>
+    <SolidColorBrush x:Key="CardLayerBrush" Color="{StaticResource BgCardColor}"/>
+    <SolidColorBrush x:Key="CardOverMicaBrush" Color="#B3FFFFFF"/>
+    <SolidColorBrush x:Key="AccentBlueBrush" Color="{StaticResource AccentBlueColor}"/>
+    <SolidColorBrush x:Key="AccentGreenBrush" Color="{StaticResource AccentGreenColor}"/>
+    <SolidColorBrush x:Key="AccentYellowBrush" Color="{StaticResource AccentYellowColor}"/>
+    <SolidColorBrush x:Key="AccentRedBrush" Color="{StaticResource AccentRedColor}"/>
+    <SolidColorBrush x:Key="TextPrimaryBrush" Color="{StaticResource TextPrimaryColor}"/>
+    <SolidColorBrush x:Key="TextSecondaryBrush" Color="{StaticResource TextSecondaryColor}"/>
+    <SolidColorBrush x:Key="TextTertiaryBrush" Color="{StaticResource TextTertiaryColor}"/>
+    <SolidColorBrush x:Key="DisabledBrush" Color="{StaticResource DisabledColor}"/>
+    <SolidColorBrush x:Key="BorderBrush" Color="{StaticResource BorderColor}"/>
+    <SolidColorBrush x:Key="HoverBrush" Color="{StaticResource HoverColor}"/>
+    <SolidColorBrush x:Key="TransparentBrush" Color="Transparent"/>
+
+    <SolidColorBrush x:Key="TextOnAccentBrush"      Color="#FFFFFF"/>
+    <SolidColorBrush x:Key="ControlFillBrush"       Color="#B3FFFFFF"/>
+    <SolidColorBrush x:Key="ControlFillHoverBrush"  Color="#80F9F9F9"/>
+    <SolidColorBrush x:Key="ControlStrokeBrush"     Color="#17000000"/>
+    <SolidColorBrush x:Key="NavHoverBrush"          Color="#09000000"/>
+    <SolidColorBrush x:Key="NavSelectedBrush"       Color="#0F000000"/>
+    <SolidColorBrush x:Key="SubtleSelectedBrush"    Color="#0A000000"/>
+    <SolidColorBrush x:Key="PopupBrush"             Color="#F9F9F9"/>
+    <SolidColorBrush x:Key="PopupStrokeBrush"       Color="#E0E0E0"/>
+    <SolidColorBrush x:Key="PopupItemHoverBrush"    Color="#09000000"/>
+    <SolidColorBrush x:Key="InputFocusBrush"        Color="#FFFFFF"/>
+    <SolidColorBrush x:Key="ToggleOffStrokeBrush"   Color="#868686"/>
+    <SolidColorBrush x:Key="StateLayerBrush"        Color="#000000"/>
+    <SolidColorBrush x:Key="FocusStrokeOuterBrush"  Color="#E4000000"/>
+    <SolidColorBrush x:Key="FocusStrokeInnerBrush"  Color="#B3FFFFFF"/>
+    <SolidColorBrush x:Key="{x:Static SystemColors.WindowBrushKey}" Color="#F9F9F9"/>
+
+    <SolidColorBrush x:Key="ScrollInkBrush"         Color="#72000000"/>
+    <SolidColorBrush x:Key="ScrollInkHoverBrush"    Color="#9E000000"/>
+    <SolidColorBrush x:Key="ScrollInkPressedBrush"  Color="#E4000000"/>
+    <SolidColorBrush x:Key="ScrollTrackBrush"       Color="#F9F9F9"/>
+
+    <SolidColorBrush x:Key="OverlaySubtleBrush"     Color="#08000000"/>
+    <SolidColorBrush x:Key="OverlayStrokeBrush"     Color="#0F000000"/>
+    <SolidColorBrush x:Key="OverlayLightBrush"      Color="#0C000000"/>
+    <SolidColorBrush x:Key="OverlayStrongBrush"     Color="#12000000"/>
+
+    <SolidColorBrush x:Key="AccentAlpha09Brush"     Color="#17005FB8"/>
+    <SolidColorBrush x:Key="AccentAlpha10Brush"     Color="#1A005FB8"/>
+    <SolidColorBrush x:Key="AccentAlpha18Brush"     Color="#2E005FB8"/>
+    <SolidColorBrush x:Key="AccentAlpha20Brush"     Color="#33005FB8"/>
+    <SolidColorBrush x:Key="AccentAlpha30Brush"     Color="#4D005FB8"/>
+    <SolidColorBrush x:Key="AccentAlpha40Brush"     Color="#66005FB8"/>
+
+    <SolidColorBrush x:Key="SuccessAlpha05Brush"    Color="#0C0F7B0F"/>
+    <SolidColorBrush x:Key="SuccessAlpha10Brush"    Color="#1A0F7B0F"/>
+    <SolidColorBrush x:Key="SuccessAlpha13Brush"    Color="#220F7B0F"/>
+    <SolidColorBrush x:Key="SuccessAlpha20Brush"    Color="#330F7B0F"/>
+    <SolidColorBrush x:Key="CautionAlpha08Brush"    Color="#149D5D00"/>
+    <SolidColorBrush x:Key="CautionAlpha10Brush"    Color="#1A9D5D00"/>
+    <SolidColorBrush x:Key="CautionAlpha13Brush"    Color="#229D5D00"/>
+    <SolidColorBrush x:Key="CautionAlpha23Brush"    Color="#3A9D5D00"/>
+    <SolidColorBrush x:Key="CriticalAlpha10Brush"   Color="#1AC42B1C"/>
+    <SolidColorBrush x:Key="CriticalAlpha13Brush"   Color="#22C42B1C"/>
+
+    <!-- Windows 11 InfoBar backgrounds for the badges. -->
+    <SolidColorBrush x:Key="BadgeNappingBrush"      Color="#FFF4CE"/>
+    <SolidColorBrush x:Key="BadgeActiveBrush"       Color="#E3EEF9"/>
+    <SolidColorBrush x:Key="BadgePendingBrush"      Color="#EEEDF5"/>
+    <SolidColorBrush x:Key="BadgeNeutralBrush"      Color="#EFEFEF"/>
+    <SolidColorBrush x:Key="BadgeGoodBrush"         Color="#DFF6DD"/>
+    <SolidColorBrush x:Key="BadgeBadBrush"          Color="#FDE7E9"/>
+    <SolidColorBrush x:Key="PillGoodBrush"          Color="#DFF6DD"/>
+    <SolidColorBrush x:Key="PillBadBrush"           Color="#FDE7E9"/>
+    <SolidColorBrush x:Key="TextInfoBrush"          Color="#466A8F"/>
+    <SolidColorBrush x:Key="InfoBannerBrush"        Color="#EEF5F9"/>
+    <SolidColorBrush x:Key="InfoBannerStrokeBrush"  Color="#C9DDE8"/>
+</ResourceDictionary>

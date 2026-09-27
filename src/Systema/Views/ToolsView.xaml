@@ -85,7 +85,7 @@
 
             <!-- ===== Block Windows Preview Updates ===== -->
             <ctl:SettingsCard Header="Block Preview Updates" Badge="Safe" RecommendKey="PreviewUpdates"
-                              BadgeBrush="{StaticResource TextSecondaryBrush}">
+                              BadgeBrush="{DynamicResource TextSecondaryBrush}">
                 <ctl:SettingsCard.Description>
                     <StackPanel>
                         <TextBlock Style="{StaticResource CardDescription}">
@@ -100,11 +100,11 @@
                             <TextBlock.Style>
                                 <Style TargetType="TextBlock" BasedOn="{StaticResource CardNote}">
                                     <Setter Property="Text" Value="Status: OFF  ·  Preview updates are allowed"/>
-                                    <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+                                    <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
                                     <Style.Triggers>
                                         <DataTrigger Binding="{Binding BlockPreviewUpdates}" Value="True">
                                             <Setter Property="Text" Value="Status: ON ✓  ·  Preview updates and Insider builds blocked"/>
-                                            <Setter Property="Foreground" Value="{StaticResource AccentGreenBrush}"/>
+                                            <Setter Property="Foreground" Value="{DynamicResource AccentGreenBrush}"/>
                                         </DataTrigger>
                                     </Style.Triggers>
                                 </Style>
@@ -128,7 +128,7 @@
 
             <!-- ===== DNS Switcher ===== -->
             <ctl:SettingsCard Header="DNS Switcher" Badge="Safe" RecommendKey="Dns"
-                              BadgeBrush="{StaticResource TextSecondaryBrush}">
+                              BadgeBrush="{DynamicResource TextSecondaryBrush}">
                 <ctl:SettingsCard.Description>
                     <StackPanel>
                         <TextBlock Style="{StaticResource CardDescription}">
@@ -139,7 +139,7 @@
                         <!-- Current DNS display -->
                         <TextBlock Style="{StaticResource CardNote}">
                             <Run Text="Current DNS: "/><Run Text="{Binding CurrentDns, Mode=OneWay}"
-                                                            Foreground="{StaticResource AccentBlueBrush}" FontWeight="SemiBold"/>
+                                                            Foreground="{DynamicResource AccentBlueBrush}" FontWeight="SemiBold"/>
                         </TextBlock>
 
                         <!-- Profile picker + buttons, grayed out under Auto-Pilot -->
@@ -181,7 +181,7 @@
 
             <!-- ===== Core Parking ===== -->
             <ctl:SettingsCard Header="CPU Core Efficiency" Badge="Moderate" RecommendKey="CoreParking"
-                              BadgeBrush="{StaticResource TextSecondaryBrush}">
+                              BadgeBrush="{DynamicResource TextSecondaryBrush}">
                 <ctl:SettingsCard.Description>
                     <StackPanel>
                         <TextBlock Style="{StaticResource CardDescription}">
@@ -200,11 +200,11 @@
                             <TextBlock.Style>
                                 <Style TargetType="TextBlock" BasedOn="{StaticResource CardNote}">
                                     <Setter Property="Text" Value="Status: OFF  ·  Windows decides when to sleep cores"/>
-                                    <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+                                    <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
                                     <Style.Triggers>
                                         <DataTrigger Binding="{Binding CoreParkingEnforced}" Value="True">
                                             <Setter Property="Text" Value="Status: ON ✓  ·  Active, and re-applied after restarts and power plan changes"/>
-                                            <Setter Property="Foreground" Value="{StaticResource AccentGreenBrush}"/>
+                                            <Setter Property="Foreground" Value="{DynamicResource AccentGreenBrush}"/>
                                         </DataTrigger>
                                     </Style.Triggers>
                                 </Style>
@@ -228,7 +228,7 @@
 
             <!-- ===== Disable NTFS Last-Access Timestamps ===== -->
             <ctl:SettingsCard Header="Disable NTFS Last-Access Timestamps" Badge="Safe" RecommendKey="NtfsLastAccess"
-                              BadgeBrush="{StaticResource TextSecondaryBrush}">
+                              BadgeBrush="{DynamicResource TextSecondaryBrush}">
                 <ctl:SettingsCard.Description>
                     <StackPanel>
                         <TextBlock Style="{StaticResource CardDescription}">
@@ -241,11 +241,11 @@
                             <TextBlock.Style>
                                 <Style TargetType="TextBlock" BasedOn="{StaticResource CardNote}">
                                     <Setter Property="Text" Value="Status: OFF  ·  Last-access timestamps are written on every read (default)"/>
-                                    <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+                                    <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
                                     <Style.Triggers>
                                         <DataTrigger Binding="{Binding NtfsLastAccessDisabled}" Value="True">
                                             <Setter Property="Text" Value="Status: ON ✓  ·  Last-access timestamp writes are disabled"/>
-                                            <Setter Property="Foreground" Value="{StaticResource AccentGreenBrush}"/>
+                                            <Setter Property="Foreground" Value="{DynamicResource AccentGreenBrush}"/>
                                         </DataTrigger>
                                     </Style.Triggers>
                                 </Style>
@@ -274,7 +274,7 @@
 
             <!-- ===== Disable Windows Suggestions & Nags ===== -->
             <ctl:SettingsCard Header="Disable Suggestions &amp; Nags" Badge="Safe" RecommendKey="Suggestions"
-                              BadgeBrush="{StaticResource TextSecondaryBrush}">
+                              BadgeBrush="{DynamicResource TextSecondaryBrush}">
                 <ctl:SettingsCard.Description>
                     <StackPanel>
                         <TextBlock Style="{StaticResource CardDescription}">
@@ -288,11 +288,11 @@
                             <TextBlock.Style>
                                 <Style TargetType="TextBlock" BasedOn="{StaticResource CardNote}">
                                     <Setter Property="Text" Value="Status: OFF  ·  Windows suggestions and tips are shown"/>
-                                    <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+                                    <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
                                     <Style.Triggers>
                                         <DataTrigger Binding="{Binding DisableSuggestions}" Value="True">
                                             <Setter Property="Text" Value="Status: ON ✓  ·  Suggestions, tips, and setup nags are off"/>
-                                            <Setter Property="Foreground" Value="{StaticResource AccentGreenBrush}"/>
+                                            <Setter Property="Foreground" Value="{DynamicResource AccentGreenBrush}"/>
                                         </DataTrigger>
                                     </Style.Triggers>
                                 </Style>
@@ -314,7 +314,7 @@
 
             <!-- ===== Disable Bing / Web Results in Start Search ===== -->
             <ctl:SettingsCard Header="Disable Web Search in Start" Badge="Safe" RecommendKey="WebSearch"
-                              BadgeBrush="{StaticResource TextSecondaryBrush}">
+                              BadgeBrush="{DynamicResource TextSecondaryBrush}">
                 <ctl:SettingsCard.Description>
                     <StackPanel>
                         <TextBlock Style="{StaticResource CardDescription}">
@@ -327,11 +327,11 @@
                             <TextBlock.Style>
                                 <Style TargetType="TextBlock" BasedOn="{StaticResource CardNote}">
                                     <Setter Property="Text" Value="Status: OFF  ·  Start search shows Bing/web results"/>
-                                    <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+                                    <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
                                     <Style.Triggers>
                                         <DataTrigger Binding="{Binding DisableWebSearch}" Value="True">
                                             <Setter Property="Text" Value="Status: ON ✓  ·  Start search is local-only (no web)"/>
-                                            <Setter Property="Foreground" Value="{StaticResource AccentGreenBrush}"/>
+                                            <Setter Property="Foreground" Value="{DynamicResource AccentGreenBrush}"/>
                                         </DataTrigger>
                                     </Style.Triggers>
                                 </Style>
@@ -356,7 +356,7 @@
 
             <!-- ===== Sleep → Hibernate (Battery, laptop only) ===== -->
             <ctl:SettingsCard Header="Sleep → Hibernate (Battery)" Badge="Safe"
-                              BadgeBrush="{StaticResource TextSecondaryBrush}"
+                              BadgeBrush="{DynamicResource TextSecondaryBrush}"
                               Visibility="{Binding HasBattery, Converter={StaticResource BoolToVis}}">
                 <ctl:SettingsCard.Description>
                     <StackPanel>
@@ -404,11 +404,11 @@
                             <TextBlock.Style>
                                 <Style TargetType="TextBlock" BasedOn="{StaticResource CardNote}">
                                     <Setter Property="Text" Value="Status: OFF  ·  laptop stays in sleep on battery (Windows default)"/>
-                                    <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+                                    <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
                                     <Style.Triggers>
                                         <DataTrigger Binding="{Binding SleepToHibernateEnabled}" Value="True">
                                             <Setter Property="Text" Value="Status: ON ✓  ·  will hibernate on battery after the chosen timeout"/>
-                                            <Setter Property="Foreground" Value="{StaticResource AccentGreenBrush}"/>
+                                            <Setter Property="Foreground" Value="{DynamicResource AccentGreenBrush}"/>
                                         </DataTrigger>
                                     </Style.Triggers>
                                 </Style>
@@ -431,7 +431,7 @@
 
             <!-- ===== Sleep → Hibernate (AC / plugged-in) ===== -->
             <ctl:SettingsCard Header="Sleep → Hibernate (Plugged In)" Badge="Safe"
-                              BadgeBrush="{StaticResource TextSecondaryBrush}">
+                              BadgeBrush="{DynamicResource TextSecondaryBrush}">
                 <ctl:SettingsCard.Description>
                     <StackPanel>
                         <TextBlock Style="{StaticResource CardDescription}">
@@ -478,11 +478,11 @@
                             <TextBlock.Style>
                                 <Style TargetType="TextBlock" BasedOn="{StaticResource CardNote}">
                                     <Setter Property="Text" Value="Status: OFF  ·  PC stays in sleep while plugged in (Windows default)"/>
-                                    <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+                                    <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
                                     <Style.Triggers>
                                         <DataTrigger Binding="{Binding SleepToHibernateAcEnabled}" Value="True">
                                             <Setter Property="Text" Value="Status: ON ✓  ·  will hibernate on AC after the chosen timeout"/>
-                                            <Setter Property="Foreground" Value="{StaticResource AccentGreenBrush}"/>
+                                            <Setter Property="Foreground" Value="{DynamicResource AccentGreenBrush}"/>
                                         </DataTrigger>
                                     </Style.Triggers>
                                 </Style>
@@ -508,7 +508,7 @@
                 <TextBlock Text="Cleanup" Style="{StaticResource SettingsGroupHeader}"/>
 
                 <ctl:SettingsCard Header="Realtek App Cleanup" Badge="Moderate"
-                                  BadgeBrush="{StaticResource TextSecondaryBrush}">
+                                  BadgeBrush="{DynamicResource TextSecondaryBrush}">
                     <ctl:SettingsCard.Description>
                         <StackPanel>
                             <TextBlock Style="{StaticResource CardDescription}">
@@ -516,7 +516,7 @@
                             </TextBlock>
 
                             <!-- Pre-scan placeholder -->
-                            <Border Background="{StaticResource BgSurfaceBrush}" CornerRadius="4"
+                            <Border Background="{DynamicResource BgSurfaceBrush}" CornerRadius="4"
                                     Padding="12,8" Margin="0,12,0,0" MaxWidth="680" HorizontalAlignment="Stretch"
                                     Visibility="{Binding RealtekScanned,
                                         Converter={StaticResource BoolToVis},
@@ -527,7 +527,7 @@
                             </Border>
 
                             <!-- Post-scan: show item list or empty message -->
-                            <Border Background="{StaticResource BgSurfaceBrush}" CornerRadius="4"
+                            <Border Background="{DynamicResource BgSurfaceBrush}" CornerRadius="4"
                                     Padding="12,8" Margin="0,12,0,0" MaxWidth="680" HorizontalAlignment="Stretch"
                                     Visibility="{Binding RealtekScanned, Converter={StaticResource BoolToVis}}">
                                 <StackPanel>
