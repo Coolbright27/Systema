@@ -111,7 +111,9 @@ public class ActivityFeedTests
     [Fact]
     public void EveryNapAction_IsStillLogged()
     {
-        string all = Src("Services", "TaskSleepService.cs") + Src("Services", "TaskSleepService.LaunchBoost.cs");
+        // Every part of the engine (the nap triggers live in TaskSleepService.NapTriggers.cs).
+        string all = Src("Services", "TaskSleepService.cs") + Src("Services", "TaskSleepService.LaunchBoost.cs")
+                   + Src("Services", "TaskSleepService.NapTriggers.cs");
         foreach (var action in ActivityFeed.NapActions)
             Assert.Contains($"\"{action}\"", all);
     }

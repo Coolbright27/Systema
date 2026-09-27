@@ -16,7 +16,8 @@
 //
 // RELATED FILES
 //   Services/TaskSleepService.cs            — gathers the facts and applies the decisions
-//   Services/TaskSleepService.SkipRules.cs  — the other rule list: processes never napped
+//   Services/TaskSleepService.SkipRules.cs  — processes never napped
+//   Services/TaskSleepService.NapTriggers.cs — when a process gets napped (gates + nap triggers)
 //   Core/NapBuckets.cs                      — which category (NapReason) a pid is napped under
 //   Systema.Tests/NapRulesTests.cs
 

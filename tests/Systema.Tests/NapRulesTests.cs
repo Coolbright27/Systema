@@ -195,11 +195,13 @@ public class NapRulesTests
         Assert.Contains("new(\"Audio/media active\", SkipTag.Activity,", skip);
         Assert.Contains("c => c.AudioPids != null && IsAudioProtected(c.Proc.Id, c.Proc.ProcessName, c.AudioPids)", skip);
 
-        var e = Engine();
-        int skipCall = e.IndexOf("if (ShouldSkip(proc, protectedPids, s, rules, audioPids))", StringComparison.Ordinal);
-        int firstTrigger = e.IndexOf("// ── Minimize-nap: throttle minimized apps after grace period ──", StringComparison.Ordinal);
-        Assert.True(skipCall > 0 && firstTrigger > skipCall, "the skip rules must run before the nap triggers");
-        Assert.True(e.IndexOf("bool hasAudio", firstTrigger, StringComparison.Ordinal) < 0,
-                    "the triggers shouldn't re-check audio (unreachable; see the comment above)");
+        // The skip rules are a gate, and every gate runs before any trigger.
+        var triggers = File.ReadAllText(Path.Combine(dir, "src", "Systema", "Services", "TaskSleepService.NapTriggers.cs"));
+        Assert.Contains("new(\"Skip rules\", (c, p) =>", triggers);
+        Assert.Contains("if (!ShouldSkip(p, c.ProtectedPids, c.S, c.Rules, c.AudioPids)) return false;", triggers);
+        int gates = triggers.IndexOf("foreach (var gate in NapGates)", StringComparison.Ordinal);
+        int trig  = triggers.IndexOf("foreach (var trigger in NapTriggers)", StringComparison.Ordinal);
+        Assert.True(gates > 0 && trig > gates, "the gates must run before the nap triggers");
+        Assert.DoesNotContain("IsAudioProtected", triggers);   // unreachable in a trigger; see above
     }
 }
