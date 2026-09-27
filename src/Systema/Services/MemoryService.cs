@@ -360,6 +360,22 @@ public class MemoryService
     /// </summary>
     public static readonly int[] PagefileSizeOptionsMb = { 32768, 16384, 12288, 8192, 4096 };
 
+    /// <summary>
+    /// True when a page file needs no change from Auto Pilot: a fixed size at least as big as the
+    /// recommendation (within 512 MB). A bigger one the user chose (32 GB on a 32 GB PC) counts.
+    /// Both Auto Pilot's checklist and its apply pass use this, so it never "fixes" a size its own
+    /// checklist already called done.
+    /// </summary>
+    public static bool PagefileMeetsRecommendation(int initialMb, bool isSystemManaged, int recommendedMb) =>
+        !isSystemManaged && initialMb >= recommendedMb - 512;
+
+    /// <summary>
+    /// The offered size closest to <paramref name="mb"/>, so the dropdown shows the nearest choice
+    /// for a size set elsewhere (30.5 GB shows 32 GB). A tie goes to the bigger size.
+    /// </summary>
+    public static int NearestPagefileOptionMb(int mb) =>
+        PagefileSizeOptionsMb.OrderBy(o => Math.Abs(o - mb)).ThenByDescending(o => o).First();
+
     internal static int GetRecommendedPagefileMb(long ramMb)
     {
         // Tiered pagefile recommendations based on installed RAM.

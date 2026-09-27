@@ -577,7 +577,7 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
                 // 1. Page file
                 var (initMb, _, isManaged) = _memoryService.GetPagefileSettings();
                 var (recommended, ramMb)   = _memoryService.GetRecommendedPagefileWithRam();
-                bool pgOk = !isManaged && initMb >= recommended - 512;
+                bool pgOk = MemoryService.PagefileMeetsRecommendation(initMb, isManaged, recommended);
                 if (!pgOk) pending++;
                 items.Add(new AutoPilotItem
                 {
@@ -1023,10 +1023,21 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
             _log.Info("DashboardViewModel", "Auto-Pilot started");
             var pc = await Task.Run(CurrentPc);
 
-            // 1. Page file — set to recommended size based on installed RAM
+            // 1. Page file — set to the recommended size, but only when the current one falls short.
+            //    It used to be rewritten on every run, so turning Auto Pilot on replaced a 32 GB page
+            //    file the user had chosen with the 16 GB recommendation, even though the checklist
+            //    had already marked 32 GB as done.
             var (recommended, ramMb) = _memoryService.GetRecommendedPagefileWithRam();
-            await _memoryService.ConfigurePagefileAsync(recommended, recommended);
-            _log.Info("DashboardViewModel", $"Page file set to {recommended / 1024} GB (RAM: {ramMb / 1024} GB)");
+            var (curInitMb, _, curManaged) = await Task.Run(() => _memoryService.GetPagefileSettings());
+            if (MemoryService.PagefileMeetsRecommendation(curInitMb, curManaged, recommended))
+            {
+                _log.Info("DashboardViewModel", $"Page file left at {curInitMb / 1024} GB (meets the {recommended / 1024} GB recommendation)");
+            }
+            else
+            {
+                await _memoryService.ConfigurePagefileAsync(recommended, recommended);
+                _log.Info("DashboardViewModel", $"Page file set to {recommended / 1024} GB (RAM: {ramMb / 1024} GB)");
+            }
 
             // 2. Privacy cleanup — telemetry services + tasks AND every "Recommended"
             //    background service in one pass. Replaces the old telemetry-only step.

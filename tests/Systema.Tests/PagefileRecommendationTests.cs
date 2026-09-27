@@ -61,4 +61,43 @@ public class PagefileRecommendationTests
     [InlineData(5000,  "4.9 GB")]
     public void SizesReadInGigabytes(int mb, string text) =>
         Assert.Equal(text, MemoryViewModel.PagefileGb(mb));
+
+    // A size set elsewhere shows as the nearest choice in the dropdown (0.7.356).
+    [Theory]
+    [InlineData(32768, 32768)]
+    [InlineData(30720, 32768)]   // 30 GB
+    [InlineData(34816, 32768)]   // 34 GB
+    [InlineData(65536, 32768)]   // bigger than any choice
+    [InlineData(18432, 16384)]   // 18 GB
+    [InlineData(14336, 16384)]   // 14 GB: halfway, the bigger size wins
+    [InlineData(13312, 12288)]   // 13 GB: 12 GB is closer
+    [InlineData(2048,  4096)]    // smaller than any choice
+    public void OddSizes_ShowTheNearestChoice(int actualMb, int shownMb) =>
+        Assert.Equal(shownMb, MemoryService.NearestPagefileOptionMb(actualMb));
+
+    [Theory]
+    [InlineData(32768, false, 16384, true)]    // the user's 32 GB on a 32 GB PC: leave it
+    [InlineData(16384, false, 16384, true)]
+    [InlineData(15872, false, 16384, true)]    // within 512 MB
+    [InlineData(8192,  false, 16384, false)]
+    [InlineData(0,     true,  16384, false)]   // Windows decides
+    public void PagefileMeetsRecommendation_CountsBiggerAsFine(int initMb, bool managed, int recMb, bool ok) =>
+        Assert.Equal(ok, MemoryService.PagefileMeetsRecommendation(initMb, managed, recMb));
+
+    // Turning Auto Pilot on used to rewrite a user's 32 GB page file to 16 GB every run.
+    [Fact]
+    public void AutoPilot_OnlyChangesAPagefileThatFallsShort()
+    {
+        string dir = System.AppContext.BaseDirectory;
+        while (!System.IO.Directory.Exists(System.IO.Path.Combine(dir, "src", "Systema"))) dir = System.IO.Directory.GetParent(dir)!.FullName;
+        var dash = System.IO.File.ReadAllText(System.IO.Path.Combine(dir, "src", "Systema", "ViewModels", "DashboardViewModel.cs"));
+
+        int run   = dash.IndexOf("private async Task RunAutoPilotAsync", System.StringComparison.Ordinal);
+        int check = dash.IndexOf("MemoryService.PagefileMeetsRecommendation(curInitMb, curManaged, recommended)", run, System.StringComparison.Ordinal);
+        int write = dash.IndexOf("await _memoryService.ConfigurePagefileAsync(recommended, recommended);", run, System.StringComparison.Ordinal);
+        Assert.True(run > 0 && check > run && write > check, "Auto Pilot must check the page file before rewriting it");
+
+        // The checklist uses the same rule, so the two can't disagree.
+        Assert.Contains("bool pgOk = MemoryService.PagefileMeetsRecommendation(initMb, isManaged, recommended);", dash);
+    }
 }

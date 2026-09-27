@@ -260,10 +260,14 @@ public partial class MemoryViewModel : ObservableObject, IAutoRefreshable, IDisp
 
                 if (!isSystemManaged && init > 0)
                 {
-                    // A fixed size is configured: the dropdown opens on it.
+                    // A fixed size is configured: the dropdown opens on it (or the nearest choice).
                     RebuildPagefileOptions(applied: init, recommended: rec);
-                    string usageNote = allocMb > 0 ? $"  ·  {usedMb:N0} MB in use now" : string.Empty;
-                    CurrentPagefileText = $"Set to {PagefileGb(init)} fixed{usageNote}";
+                    // Windows only resizes the page file at boot, so a live size that differs from
+                    // the configured one means a restart is still pending.
+                    string note = allocMb > 0 && allocMb != init ? " (restart required)"
+                                : allocMb > 0                    ? $"  ·  {usedMb:N0} MB in use now"
+                                : string.Empty;
+                    CurrentPagefileText = $"Set to {PagefileGb(init)} fixed{note}";
                 }
                 else
                 {
@@ -343,28 +347,20 @@ public partial class MemoryViewModel : ObservableObject, IAutoRefreshable, IDisp
     /// <summary>
     /// Rebuilds the dropdown and selects what's configured (<paramref name="applied"/>: 0 = Windows
     /// decides, -1 = not read yet, which selects the recommended size). A fixed size that isn't
-    /// one of the offered ones (set by an older version, or by hand) is listed as "(current)" so
-    /// the dropdown always shows the truth.
+    /// one of the offered ones (set by hand, another tool, or an older version) selects the nearest
+    /// offered size, so 30.5 GB shows 32 GB; the line under the dropdown still gives the exact size.
     /// </summary>
     private void RebuildPagefileOptions(int applied, int recommended)
     {
-        _appliedPagefileMb = applied;
-
-        var sizes = MemoryService.PagefileSizeOptionsMb.ToList();
-        if (applied > 0 && !sizes.Contains(applied)) sizes.Add(applied);
-        sizes.Sort((a, b) => b.CompareTo(a));
+        int shown = applied > 0 ? MemoryService.NearestPagefileOptionMb(applied) : applied;
+        _appliedPagefileMb = shown;
 
         PagefileOptions.Clear();
-        foreach (int mb in sizes)
-        {
-            string label = PagefileGb(mb);
-            if (mb == recommended)                                   label += " (recommended)";
-            else if (!MemoryService.PagefileSizeOptionsMb.Contains(mb)) label += " (current)";
-            PagefileOptions.Add(new PagefileOption(mb, label));
-        }
+        foreach (int mb in MemoryService.PagefileSizeOptionsMb)
+            PagefileOptions.Add(new PagefileOption(mb, mb == recommended ? $"{PagefileGb(mb)} (recommended)" : PagefileGb(mb)));
         PagefileOptions.Add(new PagefileOption(0, "Windows decides"));
 
-        int select = applied >= 0 ? applied : recommended;
+        int select = shown >= 0 ? shown : recommended;
         SelectedPagefileOption = PagefileOptions.FirstOrDefault(o => o.Mb == select)
                                  ?? PagefileOptions.FirstOrDefault(o => o.Mb == recommended);
         OnPropertyChanged(nameof(CanApplyPagefile));
