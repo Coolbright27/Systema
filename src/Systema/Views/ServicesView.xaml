@@ -31,7 +31,7 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Grid>
+                        <Grid Background="Transparent">
                             <Border x:Name="bd" Background="{DynamicResource CardLayerBrush}"
                                     BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
                                     CornerRadius="6" Padding="18,14" MinHeight="68">

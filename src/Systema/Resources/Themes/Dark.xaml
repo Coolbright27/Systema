@@ -120,7 +120,7 @@
                          background (primary, danger, custom), so no per-variant hover tint
                          has to be kept in sync with the palette, and fading Opacity avoids
                          animating a shared SolidColorBrush (WPF freezes those). -->
-                    <Grid x:Name="Wrap">
+                    <Grid x:Name="Wrap" Background="Transparent">
                         <Border x:Name="Root"
                                 Background="{TemplateBinding Background}"
                                 CornerRadius="4"
@@ -203,7 +203,7 @@
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Button">
-                    <Grid>
+                    <Grid Background="Transparent">
                         <Border x:Name="bg" Background="{DynamicResource StateLayerBrush}" Opacity="0"
                                 CornerRadius="4" IsHitTestVisible="False"/>
                         <ContentPresenter HorizontalAlignment="Stretch"/>
@@ -253,7 +253,7 @@
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Button">
-                    <Grid x:Name="Wrap">
+                    <Grid x:Name="Wrap" Background="Transparent">
                         <Border x:Name="Root"
                                 Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}"
@@ -925,7 +925,7 @@
                             <!-- Windows 11 list item: a subtle rounded highlight, with a small accent
                                  pill marking the selected entry, instead of a full accent-filled row. -->
                             <ControlTemplate TargetType="ComboBoxItem">
-                                <Grid Margin="0,1">
+                                <Grid Margin="0,1" Background="Transparent">
                                     <Border x:Name="ItemBorder"
                                             Background="{TemplateBinding Background}"
                                             CornerRadius="4"/>
@@ -990,7 +990,7 @@
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Button">
-                    <Grid>
+                    <Grid Background="Transparent">
                         <Border x:Name="Fill" Background="#C42B1C" Opacity="0" CornerRadius="0"/>
                         <Path x:Name="Glyph"
                               Data="M 0,0 L 10,10 M 10,0 L 0,10"
@@ -1079,7 +1079,7 @@
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Button">
-                    <Grid>
+                    <Grid Background="Transparent">
                         <Border x:Name="Bg" Background="{TemplateBinding Background}" CornerRadius="4"/>
                         <Border x:Name="Hover" Background="{DynamicResource NavHoverBrush}" CornerRadius="4"
                                 Opacity="0" IsHitTestVisible="False"/>

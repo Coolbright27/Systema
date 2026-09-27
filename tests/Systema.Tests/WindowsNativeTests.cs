@@ -154,6 +154,31 @@ public class WindowsNativeTests
         }
     }
 
+    // WPF only takes clicks where something has a background. The expander headers' template root
+    // had none and their hover layer ignores the mouse, so the gap between the title and the
+    // chevron did nothing when clicked (0.7.357). Every clickable template's root now has one.
+    [Fact]
+    public void ClickableTemplates_TakeClicksAcrossTheirWholeArea()
+    {
+        var files = Directory.GetFiles(Path.Combine(Root(), "Views"), "*.xaml")
+                             .Append(Path.Combine(Root(), "Resources", "Themes", "Dark.xaml"));
+        var clickable = new Regex("Button|ListBoxItem|ComboBoxItem|RadioButton|CheckBox|Thumb");
+        var bad = new List<string>();
+        foreach (var f in files)
+        {
+            var doc = System.Xml.Linq.XDocument.Load(f);
+            foreach (var t in doc.Descendants().Where(e => e.Name.LocalName == "ControlTemplate"))
+            {
+                var type = (string?)t.Attribute("TargetType") ?? "";
+                if (!clickable.IsMatch(type)) continue;
+                var root = t.Elements().FirstOrDefault(e => !e.Name.LocalName.EndsWith(".Triggers"));
+                if (root != null && root.Attribute("Background") == null)
+                    bad.Add($"{Path.GetFileName(f)}: {type} template root <{root.Name.LocalName}> has no Background");
+            }
+        }
+        Assert.True(bad.Count == 0, string.Join("\n", bad));
+    }
+
     // The tray menu kept the pre-redesign blue-grey palette and square corners.
     [Fact]
     public void TrayMenu_UsesTheWindows11Look()

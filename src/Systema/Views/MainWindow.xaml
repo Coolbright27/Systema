@@ -162,7 +162,7 @@
                         <Setter Property="Template">
                             <Setter.Value>
                                 <ControlTemplate TargetType="ListBoxItem">
-                                    <Grid Margin="0,1">
+                                    <Grid Margin="0,1" Background="Transparent">
                                         <Border x:Name="Bg" CornerRadius="4" Background="Transparent"/>
                                         <Border x:Name="Pill" Width="3" Height="16" CornerRadius="1.5"
                                                 HorizontalAlignment="Left" VerticalAlignment="Center"
@@ -533,7 +533,7 @@
                                 Background="{DynamicResource CardLayerBrush}"
                                 BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="8">
                             <StackPanel>
-                                <TextBlock Text="Systema v0.7.356" FontSize="11" FontWeight="SemiBold"
+                                <TextBlock Text="Systema v0.7.357" FontSize="11" FontWeight="SemiBold"
                                            Foreground="{DynamicResource TextPrimaryBrush}" Margin="0,0,0,7"/>
 
                                 <!-- Live status: green check + status text from the updater -->
