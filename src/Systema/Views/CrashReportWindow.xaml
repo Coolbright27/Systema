@@ -51,7 +51,7 @@
                                    Foreground="#6B7A99" VerticalAlignment="Center"/>
                     </StackPanel>
                     <Button Grid.Column="1" Click="Close_Click" Width="32" Height="32"
-                            Background="Transparent" BorderThickness="0" Cursor="Hand">
+                            Background="Transparent" BorderThickness="0">
                         <TextBlock Text="✕" FontSize="12" Foreground="#6B7A99"/>
                     </Button>
                 </Grid>
@@ -188,7 +188,6 @@
                                    FontSize="11" Foreground="#38BDF8"
                                    FontFamily="Consolas"
                                    TextTrimming="CharacterEllipsis"
-                                   Cursor="Hand"
                                    MouseLeftButtonDown="OpenLogsFolder_Click"
                                    ToolTip="Click to open the logs folder"/>
                     </StackPanel>
@@ -204,7 +203,6 @@
                                 Foreground="#E8EAF0"
                                 BorderThickness="0"
                                 Padding="14,9"
-                                Cursor="Hand"
                                 FontFamily="Segoe UI Variable Text, Segoe UI"
                                 FontSize="13"
                                 Margin="0,0,10,0">
@@ -232,7 +230,6 @@
                                 Foreground="#E8EAF0"
                                 BorderThickness="0"
                                 Padding="14,9"
-                                Cursor="Hand"
                                 FontFamily="Segoe UI Variable Text, Segoe UI"
                                 FontSize="13"
                                 Margin="0,0,10,0">
@@ -260,7 +257,6 @@
                                 Foreground="White"
                                 BorderThickness="0"
                                 Padding="14,9"
-                                Cursor="Hand"
                                 FontFamily="Segoe UI Variable Text, Segoe UI"
                                 FontWeight="SemiBold"
                                 FontSize="13"
@@ -289,7 +285,6 @@
                                 Foreground="White"
                                 BorderThickness="0"
                                 Padding="14,9"
-                                Cursor="Hand"
                                 FontFamily="Segoe UI Variable Text, Segoe UI"
                                 FontWeight="SemiBold"
                                 FontSize="13">

@@ -42,7 +42,7 @@ public sealed class ActivityFeed
     /// <summary>Newest first. UI thread only.</summary>
     public ObservableCollection<ActivityEntry> Entries { get; } = new();
 
-    private const int MaxEntries = 25;
+    private const int MaxEntries = 30;   // Home shows the newest 10 and "Show more" for the rest
     private static readonly TimeSpan RollupWindow  = TimeSpan.FromMinutes(10);
     private static readonly TimeSpan DuplicateSpan = TimeSpan.FromMinutes(2);
 

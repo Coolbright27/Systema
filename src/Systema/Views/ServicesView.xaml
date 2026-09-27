@@ -24,7 +24,6 @@
         <!-- A row that opens a Windows tool: the whole card is the button and lights up softly
              under the pointer, like Settings' "Related settings" links. -->
         <Style x:Key="CategoryCardButton" TargetType="Button">
-            <Setter Property="Cursor"                     Value="Hand"/>
             <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
             <Setter Property="Margin"                     Value="0,0,0,4"/>
             <Setter Property="FocusVisualStyle"           Value="{x:Null}"/>

@@ -39,7 +39,6 @@
         <Style x:Key="ChargeModeItemStyle" TargetType="ListBoxItem">
             <Setter Property="Margin" Value="0,0,0,4"/>
             <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
-            <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
             <Setter Property="Template">
                 <Setter.Value>

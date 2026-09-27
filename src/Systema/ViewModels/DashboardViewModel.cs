@@ -212,6 +212,23 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
     /// <summary>Home's "Today" list. Shared with the feed, which fills it from the log.</summary>
     public ObservableCollection<ActivityEntry> Activity => ActivityFeed.Instance.Entries;
 
+    // The card shows the newest 10, with "Show more" for the rest (the feed keeps 30), like the
+    // lists in Windows Settings. A long day no longer turns Home into one endless card. The rows
+    // past 10 are hidden in the view (PreviewRowVisibilityConverter), not removed, so the list
+    // stays bound to the live feed and only a new entry fades in.
+    internal const int ActivityPreviewCount = 10;
+
+    /// <summary>True when there's more than the preview, so "Show more" has something to show.</summary>
+    public bool HasMoreActivity => Activity.Count > ActivityPreviewCount;
+
+    [ObservableProperty] private bool _showAllActivity;
+
+    [RelayCommand]
+    private void ToggleShowAllActivity() => ShowAllActivity = !ShowAllActivity;
+
+    private void OnActivityChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
+        => OnPropertyChanged(nameof(HasMoreActivity));
+
     // ── Home: device header (like Windows Settings > Home) ────────────────────
     // Read once, in the background, by LoadDeviceIdentity. Purely for display.
     [ObservableProperty] private string _deviceName  = Environment.MachineName;
@@ -325,6 +342,9 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
         _recMeta = BuildRecMeta();
         LoadDismissed();
         RebuildDismissed();
+
+        // The feed lives for the whole app, as does this view model, so this never needs undoing.
+        Activity.CollectionChanged += OnActivityChanged;
 
         LoadDeviceIdentity();
         _ = InitAsync();

@@ -25,7 +25,6 @@
         <!-- Selectable "visual style" card. Selected state = accent border (driven per-card
              by an ActivePreset DataTrigger). -->
         <Style x:Key="StyleCard" TargetType="Button">
-            <Setter Property="Cursor"                     Value="Hand"/>
             <Setter Property="BorderBrush"                Value="{StaticResource BorderBrush}"/>
             <Setter Property="BorderThickness"            Value="1"/>
             <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
@@ -52,7 +51,6 @@
         <!-- One segment of the Off · Balanced · Max battery control. Active state applied
              per-button via an ActiveBatteryMode DataTrigger. -->
         <Style x:Key="BatterySegment" TargetType="Button">
-            <Setter Property="Cursor"     Value="Hand"/>
             <Setter Property="FontSize"   Value="13"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>

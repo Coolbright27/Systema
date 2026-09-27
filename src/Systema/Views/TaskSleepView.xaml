@@ -19,7 +19,6 @@
             <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
             <Setter Property="FontSize" Value="12"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="HorizontalContentAlignment" Value="Center"/>
             <Setter Property="Template">
                 <Setter.Value>
@@ -771,7 +770,6 @@
                                                 BorderThickness="0"
                                                 Foreground="{StaticResource TextSecondaryBrush}"
                                                 Padding="0" Margin="4,0,0,0"
-                                                Cursor="Hand"
                                                 VerticalAlignment="Center"
                                                 HorizontalAlignment="Center"
                                                 ToolTip="Options for this process"
@@ -1489,7 +1487,6 @@
                                                 BorderThickness="0"
                                                 Foreground="{StaticResource TextSecondaryBrush}"
                                                 Padding="8,4"
-                                                Cursor="Hand"
                                                 VerticalAlignment="Center"
                                                 Command="{Binding DataContext.RemoveFromWhitelistCommand,
                                                     RelativeSource={RelativeSource AncestorType=ItemsControl}}"

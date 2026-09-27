@@ -1217,7 +1217,7 @@ public sealed class GameBoosterService : IDisposable
                 dispatcher.BeginInvoke(() => BoostActivated?.Invoke(capturedGameName));
             else
                 BoostActivated?.Invoke(capturedGameName);
-            _tray?.SetTooltip($"Systema — Boosting: {capturedGameName}");
+            _tray?.SetTooltip($"Systema: boosting {capturedGameName}");
             _tray?.ShowBalloon("Game Boost Active",
                 // Service pausing was removed in June 2026; the old wording claimed something
                 // that no longer happens.
@@ -1290,7 +1290,7 @@ public sealed class GameBoosterService : IDisposable
                 dispatcher.BeginInvoke(() => BoostDeactivated?.Invoke());
             else
                 BoostDeactivated?.Invoke();
-            _tray?.SetTooltip("Systema — Windows Optimizer");
+            _tray?.SetTooltip("Systema");
             _tray?.ShowBalloon("Game Boost Ended", "Services restored to normal.", System.Windows.Forms.ToolTipIcon.Info);
         };
     }

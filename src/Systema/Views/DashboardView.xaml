@@ -3,6 +3,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:conv="clr-namespace:Systema.Core.Converters"
              xmlns:vm="clr-namespace:Systema.ViewModels"
+             xmlns:ctl="clr-namespace:Systema.Controls"
              Background="Transparent">
 
     <!--
@@ -22,6 +23,8 @@
 
     <UserControl.Resources>
         <conv:BoolToVisibilityConverter x:Key="BoolToVis"/>
+        <!-- Today shows the newest 10 until "Show more" (DashboardViewModel.ActivityPreviewCount). -->
+        <conv:PreviewRowVisibilityConverter x:Key="PreviewRows" Limit="10"/>
 
         <!-- A Home card: Windows Settings' big rounded tile. Built on the shared Card look
              (so it also cascades in when the page opens), with rows drawing their own padding. -->
@@ -81,7 +84,6 @@
              lights up under the pointer, inset so it never covers the card's rounded edge.
              Declared here, not inline, like every style that carries a ControlTemplate. -->
         <Style x:Key="HomeRowButton" TargetType="Button">
-            <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
             <Setter Property="FontSize" Value="14"/>
             <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
@@ -187,7 +189,7 @@
                                TextTrimming="CharacterEllipsis"/>
                     <TextBlock Text="{Binding DeviceModel, Mode=OneWay}" Style="{StaticResource BodyText}"
                                Margin="0,2,0,0" TextTrimming="CharacterEllipsis"/>
-                    <TextBlock Text="Systema v0.7.352" FontSize="13" Margin="0,4,0,0"
+                    <TextBlock Text="Systema v0.7.353" FontSize="13" Margin="0,4,0,0"
                                Foreground="{StaticResource AccentBlueBrush}" FontFamily="{StaticResource SmallFont}"/>
                 </StackPanel>
 
@@ -770,6 +772,21 @@
                             <Border BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,1,0,0">
                                 <Grid>
                                     <ItemsControl ItemsSource="{Binding Activity}" Margin="0,8">
+                                        <!-- Rows past the first 10 hide until "Show more". -->
+                                        <ItemsControl.ItemContainerStyle>
+                                            <Style TargetType="ContentPresenter">
+                                                <Setter Property="Visibility">
+                                                    <Setter.Value>
+                                                        <MultiBinding Converter="{StaticResource PreviewRows}">
+                                                            <Binding/>
+                                                            <Binding Path="DataContext.Activity" RelativeSource="{RelativeSource AncestorType=ItemsControl}"/>
+                                                            <Binding Path="DataContext.ShowAllActivity" RelativeSource="{RelativeSource AncestorType=ItemsControl}"/>
+                                                            <Binding Path="DataContext.Activity.Count" RelativeSource="{RelativeSource AncestorType=ItemsControl}"/>
+                                                        </MultiBinding>
+                                                    </Setter.Value>
+                                                </Setter>
+                                            </Style>
+                                        </ItemsControl.ItemContainerStyle>
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate>
                                                 <!-- A new line fades in rather than popping into the list -->
@@ -812,6 +829,33 @@
                                     </TextBlock>
                                 </Grid>
                             </Border>
+
+                            <!-- Show more / Show less: the same disclosure row as Auto Pilot's
+                                 "Show details", only there once the day has more than 10 entries. -->
+                            <Button Command="{Binding ToggleShowAllActivityCommand}" Style="{StaticResource HomeRowButton}" Tag="Expander"
+                                    Visibility="{Binding HasMoreActivity, Converter={StaticResource BoolToVis}}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" FontSize="14" VerticalAlignment="Center"
+                                               Foreground="{StaticResource TextPrimaryBrush}">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Text" Value="Show more"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding ShowAllActivity}" Value="True">
+                                                        <Setter Property="Text" Value="Show less"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                    <Path Grid.Column="1" Style="{StaticResource ExpanderChevron}"
+                                          ctl:Motion.Flipped="{Binding ShowAllActivity}"/>
+                                </Grid>
+                            </Button>
                         </StackPanel>
                     </Border>
                 </StackPanel>

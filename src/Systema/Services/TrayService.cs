@@ -84,56 +84,76 @@ public sealed class TrayService : IDisposable
     // Task Sleep item — caption/checkmark refreshed by UpdateTaskSleepMenuState().
     private ToolStripMenuItem? _sleepItem;
 
-    // ── Dark menu theming ──────────────────────────────────────────────────────
-    // The tray menu is WinForms, so it renders in the OS light style by default and
-    // clashes with the app. Two things are needed to make it read as ours: a colour
-    // table (the stock one paints a light IMAGE MARGIN gutter down the left edge,
-    // which is the giveaway even after the background is darkened) and a renderer
-    // that forces text/arrow colours, since ProfessionalRenderer would otherwise use
-    // system colours for disabled items.
+    // ── Windows 11 menu theming ────────────────────────────────────────────────
+    // The tray menu is WinForms, which on its own draws the square, light Windows 7 style.
+    // To read like Windows 11's own dark menus (and the rest of the app): the Win11 flyout
+    // palette, a rounded hover highlight inset from the edges, roomier rows, and DWM rounded
+    // corners with DWM's own border and shadow (see RoundCorners).
+    //
+    // The colour table still matters: the stock one paints a light IMAGE MARGIN gutter down
+    // the left edge, which gives the game away even after the background is darkened.
+    private static readonly System.Drawing.Color MenuBack = System.Drawing.Color.FromArgb(0x2C, 0x2C, 0x2C);   // PopupBrush
+    private static readonly System.Drawing.Color MenuText = System.Drawing.Color.FromArgb(0xFF, 0xFF, 0xFF);
+    private static readonly System.Drawing.Font  MenuFont = new("Segoe UI", 9f);
+
     private sealed class SystemaMenuColors : ProfessionalColorTable
     {
-        private static readonly System.Drawing.Color Card     = System.Drawing.Color.FromArgb(0x1E, 0x22, 0x27);
-        private static readonly System.Drawing.Color Border   = System.Drawing.Color.FromArgb(0x2E, 0x34, 0x3B);
-        private static readonly System.Drawing.Color Hover    = System.Drawing.Color.FromArgb(0x2A, 0x31, 0x3A);
+        private static readonly System.Drawing.Color Line = System.Drawing.Color.FromArgb(0x3D, 0x3D, 0x3D);
 
-        public override System.Drawing.Color ToolStripDropDownBackground        => Card;
-        public override System.Drawing.Color MenuBorder                         => Border;
-        public override System.Drawing.Color MenuItemBorder                     => Hover;
-        public override System.Drawing.Color MenuItemSelected                   => Hover;
-        public override System.Drawing.Color MenuItemSelectedGradientBegin      => Hover;
-        public override System.Drawing.Color MenuItemSelectedGradientEnd        => Hover;
-        public override System.Drawing.Color MenuItemPressedGradientBegin       => Hover;
-        public override System.Drawing.Color MenuItemPressedGradientMiddle      => Hover;
-        public override System.Drawing.Color MenuItemPressedGradientEnd         => Hover;
+        public override System.Drawing.Color ToolStripDropDownBackground        => MenuBack;
+        public override System.Drawing.Color MenuBorder                         => MenuBack;
+        public override System.Drawing.Color ToolStripBorder                    => MenuBack;
         // Kill the light left gutter.
-        public override System.Drawing.Color ImageMarginGradientBegin           => Card;
-        public override System.Drawing.Color ImageMarginGradientMiddle          => Card;
-        public override System.Drawing.Color ImageMarginGradientEnd             => Card;
-        public override System.Drawing.Color ImageMarginRevealedGradientBegin   => Card;
-        public override System.Drawing.Color ImageMarginRevealedGradientMiddle  => Card;
-        public override System.Drawing.Color ImageMarginRevealedGradientEnd     => Card;
-        public override System.Drawing.Color SeparatorDark                      => Border;
-        public override System.Drawing.Color SeparatorLight                     => Border;
-        public override System.Drawing.Color CheckBackground                    => System.Drawing.Color.FromArgb(0x24, 0x3A, 0x47);
-        public override System.Drawing.Color CheckSelectedBackground            => System.Drawing.Color.FromArgb(0x2B, 0x45, 0x55);
-        public override System.Drawing.Color CheckPressedBackground             => System.Drawing.Color.FromArgb(0x2B, 0x45, 0x55);
-        public override System.Drawing.Color ToolStripBorder                    => Border;
+        public override System.Drawing.Color ImageMarginGradientBegin           => MenuBack;
+        public override System.Drawing.Color ImageMarginGradientMiddle          => MenuBack;
+        public override System.Drawing.Color ImageMarginGradientEnd             => MenuBack;
+        public override System.Drawing.Color ImageMarginRevealedGradientBegin   => MenuBack;
+        public override System.Drawing.Color ImageMarginRevealedGradientMiddle  => MenuBack;
+        public override System.Drawing.Color ImageMarginRevealedGradientEnd     => MenuBack;
+        public override System.Drawing.Color SeparatorDark                      => Line;
+        public override System.Drawing.Color SeparatorLight                     => Line;
     }
 
     private sealed class SystemaMenuRenderer : ToolStripProfessionalRenderer
     {
-        private static readonly System.Drawing.Color TextPrimary = System.Drawing.Color.FromArgb(0xF3, 0xF5, 0xF7);
-        private static readonly System.Drawing.Color TextDim     = System.Drawing.Color.FromArgb(0x88, 0x91, 0x9C);
-        private static readonly System.Drawing.Color Accent      = System.Drawing.Color.FromArgb(0x38, 0xBD, 0xF8);
+        private static readonly System.Drawing.Color TextDim = System.Drawing.Color.FromArgb(0x9A, 0x9A, 0x9A);
+        private static readonly System.Drawing.Color Hover   = System.Drawing.Color.FromArgb(0x38, 0x38, 0x38);   // 6% white over the menu
+        private static readonly System.Drawing.Color Accent  = System.Drawing.Color.FromArgb(0x60, 0xCD, 0xFF);   // AccentBlueBrush
 
         public SystemaMenuRenderer() : base(new SystemaMenuColors()) { RoundedEdges = false; }
+
+        // DWM draws the border (rounded) on Windows 11; a square WinForms one would poke out
+        // past the rounded corners.
+        protected override void OnRenderToolStripBorder(ToolStripRenderEventArgs e) { }
+
+        // Windows 11 highlight: a 4px-rounded pill inset from the menu's edges, not a full-width bar.
+        protected override void OnRenderMenuItemBackground(ToolStripItemRenderEventArgs e)
+        {
+            if (!e.Item.Enabled || !(e.Item.Selected || e.Item.Pressed)) return;
+            var r = new Rectangle(4, 1, e.Item.Width - 8, e.Item.Height - 2);
+            e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            using var path = RoundedRect(r, 4);
+            using var brush = new SolidBrush(Hover);
+            e.Graphics.FillPath(brush, path);
+        }
+
+        private static System.Drawing.Drawing2D.GraphicsPath RoundedRect(Rectangle r, int radius)
+        {
+            int d = radius * 2;
+            var p = new System.Drawing.Drawing2D.GraphicsPath();
+            p.AddArc(r.Left, r.Top, d, d, 180, 90);
+            p.AddArc(r.Right - d, r.Top, d, d, 270, 90);
+            p.AddArc(r.Right - d, r.Bottom - d, d, d, 0, 90);
+            p.AddArc(r.Left, r.Bottom - d, d, d, 90, 90);
+            p.CloseFigure();
+            return p;
+        }
 
         protected override void OnRenderItemText(ToolStripItemTextRenderEventArgs e)
         {
             // Disabled items (Exit stays enabled; this covers any future dimmed entry) and
             // the right-aligned status hints both read as secondary text.
-            e.TextColor = e.Item.Enabled ? TextPrimary : TextDim;
+            e.TextColor = e.Item.Enabled ? MenuText : TextDim;
             base.OnRenderItemText(e);
         }
 
@@ -164,7 +184,7 @@ public sealed class TrayService : IDisposable
     {
         _notifyIcon = new NotifyIcon
         {
-            Text    = "Systema — Windows Optimizer",
+            Text    = "Systema",
             Visible = true,
             Icon    = LoadIcon()
         };
@@ -338,16 +358,20 @@ public sealed class TrayService : IDisposable
         var menu = new ContextMenuStrip
         {
             Renderer     = new SystemaMenuRenderer(),
-            BackColor    = System.Drawing.Color.FromArgb(0x1E, 0x22, 0x27),
-            ForeColor    = System.Drawing.Color.FromArgb(0xF3, 0xF5, 0xF7),
+            BackColor    = MenuBack,
+            ForeColor    = MenuText,
+            Font         = MenuFont,
+            Padding      = new Padding(0, 4, 0, 4),
             ShowCheckMargin = false,   // the image margin already hosts the checkmark
             ShowImageMargin = true,    // keep it: without it, Checked items draw nothing
         };
+        menu.HandleCreated += (_, _) => RoundCorners(menu);   // before first show: no square flash
+        menu.Opened        += (_, _) => RoundCorners(menu);
 
         var openItem = new ToolStripMenuItem("Open Systema");
         // Create a bold font and track it explicitly — WinForms does not dispose fonts set on menu items,
         // so we hook the menu's Disposed event to release the GDI resource.
-        var boldFont = new Font(openItem.Font, openItem.Font.Style | System.Drawing.FontStyle.Bold);
+        var boldFont = new Font(MenuFont, System.Drawing.FontStyle.Bold);
         openItem.Font = boldFont;
         menu.Disposed += (_, _) => boldFont.Dispose();
         openItem.Click += (_, _) => ShowWindowRequested?.Invoke();
@@ -377,8 +401,12 @@ public sealed class TrayService : IDisposable
         }
         // The submenu is its own ToolStrip, so it needs the renderer too or it opens light.
         powerItem.DropDown.Renderer  = new SystemaMenuRenderer();
-        powerItem.DropDown.BackColor = System.Drawing.Color.FromArgb(0x1E, 0x22, 0x27);
-        powerItem.DropDown.ForeColor = System.Drawing.Color.FromArgb(0xF3, 0xF5, 0xF7);
+        powerItem.DropDown.BackColor = MenuBack;
+        powerItem.DropDown.ForeColor = MenuText;
+        powerItem.DropDown.Font      = MenuFont;
+        powerItem.DropDown.Padding   = new Padding(0, 4, 0, 4);
+        powerItem.DropDown.HandleCreated += (_, _) => RoundCorners(powerItem.DropDown);
+        powerItem.DropDown.Opened        += (_, _) => RoundCorners(powerItem.DropDown);
 
         var updateItem = new ToolStripMenuItem("Check for updates");
         updateItem.Click += (_, _) => CheckForUpdatesRequested?.Invoke();
@@ -396,8 +424,37 @@ public sealed class TrayService : IDisposable
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(exitItem);
 
+        // Windows 11 rows are roomier than WinForms' default ~22px.
+        foreach (ToolStripItem item in menu.Items)
+            if (item is ToolStripMenuItem mi) mi.Padding = new Padding(0, 4, 0, 4);
+        foreach (ToolStripItem item in powerItem.DropDownItems)
+            item.Padding = new Padding(0, 4, 0, 4);
+
         menu.Opening += (_, _) => MenuOpening?.Invoke();
         return menu;
+    }
+
+    // ── Windows 11 rounded menu corners ────────────────────────────────────────
+    // The same DWM corner preference MainWindow uses. On a popup it also gets DWM's own thin
+    // border and soft shadow, which is exactly how Windows 11 draws its native menus.
+    // Best effort: on Windows 10 the calls fail and the menu stays square.
+    [DllImport("dwmapi.dll")]
+    private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int value, int size);
+    private const int DWMWA_WINDOW_CORNER_PREFERENCE = 33;
+    private const int DWMWA_BORDER_COLOR             = 34;
+    private const int DWMWCP_ROUND                   = 2;
+
+    private static void RoundCorners(ToolStripDropDown dropDown)
+    {
+        try
+        {
+            if (!dropDown.IsHandleCreated) return;
+            int round = DWMWCP_ROUND;
+            DwmSetWindowAttribute(dropDown.Handle, DWMWA_WINDOW_CORNER_PREFERENCE, ref round, sizeof(int));
+            int border = 0x003A3A3A;   // COLORREF (0x00BBGGRR): PopupStrokeBrush
+            DwmSetWindowAttribute(dropDown.Handle, DWMWA_BORDER_COLOR, ref border, sizeof(int));
+        }
+        catch { /* older Windows: square corners */ }
     }
 
     /// <summary>

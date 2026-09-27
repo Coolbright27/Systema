@@ -139,6 +139,23 @@
     </Style>
 
     <!-- ============================================================ -->
+    <!--  KEYBOARD FOCUS RING                                         -->
+    <!-- ============================================================ -->
+    <!-- Windows 11's focus ring: 2px white outside a 1px dark line, a few px out from the control.
+         WPF only shows a FocusVisualStyle for keyboard focus (Tab), never on a mouse click. -->
+    <Style x:Key="Win11FocusVisual">
+        <Setter Property="Control.Template">
+            <Setter.Value>
+                <ControlTemplate>
+                    <Border Margin="-3" CornerRadius="7" BorderThickness="2" BorderBrush="#FFFFFF" SnapsToDevicePixels="True">
+                        <Border CornerRadius="5" BorderThickness="1" BorderBrush="#B3000000"/>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ============================================================ -->
     <!--  PRIMARY BUTTON                                              -->
     <!-- ============================================================ -->
     <!-- Windows 11 accent button: 4px corners, regular weight, black text on the accent. -->
@@ -150,8 +167,7 @@
         <Setter Property="FontWeight" Value="Normal"/>
         <Setter Property="Padding" Value="18,8"/>
         <Setter Property="BorderThickness" Value="0"/>
-        <Setter Property="Cursor" Value="Hand"/>
-        <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+        <Setter Property="FocusVisualStyle" Value="{StaticResource Win11FocusVisual}"/>
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Button">
@@ -239,7 +255,6 @@
         <Setter Property="Background"                 Value="Transparent"/>
         <Setter Property="BorderThickness"            Value="0"/>
         <Setter Property="Padding"                    Value="0"/>
-        <Setter Property="Cursor"                     Value="Hand"/>
         <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
         <Setter Property="Template">
             <Setter.Value>
@@ -290,8 +305,7 @@
         <Setter Property="Padding" Value="16,7"/>
         <Setter Property="BorderBrush" Value="{StaticResource ControlStrokeBrush}"/>
         <Setter Property="BorderThickness" Value="1"/>
-        <Setter Property="Cursor" Value="Hand"/>
-        <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+        <Setter Property="FocusVisualStyle" Value="{StaticResource Win11FocusVisual}"/>
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Button">
@@ -363,7 +377,7 @@
     <!--  TOGGLE SWITCH (CheckBox styled)                             -->
     <!-- ============================================================ -->
     <Style x:Key="ToggleSwitch" TargetType="CheckBox">
-        <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+        <Setter Property="FocusVisualStyle" Value="{StaticResource Win11FocusVisual}"/>
         <Setter Property="Template">
             <Setter.Value>
                 <!-- Windows 11 toggle: a 40x20 track, outlined when off and accent-filled when
@@ -376,7 +390,7 @@
                 <ControlTemplate TargetType="CheckBox">
                     <StackPanel x:Name="Root" Orientation="Horizontal" VerticalAlignment="Center"
                                 Background="Transparent">
-                        <Grid x:Name="Track" Width="40" Height="20" Cursor="Hand">
+                        <Grid x:Name="Track" Width="40" Height="20">
                             <Border x:Name="TrackOff" CornerRadius="10" BorderThickness="1"
                                     BorderBrush="{StaticResource ToggleOffStrokeBrush}"
                                     Background="Transparent"/>
@@ -1022,8 +1036,7 @@
         <Setter Property="Height" Value="38"/>
         <Setter Property="Background" Value="Transparent"/>
         <Setter Property="BorderThickness" Value="0"/>
-        <Setter Property="Cursor" Value="Hand"/>
-        <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+        <Setter Property="FocusVisualStyle" Value="{StaticResource Win11FocusVisual}"/>
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Button">
@@ -1112,7 +1125,7 @@
         <Setter Property="HorizontalContentAlignment" Value="Left"/>
         <Setter Property="Cursor" Value="Arrow"/>
         <Setter Property="Margin" Value="0,2"/>
-        <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+        <Setter Property="FocusVisualStyle" Value="{StaticResource Win11FocusVisual}"/>
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Button">
@@ -1289,8 +1302,7 @@
         <Setter Property="FontFamily" Value="{StaticResource MainFont}"/>
         <Setter Property="FontSize" Value="14"/>
         <Setter Property="Padding" Value="0"/>
-        <Setter Property="Cursor" Value="Hand"/>
-        <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+        <Setter Property="FocusVisualStyle" Value="{StaticResource Win11FocusVisual}"/>
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="CheckBox">
@@ -1559,6 +1571,83 @@
                             </ContentPresenter.Resources>
                         </ContentPresenter>
                     </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ============================================================ -->
+    <!--  RIGHT-CLICK MENUS                                           -->
+    <!-- ============================================================ -->
+    <!-- Windows 11 dark menu flyout: rounded 8px, the dropdowns' fill and stroke, 4px-rounded
+         highlight. Implicit, so the Cut / Copy / Paste menu WPF gives every text box uses it
+         instead of the classic light menu. Systema has no submenus, so items are single rows. -->
+    <Style TargetType="ContextMenu">
+        <Setter Property="OverridesDefaultStyle" Value="True"/>
+        <Setter Property="SnapsToDevicePixels" Value="True"/>
+        <Setter Property="HasDropShadow" Value="False"/>
+        <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+        <Setter Property="FontFamily" Value="{StaticResource MainFont}"/>
+        <Setter Property="FontSize" Value="14"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ContextMenu">
+                    <Border Background="{StaticResource PopupBrush}" BorderBrush="{StaticResource PopupStrokeBrush}"
+                            BorderThickness="1" CornerRadius="8" Padding="4" MinWidth="160">
+                        <StackPanel IsItemsHost="True" Grid.IsSharedSizeScope="True"
+                                    KeyboardNavigation.DirectionalNavigation="Cycle"/>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style TargetType="MenuItem">
+        <Setter Property="OverridesDefaultStyle" Value="True"/>
+        <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="MenuItem">
+                    <Border x:Name="Bd" Background="Transparent" CornerRadius="4" Padding="12,0,12,0"
+                            MinHeight="32" SnapsToDevicePixels="True">
+                        <Grid VerticalAlignment="Center">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" SharedSizeGroup="MenuItemIcon"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto" SharedSizeGroup="MenuItemGesture"/>
+                            </Grid.ColumnDefinitions>
+                            <ContentPresenter x:Name="IconHost" ContentSource="Icon" Width="16" Height="16"
+                                              Margin="0,0,12,0" VerticalAlignment="Center"/>
+                            <ContentPresenter Grid.Column="1" ContentSource="Header" RecognizesAccessKey="True"
+                                              VerticalAlignment="Center"/>
+                            <TextBlock x:Name="Gesture" Grid.Column="2" Text="{TemplateBinding InputGestureText}"
+                                       Margin="28,0,0,0" FontSize="12" VerticalAlignment="Center"
+                                       Foreground="{StaticResource TextSecondaryBrush}"/>
+                        </Grid>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="Icon" Value="{x:Null}">
+                            <Setter TargetName="IconHost" Property="Visibility" Value="Collapsed"/>
+                        </Trigger>
+                        <Trigger Property="IsHighlighted" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource PopupItemHoverBrush}"/>
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Foreground" Value="{StaticResource DisabledBrush}"/>
+                            <Setter TargetName="Gesture" Property="Foreground" Value="{StaticResource DisabledBrush}"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="{x:Static MenuItem.SeparatorStyleKey}" TargetType="Separator">
+        <Setter Property="OverridesDefaultStyle" Value="True"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Separator">
+                    <Border Height="1" Margin="-4,4" Background="{StaticResource PopupStrokeBrush}"/>
                 </ControlTemplate>
             </Setter.Value>
         </Setter>
