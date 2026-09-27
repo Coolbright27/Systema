@@ -189,7 +189,7 @@
                                TextTrimming="CharacterEllipsis"/>
                     <TextBlock Text="{Binding DeviceModel, Mode=OneWay}" Style="{StaticResource BodyText}"
                                Margin="0,2,0,0" TextTrimming="CharacterEllipsis"/>
-                    <TextBlock Text="Systema v0.7.357" FontSize="13" Margin="0,4,0,0"
+                    <TextBlock Text="Systema v0.7.358" FontSize="13" Margin="0,4,0,0"
                                Foreground="{DynamicResource AccentBlueBrush}" FontFamily="{StaticResource SmallFont}"/>
                 </StackPanel>
 

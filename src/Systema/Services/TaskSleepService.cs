@@ -908,10 +908,7 @@ public sealed partial class TaskSleepService : IDisposable
         if (_enforceWakeCapOnNextTick)
         {
             _enforceWakeCapOnNextTick = false;
-            var now = DateTime.UtcNow;
-            int activeWakes = _briefWakeEndAt.Values.Count(e => now < e)
-                            + _trayBriefWakeEndAt.Values.Count(e => now < e);
-            int excess = activeWakes - s.MaxConcurrentBriefWakes;
+            int excess = ActiveBriefWakeCount() - s.MaxConcurrentBriefWakes;
             if (excess > 0)
             {
                 // Expire the latest-ending brief wakes first (give priority to those that started earlier).
@@ -1229,154 +1226,50 @@ public sealed partial class TaskSleepService : IDisposable
         // Each entry: (pid, isTray, scheduledWakeTime) — sorted by earliest scheduled = longest waiting
         var briefWakeCandidates = new List<(int Pid, bool IsTray, DateTime ScheduledAt)>();
 
-        // 5. Evaluate currently napped processes — restore if conditions are met
+        // 5. Evaluate currently napped processes against the wake rules (Core/NapRules.cs): wake it,
+        //    keep it napping, or queue a brief wake. The rules are pure and unit-tested; this loop
+        //    only gathers the facts and carries out the decision.
         foreach (int pid in _throttledPids.Keys.ToList())
         {
-            bool   shouldRestore = false;
-            string restoreReason = "";
+            _processNames.TryGetValue(pid, out string? napName);
+            NapReason? bucket = _napBuckets.Get(pid);
+            DateTime nowNap = DateTime.UtcNow;
+            bool briefWakeDue = bucket switch
+            {
+                NapReason.Minimized => !_nextBriefWakeAt.TryGetValue(pid, out DateTime nextMin)      || nowNap >= nextMin,
+                NapReason.Tray      => !_trayNextBriefWakeAt.TryGetValue(pid, out DateTime nextTray) || nowNap >= nextTray,
+                _                   => false,
+            };
+            double? nappedForMs = TryState(pid, out var taSt) && taSt.ThrottledAt is { } ta
+                ? (nowNap - ta).TotalMilliseconds : null;
+            double? procCpu = cpuMap.TryGetValue(pid, out double pc) ? pc : null;
 
-            if (!livePids.Contains(pid))
-            {
-                // Process exited — always clean up
-                shouldRestore = true; restoreReason = "process exited";
-            }
-            else if (protectedPids.Contains(pid) &&
-                     (pid == (int)foregroundPid || visibleOnMonitorPids.Contains(pid)))
-            {
-                // User brought the app DIRECTLY to foreground — wake it permanently.
-                shouldRestore = true; restoreReason = "opened by user";
-            }
-            else if (protectedPids.Contains(pid) &&
-                     !_napBuckets.Is(pid, NapReason.Minimized) && !_napBuckets.Is(pid, NapReason.Tray))
-            {
-                // This napped pid is part of the foreground app's process tree (background-,
-                // idle-, or CPU-napped helper). Previously only bg/idle helpers were restored
-                // here, which left CPU-napped windowless helpers (Firefox/Chromium content
-                // processes, Steam webhelpers, Electron/Discord renderers) stuck at the napped
-                // cap while the main app was foreground — making the whole app feel slow.
-                //
-                // Restore the helper so it can render/process alongside its parent. Minimize/
-                // tray-napped family members are NOT restored here — the user deliberately hid
-                // those, and their own branches below handle un-minimize / visibility / audio.
-                shouldRestore = true; restoreReason = "app family focused";
-            }
-            else if (_napBuckets.Is(pid, NapReason.Minimized))
-            {
-                // ── Minimize-napped process: separate restore logic ───────────────
-                bool nowMinimized = minimizedPids.Contains(pid);
-                string pn = _processNames.TryGetValue(pid, out var pn_) ? pn_ : "";
-                bool hasAudio = IsAudioProtected(pid, pn, audioPids);
+            var decision = NapWakeRules.Decide(new NappedFacts(
+                IsAlive:        livePids.Contains(pid),
+                InUse:          protectedPids.Contains(pid),
+                OpenedDirectly: pid == (int)foregroundPid || visibleOnMonitorPids.Contains(pid),
+                Reason:         bucket,
+                StillMinimized: minimizedPids.Contains(pid),
+                StillInTray:    trayPids.Contains(pid),
+                HasAudio:       IsAudioProtected(pid, napName ?? "", audioPids),
+                BriefWakeDue:   briefWakeDue,
+                NappedForMs:    nappedForMs,
+                CpuPercent:     procCpu), s);
 
-                if (!nowMinimized || hasAudio)
-                {
-                    // App was un-minimized or started audio — restore permanently
-                    shouldRestore = true;
-                    restoreReason = hasAudio ? "audio detected" : "app un-minimized";
-                }
-                else
-                {
-                    // Still minimized & silent — collect as brief-wake candidate (fairness: sorted later).
-                    // No system-CPU gate: apps like Steam commonly run 5+ processes each capped
-                    // at NappedCpuCapPercent (default 3%), so the napped contribution alone is
-                    // already 15%+ of total CPU. Any CPU-based gate would permanently block
-                    // wakes for multi-process apps. Instead we rely on:
-                    //   • MaxConcurrentBriefWakes (default 3) — hard cap on parallel wakes
-                    //   • BriefWakeCpuCapPercent (default 7%) — each wake only adds ~4% delta
-                    //   • 10-second wake window — self-limiting even if the gate misjudges
-                    //   • Game Mode suppression — covers the "system genuinely busy" case
-                    bool wakeNeeded = !_nextBriefWakeAt.TryGetValue(pid, out DateTime nextWake) ||
-                                      DateTime.UtcNow >= nextWake;
-                    bool gameBlocks = s.IsGameModeActive && s.SuppressBriefWakesDuringGameMode;
-                    if (!gameBlocks && wakeNeeded)
-                    {
-                        // Use nap-start time for fairness sort (earliest nap = waited longest).
-                        // Falls back to current time for new candidates so they queue behind older ones.
-                        DateTime scheduledAt = TryState(pid, out var nsSt) && nsSt.NapSince is { } ns ? ns : DateTime.UtcNow;
-                        briefWakeCandidates.Add((pid, false, scheduledAt));
-                    }
-                    // else: continue napping — no action
-                }
-                // Do NOT fall through to PersistentNap / time-based restore for minimize-napped procs
-            }
-            else if (_napBuckets.Is(pid, NapReason.Tray))
+            if (decision.Action == WakeAction.BriefWake)
             {
-                // ── Tray-napped process: restore if it got a visible window or started audio ─
-                bool stillTray = trayPids.Contains(pid);
-                string pn2 = _processNames.TryGetValue(pid, out var pn2_) ? pn2_ : "";
-                bool hasAudio = IsAudioProtected(pid, pn2, audioPids);
-
-                // A windowless helper (Electron renderer, GPU/utility/console host) that got
-                // tray-napped never regains a window of its own, so the two checks above would
-                // keep it cycling in perpetual brief-wake even while its app is open — the
-                // "tray processes stay napped when I reopen the app" bug. If a foreground/visible
-                // member of its app family (or its in-use parent's subtree) is protected this
-                // tick, the whole app is in use, so wake this helper alongside it. protectedPids
-                // only contains this pid when the family/subtree-awareness logic matched an
-                // in-use sibling, so a genuinely tray-only background app is unaffected.
-                bool familyInUse = protectedPids.Contains(pid);
-
-                if (!stillTray || hasAudio || familyInUse)
-                {
-                    // App opened a window, started audio, or an in-use sibling pulled it awake.
-                    shouldRestore = true;
-                    restoreReason = hasAudio   ? "audio detected"
-                                  : !stillTray ? "window appeared"
-                                  :              "app family focused";
-                }
-                else
-                {
-                    // Still tray-only — collect as brief-wake candidate (fairness: sorted later).
-                    // No system-CPU gate — see rationale in the minimize-nap branch above.
-                    bool wakeNeeded = !_trayNextBriefWakeAt.TryGetValue(pid, out DateTime nextTrayWake) ||
-                                      DateTime.UtcNow >= nextTrayWake;
-                    bool gameBlocks = s.IsGameModeActive && s.SuppressBriefWakesDuringGameMode;
-                    if (!gameBlocks && wakeNeeded)
-                    {
-                        // Use nap-start time for fairness sort (earliest nap = waited longest).
-                        DateTime scheduledAt = TryState(pid, out var nsSt) && nsSt.NapSince is { } ns ? ns : DateTime.UtcNow;
-                        briefWakeCandidates.Add((pid, true, scheduledAt));
-                    }
-                }
-                // Do NOT fall through to PersistentNap / time-based restore for tray-napped procs
+                // Queued for the fairness pass (5a): longest-napped first, under the
+                // MaxConcurrentBriefWakes cap. There's deliberately no system-CPU gate: apps like
+                // Steam run 5+ processes each capped at NappedCpuCapPercent, so any CPU gate would
+                // block their wakes forever. The limits are MaxConcurrentBriefWakes, the loosened
+                // BriefWakeCpuCapPercent, the short wake window, and Game Mode suppression.
+                DateTime scheduledAt = TryState(pid, out var nsSt) && nsSt.NapSince is { } ns ? ns : DateTime.UtcNow;
+                briefWakeCandidates.Add((pid, bucket == NapReason.Tray, scheduledAt));
+                continue;
             }
-            else if (_napBuckets.Is(pid, NapReason.Background) || _napBuckets.Is(pid, NapReason.Idle))
-            {
-                // Background/idle napped — restore when the user focuses it
-                // (protectedPids check at top already handles foreground restore).
-                // Also restore if the process started producing audio.
-                string bgPn = _processNames.TryGetValue(pid, out var bgPn_) ? bgPn_ : "";
-                if (IsAudioProtected(pid, bgPn, audioPids))
-                {
-                    shouldRestore = true;
-                    restoreReason = "audio detected";
-                }
-                // else: keep napping — user hasn't focused it
-            }
-            else if (s.PersistentNapEnabled)
-            {
-                // Nap until used: keep napping until the user focuses the app.
-                // The foreground check above is the only restore trigger.
-            }
-            else if (TryState(pid, out var taSt) && taSt.ThrottledAt is { } ta)
-            {
-                // Classic time-based restore (used when PersistentNap is off)
-                double elapsed = (DateTime.UtcNow - ta).TotalMilliseconds;
+            if (decision.Action != WakeAction.Wake) continue;
+            string restoreReason = decision.Reason;
 
-                if (elapsed >= s.MaxAdjustmentDurationMs)
-                {
-                    shouldRestore = true; restoreReason = "max duration reached";
-                }
-                else if (elapsed >= s.MinAdjustmentDurationMs)
-                {
-                    if (cpuMap.TryGetValue(pid, out double procCpu) &&
-                        procCpu < s.ProcessCpuStopPercent)
-                    {
-                        shouldRestore = true; restoreReason = $"CPU dropped to {procCpu:F1}%";
-                    }
-                }
-            }
-
-            if (shouldRestore)
             {
                 _processNames.TryGetValue(pid, out string? name);
                 bool isNapChild = TryState(pid, out var ncSt0) && ncSt0.NapChildParent.HasValue;
@@ -1413,47 +1306,24 @@ public sealed partial class TaskSleepService : IDisposable
         if (briefWakeCandidates.Count > 0)
         {
             briefWakeCandidates.Sort((a, b) => a.ScheduledAt.CompareTo(b.ScheduledAt)); // earliest = longest waiting
-            int activeWakes = _briefWakeEndAt.Values.Count(e => DateTime.UtcNow < e)
-                            + _trayBriefWakeEndAt.Values.Count(e => DateTime.UtcNow < e);
+            int activeWakes = ActiveBriefWakeCount();
             foreach (var (wPid, isTray, _) in briefWakeCandidates)
             {
                 if (!_throttledPids.ContainsKey(wPid)) continue; // PID was restored mid-tick
                 if (activeWakes >= Math.Max(1, s.MaxConcurrentBriefWakes)) break;
                 _processNames.TryGetValue(wPid, out string? wName);
 
-                if (isTray)
-                {
-                    BeginBriefWake(wPid, s);
-                    _trayBriefWakeEndAt[wPid] = DateTime.UtcNow.AddMilliseconds(s.TrayBriefWakeDurationMs);
+                // Length, next interval and label (normal vs deep sleep) come from one rule for
+                // both kinds: Core/NapRules.cs BriefWakeSchedule.
+                var kind = isTray ? NapReason.Tray : NapReason.Minimized;
+                double nappedForMs = TryState(wPid, out var bwNsSt) && bwNsSt.NapSince is { } napSince
+                    ? (DateTime.UtcNow - napSince).TotalMilliseconds : 0;
+                var plan = BriefWakeSchedule.For(kind, nappedForMs, s);
 
-                    double nappedForMs = TryState(wPid, out var trayNsSt) && trayNsSt.NapSince is { } trayNapSince
-                        ? (DateTime.UtcNow - trayNapSince).TotalMilliseconds : 0;
-                    bool trayDeepSleep = s.TrayDeepSleepEnabled &&
-                        nappedForMs >= s.TrayDeepSleepThresholdMs;
-                    int trayWakeIntervalMs = trayDeepSleep
-                        ? s.TrayDeepSleepWakeIntervalMs
-                        : s.TrayBriefWakeIntervalMs;
-                    _trayNextBriefWakeAt[wPid] = DateTime.UtcNow.AddMilliseconds(trayWakeIntervalMs);
-
-                    string wakeLabel = trayDeepSleep ? "Tray Deep Wake" : "Tray Wake";
-                    AddEvent(wName ?? $"PID {wPid}", wPid, wakeLabel, $"CPU {sysCpu:F0}%");
-                }
-                else
-                {
-                    BeginBriefWake(wPid, s);
-                    _briefWakeEndAt[wPid] = DateTime.UtcNow.AddMilliseconds(s.MinimizedBriefWakeDurationMs);
-
-                    double minimizedForMs = TryState(wPid, out var minNsSt) && minNsSt.NapSince is { } napSince
-                        ? (DateTime.UtcNow - napSince).TotalMilliseconds : 0;
-                    int wakeIntervalMs = minimizedForMs >= s.MinimizeDeepSleepThresholdMs
-                        ? s.MinimizeDeepSleepWakeIntervalMs
-                        : s.MinimizedBriefWakeIntervalMs;
-                    _nextBriefWakeAt[wPid] = DateTime.UtcNow.AddMilliseconds(wakeIntervalMs);
-
-                    string wakeLabel = minimizedForMs >= s.MinimizeDeepSleepThresholdMs
-                        ? "Deep Wake" : "Brief Wake";
-                    AddEvent(wName ?? $"PID {wPid}", wPid, wakeLabel, $"CPU {sysCpu:F0}%");
-                }
+                BeginBriefWake(wPid, s);
+                (isTray ? _trayBriefWakeEndAt  : _briefWakeEndAt )[wPid] = DateTime.UtcNow.AddMilliseconds(plan.DurationMs);
+                (isTray ? _trayNextBriefWakeAt : _nextBriefWakeAt)[wPid] = DateTime.UtcNow.AddMilliseconds(plan.NextIntervalMs);
+                AddEvent(wName ?? $"PID {wPid}", wPid, plan.EventLabel, $"CPU {sysCpu:F0}%");
                 activeWakes++;
             }
         }
@@ -1521,10 +1391,7 @@ public sealed partial class TaskSleepService : IDisposable
                 if (!livePids.Contains(cpid)) continue;
                 protectedPids.Add(cpid);   // in use → protect from re-nap this tick regardless
 
-                bool napped = _throttledPids.ContainsKey(cpid)
-                           || _napBuckets.IsNapped(cpid)
-                           || _briefWakeEndAt.ContainsKey(cpid) || _trayBriefWakeEndAt.ContainsKey(cpid);
-                if (!napped) continue;
+                if (!IsInAnyNapState(cpid)) continue;
 
                 _processNames.TryGetValue(cpid, out string? cname);
                 bool wasNapChild = TryState(cpid, out var ncSt1) && ncSt1.NapChildParent.HasValue;
@@ -1566,110 +1433,15 @@ public sealed partial class TaskSleepService : IDisposable
                     continue;
                 }
 
-                // ── Brief-wake handling: minimize-napped proc currently in a brief wake ──
-                // During BeginBriefWake the pid is removed from _throttledPids, so the main
-                // wake loop at #5 can't see it. We have to evaluate user-focus / audio /
-                // un-minimize here and fully restore if any of them triggered.
-                if ((s.MinimizeNapEnabled || s.HiddenNapEnabled) &&
-                    !_throttledPids.ContainsKey(proc.Id) &&
-                    _napBuckets.Is(proc.Id, NapReason.Minimized))
+                // ── Mid brief wake (minimized/hidden or tray) ──
+                // BeginBriefWake takes the pid out of _throttledPids, so the wake rules at #5 can't
+                // see it. Its own rule (Core/NapRules.cs BriefWakeRules) decides here: wake it for
+                // real if it was shown, focused or started audio; re-nap it once the window is over;
+                // otherwise let the window run. Either way, nothing else in this loop applies to it.
+                if (TryGetBriefWakeKind(proc.Id, s, out NapReason briefKind))
                 {
-                    bool stillMinimized = minimizedPids.Contains(proc.Id);
-                    bool reNapAudio     = IsAudioProtected(proc.Id, proc.ProcessName, audioPids);
-                    bool userFocused    = protectedPids.Contains(proc.Id);
-                    bool wakeWindowOver = _briefWakeEndAt.TryGetValue(proc.Id, out DateTime wakeEnd) &&
-                                          DateTime.UtcNow >= wakeEnd;
-
-                    // User opened the window / focused the app / started audio → immediate
-                    // full restore (don't wait for the 10 s brief wake window to elapse —
-                    // otherwise the app sits at the loosened cap until it expires, which
-                    // feels broken to the user).
-                    if (!stillMinimized || userFocused || reNapAudio)
-                    {
-                        FullyRestoreFromBriefWake(proc.Id);
-                        _processNames.TryGetValue(proc.Id, out string? wn);
-                        string reason = reNapAudio   ? "audio detected"
-                                       : userFocused ? "opened by user"
-                                                     : "window shown again";   // un-minimized or no longer covered
-                        AddEvent(wn ?? proc.ProcessName, proc.Id, "Woke up", reason);
-                    }
-                    else if (wakeWindowOver)
-                    {
-                        // Window expired with no user interaction — re-nap. The app never left its
-                        // napped throttle profile (the brief wake only widened the cap), so just
-                        // re-seat the original-priority record and tighten the cap back down —
-                        // no priority re-capture, no priority change.
-                        _briefWakeEndAt.Remove(proc.Id);
-                        _throttledPids[proc.Id] = StateFor(proc.Id).NappedOriginalCpu ?? NORMAL_PRIORITY_CLASS;
-                        StateFor(proc.Id).NappedOriginalCpu = null;
-                        StateFor(proc.Id).ThrottledAt = DateTime.UtcNow;
-                        if (s.NappedCpuCapEnabled && s.NappedCpuCapPercent > 0)
-                            UpdateCpuCap(proc.Id, Math.Clamp(s.NappedCpuCapPercent, 1, 100));
-                        _processNames.TryGetValue(proc.Id, out string? rn);
-                        AddEvent(rn ?? proc.ProcessName, proc.Id, "Re-napping", "brief wake ended");
-
-                        // Re-tighten any children that loosened with this parent.
-                        if (s.NappedCpuCapEnabled)
-                            SetNapChildCaps(proc.Id, s.NappedCpuCapPercent);
-
-                        // Nap memory compression: the brief wake faulted pages back in; push them
-                        // straight back to standby so Windows can re-compress. Applies to regular
-                        // nap and deep sleep alike.
-                        if (s.CompressDeepSleep)
-                        {
-                            TrimWorkingSetByPid(proc.Id, rn ?? proc.ProcessName);
-                            StateFor(proc.Id).DeepSleepTrimmed = true;
-                        }
-                    }
-                    // Whether we just restored, re-throttled, or are still in the wake window,
-                    // skip the rest of the throttle logic for this process.
-                    continue;
-                }
-
-                // ── Brief-wake handling: tray-napped proc currently in a brief wake ──
-                if (s.TrayNapEnabled &&
-                    !_throttledPids.ContainsKey(proc.Id) &&
-                    _napBuckets.Is(proc.Id, NapReason.Tray))
-                {
-                    bool stillTray      = trayPids.Contains(proc.Id);
-                    bool trayReNapAudio = IsAudioProtected(proc.Id, proc.ProcessName, audioPids);
-                    bool userFocused    = protectedPids.Contains(proc.Id);
-                    bool wakeWindowOver = _trayBriefWakeEndAt.TryGetValue(proc.Id, out DateTime trayWakeEnd) &&
-                                          DateTime.UtcNow >= trayWakeEnd;
-
-                    if (!stillTray || userFocused || trayReNapAudio)
-                    {
-                        FullyRestoreFromBriefWake(proc.Id);
-                        _processNames.TryGetValue(proc.Id, out string? wn);
-                        string reason = trayReNapAudio ? "audio detected"
-                                       : userFocused   ? "opened by user"
-                                                       : "window appeared";
-                        AddEvent(wn ?? proc.ProcessName, proc.Id, "Woke up", reason);
-                    }
-                    else if (wakeWindowOver)
-                    {
-                        // Re-nap (cap-only) — same model as the minimize branch above: re-seat the
-                        // parked original priority and tighten the cap; change no priorities.
-                        _trayBriefWakeEndAt.Remove(proc.Id);
-                        _throttledPids[proc.Id] = StateFor(proc.Id).NappedOriginalCpu ?? NORMAL_PRIORITY_CLASS;
-                        StateFor(proc.Id).NappedOriginalCpu = null;
-                        StateFor(proc.Id).ThrottledAt = DateTime.UtcNow;
-                        if (s.NappedCpuCapEnabled && s.NappedCpuCapPercent > 0)
-                            UpdateCpuCap(proc.Id, Math.Clamp(s.NappedCpuCapPercent, 1, 100));
-                        _processNames.TryGetValue(proc.Id, out string? tn);
-                        AddEvent(tn ?? proc.ProcessName, proc.Id, "Tray Re-nap", "brief wake ended");
-
-                        // Re-tighten any children that loosened with this parent.
-                        if (s.NappedCpuCapEnabled)
-                            SetNapChildCaps(proc.Id, s.NappedCpuCapPercent);
-
-                        // Nap memory compression: see the matching minimize-nap branch above.
-                        if (s.CompressDeepSleep)
-                        {
-                            TrimWorkingSetByPid(proc.Id, tn ?? proc.ProcessName);
-                            StateFor(proc.Id).DeepSleepTrimmed = true;
-                        }
-                    }
+                    HandleBriefWakeInProgress(proc, briefKind,
+                        briefKind == NapReason.Tray ? trayPids : minimizedPids, protectedPids, audioPids, s);
                     continue;
                 }
 
@@ -1687,99 +1459,90 @@ public sealed partial class TaskSleepService : IDisposable
                 if (TryState(proc.Id, out var cdSt) && cdSt.RestoredAt is { } rt &&
                     (DateTime.UtcNow - rt).TotalMilliseconds < 5_000) continue;
 
+                // ── NAP TRIGGERS ── the first that applies naps the process, then `continue`:
+                //    minimized/hidden → tray → background (unfocused) → idle (≈0% CPU) → known waster.
+                //    None re-checks audio: the skip rules above (ShouldSkip's "Audio/media active")
+                //    already turned away every process playing or recording audio, with the same check
+                //    on the same data, so an audio check here could never be true.
+
                 // ── Minimize-nap: throttle minimized apps after grace period ──
                 // (Busy minimized/tray apps are already handled up front via busyAwakePids — their
                 //  whole tree is kept awake, so they never reach here.)
                 if ((s.MinimizeNapEnabled || s.HiddenNapEnabled) && minimizedPids.Contains(proc.Id))
                 {
-                    bool hasAudio = IsAudioProtected(proc.Id, proc.ProcessName, audioPids);
+                    // Record when this process first went minimized / hidden (grace period start)
+                    if (!_minimizeGraceSince.ContainsKey(proc.Id))
+                        _minimizeGraceSince[proc.Id] = DateTime.UtcNow;
 
-                    if (!hasAudio)
+                    // Hidden (fully-covered) apps get their own, longer, user-adjustable grace so a
+                    // window you're just flipping in front of isn't napped the instant it's covered.
+                    // Minimized/tray apps keep the short MinimizeTrayGraceMs.
+                    bool pendingHidden = hiddenPids.Contains(proc.Id);
+                    StateFor(proc.Id).IsPendingHidden = pendingHidden;
+                    double graceMs = pendingHidden ? s.HiddenNapGraceMs : MinimizeTrayGraceMs;
+
+                    bool graceElapsed =
+                        (DateTime.UtcNow - _minimizeGraceSince[proc.Id]).TotalMilliseconds
+                        >= graceMs;
+
+                    if (graceElapsed)
                     {
-                        // Record when this process first went minimized / hidden (grace period start)
-                        if (!_minimizeGraceSince.ContainsKey(proc.Id))
-                            _minimizeGraceSince[proc.Id] = DateTime.UtcNow;
-
-                        // Hidden (fully-covered) apps get their own, longer, user-adjustable grace so a
-                        // window you're just flipping in front of isn't napped the instant it's covered.
-                        // Minimized/tray apps keep the short MinimizeTrayGraceMs.
-                        bool pendingHidden = hiddenPids.Contains(proc.Id);
-                        StateFor(proc.Id).IsPendingHidden = pendingHidden;
-                        double graceMs = pendingHidden ? s.HiddenNapGraceMs : MinimizeTrayGraceMs;
-
-                        bool graceElapsed =
-                            (DateTime.UtcNow - _minimizeGraceSince[proc.Id]).TotalMilliseconds
-                            >= graceMs;
-
-                        if (graceElapsed)
+                        _minimizeGraceSince.Remove(proc.Id);
+                        if (TryThrottle(proc, s, rules, forceMaxThrottle: true))
                         {
-                            _minimizeGraceSince.Remove(proc.Id);
-                            if (TryThrottle(proc, s, rules, forceMaxThrottle: true))
-                            {
-                                double mnCpu = TryState(proc.Id, out var lcMn) && lcMn.LastCpuPercent is { } vMn ? vMn : 0;
-                                StateFor(proc.Id).CpuAtThrottle =mnCpu;
-                                StateFor(proc.Id).ThrottledAt     = DateTime.UtcNow;
-                                MarkNap(proc.Id, NapReason.Minimized);
-                                StateFor(proc.Id).NapSince ??= DateTime.UtcNow; // deep-sleep timer
-                                _nextBriefWakeAt[proc.Id] =
-                                    DateTime.UtcNow.AddMilliseconds(s.MinimizedBriefWakeIntervalMs);
-                                _briefWakeEndAt.Remove(proc.Id);
-                                bool isHidden = hiddenPids.Contains(proc.Id);
-                                AddEvent(proc.ProcessName, proc.Id,
-                                    isHidden ? "Hidden Nap"                 : "Minimize Nap",
-                                    isHidden ? "hidden behind other windows" : "app minimized");
-                                // Nap the whole tree as a unit so the entire app goes down together
-                                // (renderers/helpers), not just the window owner. Restored together
-                                // by the full-app wake sweep when the window comes back.
-                                NapChildProcesses(proc.Id, all, parentMap, protectedPids, audioPids, s, rules);
-                            }
+                            double mnCpu = TryState(proc.Id, out var lcMn) && lcMn.LastCpuPercent is { } vMn ? vMn : 0;
+                            StateFor(proc.Id).CpuAtThrottle =mnCpu;
+                            StateFor(proc.Id).ThrottledAt     = DateTime.UtcNow;
+                            MarkNap(proc.Id, NapReason.Minimized);
+                            StateFor(proc.Id).NapSince ??= DateTime.UtcNow; // deep-sleep timer
+                            _nextBriefWakeAt[proc.Id] =
+                                DateTime.UtcNow.AddMilliseconds(s.MinimizedBriefWakeIntervalMs);
+                            _briefWakeEndAt.Remove(proc.Id);
+                            bool isHidden = hiddenPids.Contains(proc.Id);
+                            AddEvent(proc.ProcessName, proc.Id,
+                                isHidden ? "Hidden Nap"                 : "Minimize Nap",
+                                isHidden ? "hidden behind other windows" : "app minimized");
+                            // Nap the whole tree as a unit so the entire app goes down together
+                            // (renderers/helpers), not just the window owner. Restored together
+                            // by the full-app wake sweep when the window comes back.
+                            NapChildProcesses(proc.Id, all, parentMap, protectedPids, audioPids, s, rules);
                         }
-                        continue;
                     }
-                    // Has audio → clear grace, fall through (audio-active apps are never napped).
-                    StateFor(proc.Id).SkipReason ="Audio active";
-                    _minimizeGraceSince.Remove(proc.Id);
+                    continue;
                 }
 
                 // ── Tray-nap: throttle tray-only processes after grace period ──
                 if (s.TrayNapEnabled && trayPids.Contains(proc.Id) &&
                     !_napBuckets.Is(proc.Id, NapReason.Tray))
                 {
-                    bool hasAudio = IsAudioProtected(proc.Id, proc.ProcessName, audioPids);
-                    if (!hasAudio)
+                    // Record when this process first became tray-only (grace period start)
+                    if (!_trayGraceSince.ContainsKey(proc.Id))
+                        _trayGraceSince[proc.Id] = DateTime.UtcNow;
+
+                    bool graceElapsed =
+                        (DateTime.UtcNow - _trayGraceSince[proc.Id]).TotalMilliseconds
+                        >= MinimizeTrayGraceMs;
+
+                    if (graceElapsed)
                     {
-                        // Record when this process first became tray-only (grace period start)
-                        if (!_trayGraceSince.ContainsKey(proc.Id))
-                            _trayGraceSince[proc.Id] = DateTime.UtcNow;
-
-                        bool graceElapsed =
-                            (DateTime.UtcNow - _trayGraceSince[proc.Id]).TotalMilliseconds
-                            >= MinimizeTrayGraceMs;
-
-                        if (graceElapsed)
+                        _trayGraceSince.Remove(proc.Id);
+                        if (TryThrottle(proc, s, rules, forceMaxThrottle: true))
                         {
-                            _trayGraceSince.Remove(proc.Id);
-                            if (TryThrottle(proc, s, rules, forceMaxThrottle: true))
-                            {
-                                double tnCpu = TryState(proc.Id, out var lcTn) && lcTn.LastCpuPercent is { } vTn ? vTn : 0;
-                                StateFor(proc.Id).CpuAtThrottle =tnCpu;
-                                StateFor(proc.Id).ThrottledAt         = DateTime.UtcNow;
-                                MarkNap(proc.Id, NapReason.Tray);
-                                _trayNextBriefWakeAt[proc.Id] =
-                                    DateTime.UtcNow.AddMilliseconds(s.TrayBriefWakeIntervalMs);
-                                _trayBriefWakeEndAt.Remove(proc.Id);
-                                StateFor(proc.Id).NapSince ??= DateTime.UtcNow; // deep-sleep timer
-                                string trayDetail = "no visible window";
-                                AddEvent(proc.ProcessName, proc.Id, "Tray Nap", trayDetail);
-                                // Nap the whole tree as a unit (see minimize-nap above).
-                                NapChildProcesses(proc.Id, all, parentMap, protectedPids, audioPids, s, rules);
-                            }
+                            double tnCpu = TryState(proc.Id, out var lcTn) && lcTn.LastCpuPercent is { } vTn ? vTn : 0;
+                            StateFor(proc.Id).CpuAtThrottle =tnCpu;
+                            StateFor(proc.Id).ThrottledAt         = DateTime.UtcNow;
+                            MarkNap(proc.Id, NapReason.Tray);
+                            _trayNextBriefWakeAt[proc.Id] =
+                                DateTime.UtcNow.AddMilliseconds(s.TrayBriefWakeIntervalMs);
+                            _trayBriefWakeEndAt.Remove(proc.Id);
+                            StateFor(proc.Id).NapSince ??= DateTime.UtcNow; // deep-sleep timer
+                            string trayDetail = "no visible window";
+                            AddEvent(proc.ProcessName, proc.Id, "Tray Nap", trayDetail);
+                            // Nap the whole tree as a unit (see minimize-nap above).
+                            NapChildProcesses(proc.Id, all, parentMap, protectedPids, audioPids, s, rules);
                         }
-                        continue; // don't also CPU-throttle
                     }
-                    // Has audio → clear grace, fall through; eligible for CPU throttle if high
-                    StateFor(proc.Id).SkipReason ="Audio active";
-                    _trayGraceSince.Remove(proc.Id);
+                    continue; // don't also CPU-throttle
                 }
 
                 // ── Background nap: nap processes unfocused for BackgroundNapAfterMs ──
@@ -1799,21 +1562,17 @@ public sealed partial class TaskSleepService : IDisposable
                     }
                     else if ((DateTime.UtcNow - lastFg).TotalMilliseconds >= s.BackgroundNapAfterMs)
                     {
-                        bool hasAudio = IsAudioProtected(proc.Id, proc.ProcessName, audioPids);
-                        if (!hasAudio)
+                        if (TryThrottle(proc, s, rules))
                         {
-                            if (TryThrottle(proc, s, rules))
-                            {
-                                StateFor(proc.Id).ThrottledAt = DateTime.UtcNow;
-                                double bgCpu = TryState(proc.Id, out var lcBg) && lcBg.LastCpuPercent is { } vBg ? vBg : 0;
-                                StateFor(proc.Id).CpuAtThrottle =bgCpu;
-                                MarkNap(proc.Id, NapReason.Background);
-                                int mins = (int)((DateTime.UtcNow - lastFg).TotalMinutes);
-                                AddEvent(proc.ProcessName, proc.Id, "Background Nap",
-                                    $"unfocused {mins}m — CPU {bgCpu:F1}%");
-                            }
-                            continue;
+                            StateFor(proc.Id).ThrottledAt = DateTime.UtcNow;
+                            double bgCpu = TryState(proc.Id, out var lcBg) && lcBg.LastCpuPercent is { } vBg ? vBg : 0;
+                            StateFor(proc.Id).CpuAtThrottle =bgCpu;
+                            MarkNap(proc.Id, NapReason.Background);
+                            int mins = (int)((DateTime.UtcNow - lastFg).TotalMinutes);
+                            AddEvent(proc.ProcessName, proc.Id, "Background Nap",
+                                $"unfocused {mins}m — CPU {bgCpu:F1}%");
                         }
+                        continue;
                     }
                 }
 
@@ -1831,20 +1590,16 @@ public sealed partial class TaskSleepService : IDisposable
 
                         if ((DateTime.UtcNow - idleSt.IdleSince.Value).TotalMilliseconds >= s.IdleNapAfterMs)
                         {
-                            bool hasAudio = IsAudioProtected(proc.Id, proc.ProcessName, audioPids);
-                            if (!hasAudio)
+                            idleSt.IdleSince = null;
+                            if (TryThrottle(proc, s, rules))
                             {
-                                idleSt.IdleSince = null;
-                                if (TryThrottle(proc, s, rules))
-                                {
-                                    StateFor(proc.Id).ThrottledAt = DateTime.UtcNow;
-                                    StateFor(proc.Id).CpuAtThrottle =idleCpu;
-                                    MarkNap(proc.Id, NapReason.Idle);
-                                    AddEvent(proc.ProcessName, proc.Id, "Idle Nap",
-                                        $"CPU {idleCpu:F2}% for 2+ min");
-                                }
-                                continue;
+                                StateFor(proc.Id).ThrottledAt = DateTime.UtcNow;
+                                StateFor(proc.Id).CpuAtThrottle =idleCpu;
+                                MarkNap(proc.Id, NapReason.Idle);
+                                AddEvent(proc.ProcessName, proc.Id, "Idle Nap",
+                                    $"CPU {idleCpu:F2}% for 2+ min");
                             }
+                            continue;
                         }
                     }
                     else if (TryState(proc.Id, out var idleSt2))
@@ -1915,10 +1670,7 @@ public sealed partial class TaskSleepService : IDisposable
         {
             foreach (int capPid in _cpuCapJobs.Keys.ToList())
             {
-                if (_throttledPids.ContainsKey(capPid)) continue;       // actively napped
-                if (_napBuckets.IsNapped(capPid))       continue;       // napped under any category (minimize/tray/bg/idle)
-                if (_briefWakeEndAt.ContainsKey(capPid)) continue;      // wake window still open
-                if (_trayBriefWakeEndAt.ContainsKey(capPid)) continue;  // tray wake window still open
+                if (IsInAnyNapState(capPid)) continue;   // still napped, or its wake window is open
                 // Orphan — release it.
                 _processNames.TryGetValue(capPid, out string? orphanName);
                 RemoveCpuCap(capPid);
@@ -1942,10 +1694,7 @@ public sealed partial class TaskSleepService : IDisposable
             foreach (var (childPid, parentPid) in napChildren)
             {
                 // Parent still in any napped / brief-wake state → child stays napped.
-                if (_throttledPids.ContainsKey(parentPid))      continue;
-                if (_napBuckets.IsNapped(parentPid))            continue;   // napped under any category
-                if (_briefWakeEndAt.ContainsKey(parentPid))     continue;
-                if (_trayBriefWakeEndAt.ContainsKey(parentPid)) continue;
+                if (IsInAnyNapState(parentPid)) continue;
 
                 // Parent is fully un-napped (or gone) — wake the child too.
                 _processNames.TryGetValue(childPid, out string? orphanChildName);
@@ -2416,6 +2165,25 @@ public sealed partial class TaskSleepService : IDisposable
     private void MarkNap(int pid, NapReason reason) => _napBuckets.Mark(pid, reason);
 
     /// <summary>
+    /// True while the engine still owns this process in any way: throttled, napped under a
+    /// category, or mid brief wake (a brief wake takes the pid out of <see cref="_throttledPids"/>
+    /// but keeps it napped). The one definition used by the full-app wake sweep and both orphan
+    /// sweeps, which each used to spell out the same four checks.
+    /// </summary>
+    private bool IsInAnyNapState(int pid) =>
+        _throttledPids.ContainsKey(pid)
+        || _napBuckets.IsNapped(pid)
+        || _briefWakeEndAt.ContainsKey(pid)
+        || _trayBriefWakeEndAt.ContainsKey(pid);
+
+    /// <summary>Brief wakes whose window is still open, minimized and tray together.</summary>
+    private int ActiveBriefWakeCount()
+    {
+        var now = DateTime.UtcNow;
+        return _briefWakeEndAt.Values.Count(e => now < e) + _trayBriefWakeEndAt.Values.Count(e => now < e);
+    }
+
+    /// <summary>
     /// The one full-wake sequence shared by every "this process should be awake now" path:
     /// the direct wake in the main loop, the sibling bulk-restore, and the whole-app cluster
     /// sweep. Restores the process (or releases its brief-wake cap if it was mid-brief-wake),
@@ -2539,6 +2307,92 @@ public sealed partial class TaskSleepService : IDisposable
         // parent is running freely, which produces the exact "super slow app" symptom
         // the main-loop fix addresses. Harmless if parent had no napped children.
         RestoreNapChildren(pid);
+    }
+
+    /// <summary>
+    /// True if <paramref name="pid"/> is mid brief wake (napped under Minimized or Tray but out of
+    /// <see cref="_throttledPids"/>), and which kind. A Minimized entry counts while minimize- or
+    /// hidden-nap is on (hidden apps nap under Minimized); a Tray entry while tray-nap is on.
+    /// </summary>
+    private bool TryGetBriefWakeKind(int pid, TaskSleepSettings s, out NapReason kind)
+    {
+        kind = default;
+        if (_throttledPids.ContainsKey(pid)) return false;
+        if ((s.MinimizeNapEnabled || s.HiddenNapEnabled) && _napBuckets.Is(pid, NapReason.Minimized))
+        {
+            kind = NapReason.Minimized;
+            return true;
+        }
+        if (s.TrayNapEnabled && _napBuckets.Is(pid, NapReason.Tray))
+        {
+            kind = NapReason.Tray;
+            return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// One tick for a process mid brief wake, minimized/hidden and tray alike. The decision is
+    /// <see cref="BriefWakeRules"/>; this carries it out. (These were two hand-copied branches
+    /// that differed only in which set/timer they read and the log label.)
+    /// </summary>
+    private void HandleBriefWakeInProgress(Process proc, NapReason kind, HashSet<int> stillHiddenPids,
+                                           HashSet<int> protectedPids, HashSet<int> audioPids, TaskSleepSettings s)
+    {
+        var endAt = kind == NapReason.Tray ? _trayBriefWakeEndAt : _briefWakeEndAt;
+        bool windowOver = endAt.TryGetValue(proc.Id, out DateTime wakeEnd) && DateTime.UtcNow >= wakeEnd;
+
+        var (action, reason) = BriefWakeRules.Decide(kind,
+            stillHidden: stillHiddenPids.Contains(proc.Id),
+            userFocused: protectedPids.Contains(proc.Id),
+            hasAudio:    IsAudioProtected(proc.Id, proc.ProcessName, audioPids),
+            windowOver:  windowOver);
+
+        switch (action)
+        {
+            case BriefWakeAction.FullWake:
+                // Immediately, not when the window ends: otherwise the app sits at the loosened
+                // cap until it expires, which feels broken.
+                FullyRestoreFromBriefWake(proc.Id);
+                _processNames.TryGetValue(proc.Id, out string? wn);
+                AddEvent(wn ?? proc.ProcessName, proc.Id, "Woke up", reason);
+                break;
+
+            case BriefWakeAction.ReNap:
+                endAt.Remove(proc.Id);
+                ReNapAfterBriefWake(proc.Id, proc.ProcessName,
+                                    kind == NapReason.Tray ? "Tray Re-nap" : "Re-napping", reason, s);
+                break;
+        }
+    }
+
+    /// <summary>
+    /// Ends a brief wake with no user interaction. The app never left its napped throttle profile
+    /// (a brief wake only widens the CPU cap), so this re-seats the parked original priority,
+    /// tightens the cap back down (children too), and re-trims memory. No priority is re-captured
+    /// or changed.
+    /// </summary>
+    private void ReNapAfterBriefWake(int pid, string fallbackName, string eventLabel, string detail, TaskSleepSettings s)
+    {
+        _throttledPids[pid] = StateFor(pid).NappedOriginalCpu ?? NORMAL_PRIORITY_CLASS;
+        StateFor(pid).NappedOriginalCpu = null;
+        StateFor(pid).ThrottledAt = DateTime.UtcNow;
+        if (s.NappedCpuCapEnabled && s.NappedCpuCapPercent > 0)
+            UpdateCpuCap(pid, Math.Clamp(s.NappedCpuCapPercent, 1, 100));
+        _processNames.TryGetValue(pid, out string? rn);
+        AddEvent(rn ?? fallbackName, pid, eventLabel, detail);
+
+        // Re-tighten any children that loosened with this parent.
+        if (s.NappedCpuCapEnabled)
+            SetNapChildCaps(pid, s.NappedCpuCapPercent);
+
+        // Nap memory compression: the brief wake faulted pages back in; push them straight back
+        // to standby so Windows can re-compress. Applies to regular nap and deep sleep alike.
+        if (s.CompressDeepSleep)
+        {
+            TrimWorkingSetByPid(pid, rn ?? fallbackName);
+            StateFor(pid).DeepSleepTrimmed = true;
+        }
     }
 
     /// <summary>
