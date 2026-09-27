@@ -167,6 +167,7 @@ public sealed partial class TaskSleepService
         "findstr", "find", "cat", "head", "tail", "grep", "sed", "awk", "ls",
         "sort", "wc", "cut", "tr", "xargs", "more", "dirname", "basename", "env",
         "cygpath", "uname", "date", "sleep", "printf", "expr", "test", "true", "false",
+        "timeout", "choice",
         // UAC and user-mode security prompts
         "consent", "RuntimeBroker",
         // .NET Framework NGEN — fires in big bursts after every Windows Update;
@@ -194,6 +195,9 @@ public sealed partial class TaskSleepService
         "CHXSmartScreen",
         // Dell / OEM inventory + driver-update agents seen on test machines
         "invcol", "DRVUpdate", "SalomanDock", "provtool",
+        // Background updaters and scanners nobody opens by hand (Edge, Defender signatures,
+        // NVIDIA DLSS, NVIDIA App's game scanner)
+        "MicrosoftEdgeUpdate", "MpSigStub", "nvngx_update", "OAWrapper",
         // Background "open hint" prompts
         "downloader", "updatesrv", "pingsender", "ByteCodeGenerator",
         // Our own installer (the previous build's setup) — never boost it
@@ -545,7 +549,8 @@ public sealed partial class TaskSleepService
     /// <item>REJECT if the parent is a napped/throttled app (dormant → background spawn) or a
     /// service/scheduler/updater host (<see cref="LaunchBoostBackgroundParents"/>).</item>
     /// <item>ACCEPT if the parent is the shell (explorer) — a direct Start/taskbar/desktop launch.</item>
-    /// <item>ACCEPT if the parent is a transient launcher stub: a young process (&lt; 20 s old).
+    /// <item>ACCEPT if the parent is a transient launcher stub: a young process (&lt; 20 s old) that
+    /// explorer started (an updater a service started is young too, but it's background work).
     /// Many apps (Firefox, etc.) launch via a short-lived stub that explorer spawns; the real
     /// process is the stub's child. Treating a young non-background parent as a launch origin
     /// catches that even if the stub's own boost was missed.</item>
@@ -571,13 +576,23 @@ public sealed partial class TaskSleepService
         // dev tool cascades a fresh boost onto every subprocess it spawns.
         if (LaunchBoostShellParents.Contains(parent)) return false;
 
-        // Transient launcher stub (young, non-background, non-shell parent) → treat as a launch origin.
+        // Transient launcher stub (young, non-background, non-shell parent) → treat as a launch origin,
+        // but only when the stub itself came from the shell. Background updaters relaunch themselves
+        // (MicrosoftEdgeUpdate → MicrosoftEdgeUpdate, MpSigStub → AM_Delta_Patch, NVIDIA's NvBackend →
+        // OAWrapper): the parent is young, but a service or the Task Scheduler started it, and boosting
+        // it handed a background updater High priority. A real launch through a stub still gets its
+        // boost, because the stub (started by explorer) is boosted and its child inherits.
         TimeSpan? age = GetProcessAgeSafe(ppid);
-        if (age.HasValue && age.Value < TimeSpan.FromSeconds(20)) return true;
+        if (age.HasValue && age.Value < TimeSpan.FromSeconds(20)) return WasStartedByShell(ppid);
 
         // Established running app spawning a child → not a fresh launch.
         return false;
     }
+
+    /// <summary>True when the Windows shell (explorer) started this process.</summary>
+    private static bool WasStartedByShell(int pid) =>
+        BuildParentMap().TryGetValue(pid, out int parent) &&
+        string.Equals(GetProcessNameSafe(parent), "explorer", StringComparison.OrdinalIgnoreCase);
 
     private static string? GetProcessNameSafe(int pid)
     {

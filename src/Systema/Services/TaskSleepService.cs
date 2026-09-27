@@ -1004,6 +1004,12 @@ public sealed partial class TaskSleepService : IDisposable
             _log.Warn("TaskSleepService", $"Process.GetProcesses() failed: {ex.Message}");
             return; // skip this tick entirely — no process list available
         }
+        // Released when the tick ends, NOT one by one inside the nap loop (step 6). A disposed
+        // Process throws on .Id, and the tree steps look processes up by id from this array: the
+        // whole-tree nap inside step 6 and the new-child sweep after it (6d). Disposing in the loop
+        // left those lookups empty, so an app's tree only half napped and a tab or renderer opened
+        // while it was napped ran at full speed until the idle nap caught it 2 minutes later.
+        using var releaseAll = new DisposeAllOnExit(all);
         var livePids = new HashSet<int>(all.Select(p => p.Id));
 
         // 4b. Collect window / audio state for minimize-, tray-, and hidden-nap. Computed HERE — BEFORE
@@ -1431,7 +1437,7 @@ public sealed partial class TaskSleepService : IDisposable
                 // proc.SessionId). Benign — nothing to clean up, just move on.
             }
             catch (Exception ex) { _log.Warn("TaskSleepService", $"Tick: could not process PID {proc.Id}: {ex.Message}"); }
-            finally { try { proc.Dispose(); } catch { } }
+            // No Dispose here: 6d below still reads these (see releaseAll at the top of the tick).
         }
 
         // 6b. Orphan-cap sweep — safety net for any Job Object cap that became
@@ -1641,6 +1647,17 @@ public sealed partial class TaskSleepService : IDisposable
 
         // Persist the current napped set for crash recovery (only rewrites the file when it changed).
         PersistNapJournalIfChanged();
+    }
+
+    /// <summary>Disposes one tick's Process objects when the tick ends, on every exit path.</summary>
+    private readonly struct DisposeAllOnExit : IDisposable
+    {
+        private readonly Process[] _procs;
+        public DisposeAllOnExit(Process[] procs) => _procs = procs;
+        public void Dispose()
+        {
+            foreach (var p in _procs) { try { p.Dispose(); } catch { } }
+        }
     }
 
     // ── CPU Sampling ───────────────────────────────────────────────────────────
