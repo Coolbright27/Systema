@@ -126,7 +126,7 @@
                 <!-- One group: the profile on top, its plugged-in and battery pickers as rows under it. -->
                 <Border Style="{StaticResource ExpanderCard}">
                 <StackPanel>
-                <ctl:SettingsCard Header="Thermal Profile" Style="{StaticResource ExpanderHeaderCard}">
+                <ctl:SettingsCard Header="Thermal profile" Style="{StaticResource ExpanderHeaderCard}">
                     <ctl:SettingsCard.Description>
                         <StackPanel>
                             <TextBlock Style="{StaticResource CardDescription}">
@@ -194,7 +194,7 @@
                         Visibility="{Binding ChargingSupported, Converter={StaticResource BoolToVis}}">
                 <TextBlock Text="Battery" Style="{StaticResource SettingsGroupHeader}"/>
 
-                <ctl:SettingsCard Header="Charging Mode">
+                <ctl:SettingsCard Header="Charging mode">
                     <ctl:SettingsCard.Description>
                         <StackPanel>
                             <TextBlock Style="{StaticResource CardDescription}">

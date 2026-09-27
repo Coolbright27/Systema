@@ -79,7 +79,7 @@
 
             <!-- ===== HEADER ===== -->
             <StackPanel Margin="0,0,0,8">
-                <TextBlock Text="Visual &amp; Power" Style="{StaticResource HeadingLarge}"/>
+                <TextBlock Text="Visual &amp; power" Style="{StaticResource HeadingLarge}"/>
                 <TextBlock Text="Pick how snappy Windows feels, and how it uses power."
                            Style="{StaticResource CaptionText}" Margin="0,4,0,0" TextWrapping="Wrap"/>
             </StackPanel>

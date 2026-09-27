@@ -75,6 +75,85 @@ public class WindowsNativeTests
         }
     }
 
+    // At 100% scaling WPF's default ("Ideal") text sits between pixels and, over Mica, is drawn
+    // with grey smoothing: soft and faint next to Settings. Display mode snaps it to the pixel
+    // grid like Windows' own text (0.7.355). Popups are separate windows, so they set it too.
+    [Fact]
+    public void EveryWindow_DrawsCrispText()
+    {
+        foreach (var w in new[] { "MainWindow.xaml", "DismissedWindow.xaml", "RestorePointManagerWindow.xaml",
+                                  "CrashReportWindow.xaml", "DiagnosticsReportWindow.xaml" })
+            Assert.Contains("TextOptions.TextFormattingMode=\"Display\"", Read("Views", w));
+        Assert.Contains("SetTextFormattingMode(this, System.Windows.Media.TextFormattingMode.Display)",
+                        Read("Views", "RestorePointManagerWindow.xaml.cs"));
+
+        var d = Dark();
+        foreach (var popup in new[] { "<Style TargetType=\"ToolTip\">", "<Style TargetType=\"ContextMenu\">" })
+        {
+            int s = d.IndexOf(popup, StringComparison.Ordinal);
+            Assert.True(s > 0);
+            Assert.Contains("TextOptions.TextFormattingMode\" Value=\"Display\"", d[s..d.IndexOf("</Style>", s, StringComparison.Ordinal)]);
+        }
+    }
+
+    // Settings writes "On" / "Off" before every switch.
+    [Fact]
+    public void Switches_SayOnOrOff()
+    {
+        var d = Dark();
+        int s = d.IndexOf("x:Key=\"ToggleSwitch\"", StringComparison.Ordinal);
+        var toggle = d[s..d.IndexOf("</ControlTemplate>", s, StringComparison.Ordinal)];
+        Assert.Contains("x:Name=\"StateText\" Text=\"Off\"", toggle);
+        Assert.Contains("<Setter TargetName=\"StateText\" Property=\"Text\" Value=\"On\"/>", toggle);
+
+        // Home's Auto Pilot switch used to hand-build its own label; now it would say it twice.
+        var home = Read("Views", "DashboardView.xaml");
+        int sw = home.IndexOf("<CheckBox Style=\"{StaticResource ToggleSwitch}\" VerticalAlignment=\"Center\"", StringComparison.Ordinal);
+        Assert.True(sw > 0);
+        Assert.DoesNotContain("Value=\"Off\"", home[Math.Max(0, sw - 400)..sw]);
+    }
+
+    // Windows uses sentence case for every setting name and button ("Choose your mode",
+    // "Install all"), keeping capitals only for names.
+    [Fact]
+    public void HeadingsAndButtons_UseSentenceCase()
+    {
+        var names = new HashSet<string>
+        {
+            "Windows", "Systema", "Start", "Game", "Bar", "Boost", "Booster", "Engine", "Auto", "Pilot", "Launch",
+            "Telemetry", "Pro", "Intel", "Dell", "Discord", "Store", "Control", "Panel", "Bluetooth", "Nagle's",
+            "Realtek", "Wi-Fi", "High", "Max", "Off", "On", "ClearType",
+        };
+        var bad = new List<string>();
+        foreach (var f in Directory.GetFiles(Path.Combine(Root(), "Views"), "*.xaml"))
+            foreach (Match m in Regex.Matches(File.ReadAllText(f), "(?:Header|Content)=\"([^\"{]+)\""))
+            {
+                var words = m.Groups[1].Value.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                foreach (var w in words.Skip(1))
+                {
+                    var word = w.Trim('(', ')', ',', '.');
+                    if (Regex.IsMatch(word, "^[A-Z][a-z]") && !names.Contains(word))
+                        bad.Add($"{Path.GetFileName(f)}: \"{m.Groups[1].Value}\"");
+                }
+            }
+        Assert.True(bad.Count == 0, "Title Case left:\n  " + string.Join("\n  ", bad.Distinct()));
+    }
+
+    // Windows buttons and notes are plain text: no emoji, no fallback-font symbols, and no
+    // "Status: ON ✓" beside a switch that already says On.
+    [Fact]
+    public void Text_HasNoSymbolsOrRedundantStatus()
+    {
+        foreach (var f in Directory.GetFiles(Path.Combine(Root(), "Views"), "*.xaml"))
+        {
+            var x = File.ReadAllText(f);
+            Assert.DoesNotContain("⟳", x);
+            Assert.DoesNotContain("\"Status: ON", x);
+            Assert.DoesNotContain("\"Status: OFF", x);
+            Assert.False(Regex.IsMatch(x, "Content=\"(➕|🔄|↻ |↑)"), $"{Path.GetFileName(f)} has an emoji button");
+        }
+    }
+
     // The tray menu kept the pre-redesign blue-grey palette and square corners.
     [Fact]
     public void TrayMenu_UsesTheWindows11Look()

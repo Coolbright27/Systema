@@ -58,7 +58,7 @@
                             dropouts. It only touches scheduling, never any device effect, so it won't change how your
                             speakers sound. Turning it off puts the Windows default back.
                         </TextBlock>
-                        <TextBlock Text="⟳  Restart your PC to apply." Style="{StaticResource CardNoteWarn}"/>
+                        <TextBlock Text="Restart your PC to apply." Style="{StaticResource CardNoteWarn}"/>
                     </StackPanel>
                 </ctl:SettingsCard.Description>
                 <CheckBox Style="{StaticResource ToggleSwitch}"
@@ -86,7 +86,7 @@
                             unless the app (Discord, Zoom) does its own. It's fully reversible, so just toggle it back if you like
                             them on. Spatial sound has its own toggle below.
                         </TextBlock>
-                        <TextBlock Text="⟳  Needs a full restart to take effect. Reopening Sound settings won't show it until the audio engine reloads."
+                        <TextBlock Text="Needs a full restart to take effect. Reopening Sound settings won't show it until the audio engine reloads."
                                    Style="{StaticResource CardNoteWarn}"/>
                         <TextBlock Text="↻  Stays enforced. If a device reconnects with its effects back on, or a vendor audio service comes back after an update, Systema turns them off again on its own."
                                    Style="{StaticResource CardNoteGood}"/>
@@ -109,7 +109,7 @@
                             This covers the Windows spatial engine. Standalone apps like Dolby Access or DTS Sound Unbound
                             have their own off switch.
                         </TextBlock>
-                        <TextBlock Text="⟳  Needs a full restart to take effect." Style="{StaticResource CardNoteWarn}"/>
+                        <TextBlock Text="Needs a full restart to take effect." Style="{StaticResource CardNoteWarn}"/>
                         <TextBlock Text="↻  Stays enforced. If a device reconnects with spatial back on, Systema turns it off again on its own."
                                    Style="{StaticResource CardNoteGood}"/>
                     </StackPanel>

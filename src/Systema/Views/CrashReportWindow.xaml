@@ -1,6 +1,7 @@
 <!-- AllowsTransparency removed — see MainWindow.xaml VSync warning comment.
      Layered windows break NVIDIA driver-level VSync for the foreground game. -->
 <Window x:Class="Systema.Views.CrashReportWindow"
+        TextOptions.TextFormattingMode="Display"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Systema — Crash Report"
@@ -118,7 +119,7 @@
                         <RowDefinition Height="*"/>
                     </Grid.RowDefinitions>
                     <TextBlock Grid.Row="0"
-                               Text="Stack Trace"
+                               Text="Stack trace"
                                FontSize="11" FontWeight="SemiBold"
                                Foreground="#6B7A99" FontFamily="Segoe UI Variable Text, Segoe UI"/>
                     <Border Grid.Row="2"
@@ -147,7 +148,7 @@
                         <RowDefinition Height="*"/>
                     </Grid.RowDefinitions>
                     <TextBlock Grid.Row="0"
-                               Text="Recent Activity"
+                               Text="Recent activity"
                                FontSize="11" FontWeight="SemiBold"
                                Foreground="#6B7A99" FontFamily="Segoe UI Variable Text, Segoe UI"/>
                     <Border Grid.Row="2"
@@ -197,7 +198,7 @@
 
                         <!-- Copy Report -->
                         <Button x:Name="CopyButton"
-                                Content="Copy Report"
+                                Content="Copy report"
                                 Click="CopyReport_Click"
                                 Background="#262628"
                                 Foreground="#E8EAF0"
@@ -224,7 +225,7 @@
 
                         <!-- Open Logs Folder -->
                         <Button x:Name="OpenFolderButton"
-                                Content="Open Logs Folder"
+                                Content="Open logs folder"
                                 Click="OpenLogsFolder_Click"
                                 Background="#262628"
                                 Foreground="#E8EAF0"

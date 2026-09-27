@@ -18,7 +18,7 @@
 
             <!-- ===== HEADER ===== -->
             <StackPanel Margin="0,0,0,8">
-                <TextBlock Text="App Cleanup" Style="{StaticResource HeadingLarge}"/>
+                <TextBlock Text="App cleanup" Style="{StaticResource HeadingLarge}"/>
                 <TextBlock Style="{StaticResource CaptionText}" Margin="0,4,0,0" TextWrapping="Wrap" MaxWidth="760"
                            HorizontalAlignment="Left">
                     Remove pre-installed Microsoft apps you don't use. Your PC stays healthy and
@@ -28,7 +28,7 @@
             </StackPanel>
 
             <!-- ===== INFO CARD ===== -->
-            <ctl:SettingsCard Header="Safe Pre-installed App List" Margin="0,16,0,4"
+            <ctl:SettingsCard Header="Safe pre-installed app list" Margin="0,16,0,4"
                               Badge="Safe" BadgeBrush="{DynamicResource AccentGreenBrush}">
                 <ctl:SettingsCard.Description>
                     <TextBlock Style="{StaticResource CardDescription}">
@@ -37,7 +37,7 @@
                         A safety restore point is created before anything is removed.
                     </TextBlock>
                 </ctl:SettingsCard.Description>
-                <Button Content="Scan Again"
+                <Button Content="Scan again"
                         Style="{StaticResource GhostButton}" Padding="16,9"
                         IsEnabled="{Binding IsNotLoading}"
                         Command="{Binding RescanCommand}"/>
@@ -69,10 +69,10 @@
                                VerticalAlignment="Center" Margin="0,0,16,0"/>
                     <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center"
                                 Visibility="{Binding HasApps, Converter={StaticResource BoolToVis}}">
-                        <Button Content="Select All" Style="{StaticResource GhostButton}"
+                        <Button Content="Select all" Style="{StaticResource GhostButton}"
                                 Padding="12,6" Margin="0,0,8,0"
                                 Command="{Binding SelectAllCommand}"/>
-                        <Button Content="Deselect All" Style="{StaticResource GhostButton}"
+                        <Button Content="Deselect all" Style="{StaticResource GhostButton}"
                                 Padding="12,6"
                                 Command="{Binding DeselectAllCommand}"/>
                     </StackPanel>
@@ -141,7 +141,7 @@
                                 Command="{Binding RemoveSelectedCommand}"
                                 IsEnabled="{Binding IsNotRemoving}">
                             <TextBlock>
-                                <Run Text="Remove Selected ("/>
+                                <Run Text="Remove selected ("/>
                                 <Run Text="{Binding SelectedCount, Mode=OneWay}"/>
                                 <Run Text=")"/>
                             </TextBlock>

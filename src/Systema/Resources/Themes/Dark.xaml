@@ -334,6 +334,11 @@
                 <ControlTemplate TargetType="CheckBox">
                     <StackPanel x:Name="Root" Orientation="Horizontal" VerticalAlignment="Center"
                                 Background="Transparent">
+                        <!-- "On" / "Off" before the switch, exactly as Windows Settings shows it.
+                             Tag="NoStateLabel" drops it where the switch already has its own text. -->
+                        <TextBlock x:Name="StateText" Text="Off" FontSize="14" Margin="0,0,12,0"
+                                   VerticalAlignment="Center"
+                                   Foreground="{DynamicResource TextPrimaryBrush}"/>
                         <Grid x:Name="Track" Width="40" Height="20">
                             <Border x:Name="TrackOff" CornerRadius="10" BorderThickness="1"
                                     BorderBrush="{DynamicResource ToggleOffStrokeBrush}"
@@ -360,6 +365,12 @@
                         <ContentPresenter Margin="8,0,0,0" VerticalAlignment="Center"/>
                     </StackPanel>
                     <ControlTemplate.Triggers>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="StateText" Property="Text" Value="On"/>
+                        </Trigger>
+                        <Trigger Property="Tag" Value="NoStateLabel">
+                            <Setter TargetName="StateText" Property="Visibility" Value="Collapsed"/>
+                        </Trigger>
                         <!-- Thumb spans x=4..16 of the 40px track; 20px of travel puts it at 24..36,
                              leaving the same 4px margin on the right. 167 ms is WinUI's
                              ControlFastAnimationDuration. -->
@@ -1491,6 +1502,7 @@
          styles set through a ToolTip setter. Long tooltips wrap instead of running off
          the screen. Only the look changes: content, timing and placement are WPF's own. -->
     <Style TargetType="ToolTip">
+        <Setter Property="TextOptions.TextFormattingMode" Value="Display"/>
         <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
         <Setter Property="FontFamily" Value="{StaticResource SmallFont}"/>
         <Setter Property="FontSize" Value="12"/>
@@ -1522,6 +1534,7 @@
          highlight. Implicit, so the Cut / Copy / Paste menu WPF gives every text box uses it
          instead of the classic light menu. Systema has no submenus, so items are single rows. -->
     <Style TargetType="ContextMenu">
+        <Setter Property="TextOptions.TextFormattingMode" Value="Display"/>
         <Setter Property="OverridesDefaultStyle" Value="True"/>
         <Setter Property="SnapsToDevicePixels" Value="True"/>
         <Setter Property="HasDropShadow" Value="False"/>

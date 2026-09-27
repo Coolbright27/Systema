@@ -74,7 +74,7 @@
 
             <!-- ===== HEADER ===== -->
             <StackPanel Margin="0,0,0,8">
-                <TextBlock Text="Cleanup &amp; Privacy" Style="{StaticResource HeadingLarge}"/>
+                <TextBlock Text="Cleanup &amp; privacy" Style="{StaticResource HeadingLarge}"/>
                 <TextBlock Text="Stop background services you don't need, and stop Windows collecting data about you."
                            Style="{StaticResource CaptionText}" Margin="0,4,0,0" TextWrapping="Wrap"/>
             </StackPanel>
@@ -87,7 +87,7 @@
                 <!-- Recommended cleanup: single on/off toggle (drives the same
                      PrivacyCleanupApplied state the Dashboard reads). -->
                 <StackPanel Style="{StaticResource ManagedSection}">
-                    <ctl:SettingsCard Header="Service Cleanup" RecommendKey="PrivacyCleanup">
+                    <ctl:SettingsCard Header="Service cleanup" RecommendKey="PrivacyCleanup">
                         <ctl:SettingsCard.Description>
                             <StackPanel>
                                 <TextBlock Text="{Binding RecommendedSummaryText}" Style="{StaticResource CardDescription}"/>

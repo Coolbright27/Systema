@@ -31,7 +31,7 @@
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
                 <StackPanel Grid.Column="0">
-                    <TextBlock Text="Intel Graphics" Style="{StaticResource HeadingLarge}"/>
+                    <TextBlock Text="Intel graphics" Style="{StaticResource HeadingLarge}"/>
                     <TextBlock Text="{Binding AdapterName}" Style="{StaticResource CaptionText}"
                                Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,4,0,0"/>
                 </StackPanel>
@@ -57,7 +57,7 @@
             <TextBlock Text="Performance" Style="{StaticResource SettingsGroupHeader}"/>
 
             <!-- ===== Power Policy ===== -->
-            <ctl:SettingsCard Header="Power Policy" RecommendKey="IntelPowerPolicy"
+            <ctl:SettingsCard Header="Power policy" RecommendKey="IntelPowerPolicy"
                               Visibility="{Binding ShowPowerPolicy, Converter={StaticResource BoolToVis}}">
                 <ctl:SettingsCard.Description>
                     <StackPanel>
@@ -75,13 +75,13 @@
                 <StackPanel>
                     <ComboBox Width="170" ItemsSource="{Binding PowerPolicyOptions}"
                               SelectedItem="{Binding SelectedPowerPolicy, Mode=TwoWay}"/>
-                    <Button Content="Reset to Default" Style="{StaticResource CardResetButton}"
+                    <Button Content="Reset to default" Style="{StaticResource CardResetButton}"
                             Command="{Binding ResetSettingCommand}" CommandParameter="PowerPolicy"/>
                 </StackPanel>
             </ctl:SettingsCard>
 
             <!-- ===== RC6 Render Standby ===== -->
-            <ctl:SettingsCard Header="RC6 Render Standby" RecommendKey="IntelRc6"
+            <ctl:SettingsCard Header="RC6 render standby" RecommendKey="IntelRc6"
                               Visibility="{Binding ShowRc6, Converter={StaticResource BoolToVis}}">
                 <ctl:SettingsCard.Description>
                     <StackPanel>
@@ -99,7 +99,7 @@
                 <StackPanel>
                     <CheckBox Style="{StaticResource ToggleSwitch}" HorizontalAlignment="Right"
                               IsChecked="{Binding Rc6On, Mode=TwoWay}"/>
-                    <Button Content="Reset to Default" Style="{StaticResource CardResetButton}"
+                    <Button Content="Reset to default" Style="{StaticResource CardResetButton}"
                             Command="{Binding ResetSettingCommand}" CommandParameter="RC6"/>
                 </StackPanel>
             </ctl:SettingsCard>
@@ -112,7 +112,7 @@
             <TextBlock Text="Display and battery" Style="{StaticResource SettingsGroupHeader}"/>
 
             <!-- ===== Display Power Saving (DPST) ===== -->
-            <ctl:SettingsCard Header="Display Power Saving (DPST)" RecommendKey="IntelDpst"
+            <ctl:SettingsCard Header="Display power saving (DPST)" RecommendKey="IntelDpst"
                               Visibility="{Binding ShowDpst, Converter={StaticResource BoolToVis}}">
                 <ctl:SettingsCard.Description>
                     <StackPanel>
@@ -130,13 +130,13 @@
                 <StackPanel>
                     <CheckBox Style="{StaticResource ToggleSwitch}" HorizontalAlignment="Right"
                               IsChecked="{Binding DpstOn, Mode=TwoWay}"/>
-                    <Button Content="Reset to Default" Style="{StaticResource CardResetButton}"
+                    <Button Content="Reset to default" Style="{StaticResource CardResetButton}"
                             Command="{Binding ResetSettingCommand}" CommandParameter="DPST"/>
                 </StackPanel>
             </ctl:SettingsCard>
 
             <!-- ===== Dynamic Refresh Switching (DRRS) ===== -->
-            <ctl:SettingsCard Header="Dynamic Refresh Switching" RecommendKey="IntelDrrs"
+            <ctl:SettingsCard Header="Dynamic refresh switching" RecommendKey="IntelDrrs"
                               Visibility="{Binding ShowDrrs, Converter={StaticResource BoolToVis}}">
                 <ctl:SettingsCard.Description>
                     <StackPanel>
@@ -160,13 +160,13 @@
                 <StackPanel>
                     <CheckBox Style="{StaticResource ToggleSwitch}" HorizontalAlignment="Right"
                               IsChecked="{Binding DrrsOn, Mode=TwoWay}"/>
-                    <Button Content="Reset to Default" Style="{StaticResource CardResetButton}"
+                    <Button Content="Reset to default" Style="{StaticResource CardResetButton}"
                             Command="{Binding ResetSettingCommand}" CommandParameter="DRRS"/>
                 </StackPanel>
             </ctl:SettingsCard>
 
             <!-- ===== Frame Buffer Compression (FBC) ===== -->
-            <ctl:SettingsCard Header="Frame Buffer Compression" RecommendKey="IntelFbc"
+            <ctl:SettingsCard Header="Frame buffer compression" RecommendKey="IntelFbc"
                               Visibility="{Binding ShowFbc, Converter={StaticResource BoolToVis}}">
                 <ctl:SettingsCard.Description>
                     <StackPanel>
@@ -183,7 +183,7 @@
                 <StackPanel>
                     <CheckBox Style="{StaticResource ToggleSwitch}" HorizontalAlignment="Right"
                               IsChecked="{Binding FbcOn, Mode=TwoWay}"/>
-                    <Button Content="Reset to Default" Style="{StaticResource CardResetButton}"
+                    <Button Content="Reset to default" Style="{StaticResource CardResetButton}"
                             Command="{Binding ResetSettingCommand}" CommandParameter="FBC"/>
                 </StackPanel>
             </ctl:SettingsCard>
@@ -200,7 +200,7 @@
 
                 <ctl:SettingsCard Header="Revert all"
                                   Description="Restore every Intel graphics setting to the driver's defaults.">
-                    <Button Content="Revert All Intel Settings to Default"
+                    <Button Content="Revert all Intel settings to default"
                             Style="{StaticResource GhostButton}" Padding="14,8"
                             Command="{Binding RevertAllCommand}"/>
                 </ctl:SettingsCard>

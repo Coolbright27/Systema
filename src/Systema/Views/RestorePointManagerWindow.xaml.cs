@@ -214,7 +214,8 @@ internal class RestorePointNameDialog : Window
     public RestorePointNameDialog()
     {
         Systema.Core.ThemeManager.FollowTheme(this);
-        Title  = "Create Restore Point";
+        System.Windows.Media.TextOptions.SetTextFormattingMode(this, System.Windows.Media.TextFormattingMode.Display);   // crisp text, like every window
+        Title  = "Create restore point";
         Width  = 440;
         Height = 200;
         ResizeMode = ResizeMode.NoResize;

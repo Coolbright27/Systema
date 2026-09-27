@@ -67,9 +67,9 @@ public class UiSearchIndexTests
     [Fact]
     public void EverydayWords_FindTheRightSetting()
     {
-        Assert.Contains(SettingsSearchIndex.Search("fan", All), e => e.Title == "Thermal Profile");
+        Assert.Contains(SettingsSearchIndex.Search("fan", All), e => e.Title == "Thermal profile");
         Assert.Contains(SettingsSearchIndex.Search("tracking", All), e => e.Title == "No Telemetry Pro");
-        Assert.Contains(SettingsSearchIndex.Search("charge", All), e => e.Title == "Charging Mode");
+        Assert.Contains(SettingsSearchIndex.Search("charge", All), e => e.Title == "Charging mode");
         Assert.Contains(SettingsSearchIndex.Search("pagefile", All), e => e.Title.Contains("page file"));
     }
 

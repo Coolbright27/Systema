@@ -1,4 +1,5 @@
 <Window x:Class="Systema.Views.RestorePointManagerWindow"
+        TextOptions.TextFormattingMode="Display"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Manage Restore Points — Systema"
@@ -25,7 +26,7 @@
 
         <!-- Header -->
         <StackPanel Grid.Row="0">
-            <TextBlock Text="Manage Restore Points" Style="{StaticResource HeadingLarge}"/>
+            <TextBlock Text="Manage restore points" Style="{StaticResource HeadingLarge}"/>
             <TextBlock TextWrapping="Wrap" Style="{StaticResource CaptionText}" Margin="0,4,0,0">
                 Restore points are safety snapshots of your Windows settings. If something goes wrong
                 after making changes, you can go back to an earlier state. Click "Restore My PC" to
@@ -35,10 +36,10 @@
 
         <!-- Create / Refresh row -->
         <StackPanel Grid.Row="2" Orientation="Horizontal">
-            <Button x:Name="CreateBtn" Content="➕  Create New Restore Point"
+            <Button x:Name="CreateBtn" Content="Create new restore point"
                     Style="{StaticResource PrimaryButton}" Padding="18,9" Margin="0,0,10,0"
                     Click="CreateBtn_Click"/>
-            <Button x:Name="RefreshBtn" Content="↻  Refresh List"
+            <Button x:Name="RefreshBtn" Content="Refresh list"
                     Style="{StaticResource GhostButton}" Padding="14,9"
                     Click="RefreshBtn_Click"/>
         </StackPanel>
@@ -135,7 +136,7 @@
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
 
-            <Button Grid.Column="0" Content="🔄  Restore My PC (opens Windows wizard)"
+            <Button Grid.Column="0" Content="Restore my PC (opens Windows wizard)"
                     Style="{StaticResource GhostButton}" Padding="18,9"
                     HorizontalAlignment="Left"
                     Click="RestoreWizardBtn_Click"

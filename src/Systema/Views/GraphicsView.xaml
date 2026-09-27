@@ -36,7 +36,7 @@
             <!-- ===== FRAME PACING & DISPLAY ===== -->
             <TextBlock Text="Frame pacing and display" Style="{StaticResource SettingsGroupHeader}"/>
 
-            <ctl:SettingsCard Header="Disable Multi-Plane Overlay (MPO)" RecommendKey="DisableMpo">
+            <ctl:SettingsCard Header="Disable multi-plane overlay (MPO)" RecommendKey="DisableMpo">
                 <ctl:SettingsCard.Description>
                     <StackPanel>
                         <TextBlock Style="{StaticResource CardDescription}">
@@ -48,7 +48,7 @@
                             Tradeoff: NVIDIA's VSync / Independent Flip relies on MPO. On NVIDIA GPUs, disabling MPO can fix
                             stutter on some systems but cause screen tearing on others. Test it, and revert if you see tearing.
                         </TextBlock>
-                        <TextBlock Text="⟳  Restart your PC to apply." Style="{StaticResource CardNoteWarn}"/>
+                        <TextBlock Text="Restart your PC to apply." Style="{StaticResource CardNoteWarn}"/>
                     </StackPanel>
                 </ctl:SettingsCard.Description>
                 <CheckBox Style="{StaticResource AutoPilotManagedToggle}"
@@ -56,7 +56,7 @@
                           IsChecked="{Binding DisableMpo, Mode=TwoWay}"/>
             </ctl:SettingsCard>
 
-            <ctl:SettingsCard Header="Hardware-accelerated GPU Scheduling" RecommendKey="Hags">
+            <ctl:SettingsCard Header="Hardware-accelerated GPU scheduling" RecommendKey="Hags">
                 <ctl:SettingsCard.Description>
                     <StackPanel>
                         <TextBlock Style="{StaticResource CardDescription}">
@@ -66,7 +66,7 @@
                         </TextBlock>
                         <TextBlock Text="Not supported on this GPU/driver." Style="{StaticResource CardNote}"
                                    Visibility="{Binding HagsSupported, Converter={StaticResource BoolToVis}, ConverterParameter=Invert}"/>
-                        <TextBlock Text="⟳  Restart your PC to apply." Style="{StaticResource CardNoteWarn}"/>
+                        <TextBlock Text="Restart your PC to apply." Style="{StaticResource CardNoteWarn}"/>
                     </StackPanel>
                 </ctl:SettingsCard.Description>
                 <CheckBox Style="{StaticResource ToggleSwitch}"
@@ -82,7 +82,7 @@
                             lower latency and tearing control closer to true fullscreen. Same toggle as Windows Settings
                             → Display → Graphics.
                         </TextBlock>
-                        <TextBlock Text="⟳  Restart any open games to apply." Style="{StaticResource CardNoteWarn}"/>
+                        <TextBlock Text="Restart any open games to apply." Style="{StaticResource CardNoteWarn}"/>
                     </StackPanel>
                 </ctl:SettingsCard.Description>
                 <CheckBox Style="{StaticResource ToggleSwitch}"
@@ -98,7 +98,7 @@
                             steadier FPS and lower latency. This reflects your current Windows setting and changes nothing
                             until you flip it; off restores the Windows default.
                         </TextBlock>
-                        <TextBlock Text="⟳  Restart any open games to apply." Style="{StaticResource CardNoteWarn}"/>
+                        <TextBlock Text="Restart any open games to apply." Style="{StaticResource CardNoteWarn}"/>
                     </StackPanel>
                 </ctl:SettingsCard.Description>
                 <CheckBox Style="{StaticResource ToggleSwitch}"
@@ -120,7 +120,7 @@
                         </TextBlock>
                         <TextBlock Style="{StaticResource CardNoteWarn}"
                                    Text="It caps at the highest safe level, not true realtime. Real realtime priority can starve Windows itself and freeze the machine, so Systema stays one notch below that. This does raise the desktop compositor's priority for a smoother whole-display pipeline, which is fully reversible if anything ever looks off."/>
-                        <TextBlock Text="⟳  Needs a full restart to take effect." Style="{StaticResource CardNoteWarn}"/>
+                        <TextBlock Text="Needs a full restart to take effect." Style="{StaticResource CardNoteWarn}"/>
                     </StackPanel>
                 </ctl:SettingsCard.Description>
                 <CheckBox Style="{StaticResource ToggleSwitch}"
@@ -143,9 +143,9 @@
                                  Foreground="{DynamicResource AccentGreenBrush}" FontWeight="SemiBold"/>
                         </TextBlock>
                         <!-- State-aware system-wide status: pending restart vs active for every process -->
-                        <TextBlock Text="⟳  Restart your PC so it applies system-wide." Style="{StaticResource CardNoteWarn}"
+                        <TextBlock Text="Restart your PC so it applies system-wide." Style="{StaticResource CardNoteWarn}"
                                    Visibility="{Binding ShowTimerRestartNote, Converter={StaticResource BoolToVis}}"/>
-                        <TextBlock Text="✓  Active system-wide. Every app now gets the 0.5 ms timer." Style="{StaticResource CardNoteGood}"
+                        <TextBlock Text="Active system-wide. Every app now gets the 0.5 ms timer." Style="{StaticResource CardNoteGood}"
                                    Visibility="{Binding ShowTimerActiveNote, Converter={StaticResource BoolToVis}}"/>
                         <TextBlock Text="Stays on while Systema is running. If you fully close Systema, the timer goes back to normal."
                                    Style="{StaticResource CardNote}"
@@ -168,7 +168,7 @@
                             to 10 seconds so the GPU can recover from a short hiccup instead of resetting, cutting down on
                             those black screens.
                         </TextBlock>
-                        <TextBlock Text="⟳  Restart your PC to apply." Style="{StaticResource CardNoteWarn}"/>
+                        <TextBlock Text="Restart your PC to apply." Style="{StaticResource CardNoteWarn}"/>
                     </StackPanel>
                 </ctl:SettingsCard.Description>
                 <CheckBox Style="{StaticResource AutoPilotManagedToggle}"
@@ -184,10 +184,10 @@
             <ctl:SettingsCard Header="Intel integrated graphics detected" Margin="0,16,0,4"
                               Visibility="{Binding DataContext.IsIntelGpuPresent, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToVis}}">
                 <ctl:SettingsCard.Description>
-                    <TextBlock Text="Per-GPU power, display, and performance tweaks live on the Intel Graphics page."
+                    <TextBlock Text="Per-GPU power, display, and performance tweaks live on the Intel graphics page."
                                Style="{StaticResource CardDescription}"/>
                 </ctl:SettingsCard.Description>
-                <Button Content="Open Intel Graphics" Style="{StaticResource GhostButton}"
+                <Button Content="Open Intel graphics" Style="{StaticResource GhostButton}"
                         Command="{Binding DataContext.NavigateCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                         CommandParameter="Intel"/>
             </ctl:SettingsCard>
@@ -196,10 +196,10 @@
             <ctl:SettingsCard Header="NVIDIA graphics detected"
                               Visibility="{Binding DataContext.IsNvidiaGpuPresent, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToVis}}">
                 <ctl:SettingsCard.Description>
-                    <TextBlock Text="Per-GPU power management and driver tweaks live on the Nvidia Graphics page."
+                    <TextBlock Text="Per-GPU power management and driver tweaks live on the NVIDIA graphics page."
                                Style="{StaticResource CardDescription}"/>
                 </ctl:SettingsCard.Description>
-                <Button Content="Open Nvidia Graphics" Style="{StaticResource GhostButton}"
+                <Button Content="Open NVIDIA graphics" Style="{StaticResource GhostButton}"
                         Command="{Binding DataContext.NavigateCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                         CommandParameter="Nvidia"/>
             </ctl:SettingsCard>

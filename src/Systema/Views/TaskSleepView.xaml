@@ -274,7 +274,7 @@
                                 ctl:Motion.RevealOnShow="True">
 
                         <!-- Foreground Priority Boost -->
-                        <ctl:SettingsCard Header="Foreground Priority Boost" Style="{StaticResource ExpanderItem}" RecommendKey="ForegroundBoost"
+                        <ctl:SettingsCard Header="Foreground priority boost" Style="{StaticResource ExpanderItem}" RecommendKey="ForegroundBoost"
                                           Badge="Safe" BadgeBrush="{DynamicResource TextSecondaryBrush}">
                             <ctl:SettingsCard.Description>
                                 <TextBlock Style="{StaticResource CardDescription}">
@@ -290,7 +290,7 @@
                         </ctl:SettingsCard>
 
                         <!-- Instant App Focus -->
-                        <ctl:SettingsCard Header="Instant App Focus" Style="{StaticResource ExpanderItem}" RecommendKey="InstantAppFocus"
+                        <ctl:SettingsCard Header="Instant app focus" Style="{StaticResource ExpanderItem}" RecommendKey="InstantAppFocus"
                                           Badge="Safe" BadgeBrush="{DynamicResource TextSecondaryBrush}">
                             <ctl:SettingsCard.Description>
                                 <TextBlock Style="{StaticResource CardDescription}">
@@ -306,7 +306,7 @@
                         </ctl:SettingsCard>
 
                         <!-- Instant Startup Apps -->
-                        <ctl:SettingsCard Header="Instant Startup Apps" Style="{StaticResource ExpanderItem}" RecommendKey="InstantStartupApps"
+                        <ctl:SettingsCard Header="Instant startup apps" Style="{StaticResource ExpanderItem}" RecommendKey="InstantStartupApps"
                                           Badge="Safe" BadgeBrush="{DynamicResource TextSecondaryBrush}">
                             <ctl:SettingsCard.Description>
                                 <TextBlock Style="{StaticResource CardDescription}">
@@ -323,7 +323,7 @@
                         </ctl:SettingsCard>
 
                         <!-- Maximum System Responsiveness: engine-gated with the boosts above. -->
-                        <ctl:SettingsCard Header="Maximum System Responsiveness" Style="{StaticResource ExpanderItem}" RecommendKey="MaxResponsiveness"
+                        <ctl:SettingsCard Header="Maximum system responsiveness" Style="{StaticResource ExpanderItem}" RecommendKey="MaxResponsiveness"
                                           Badge="Advanced" BadgeBrush="{DynamicResource AccentYellowBrush}">
                             <ctl:SettingsCard.Description>
                                 <StackPanel>
@@ -335,7 +335,7 @@
                                         reinforces what the engine is already doing, with less CPU reserved for background work and more
                                         for the app in front.
                                     </TextBlock>
-                                    <TextBlock Text="⟳ Requires a restart to take effect." Style="{StaticResource CardNoteWarn}"/>
+                                    <TextBlock Text="Requires a restart to take effect." Style="{StaticResource CardNoteWarn}"/>
                                 </StackPanel>
                             </ctl:SettingsCard.Description>
                             <CheckBox Style="{StaticResource ToggleSwitch}"
@@ -343,7 +343,7 @@
                         </ctl:SettingsCard>
 
                         <!-- Network Throttling Off: pairs with Maximum System Responsiveness. -->
-                        <ctl:SettingsCard Header="Network Throttling Off" Style="{StaticResource ExpanderItem}" RecommendKey="NetworkThrottlingOff"
+                        <ctl:SettingsCard Header="Network throttling off" Style="{StaticResource ExpanderItem}" RecommendKey="NetworkThrottlingOff"
                                           Badge="Safe" BadgeBrush="{DynamicResource TextSecondaryBrush}">
                             <ctl:SettingsCard.Description>
                                 <StackPanel>
@@ -354,7 +354,7 @@
                                         <LineBreak/><Run FontWeight="SemiBold">With the Systema Engine:</Run> it pairs with
                                         Maximum System Responsiveness, the same multimedia profile, now without the network brake.
                                     </TextBlock>
-                                    <TextBlock Text="⟳ Requires a restart to take effect." Style="{StaticResource CardNoteWarn}"/>
+                                    <TextBlock Text="Requires a restart to take effect." Style="{StaticResource CardNoteWarn}"/>
                                 </StackPanel>
                             </ctl:SettingsCard.Description>
                             <CheckBox Style="{StaticResource ToggleSwitch}"
@@ -362,7 +362,7 @@
                         </ctl:SettingsCard>
 
                         <!-- Power Throttling On: lets Windows park background work on efficiency cores. -->
-                        <ctl:SettingsCard Header="Power Throttling On" Style="{StaticResource ExpanderItem}" RecommendKey="PowerThrottling"
+                        <ctl:SettingsCard Header="Power throttling on" Style="{StaticResource ExpanderItem}" RecommendKey="PowerThrottling"
                                           Badge="Safe" BadgeBrush="{DynamicResource TextSecondaryBrush}">
                             <ctl:SettingsCard.Description>
                                 <TextBlock Style="{StaticResource CardDescription}">
@@ -378,7 +378,7 @@
                         </ctl:SettingsCard>
 
                         <!-- Fast App Close: snappier shutdown / sign-out. -->
-                        <ctl:SettingsCard Header="Fast App Close" Style="{StaticResource ExpanderItem}" RecommendKey="FastAppClose"
+                        <ctl:SettingsCard Header="Fast app close" Style="{StaticResource ExpanderItem}" RecommendKey="FastAppClose"
                                           Badge="Safe" BadgeBrush="{DynamicResource TextSecondaryBrush}">
                             <ctl:SettingsCard.Description>
                                 <TextBlock Style="{StaticResource CardDescription}">
@@ -394,7 +394,7 @@
                         </ctl:SettingsCard>
 
                         <!-- Keep Kernel in RAM: RAM-gated (default on at >= 14 GB, recommended 16 GB+). -->
-                        <ctl:SettingsCard Header="Keep Kernel in RAM" Style="{StaticResource ExpanderItem}" RecommendKey="KeepKernelInRam"
+                        <ctl:SettingsCard Header="Keep kernel in RAM" Style="{StaticResource ExpanderItem}" RecommendKey="KeepKernelInRam"
                                           Badge="Safe" BadgeBrush="{DynamicResource TextSecondaryBrush}">
                             <ctl:SettingsCard.Description>
                                 <StackPanel>
@@ -404,7 +404,7 @@
                                         <LineBreak/><Run FontWeight="SemiBold">Only recommended if your PC has 16 GB or more of RAM.</Run>
                                         Systema leaves this off by default on machines with less than 14 GB.
                                     </TextBlock>
-                                    <TextBlock Text="⟳ Requires a restart to take effect." Style="{StaticResource CardNoteWarn}"/>
+                                    <TextBlock Text="Requires a restart to take effect." Style="{StaticResource CardNoteWarn}"/>
                                 </StackPanel>
                             </ctl:SettingsCard.Description>
                             <CheckBox Style="{StaticResource ToggleSwitch}"
@@ -412,7 +412,7 @@
                         </ctl:SettingsCard>
 
                         <!-- Faster Shutdown: AutoEndTasks + HungAppTimeout reinforcement. -->
-                        <ctl:SettingsCard Header="Faster Shutdown" Style="{StaticResource ExpanderItem}" RecommendKey="FasterShutdown"
+                        <ctl:SettingsCard Header="Faster shutdown" Style="{StaticResource ExpanderItem}" RecommendKey="FasterShutdown"
                                           Badge="Safe" BadgeBrush="{DynamicResource TextSecondaryBrush}">
                             <ctl:SettingsCard.Description>
                                 <TextBlock Style="{StaticResource CardDescription}">
@@ -429,7 +429,7 @@
                         </ctl:SettingsCard>
 
                         <!-- Input Hook Timeout: LowLevelHooksTimeout, enforced in the .DEFAULT hive too. -->
-                        <ctl:SettingsCard Header="Input Hook Timeout" Style="{StaticResource ExpanderItem}" RecommendKey="InputHookTimeout"
+                        <ctl:SettingsCard Header="Input hook timeout" Style="{StaticResource ExpanderItem}" RecommendKey="InputHookTimeout"
                                           Badge="Safe" BadgeBrush="{DynamicResource TextSecondaryBrush}">
                             <ctl:SettingsCard.Description>
                                 <TextBlock Style="{StaticResource CardDescription}">
@@ -446,7 +446,7 @@
                         </ctl:SettingsCard>
 
                         <!-- Faster Service Shutdown: WaitToKillServiceTimeout trim (service counterpart of Fast App Close). -->
-                        <ctl:SettingsCard Header="Faster Service Shutdown" Style="{StaticResource ExpanderItem}" RecommendKey="ServiceShutdownFast"
+                        <ctl:SettingsCard Header="Faster service shutdown" Style="{StaticResource ExpanderItem}" RecommendKey="ServiceShutdownFast"
                                           Badge="Safe" BadgeBrush="{DynamicResource TextSecondaryBrush}">
                             <ctl:SettingsCard.Description>
                                 <TextBlock Style="{StaticResource CardDescription}">
@@ -463,7 +463,7 @@
                         </ctl:SettingsCard>
 
                         <!-- Disable Fast Startup: HiberbootEnabled=0 only (hibernate left intact so Sleep->Hibernate keeps working). -->
-                        <ctl:SettingsCard Header="Disable Fast Startup" Style="{StaticResource ExpanderItem}" RecommendKey="FastStartupOff"
+                        <ctl:SettingsCard Header="Disable fast startup" Style="{StaticResource ExpanderItem}" RecommendKey="FastStartupOff"
                                           Badge="Safe" BadgeBrush="{DynamicResource TextSecondaryBrush}">
                             <ctl:SettingsCard.Description>
                                 <TextBlock Style="{StaticResource CardDescription}">
@@ -595,7 +595,7 @@
                                        Foreground="{DynamicResource TextSecondaryBrush}"
                                        VerticalAlignment="Center"
                                        Margin="0,0,8,0"/>
-                            <CheckBox IsChecked="{Binding ShowAllProcesses, Mode=TwoWay}"
+                            <CheckBox IsChecked="{Binding ShowAllProcesses, Mode=TwoWay}" Tag="NoStateLabel"
                                       Style="{StaticResource ToggleSwitch}"
                                       VerticalAlignment="Center"/>
                         </StackPanel>
@@ -787,7 +787,7 @@
                                             <Button.Tag>0</Button.Tag>
                                             <Button.ContextMenu>
                                                 <ContextMenu>
-                                                    <MenuItem Header="Stop Napping"
+                                                    <MenuItem Header="Stop napping"
                                                               Command="{Binding DataContext.WakeProcessCommand,
                                                                   RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                                                               CommandParameter="{Binding}"/>
@@ -1536,7 +1536,7 @@
                                 Style="{StaticResource GhostButton}"
                                 Margin="0,0,8,0"/>
 
-                        <Button Content="Add to Whitelist"
+                        <Button Content="Add to whitelist"
                                 Height="32"
                                 Padding="14,0"
                                 Style="{StaticResource PrimaryButton}"

@@ -57,7 +57,7 @@
                 <CheckBox IsChecked="{Binding SkipRestorePoint}" Style="{StaticResource ToggleSwitch}"/>
             </ctl:SettingsCard>
 
-            <ctl:SettingsCard Header="Restore Point Manager">
+            <ctl:SettingsCard Header="Restore point manager">
                 <ctl:SettingsCard.Description>
                     <TextBlock Style="{StaticResource CardDescription}">
                         View, create, and delete Windows restore points. If something goes wrong
@@ -65,7 +65,7 @@
                         an earlier date.
                     </TextBlock>
                 </ctl:SettingsCard.Description>
-                <Button Content="Manage Restore Points" Padding="18,10"
+                <Button Content="Manage restore points" Padding="18,10"
                         Command="{Binding ManageRestorePointsCommand}"
                         Style="{StaticResource GhostButton}"/>
             </ctl:SettingsCard>
@@ -93,7 +93,7 @@
             </ctl:SettingsCard>
 
             <!-- Keep Systema Running -->
-            <ctl:SettingsCard Header="Keep Systema Running">
+            <ctl:SettingsCard Header="Keep Systema running">
                 <ctl:SettingsCard.Description>
                     <StackPanel>
                         <TextBlock Style="{StaticResource CardDescription}">
@@ -180,7 +180,7 @@
                 <!-- Right-side buttons: contextual based on state -->
                 <StackPanel Orientation="Horizontal">
                     <!-- "Install Now": only when the installer is downloaded and ready -->
-                    <Button Content="↑  Install Now"
+                    <Button Content="Install now"
                             Padding="18,9" Margin="0,0,8,0"
                             Command="{Binding InstallNowCommand}">
                         <Button.Style>
@@ -195,8 +195,8 @@
                         </Button.Style>
                     </Button>
 
-                    <!-- "Check Now": always available unless actively checking/downloading -->
-                    <Button Content="Check Now"
+                    <!-- "Check now": always available unless actively checking/downloading -->
+                    <Button Content="Check now"
                             Padding="18,9"
                             IsEnabled="{Binding CanCheckNow}"
                             Command="{Binding CheckForUpdatesCommand}"
@@ -207,7 +207,7 @@
             <!-- ════════════════ BACKUP AND SUPPORT ════════════════ -->
             <TextBlock Text="Backup and support" Style="{StaticResource SettingsGroupHeader}"/>
 
-            <ctl:SettingsCard Header="Export / Import Settings" Badge="Backup"
+            <ctl:SettingsCard Header="Export / import settings" Badge="Backup"
                               BadgeBrush="{DynamicResource TextSecondaryBrush}">
                 <ctl:SettingsCard.Description>
                     <StackPanel>
@@ -233,25 +233,25 @@
                     </StackPanel>
                 </ctl:SettingsCard.Description>
                 <StackPanel Orientation="Horizontal">
-                    <Button Content="Export Settings"
+                    <Button Content="Export settings"
                             Padding="18,9" Margin="0,0,8,0"
                             Command="{Binding ExportSettingsCommand}"
                             Style="{StaticResource GhostButton}"/>
-                    <Button Content="Import Settings"
+                    <Button Content="Import settings"
                             Padding="18,9"
                             Command="{Binding ImportSettingsCommand}"
                             Style="{StaticResource GhostButton}"/>
                 </StackPanel>
             </ctl:SettingsCard>
 
-            <ctl:SettingsCard Header="Diagnostic Report" Badge="Diagnostic"
+            <ctl:SettingsCard Header="Diagnostic report" Badge="Diagnostic"
                               BadgeBrush="{DynamicResource TextSecondaryBrush}">
                 <ctl:SettingsCard.Description>
                     <TextBlock Style="{StaticResource CardDescription}">
                         Creates a report of recent errors and session activity that you can paste into Discord for support. Nothing is sent automatically.
                     </TextBlock>
                 </ctl:SettingsCard.Description>
-                <Button Content="Copy Diagnostic Report" Padding="18,10"
+                <Button Content="Copy diagnostic report" Padding="18,10"
                         Command="{Binding OpenDiagnosticsCommand}"
                         Style="{StaticResource PrimaryButton}"/>
             </ctl:SettingsCard>
@@ -261,14 +261,14 @@
 
             <ctl:SettingsCard Header="Reset all settings"
                               Description="Resets every Systema setting to factory defaults and restarts the app. This cannot be undone.">
-                <Button Content="Reset to Defaults"
+                <Button Content="Reset to defaults"
                         Command="{Binding ResetAllSettingsCommand}"
                         Style="{StaticResource GhostButton}"
                         Foreground="{DynamicResource AccentRedBrush}"/>
             </ctl:SettingsCard>
 
             <!-- Version footer -->
-            <TextBlock Text="Systema v0.7.354  ·  For support visit discord.gg/yYhM7mdupH"
+            <TextBlock Text="Systema v0.7.355  ·  For support visit discord.gg/yYhM7mdupH"
                        Style="{StaticResource CaptionText}" Foreground="{DynamicResource TextSecondaryBrush}"
                        TextWrapping="Wrap" Margin="2,24,0,0"/>
         </StackPanel>

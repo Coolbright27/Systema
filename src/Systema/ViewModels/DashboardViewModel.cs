@@ -175,10 +175,10 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
                         "Background apps aren't being rested. Turn it on in Systema Engine."));
         if (f.DataCollection == "On")
             issues.Add(("Windows is collecting data about how you use your PC",
-                        "Turn on No Telemetry Pro in Cleanup & Privacy to stop it."));
+                        "Turn on No Telemetry Pro in Cleanup & privacy to stop it."));
         else if (f.DataCollection == "Reduced")
             issues.Add(("Windows data collection is only partly blocked",
-                        "Turn on No Telemetry Pro in Cleanup & Privacy to block the rest."));
+                        "Turn on No Telemetry Pro in Cleanup & privacy to block the rest."));
         int pending = f.Total - f.Applied;
         if (!f.AutoPilotOn && f.Total > 0 && pending > 0)
             issues.Add(($"{pending} recommended optimization{(pending == 1 ? " isn't" : "s aren't")} on",
@@ -954,7 +954,7 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
                 AutoPilotPendingCount = pending;
                 IsAutoPilotApplied    = pending == 0;
                 AutoPilotButtonText   = pending == 0
-                    ? "✓  All settings applied"
+                    ? "All settings applied"
                     : $"Apply settings once  ({pending} item{(pending == 1 ? "" : "s")})";
 
                 AutoPilotChecklist.Clear();
@@ -1298,12 +1298,12 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
             "Stops Windows' Game Bar and Game DVR from recording in the background, removing the constant CPU and disk overhead it adds while you game. Restart any open games to apply.",
             () => { if (!_graphics.IsGameDvrDisabled()) _graphics.SetGameDvrDisabled(true); return Task.CompletedTask; }),
         ["Dell Ultra Performance on AC"] = ("Set the Dell thermal profile to Ultra Performance (plugged in)",
-            "Dell laptops hold back their fans and clocks by default to stay quiet and cool. Ultra Performance lets the machine run the fans harder and hold higher clocks while it's plugged in, for noticeably more sustained CPU and GPU performance. This changes ONLY the plugged-in profile, so your on-battery runtime and behavior are untouched. Cons: plugged in it runs warmer and the fans get louder under load. It applies as soon as you're plugged in, and you can change it any time on the Dell tab.",
+            "Dell laptops hold back their fans and clocks by default to stay quiet and cool. Ultra Performance lets the machine run the fans harder and hold higher clocks while it's plugged in, for noticeably more sustained CPU and GPU performance. This changes ONLY the plugged-in profile, so your on-battery runtime and behavior are untouched. Cons: plugged in it runs warmer and the fans get louder under load. It applies as soon as you're plugged in, and you can change it any time on the Dell page.",
             async () => { string ultra = _thermal.AvailableModes.FirstOrDefault(m => string.Equals(m, "UltraPerformance", StringComparison.OrdinalIgnoreCase)) ?? "UltraPerformance";
                           _settings.ThermalModeAc = ultra;                                   // persist the plugged-in preference
                           if (!_powerPlan.IsOnBattery()) await Task.Run(() => _thermal.SetMode(ultra)); }),   // apply now only if actually on AC
         ["Intel GPU power saving off"] = ("Turn off Intel graphics power saving",
-            "Turns off the Intel integrated graphics power-saving features (RC6 render standby, plus DPST display power saving and Dynamic Refresh Switching where the panel has them) so the chip stays fully awake for the most consistent performance. This is meant for desktops, where there's no battery to preserve. Cons: it uses a little more power at idle and runs a touch warmer. Takes effect after a restart, and you can undo it any time with Reset on the Intel Graphics tab.",
+            "Turns off the Intel integrated graphics power-saving features (RC6 render standby, plus DPST display power saving and Dynamic Refresh Switching where the panel has them) so the chip stays fully awake for the most consistent performance. This is meant for desktops, where there's no battery to preserve. Cons: it uses a little more power at idle and runs a touch warmer. Takes effect after a restart, and you can undo it any time with Reset on the Intel graphics page.",
             () => { var a = _intelGpu.DetectIntelAdapters();
                     if (a.Count > 0) { _intelGpu.SetRc6(a, on: false); _intelGpu.SetDpst(a, on: false); _intelGpu.SetDrrs(a, on: false); }
                     return Task.CompletedTask; }),
@@ -1314,16 +1314,16 @@ public partial class DashboardViewModel : ObservableObject, IAutoRefreshable
                                        _intelGpu.WriteValue(a, pp.Name ?? IntelGpuService.PowerPolicy, 2); }
                     return Task.CompletedTask; }),
         ["NVIDIA power mode: maximum performance"] = ("Set the NVIDIA power mode to maximum performance",
-            "This is the Power management mode setting from the NVIDIA app, and it's separate from the PowerMizer one above. Prefer maximum performance keeps the graphics card at its full clock speeds instead of dropping them whenever it thinks it can, which removes the brief moment where it has to spin back up and makes frame timing steadier. Cons: it uses more power sitting idle and runs warmer, so it's only suggested on desktops where you have the cooling for it and aren't running off a battery. It applies straight away with no restart, and you can change it any time on the Nvidia Graphics tab.",
+            "This is the Power management mode setting from the NVIDIA app, and it's separate from the PowerMizer one above. Prefer maximum performance keeps the graphics card at its full clock speeds instead of dropping them whenever it thinks it can, which removes the brief moment where it has to spin back up and makes frame timing steadier. Cons: it uses more power sitting idle and runs warmer, so it's only suggested on desktops where you have the cooling for it and aren't running off a battery. It applies straight away with no restart, and you can change it any time on the NVIDIA graphics page.",
             () => { _nvapi.SetPowerMode(NvapiService.PStateMaxPerf); return Task.CompletedTask; }),
         ["GPU max performance"] = ("Set the NVIDIA GPU to maximum performance",
             "By default the NVIDIA GPU idles its clocks down to save power (PowerMizer). On a desktop you have the power and cooling headroom to skip that, so this holds the GPU at full clocks for the best and most consistent performance. Cons: it draws a little more power at idle, and it's not recommended on laptops (there it can cause thermal throttling), which is why this only shows on desktops. Takes effect after a restart.",
             () => { var a = _nvidiaGpu.DetectNvidiaAdapters(); if (a.Count > 0) { _nvidiaGpu.SetPowerSaving(a, on: false); _settings.NvidiaGpuPreferMaxPerformance = true; } return Task.CompletedTask; }),
         ["Cap FPS to monitor refresh"] = ("Cap FPS to your monitor's refresh rate",
-            "On a laptop, any frame your GPU renders above your screen's refresh rate is thrown away before you ever see it, so it's wasted work. Capping frames at your refresh rate (with NVIDIA's own limiter, the same one the NVIDIA app uses) cuts GPU load, heat, fan noise, and battery drain, and often makes frame pacing feel steadier. Cons: it adds a very tiny bit of input lag versus running fully uncapped, and it won't help games that already run below your refresh rate. You can change or remove the cap any time on the Nvidia Graphics tab.",
+            "On a laptop, any frame your GPU renders above your screen's refresh rate is thrown away before you ever see it, so it's wasted work. Capping frames at your refresh rate (with NVIDIA's own limiter, the same one the NVIDIA app uses) cuts GPU load, heat, fan noise, and battery drain, and often makes frame pacing feel steadier. Cons: it adds a very tiny bit of input lag versus running fully uncapped, and it won't help games that already run below your refresh rate. You can change or remove the cap any time on the NVIDIA graphics page.",
             async () => { int t = NvapiService.GetRefreshRateFpsTarget(); if (t > 0) await Task.Run(() => _nvapi.SetMaxFrameRate(t)); }),
         ["GPU scheduling & windowed optimizations"] = ("Turn off GPU scheduling and windowed game optimizations",
-            "Turns off Hardware-accelerated GPU Scheduling and Optimizations for windowed games. How it helps: both add an extra layer to how frames are scheduled and presented, so turning them off keeps the graphics path simpler with fewer moving parts to glitch, which is more stable on many setups. Possible issue: on some capable GPUs these features can actually lower latency and smooth frame delivery, so if your games felt better with them on, you can re-enable them in the Graphics tab. GPU scheduling needs a PC restart, and open games need restarting.",
+            "Turns off Hardware-accelerated GPU scheduling and Optimizations for windowed games. How it helps: both add an extra layer to how frames are scheduled and presented, so turning them off keeps the graphics path simpler with fewer moving parts to glitch, which is more stable on many setups. Possible issue: on some capable GPUs these features can actually lower latency and smooth frame delivery, so if your games felt better with them on, you can re-enable them on the Graphics page. GPU scheduling needs a PC restart, and open games need restarting.",
             () => {
                 if (_graphics.IsHagsEnabled()) { _graphics.SetHags(false); _settings.GraphicsHagsPref = 0; }
                 if (_graphics.IsWindowedOptimizationsEnabled()) { _graphics.SetWindowedOptimizations(false); _settings.GraphicsWindowedOptPref = 0; }

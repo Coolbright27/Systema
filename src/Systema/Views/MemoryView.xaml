@@ -45,7 +45,7 @@
 
             <!-- ===== HEADER ===== -->
             <StackPanel Margin="0,0,0,8">
-                <TextBlock Text="Memory &amp; Startup" Style="{StaticResource HeadingLarge}"/>
+                <TextBlock Text="Memory &amp; startup" Style="{StaticResource HeadingLarge}"/>
                 <TextBlock Text="See how your memory is doing and manage the apps that open when your PC starts."
                            Style="{StaticResource CaptionText}" Margin="0,4,0,0" TextWrapping="Wrap"/>
             </StackPanel>

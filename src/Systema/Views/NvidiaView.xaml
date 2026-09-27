@@ -44,7 +44,7 @@
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
                 <StackPanel Grid.Column="0">
-                    <TextBlock Text="Nvidia Graphics" Style="{StaticResource HeadingLarge}"/>
+                    <TextBlock Text="NVIDIA graphics" Style="{StaticResource HeadingLarge}"/>
                     <TextBlock Text="{Binding AdapterName}" Style="{StaticResource CaptionText}"
                                Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,4,0,0"/>
                 </StackPanel>
@@ -75,7 +75,7 @@
             <TextBlock Text="Power" Style="{StaticResource SettingsGroupHeader}"/>
 
             <!-- ===== GPU Power Management (PowerMizer / render-standby equivalent) ===== -->
-            <ctl:SettingsCard Header="GPU Power Management (Similar to RC6)" RecommendKey="NvidiaPowerManagement">
+            <ctl:SettingsCard Header="GPU power management (similar to RC6)" RecommendKey="NvidiaPowerManagement">
                 <ctl:SettingsCard.Description>
                     <StackPanel>
                         <TextBlock Style="{StaticResource CardDescription}">
@@ -99,7 +99,7 @@
                 <StackPanel>
                     <CheckBox Style="{StaticResource ToggleSwitch}" HorizontalAlignment="Right"
                               IsChecked="{Binding PowerSavingOn, Mode=TwoWay}"/>
-                    <Button Content="Reset to Default" Style="{StaticResource GhostButton}"
+                    <Button Content="Reset to default" Style="{StaticResource GhostButton}"
                             Margin="0,8,0,0" HorizontalAlignment="Right" FontSize="11" Padding="10,4"
                             Command="{Binding ResetSettingCommand}" CommandParameter="PowerManagement"/>
                 </StackPanel>
@@ -171,7 +171,7 @@
             <StackPanel Visibility="{Binding IsFpsCapAvailable, Converter={StaticResource BoolToVis}}">
                 <TextBlock Text="Frame rate" Style="{StaticResource SettingsGroupHeader}"/>
 
-                <ctl:SettingsCard Header="Max Frame Rate (FPS cap)" RecommendKey="NvidiaFpsCap">
+                <ctl:SettingsCard Header="Max frame rate (FPS cap)" RecommendKey="NvidiaFpsCap">
                     <ctl:SettingsCard.Description>
                         <StackPanel>
                             <TextBlock Style="{StaticResource CardDescription}">
@@ -218,7 +218,7 @@
 
             <ctl:SettingsCard Header="Revert all"
                               Description="Restore every NVIDIA power setting to the driver's defaults.">
-                <Button Content="Revert All Nvidia Settings to Default"
+                <Button Content="Revert all NVIDIA settings to default"
                         Style="{StaticResource GhostButton}" Padding="14,8"
                         Command="{Binding RevertAllCommand}"/>
             </ctl:SettingsCard>
