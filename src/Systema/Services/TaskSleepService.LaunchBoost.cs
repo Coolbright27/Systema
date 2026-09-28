@@ -20,6 +20,7 @@
 using System.Diagnostics;
 using System.Management;
 using System.Runtime.InteropServices;
+using Systema.Core;
 using Systema.Models;
 
 namespace Systema.Services;
@@ -30,13 +31,21 @@ public sealed partial class TaskSleepService
     //  Launch Boost
     // ════════════════════════════════════════════════════════════════════════════
     //
-    // When enabled, a dedicated 1.5 s timer watches for newly-launched processes.
-    // Each new user app gets a temporary boost — CPU High, I/O High, efficiency
-    // mode off (RAM unchanged; GPU scheduling NEVER touched) — for a configurable
-    // window (default 20 s), then its original priorities are restored so Windows
-    // takes scheduling back over. Fully self-contained: owns its own state and a
-    // thread-safe event-log path; reuses the same priority P/Invokes the napping
-    // engine uses (no new native surface for Defender/SAC to flag).
+    //   SEES      every new process twice over: the Win32_ProcessStartTrace event and a 300 ms
+    //             toolhelp poll (whichever is first; the claim in ApplyLaunchBoost stops doubles).
+    //   DECIDES   with Core/LaunchBoostRules.cs: names never boosted, then the ordered launch rules
+    //             (opened from the shell or a launcher stub it started → boost; a boosting parent's
+    //             child → rides that boost; everything else → left alone).
+    //   BOOSTS    CPU High, I/O High and efficiency mode off (each per its setting); page priority
+    //             back to Normal if a napped parent left it lower; GPU scheduling to Realtime only
+    //             if "GPU priority" is on (off by default), with the auto-disable safety net below.
+    //   HOLDS     for the set duration (default 20 s), re-asserting CPU/I-O/efficiency every poll so
+    //             Windows can't quietly flip EcoQoS back on. A child riding its parent's boost ends
+    //             with it, so the whole app gets one window.
+    //   ENDS      by restoring the ORIGINAL priorities, so Windows takes scheduling back over.
+    //
+    // Fully self-contained: owns its own state and a thread-safe event-log path; reuses the same
+    // priority P/Invokes the napping engine uses (no new native surface for Defender/SAC to flag).
 
     private System.Threading.Timer? _launchBoostTimer;
     private readonly object _launchBoostLock = new();
@@ -45,8 +54,8 @@ public sealed partial class TaskSleepService
 
     // Event-driven launch detection. Win32_ProcessStartTrace fires the instant a
     // process is created (ETW-backed, near-zero overhead), so the boost lands from
-    // the app's first moments — DLL loads and init — instead of up to 1.5s later.
-    // The 1.5s polling timer above is kept as a fallback (belt-and-suspenders) for
+    // the app's first moments — DLL loads and init — instead of on the next poll.
+    // The 300 ms polling timer is kept as a fallback (belt-and-suspenders) for
     // anything the watcher misses or in case the watcher fails to start.
     private ManagementEventWatcher? _lbStartWatcher;
 
@@ -137,8 +146,8 @@ public sealed partial class TaskSleepService
         catch (Exception ex) { _log.Warn("TaskSleepService", $"RestoreNapGpuPriority PID {pid} failed: {ex.Message}"); }
     }
 
-    // LaunchBoostTick reentrancy guard. The 1.5s System.Threading.Timer fires
-    // on a threadpool thread; if a single tick takes >1.5s (heavy boost dict,
+    // LaunchBoostTick reentrancy guard. The 300 ms System.Threading.Timer fires
+    // on a threadpool thread; if a single tick takes longer than 300 ms (heavy boost dict,
     // slow P/Invoke, etc.) the next tick will start while the first is still
     // running, contending on _launchBoostLock. Worst case: any P/Invoke that
     // genuinely hangs leaves the lock held, and every subsequent tick blocks
@@ -146,63 +155,6 @@ public sealed partial class TaskSleepService
     // exactly the "process alive but UI-dead" pattern. 0/1 flip via
     // Interlocked guarantees at most one tick body runs at a time.
     private int _lbTickInFlight;
-
-    // Admin / maintenance binaries that are NOT user-app launches. Boosting them
-    // wastes the slot, fills the boost dictionary (so the 1.5 s re-assert tick
-    // does more work and more P/Invokes), and on weak GPUs amplifies WDDM stress.
-    // None of these are something the user is "opening" — they're Windows
-    // servicing tools, COM helpers, UAC prompts, NGEN compilation, etc.
-    private static readonly HashSet<string> LaunchBoostExclusionExtras =
-        new(StringComparer.OrdinalIgnoreCase)
-    {
-        // Command-line / scripting / config utilities
-        "cmd", "powershell", "pwsh", "wscript", "cscript", "reg", "regedit",
-        "schtasks", "sc", "fsutil", "powercfg", "where", "whoami", "tasklist",
-        "taskkill", "wmic", "net", "net1", "netsh", "ipconfig", "nslookup",
-        "ping", "tracert", "route", "arp", "icacls",
-        // Dev-shell subprocesses that spawn in bursts (a terminal / IDE / dev tool running
-        // commands): git & Unix coreutils from Git-Bash/WSL. Transient, sub-second, and boosting
-        // dozens of them is pure noise — this is the flood in the diagnostic report.
-        "git", "git-lfs", "bash", "sh", "conhost", "openconsole",
-        "findstr", "find", "cat", "head", "tail", "grep", "sed", "awk", "ls",
-        "sort", "wc", "cut", "tr", "xargs", "more", "dirname", "basename", "env",
-        "cygpath", "uname", "date", "sleep", "printf", "expr", "test", "true", "false",
-        "timeout", "choice",
-        // UAC and user-mode security prompts
-        "consent", "RuntimeBroker",
-        // .NET Framework NGEN — fires in big bursts after every Windows Update;
-        // boosting twenty of these at once is what overwhelms the boost dict and
-        // hammers the GPU scheduler with priority calls.
-        "mscorsvw", "ngen", "ngentask",
-        // Windows Update / servicing
-        "TiWorker", "TrustedInstaller", "Dism", "DismHost", "wimserv",
-        "sdbinst", "wuaucltcore", "MoUsoCoreWorker", "MusNotification",
-        "MusNotifyIcon", "musnotificationux",
-        // Telemetry / compatibility scans (Microsoft's own background tasks)
-        "CompatTelRunner", "DeviceCensus", "deviceenroller", "diskaudit",
-        // Modern Windows shell hosts / picker hosts (system internal UI)
-        "UIEOrchestrator", "UIEOrchestratorStub", "PickerHost",
-        "DataExchangeHost", "ShellHost", "CrossDeviceResume",
-        // Volume / Disk / Firmware system services
-        "vds", "vdsldr", "VSSVC", "FirmwareTPM",
-        // Generic Win32 helpers used by system tasks
-        "rundll32", "regsvr32", "CompPkgSrv", "OpenWith",
-        // Search indexing helpers
-        "SearchFilterHost", "SearchProtocolHost", "WmiApSrv",
-        // Crash / error reporters
-        "crashreporter", "crashhelper", "WerFault", "WerFaultSecure",
-        // CHX SmartScreen helper
-        "CHXSmartScreen",
-        // Dell / OEM inventory + driver-update agents seen on test machines
-        "invcol", "DRVUpdate", "SalomanDock", "provtool",
-        // Background updaters and scanners nobody opens by hand (Edge, Defender signatures,
-        // NVIDIA DLSS, NVIDIA App's game scanner)
-        "MicrosoftEdgeUpdate", "MpSigStub", "nvngx_update", "OAWrapper",
-        // Background "open hint" prompts
-        "downloader", "updatesrv", "pingsender", "ByteCodeGenerator",
-        // Our own installer (the previous build's setup) — never boost it
-        "Systema_Setup",
-    };
 
     private sealed class LaunchBoostEntry
     {
@@ -250,7 +202,7 @@ public sealed partial class TaskSleepService
     /// <summary>
     /// Arms the Win32_ProcessStartTrace event watcher so launches are boosted the
     /// instant the process is created. Best-effort: if WMI rejects the query (rare),
-    /// the 1.5s polling timer still covers everything.
+    /// the 300 ms polling timer still covers everything.
     /// </summary>
     private void StartLaunchBoostWatcher()
     {
@@ -271,7 +223,7 @@ public sealed partial class TaskSleepService
             catch (Exception ex)
             {
                 _log.Warn("TaskSleepService",
-                    $"Launch Boost: process-start watcher failed to arm — falling back to 1.5s polling ({ex.Message})");
+                    $"Launch Boost: process-start watcher failed to arm — falling back to 300 ms polling ({ex.Message})");
                 try { _lbStartWatcher?.Dispose(); } catch { }
                 _lbStartWatcher = null;
             }
@@ -346,7 +298,7 @@ public sealed partial class TaskSleepService
     private void LaunchBoostTick()
     {
         // Reentrancy guard: skip if the previous tick is still in progress.
-        // Returning is correct — the next 1.5s timer fires automatically.
+        // Returning is correct — the next 300 ms tick fires automatically.
         if (System.Threading.Interlocked.CompareExchange(ref _lbTickInFlight, 1, 0) != 0)
             return;
         try
@@ -444,149 +396,51 @@ public sealed partial class TaskSleepService
         return list;
     }
 
-    /// <summary>True for ordinary user apps — excludes OS, security, AV, and Systema itself.</summary>
-    private bool IsBoostableLaunch(string name)
-    {
-        if (string.IsNullOrEmpty(name)) return false;
-        if (name.Equals("Systema", StringComparison.OrdinalIgnoreCase)) return false;
-        if (SystemProcessNames.Contains(name))         return false;
-        if (SecurityCriticalProcessNames.Contains(name)) return false;
-        if (_detectedAvProcessNames.Contains(name))    return false;
-        if (LaunchBoostExclusionExtras.Contains(name)) return false;
-        // Defensive prefix check for things like "Systema_Setup_0.7.28" / "...tmp"
-        // — we never want to boost our own installer or its temp helpers.
-        if (name.StartsWith("Systema_Setup", StringComparison.OrdinalIgnoreCase)) return false;
-        return true;
-    }
+    // ── Who gets boosted: Core/LaunchBoostRules.cs ─────────────────────────────
+    // The decision is two ordered rule lists there (names never boosted, then the launch rules);
+    // this part only gathers the facts they need and turns the answer into an expiry time.
+
+    /// <summary>The nap engine's name lists that <see cref="LaunchBoostNames"/> consults.</summary>
+    private LaunchBoostNames.NameLists BoostNameLists => new(
+        IsWindowsProcess:   n => SystemProcessNames.Contains(n),
+        IsSecuritySoftware: n => SecurityCriticalProcessNames.Contains(n) || _detectedAvProcessNames.Contains(n));
 
     /// <summary>
-    /// Eligibility for boosting a CHILD process that a currently-boosted app spawned. Blocks the
-    /// same sets as <see cref="IsBoostableLaunch"/> — including the transient CLI / shell / system
-    /// "extras" (cmd, git, bash, findstr, reg, rundll32…). Those are sub-second helpers that provide
-    /// nothing when boosted; letting them ride a parent's window is exactly what floods the log when
-    /// a terminal or dev tool runs a burst of commands. A real app's meaningful children (its own
-    /// helper exes, renderers, anti-cheat) aren't on the block list, so they still inherit the boost.
+    /// Asks <see cref="LaunchBoostRules"/> about a newly seen process. The parent facts are lazy,
+    /// so a launch the early rules decide never pays for a process lookup or a full snapshot.
     /// </summary>
-    private bool IsBoostableChild(string name)
+    private LaunchDecision DecideLaunch(int ppid, string name, out DateTime? parentExpiry)
     {
-        if (string.IsNullOrEmpty(name)) return false;
-        if (name.Equals("Systema", StringComparison.OrdinalIgnoreCase)) return false;
-        if (SystemProcessNames.Contains(name))           return false;
-        if (SecurityCriticalProcessNames.Contains(name)) return false;
-        if (_detectedAvProcessNames.Contains(name))      return false;
-        if (LaunchBoostExclusionExtras.Contains(name))   return false;   // transient CLI/shell/system junk — never boost, even as a child
-        if (name.StartsWith("Systema_Setup", StringComparison.OrdinalIgnoreCase)) return false;
-        return true;
+        DateTime? pExp = null;
+        lock (_launchBoostLock)
+            if (_lbBoosted.TryGetValue(ppid, out var parentEntry)) pExp = parentEntry.Expiry;
+        parentExpiry = pExp;
+
+        return LaunchBoostRules.Decide(new LaunchFacts(
+            Boostable:            LaunchBoostNames.NeverBoostReason(name, BoostNameLists) == null,
+            ParentPid:            ppid,
+            ParentBoosted:        pExp.HasValue,
+            ParentNapped:         new(() => _throttledPids.ContainsKey(ppid) || _napBuckets.IsNapped(ppid)),
+            ParentName:           new(() => GetProcessNameSafe(ppid)),
+            ParentAge:            new(() => GetProcessAgeSafe(ppid)),
+            ParentStartedByShell: new(() => WasStartedByShell(ppid))));
     }
 
     /// <summary>
-    /// Decides whether a newly-seen process should be launch-boosted and, if so, the expiry
-    /// to use. Two ways in — and ONLY these two:
-    /// <list type="bullet">
-    /// <item><b>INHERIT</b> — the parent is already boosted, so this child rides the SAME
-    /// session window. The whole app boosts for ONE fixed duration; a child that spawns part
-    /// way through does NOT start its own fresh window, and once the window closes new
-    /// children are not re-boosted. This is what makes "boost the WHOLE thing for the set
-    /// time" actually true.</item>
-    /// <item><b>NEW SESSION</b> — only when the USER launched the app, detected as the parent
-    /// being the Windows shell (explorer.exe): Start menu, taskbar, desktop, Run, or a
-    /// double-clicked file. Gets a fresh now+duration window.</item>
-    /// </list>
-    /// Everything else is skipped. Background tasks, updaters and service helpers are spawned
-    /// by services.exe / svchost / taskhostw / a napped launcher — never by the shell — so an
-    /// Epic/Edge/Store background process that starts while the user isn't launching anything
-    /// gets no boost (and therefore stays nap-eligible).
+    /// Whether to boost a newly seen process and until when. A new boost runs for the set duration;
+    /// a child riding its parent's boost ends with it, so the whole app gets ONE window (a child that
+    /// spawns part way through doesn't start a fresh one, and none are boosted once it closes).
     /// </summary>
     private bool ShouldLaunchBoost(int ppid, string name, TaskSleepSettings s, DateTime now, out DateTime expiry)
     {
-        expiry = default;
-
-
-        // INHERIT: ride the parent's active session window (whole-tree, one shared duration).
-        lock (_launchBoostLock)
+        var decision = DecideLaunch(ppid, name, out DateTime? parentExpiry);
+        expiry = decision.Action switch
         {
-            if (_lbBoosted.TryGetValue(ppid, out var parentEntry))
-            {
-                if (!IsBoostableChild(name)) return false;
-                expiry = parentEntry.Expiry;   // share the parent's window — no fresh 40 s
-                return true;
-            }
-        }
-
-        // NEW SESSION: only for a genuine user launch.
-        if (!IsBoostableLaunch(name)) return false;
-        if (!IsUserLaunch(ppid))      return false;
-        expiry = now.AddSeconds(Math.Clamp(s.LaunchBoostDurationSeconds, 3, 120));
-        return true;
-    }
-
-    /// <summary>Service / scheduler / updater host processes that spawn BACKGROUND work, never
-    /// user-launched apps. A new process parented by one of these is a scheduled task, a
-    /// service helper, or an auto-updater — exactly the things that should NOT be boosted.</summary>
-    private static readonly HashSet<string> LaunchBoostBackgroundParents = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "services", "svchost", "taskhostw", "wininit", "winlogon", "lsass", "WmiPrvSE",
-        "dllhost", "RuntimeBroker", "sihost", "MoUsoCoreWorker", "usocoreworker", "UsoClient",
-        "wuauclt", "TrustedInstaller", "TiWorker", "OfficeClickToRun", "backgroundTaskHost",
-        "smartscreen", "SearchIndexer", "SearchProtocolHost", "SgrmBroker",
-    };
-
-    /// <summary>Interpreters / shells that RUN commands rather than launch apps. A child of one of
-    /// these is a script or tool subprocess, not a user launch, so it must never originate a fresh
-    /// boost session — otherwise a terminal, IDE, or dev tool cascades boosts across its whole
-    /// subprocess tree. (Game launchers like Steam/Epic are deliberately NOT here.)</summary>
-    private static readonly HashSet<string> LaunchBoostShellParents = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "cmd", "powershell", "pwsh", "bash", "sh", "wsl", "wslhost", "conhost", "openconsole",
-        "node", "python", "python3", "py", "perl", "ruby", "git",
-    };
-
-    /// <summary>
-    /// True when a brand-new top-level process looks like something the USER just launched,
-    /// rather than a background spawn or a child of an already-running app. We can't read the
-    /// window yet (it doesn't exist at process-start), so we judge by the parent:
-    /// <list type="bullet">
-    /// <item>REJECT if the parent is a napped/throttled app (dormant → background spawn) or a
-    /// service/scheduler/updater host (<see cref="LaunchBoostBackgroundParents"/>).</item>
-    /// <item>ACCEPT if the parent is the shell (explorer) — a direct Start/taskbar/desktop launch.</item>
-    /// <item>ACCEPT if the parent is a transient launcher stub: a young process (&lt; 20 s old) that
-    /// explorer started (an updater a service started is young too, but it's background work).
-    /// Many apps (Firefox, etc.) launch via a short-lived stub that explorer spawns; the real
-    /// process is the stub's child. Treating a young non-background parent as a launch origin
-    /// catches that even if the stub's own boost was missed.</item>
-    /// <item>REJECT otherwise — an established, long-running app spawning a child is NOT a fresh
-    /// user launch (so a running browser's late renderers / a dev tool's git children don't get
-    /// their own boost once the app's launch window has closed).</item>
-    /// </list>
-    /// </summary>
-    private bool IsUserLaunch(int ppid)
-    {
-        if (ppid <= 0) return false;
-
-        // Background spawn: parent is a dormant (napped) app.
-        if (_throttledPids.ContainsKey(ppid) || _napBuckets.IsNapped(ppid)) return false;
-
-        string? parent = GetProcessNameSafe(ppid);
-        if (parent == null) return false;                                   // parent gone — can't verify; don't start a session
-        if (LaunchBoostBackgroundParents.Contains(parent)) return false;    // service / scheduler / updater host
-        if (parent.Equals("explorer", StringComparison.OrdinalIgnoreCase)) return true;   // direct shell launch
-
-        // A shell / interpreter parent (cmd, bash, git, node…) is running a command or script — not a
-        // user launching an app — so it never originates a boost session. Without this, a terminal or
-        // dev tool cascades a fresh boost onto every subprocess it spawns.
-        if (LaunchBoostShellParents.Contains(parent)) return false;
-
-        // Transient launcher stub (young, non-background, non-shell parent) → treat as a launch origin,
-        // but only when the stub itself came from the shell. Background updaters relaunch themselves
-        // (MicrosoftEdgeUpdate → MicrosoftEdgeUpdate, MpSigStub → AM_Delta_Patch, NVIDIA's NvBackend →
-        // OAWrapper): the parent is young, but a service or the Task Scheduler started it, and boosting
-        // it handed a background updater High priority. A real launch through a stub still gets its
-        // boost, because the stub (started by explorer) is boosted and its child inherits.
-        TimeSpan? age = GetProcessAgeSafe(ppid);
-        if (age.HasValue && age.Value < TimeSpan.FromSeconds(20)) return WasStartedByShell(ppid);
-
-        // Established running app spawning a child → not a fresh launch.
-        return false;
+            LaunchAction.RideParentBoost => parentExpiry!.Value,
+            LaunchAction.Boost           => now.AddSeconds(Math.Clamp(s.LaunchBoostDurationSeconds, 3, 120)),
+            _                            => default,
+        };
+        return decision.Action != LaunchAction.Skip;
     }
 
     /// <summary>True when the Windows shell (explorer) started this process.</summary>
@@ -625,7 +479,7 @@ public sealed partial class TaskSleepService
             bool claimed;
             lock (_launchBoostLock)
             {
-                // Concurrency guard: the event watcher and the 1.5s timer can both
+                // Concurrency guard: the event watcher and the 300 ms timer can both
                 // reach the same fresh PID. Whoever records the entry first owns the
                 // original-priority value — never overwrite it.
                 if (_lbBoosted.ContainsKey(pid)) { claimed = false; }
@@ -663,9 +517,10 @@ public sealed partial class TaskSleepService
             // pattern on older Intel iGPUs / unstable WDDM), keep calling it would
             // risk triggering a TDR (graphics device reset) which kills WPF
             // rendering and leaves the app alive but UI-frozen. We count failures
-            // and silently stop touching GPU priority for the rest of the session
-            // after 3 strikes — the boost still applies CPU/I-O priority and
-            // efficiency-off, just no GPU. A log line tells us once.
+            // and stop touching GPU priority for the rest of the session after
+            // GpuBoostFailureThreshold (50) error returns, or 3 if the call throws
+            // (a success resets the count) — the boost still applies CPU/I-O
+            // priority and efficiency-off, just no GPU. A log line tells us once.
             int?  origGpu    = null;
             bool  gpuApplied = false;
             if (s.LaunchBoostGpu && !_gpuBoostDisabledForSession)

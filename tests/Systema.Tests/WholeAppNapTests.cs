@@ -50,14 +50,19 @@ public class WholeAppNapTests
     }
 
     // A background updater that relaunches itself has a young parent, but no one "opened" it.
+    // (0.7.365 moved this into Core/LaunchBoostRules.cs, so it's tested as behaviour now.)
     [Fact]
     public void LaunchBoost_YoungParentCountsOnlyIfTheShellStartedIt()
     {
-        var lb = Read("TaskSleepService.LaunchBoost.cs");
-        Assert.Contains("if (age.HasValue && age.Value < TimeSpan.FromSeconds(20)) return WasStartedByShell(ppid);", lb);
-        Assert.DoesNotContain("TimeSpan.FromSeconds(20)) return true;", lb);
+        Systema.Core.LaunchFacts Young(bool shellStartedIt) => new(
+            Boostable: true, ParentPid: 42, ParentBoosted: false,
+            ParentNapped: new(() => false), ParentName: new(() => "MicrosoftEdgeUpdate"),
+            ParentAge: new(() => TimeSpan.FromSeconds(3)), ParentStartedByShell: new(() => shellStartedIt));
 
-        foreach (var name in new[] { "\"MicrosoftEdgeUpdate\"", "\"MpSigStub\"", "\"nvngx_update\"", "\"OAWrapper\"", "\"timeout\"" })
-            Assert.Contains(name, lb);
+        Assert.Equal(Systema.Core.LaunchAction.Skip,  Systema.Core.LaunchBoostRules.Decide(Young(shellStartedIt: false)).Action);
+        Assert.Equal(Systema.Core.LaunchAction.Boost, Systema.Core.LaunchBoostRules.Decide(Young(shellStartedIt: true)).Action);
+
+        foreach (var name in new[] { "MicrosoftEdgeUpdate", "MpSigStub", "nvngx_update", "OAWrapper", "timeout" })
+            Assert.Contains(name, Systema.Core.LaunchBoostNames.Helpers);
     }
 }
