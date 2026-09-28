@@ -6,13 +6,14 @@
              xmlns:ctl="clr-namespace:Systema.Controls">
 
     <!-- Windows 11 Settings layout. Each section is a settings expander: a header row with a
-         rotating chevron, and when open, its settings as rows split by hairlines. The live
-         process table, timing pickers and never-nap list are unchanged inside their sections.
-         Same bindings and text as before; only the layout changed. -->
+         rotating chevron, and when open, its settings as rows split by hairlines, grouped under
+         plain headings (ExpanderGroupHeading) where a section has several kinds of setting.
+         0.7.361-0.7.364 rebuilt the Live monitor, Never-nap list, Advanced timing & caps and Sleep
+         rules as Settings lists; the tests that render each one are LiveMonitorTests,
+         NeverNapListTests, AdvancedTimingTests and SleepRulesTests. -->
 
     <UserControl.Resources>
         <conv:BoolToVisibilityConverter x:Key="BoolToVis"/>
-        <conv:IntEqualConverter x:Key="IntEqualConverter"/>
         <conv:BoolToIndexConverter x:Key="BoolToIndex"/>
         <conv:ProcessIconConverter x:Key="ProcessIcon"/>
         <conv:ActivityKindConverter x:Key="ActivityKind"/>
@@ -99,44 +100,6 @@
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
-        </Style>
-
-        <!-- Toggle-style radio button for aggressiveness selector -->
-        <Style x:Key="ToggleRadio" TargetType="RadioButton">
-            <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
-            <Setter Property="FontSize" Value="12"/>
-            <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="HorizontalContentAlignment" Value="Center"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="RadioButton">
-                        <Border x:Name="bg" CornerRadius="6" Padding="10,8"
-                                Background="{DynamicResource OverlaySubtleBrush}" BorderThickness="1" BorderBrush="{DynamicResource OverlayStrokeBrush}">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="bg" Property="Background" Value="{DynamicResource OverlayLightBrush}"/>
-                            </Trigger>
-                            <Trigger Property="IsChecked" Value="True">
-                                <Setter TargetName="bg" Property="Background" Value="{DynamicResource AccentBlueBrush}"/>
-                                <Setter TargetName="bg" Property="BorderBrush" Value="{DynamicResource TextInfoBrush}"/>
-                                <Setter Property="Foreground" Value="{DynamicResource TextOnAccentBrush}"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
-        <!-- TextBox style for threshold inputs -->
-        <Style x:Key="ThresholdInput" TargetType="TextBox"
-               BasedOn="{StaticResource DarkTextBox}">
-            <Setter Property="Width"                   Value="64"/>
-            <Setter Property="TextAlignment"           Value="Center"/>
-            <Setter Property="VerticalContentAlignment" Value="Center"/>
-            <Setter Property="Height"                  Value="32"/>
-            <Setter Property="core:NumericTextBox.IsNumericOnly" Value="True"/>
         </Style>
     </UserControl.Resources>
 
@@ -912,6 +875,11 @@
             </Border>
 
             <!-- ===== SLEEP RULES ===== -->
+            <!-- Windows 11 Settings rows under plain group headings. Every timing in the text is the
+                 engine's real one (NapTriggers.cs / TaskSleepSettings): minimized and tray apps nap
+                 after MinimizeTrayGraceMs (30 s), unused apps after BackgroundNapAfterMs (3 min), idle
+                 apps after IdleNapAfterMs (2 min) under IdleNapCpuThreshold (0.5%), busy apps stay
+                 awake over BusyMinimizedCpuThresholdPercent (20%). SleepRulesTests pins them. -->
             <Border Style="{StaticResource ExpanderCard}">
                 <StackPanel>
                     <Button Command="{Binding ToggleSleepRulesSectionCommand}" Style="{StaticResource ExpanderButton}">
@@ -922,7 +890,7 @@
                             </Grid.ColumnDefinitions>
                             <StackPanel Grid.Column="0" VerticalAlignment="Center">
                                 <TextBlock Text="Sleep rules" Style="{StaticResource ExpanderHeaderTitle}"/>
-                                <TextBlock Text="Which apps get put to sleep (minimized, tray, unused, and idle) and how aggressively."
+                                <TextBlock Text="Which apps go to sleep, when, and what always stays awake."
                                            Style="{StaticResource CaptionText}" Margin="0,2,0,0" TextWrapping="Wrap"/>
                             </StackPanel>
                             <Path Grid.Column="1" Style="{StaticResource ExpanderChevron}" Margin="16,0,0,0"
@@ -933,55 +901,68 @@
                     <StackPanel Visibility="{Binding ShowSleepRules, Converter={StaticResource BoolToVis}}"
                                 ctl:Motion.RevealOnShow="True">
 
-                        <!-- Sleep minimized apps -->
+                        <!-- ── What goes to sleep ── -->
+                        <Border Style="{StaticResource ExpanderGroupHeading}">
+                            <TextBlock Text="What goes to sleep" Style="{StaticResource HeadingSmall}"/>
+                        </Border>
+
                         <ctl:SettingsCard Header="Sleep minimized apps" Style="{StaticResource ExpanderItem}"
-                                          Description="Apps you minimize are automatically put to sleep. They get periodic brief wakes to stay up to date. Audio, calls, and recordings are always protected.">
+                                          Description="An app you minimize goes to sleep after 30 seconds. It wakes briefly now and then to stay up to date, and fully as soon as you open it.">
                             <CheckBox IsChecked="{Binding MinimizeNapEnabled, Mode=TwoWay}"
                                       Style="{StaticResource ToggleSwitch}"/>
                         </ctl:SettingsCard>
 
-                        <!-- Nap hidden apps -->
-                        <ctl:SettingsCard Header="Nap hidden apps" Style="{StaticResource ExpanderItem}"
-                                          Description="Also sleeps apps that are open but fully covered by other windows, treating them just like a minimized app. An app has to stay fully covered for a few minutes before it naps (set how long under Advanced timing &amp; caps). They wake the instant they're uncovered or clicked, and the same protections apply: anything playing audio, busy in the background, recently used, or in the foreground is left awake. On by default.">
+                        <ctl:SettingsCard Header="Sleep hidden apps" Style="{StaticResource ExpanderItem}"
+                                          Description="An app that's open but completely covered by other windows is treated like a minimized one. It sleeps once it's stayed covered for the time set under Advanced timing &amp; caps, and wakes as soon as you uncover it.">
                             <CheckBox IsChecked="{Binding HiddenNapEnabled, Mode=TwoWay}"
                                       Style="{StaticResource ToggleSwitch}"/>
                         </ctl:SettingsCard>
 
-                        <!-- Sleep system tray apps -->
                         <ctl:SettingsCard Header="Sleep tray apps" Style="{StaticResource ExpanderItem}"
-                                          Description="Background apps living in the system tray (cloud sync, game launchers, updaters) are put to sleep with rare brief wakes.">
+                                          Description="Apps running with no open window, like chat, sync and game launcher apps in the notification area, go to sleep after 30 seconds and wake briefly now and then.">
                             <CheckBox IsChecked="{Binding TrayNapEnabled, Mode=TwoWay}"
                                       Style="{StaticResource ToggleSwitch}"/>
                         </ctl:SettingsCard>
 
-                        <!-- Sleep unused apps (Background Nap) -->
                         <ctl:SettingsCard Header="Sleep unused apps" Style="{StaticResource ExpanderItem}"
-                                          Description="Apps you haven't used in a few minutes are put to sleep, even if they're not minimized. It's the most effective mode and catches everything you're not actively using.">
+                                          Description="Anything you haven't used for 3 minutes and can't see on screen goes to sleep, even with its window still open. It wakes the moment you go back to it. This catches the most.">
                             <CheckBox IsChecked="{Binding BackgroundNapEnabled, Mode=TwoWay}"
                                       Style="{StaticResource ToggleSwitch}"/>
                         </ctl:SettingsCard>
 
-                        <!-- Sleep idle apps -->
                         <ctl:SettingsCard Header="Sleep idle apps" Style="{StaticResource ExpanderItem}"
-                                          Description="Apps using almost no CPU for 2+ minutes are put to sleep. Catches truly idle background processes that waste resources by just existing.">
+                                          Description="Background processes that have used almost no CPU (under 0.5%) for 2 minutes go to sleep, even ones without a window. They wake as soon as you use them.">
                             <CheckBox IsChecked="{Binding IdleNapEnabled, Mode=TwoWay}"
                                       Style="{StaticResource ToggleSwitch}"/>
                         </ctl:SettingsCard>
 
-                        <!-- "Include helper processes" was removed: it never controlled whether helpers
-                             were slept (the child-nap sweep always runs), only whether their CPU caps
-                             tracked the parent through a brief wake, which is now unconditional. -->
+                        <!-- ── What stays awake ── -->
+                        <Border Style="{StaticResource ExpanderGroupHeading}">
+                            <TextBlock Text="What stays awake" Style="{StaticResource HeadingSmall}"/>
+                        </Border>
 
-                        <!-- Keep busy apps awake (on by default) -->
+                        <!-- The skip rule "Audio/media active" (SkipRules.cs) runs on every nap path, whatever
+                             these switches say, so it's shown as always on. -->
+                        <ctl:SettingsCard Header="Apps playing sound, in a call or recording" Style="{StaticResource ExpanderItem}"
+                                          Description="Never put to sleep while they're doing it, whatever the rules above say. They can sleep again once they stop.">
+                            <TextBlock Text="Always on" Style="{StaticResource BodyText}"
+                                       Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center"/>
+                        </ctl:SettingsCard>
+
                         <ctl:SettingsCard Header="Keep busy apps awake" Style="{StaticResource ExpanderItem}"
-                                          Description="Don't sleep a minimized or tray app while its whole process tree is using more than 20% CPU, since it's probably still doing work like an export, a render, or a build. The entire app stays awake, and naps normally once it settles down.">
+                                          Description="A minimized, hidden or tray app whose processes together use more than 20% of your CPU stays awake, since it's probably still working on something like an export, a render or a build. It sleeps once it settles down.">
                             <CheckBox IsChecked="{Binding SkipBusyMinimizedApps, Mode=TwoWay}"
                                       Style="{StaticResource ToggleSwitch}"/>
                         </ctl:SettingsCard>
 
-                        <!-- Compress napped app memory: trims the working set from the moment an app naps so Windows compresses its pages. Closest Windows equivalent to macOS App Nap plus Compressed Memory. -->
+                        <!-- ── While apps sleep ── -->
+                        <Border Style="{StaticResource ExpanderGroupHeading}">
+                            <TextBlock Text="While apps sleep" Style="{StaticResource HeadingSmall}"/>
+                        </Border>
+
+                        <!-- Controls ALL nap trimming (BuildSettings: TrimWorkingSet = CompressDeepSleep). -->
                         <ctl:SettingsCard Header="Compress napped app memory" Style="{StaticResource ExpanderItem}"
-                                          Description="As soon as an app naps, Systema trims its working set so Windows can compress those pages on the standby list, usually shrinking a background app's real memory use by about 2 to 4 times. This starts on a regular nap, not just after an app reaches deep sleep, and Systema keeps re-trimming after every brief wake so the compressed footprint stays small the whole time the app is idle. This is the closest Windows gets to macOS App Nap and Compressed Memory.">
+                                          Description="When an app goes to sleep, its memory is trimmed so Windows can compress it or give it to the apps you're using, and trimmed again after each brief wake. Turn this off if an app is slow to come back.">
                             <CheckBox IsChecked="{Binding CompressDeepSleep, Mode=TwoWay}"
                                       Style="{StaticResource ToggleSwitch}"/>
                         </ctl:SettingsCard>

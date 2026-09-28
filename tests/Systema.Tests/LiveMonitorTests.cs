@@ -167,6 +167,15 @@ public sealed class FakeEngine
     public bool   PickerCanAddTyped     { get; set; }
     public ObservableCollection<Systema.Core.RunningApp> PickerApps { get; } = new();
 
+    // Sleep rules
+    public bool  ShowSleepRules                       { get; set; } = true;
+    public bool  MinimizeNapEnabled                   { get; set; } = true;
+    public bool  TrayNapEnabled                       { get; set; } = true;
+    public bool  BackgroundNapEnabled                 { get; set; } = true;
+    public bool  IdleNapEnabled                       { get; set; } = true;
+    public bool  SkipBusyMinimizedApps                { get; set; } = true;
+    public bool  CompressDeepSleep                    { get; set; } = true;
+
     // Advanced timing & caps (the values from the user's screenshot, 2026-09-27)
     public bool  ShowAdvancedSection                  { get; set; } = true;
     public bool  MultiMonitorAwarenessEnabled         { get; set; } = true;

@@ -101,7 +101,7 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
     [ObservableProperty] private int  _minimizeDeepSleepThresholdMs    = 600_000;
     [ObservableProperty] private int  _minimizeDeepSleepWakeIntervalMs = 300_000;
 
-    // (LowerMemoryPriority, TrimWorkingSet, AdaptiveTick always on — hardcoded in BuildSettings)
+    // (LowerMemoryPriority and AdaptiveTick always on, hardcoded in BuildSettings; TrimWorkingSet follows CompressDeepSleep)
 
     // ── Whitelist (apps that are never napped) ────────────────────────────────
     /// <summary>Process names that Task Sleep will never touch, shown as the whitelist in the UI.</summary>
@@ -838,7 +838,7 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
     partial void OnIdleNapEnabledChanged(bool value)                     => PushSettings();
     partial void OnIdleNapAfterMsChanged(int value)                      => PushSettings();
 
-    // (LowerMemoryPriority, TrimWorkingSet, AdaptiveTick, EnforceSettings, SoftNap — hardcoded)
+    // (LowerMemoryPriority, AdaptiveTick, EnforceSettings, SoftNap: hardcoded. TrimWorkingSet follows CompressDeepSleep.)
 
     // ── Human-friendly helpers for XAML bindings (convert ms ↔ seconds/minutes) ─
 
@@ -1111,11 +1111,11 @@ public partial class TaskSleepViewModel : ObservableObject, IDisposable
         DetectECores            = true,
         MoveToECores            = true,
         LowerMemoryPriority     = true,
-        TrimWorkingSet          = true,
-        // Compress in deep sleep — on by default. Trim once when a process
-        // crosses the deep-sleep threshold AND after every brief wake while
-        // still in deep sleep. Replaces the v0.7.9 hard RAM cap + re-trim-
-        // after-brief-wake + ActOnForegroundChildren toggles.
+        // "Compress napped app memory" (on by default) controls ALL nap trimming: the trim when an
+        // app first naps (TrimWorkingSet, in TryThrottle) and the re-trims after it (4f sweep, and
+        // after every brief wake). TrimWorkingSet used to be hard-wired on, so turning the switch
+        // off still trimmed every app as it napped (0.7.364).
+        TrimWorkingSet          = CompressDeepSleep,
         CompressDeepSleep       = CompressDeepSleep,
         AdaptiveTick            = true,
         // User-configurable

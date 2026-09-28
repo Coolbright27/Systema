@@ -509,7 +509,6 @@ TaskSleepView.xaml | handler Click=ProcessMenuButton_Click | 1
 TaskSleepView.xaml | handler IsVisibleChanged=PickerSearchBox_IsVisibleChanged | 1
 TaskSleepView.xaml | name Bg | 1
 TaskSleepView.xaml | name PickerSearchBox | 1
-TaskSleepView.xaml | name bg | 1
 ToolsView.xaml | binding ApplyDnsCommand | 1
 ToolsView.xaml | binding BlockPreviewUpdates | 2
 ToolsView.xaml | binding CoreParkingEnforced | 2
