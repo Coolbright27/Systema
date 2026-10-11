@@ -15,7 +15,7 @@ public class PagefileRecommendationTests
     [Fact]
     public void OfferedSizes_AreTheOnesThePageShows()
     {
-        Assert.Equal(new[] { 32768, 16384, 12288, 8192, 4096 }, MemoryService.PagefileSizeOptionsMb);
+        Assert.Equal(new[] { 65536, 32768, 16384, 12288, 8192, 4096 }, MemoryService.PagefileSizeOptionsMb);
     }
 
     [Theory]
@@ -46,6 +46,14 @@ public class PagefileRecommendationTests
     public void Recommendation_ByRam(long ramMb, int expectedMb) =>
         Assert.Equal(expectedMb, MemoryService.GetRecommendedPagefileMb(ramMb));
 
+    // 64 GB is offered to pick by hand, never recommended (so Auto Pilot and Home never push it).
+    [Fact]
+    public void SixtyFourGb_IsNeverRecommended()
+    {
+        for (long ram = 1_000; ram <= 262_144; ram += 250)
+            Assert.NotEqual(65536, MemoryService.GetRecommendedPagefileMb(ram));
+    }
+
     [Fact]
     public void LowRam_NeverGetsLessThanOneAndAHalfTimesRam()
     {
@@ -67,7 +75,10 @@ public class PagefileRecommendationTests
     [InlineData(32768, 32768)]
     [InlineData(30720, 32768)]   // 30 GB
     [InlineData(34816, 32768)]   // 34 GB
-    [InlineData(65536, 32768)]   // bigger than any choice
+    [InlineData(65536, 65536)]   // 64 GB is a choice now
+    [InlineData(131072, 65536)]  // bigger than any choice
+    [InlineData(49152, 65536)]   // 48 GB: halfway between 32 and 64, the bigger size wins
+    [InlineData(40960, 32768)]   // 40 GB: 32 GB is closer
     [InlineData(18432, 16384)]   // 18 GB
     [InlineData(14336, 16384)]   // 14 GB: halfway, the bigger size wins
     [InlineData(13312, 12288)]   // 13 GB: 12 GB is closer
@@ -76,6 +87,8 @@ public class PagefileRecommendationTests
         Assert.Equal(shownMb, MemoryService.NearestPagefileOptionMb(actualMb));
 
     [Theory]
+    [InlineData(65536, false, 16384, true)]    // 64 GB picked by hand: Auto Pilot leaves it
+    [InlineData(65536, false, 32768, true)]
     [InlineData(32768, false, 16384, true)]    // the user's 32 GB on a 32 GB PC: leave it
     [InlineData(16384, false, 16384, true)]
     [InlineData(15872, false, 16384, true)]    // within 512 MB

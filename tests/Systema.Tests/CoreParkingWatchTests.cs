@@ -25,7 +25,9 @@ public class CoreParkingWatchTests
     [Fact]
     public void PlanChangesReEnforceParking()
     {
-        var svc = Read("src", "Systema", "Services", "CoreParkingService.cs");
+        // Line endings normalized: the 800-character window below must mean the same thing whether
+        // the checkout has LF or CRLF (a CRLF checkout pushed Task.Delay just outside it).
+        var svc = Read("src", "Systema", "Services", "CoreParkingService.cs").Replace("\r\n", "\n");
 
         Assert.Contains("StartPlanWatch", svc);
 
