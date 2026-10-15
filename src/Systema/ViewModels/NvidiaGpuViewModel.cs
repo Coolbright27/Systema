@@ -42,6 +42,12 @@ public partial class NvidiaGpuViewModel : ObservableObject, IDisposable, IAutoRe
     // Opt-in: re-apply the saved choice after NVIDIA driver updates (which wipe the values).
     [ObservableProperty] private bool   _reapplyAfterDriverUpdate;
 
+    // ── NVENC encoding redirect (only visible when both NVIDIA + an iGPU are present) ──
+    [ObservableProperty] private bool   _isNvencToggleAvailable;
+    [ObservableProperty] private bool   _nvencEnabled;
+    [ObservableProperty] private string _nvencDetected = "";
+    [ObservableProperty] private string _iGpuName = "";
+
     // ── Max Frame Rate (FPS cap) via NVAPI DRS — the same limiter the NVIDIA app uses ──
     [ObservableProperty] private bool   _isFpsCapAvailable;
     [ObservableProperty] private int    _fpsCapInput;
@@ -65,6 +71,7 @@ public partial class NvidiaGpuViewModel : ObservableObject, IDisposable, IAutoRe
         _reapplyAfterDriverUpdate = _settings.NvidiaGpuReapplyEnabled;
         LoadFromRegistry();
         LoadFpsCap();
+        LoadNvenc();
 
         // The driver holds ONE global power mode, so a separate battery choice only exists if we
         // swap it when the plug goes in or out. PowerModeChanged fires on exactly that.
@@ -455,6 +462,103 @@ public partial class NvidiaGpuViewModel : ObservableObject, IDisposable, IAutoRe
         public ushort dmLogPixels;
         public uint   dmBitsPerPel, dmPelsWidth, dmPelsHeight, dmDisplayFlags, dmDisplayFrequency;
         public uint   dmICMMethod, dmICMIntent, dmMediaType, dmDitherType, dmReserved1, dmReserved2, dmPanningWidth, dmPanningHeight;
+    }
+
+    // ── NVENC encoding redirect ────────────────────────────────────────────────
+
+    private void LoadNvenc()
+    {
+        bool nvencExists = NvidiaGpuService.IsNvencPresent();
+        bool hasIgpu     = NvidiaGpuService.HasNonNvidiaGpu();
+        IsNvencToggleAvailable = nvencExists && hasIgpu;
+        if (!IsNvencToggleAvailable) return;
+
+        _loading = true;
+        try
+        {
+            NvencEnabled = NvidiaGpuService.IsNvencEnabled();
+            NvencDetected = NvencEnabled ? "On" : "Off";
+            IGpuName = DetectIGpuName();
+        }
+        finally { _loading = false; }
+    }
+
+    /// <summary>
+    /// Called from App.xaml.cs on startup. If the user chose to disable NVENC but a driver
+    /// update restored the DLLs, re-disable them automatically.
+    /// </summary>
+    public static void ReEnforceNvenc(SettingsService settings)
+    {
+        bool? saved = settings.NvencEncodingDisabled;
+        if (saved != true) return;
+        if (!NvidiaGpuService.IsNvencPresent()) return;
+        if (!NvidiaGpuService.IsNvencEnabled()) return;   // already off, nothing to do
+        var r = NvidiaGpuService.DisableNvenc();
+        _log.Info("NvidiaGpuViewModel",
+                  r.Success ? "Re-enforced NVENC disable after driver update."
+                            : $"NVENC re-enforce failed: {r.Message}");
+    }
+
+    partial void OnNvencEnabledChanged(bool value)
+    {
+        if (_loading) return;
+        var r = value ? NvidiaGpuService.EnableNvenc() : NvidiaGpuService.DisableNvenc();
+        StatusMessage = r.Message;
+        if (r.Success)
+        {
+            _settings.NvencEncodingDisabled = !value;
+            NvencDetected = value ? "On" : "Off";
+            _log.Info("NvidiaGpuViewModel", $"NVENC encoding: enabled={value}");
+        }
+        else
+        {
+            _loading = true;
+            try { NvencEnabled = !value; }
+            finally { _loading = false; }
+        }
+    }
+
+    [RelayCommand]
+    private void ResetNvenc()
+    {
+        if (!IsNvencToggleAvailable) return;
+        _loading = true;
+        try
+        {
+            if (!NvidiaGpuService.IsNvencEnabled())
+            {
+                var r = NvidiaGpuService.EnableNvenc();
+                StatusMessage = r.Success ? "NVIDIA video encoding restored to default." : r.Message;
+            }
+            else
+            {
+                StatusMessage = "NVIDIA video encoding is already at its default.";
+            }
+            _settings.NvencEncodingDisabled = null;
+            NvencEnabled = true;
+            NvencDetected = "On";
+        }
+        finally { _loading = false; }
+    }
+
+    private static string DetectIGpuName()
+    {
+        try
+        {
+            using var s = new System.Management.ManagementObjectSearcher(
+                "SELECT Name FROM Win32_VideoController");
+            foreach (System.Management.ManagementObject mo in s.Get())
+            {
+                string name = mo["Name"]?.ToString() ?? "";
+                if (string.IsNullOrWhiteSpace(name)) continue;
+                if (name.IndexOf("nvidia", StringComparison.OrdinalIgnoreCase) >= 0) continue;
+                if (name.IndexOf("Microsoft Basic", StringComparison.OrdinalIgnoreCase) >= 0) continue;
+                if (name.IndexOf("Microsoft Remote", StringComparison.OrdinalIgnoreCase) >= 0) continue;
+                return name;
+            }
+        }
+        catch { }
+        return "integrated GPU";
     }
 
     private Microsoft.Win32.PowerModeChangedEventHandler? _powerModeChanged;

@@ -207,6 +207,37 @@
                 </ctl:SettingsCard>
             </StackPanel>
 
+            <!-- ══════════════ VIDEO ENCODING ══════════════ -->
+            <StackPanel Visibility="{Binding IsNvencToggleAvailable, Converter={StaticResource BoolToVis}}">
+                <TextBlock Text="Video encoding" Style="{StaticResource SettingsGroupHeader}"/>
+
+                <ctl:SettingsCard Header="NVIDIA encoding" Badge="Beta" RecommendKey="NvencEncoding">
+                    <ctl:SettingsCard.Description>
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource CardDescription}" TextWrapping="Wrap">
+                                When off, apps like Discord, OBS and ShadowPlay encode video on your
+                                <Run Text="{Binding IGpuName, Mode=OneWay}" FontWeight="SemiBold"/>
+                                instead of the NVIDIA GPU. Less heat, less power, little to no quality
+                                difference on modern PCs. Games and 3D still use NVIDIA as normal.
+                            </TextBlock>
+                            <TextBlock Style="{StaticResource CardNoteWarn}" TextWrapping="Wrap"
+                                       Text="Restart encoding apps after changing this. Systema re-enforces your choice after driver updates."/>
+                            <TextBlock Style="{StaticResource CardNote}">
+                                <Run Text="Currently: "/><Run Text="{Binding NvencDetected, Mode=OneWay}"
+                                     Foreground="{DynamicResource AccentGreenBrush}" FontWeight="SemiBold"/>
+                            </TextBlock>
+                        </StackPanel>
+                    </ctl:SettingsCard.Description>
+                    <StackPanel>
+                        <CheckBox Style="{StaticResource ToggleSwitch}" HorizontalAlignment="Right"
+                                  IsChecked="{Binding NvencEnabled, Mode=TwoWay}"/>
+                        <Button Content="Reset to default" Style="{StaticResource GhostButton}"
+                                Margin="0,8,0,0" HorizontalAlignment="Right" FontSize="11" Padding="10,4"
+                                Command="{Binding ResetNvencCommand}"/>
+                    </StackPanel>
+                </ctl:SettingsCard>
+            </StackPanel>
+
             <!-- ══════════════ KEEP YOUR SETTINGS + REVERT ALL ══════════════ -->
             <TextBlock Text="Keep your settings" Style="{StaticResource SettingsGroupHeader}"/>
 

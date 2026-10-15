@@ -16,6 +16,8 @@
 //     full, clean self-heal.
 // ════════════════════════════════════════════════════════════════════════════
 
+using System.Diagnostics;
+using System.IO;
 using System.Management;
 using Microsoft.Win32;
 using Systema.Core;
@@ -318,6 +320,136 @@ public class NvidiaGpuService
     // NvapiService — and it applies immediately with no restart. The PowerMizer values above are
     // a separate, older registry mechanism that needs a reboot. Don't add a second power-mode
     // control here; they would fight.
+
+    // ── NVENC DLL control (video encoding redirect) ────────────────────────────
+    //
+    // The NVIDIA encoder is exposed to applications through two DLLs:
+    //   System32\nvEncodeAPI64.dll   (64-bit apps: Discord, OBS, etc.)
+    //   SysWOW64\nvEncodeAPI.dll     (32-bit apps)
+    //
+    // Renaming them to .off makes LoadLibrary fail, so apps fall back to the
+    // next available encoder (Intel Quick Sync, AMD AMF, or software). This is
+    // the same technique the user's StopNvidiaEncoding.bat uses. Reversible by
+    // renaming back. Driver updates restore the originals automatically.
+
+    private static readonly string NvEnc64     = Path.Combine(Environment.SystemDirectory, "nvEncodeAPI64.dll");
+    private static readonly string NvEnc64Off  = NvEnc64 + ".off";
+    private static readonly string NvEnc32     = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.Windows), "SysWOW64", "nvEncodeAPI.dll");
+    private static readonly string NvEnc32Off  = NvEnc32 + ".off";
+
+    /// <summary>True when NVENC DLLs exist in either active or disabled state.</summary>
+    public static bool IsNvencPresent() =>
+        File.Exists(NvEnc64) || File.Exists(NvEnc64Off);
+
+    /// <summary>True when the NVENC DLLs are in their normal (active) position.</summary>
+    public static bool IsNvencEnabled() => File.Exists(NvEnc64);
+
+    /// <summary>
+    /// True when the system has a non-NVIDIA display adapter that could handle encoding
+    /// (Intel iGPU with Quick Sync, AMD APU with AMF, etc.).
+    /// </summary>
+    public static bool HasNonNvidiaGpu()
+    {
+        try
+        {
+            using var s = new ManagementObjectSearcher(
+                "SELECT Name FROM Win32_VideoController");
+            foreach (ManagementObject mo in s.Get())
+            {
+                string name = mo["Name"]?.ToString() ?? "";
+                if (string.IsNullOrWhiteSpace(name)) continue;
+                if (name.IndexOf("nvidia", StringComparison.OrdinalIgnoreCase) >= 0) continue;
+                if (name.IndexOf("Microsoft Basic", StringComparison.OrdinalIgnoreCase) >= 0) continue;
+                if (name.IndexOf("Microsoft Remote", StringComparison.OrdinalIgnoreCase) >= 0) continue;
+                return true;
+            }
+        }
+        catch (Exception ex)
+        {
+            _log.Warn("NvidiaGpuService", $"HasNonNvidiaGpu check failed: {ex.Message}");
+        }
+        return false;
+    }
+
+    /// <summary>Disable NVENC by renaming the encoder DLLs. Apps fall back to the iGPU encoder.</summary>
+    public static TweakResult DisableNvenc()
+    {
+        int done = 0;
+        if (File.Exists(NvEnc64))
+        {
+            var r = RenameDll(NvEnc64, NvEnc64Off);
+            if (!r.Success) return r;
+            done++;
+        }
+        if (File.Exists(NvEnc32))
+        {
+            var r = RenameDll(NvEnc32, NvEnc32Off);
+            if (!r.Success) return r;
+            done++;
+        }
+        if (done == 0) return TweakResult.Ok("NVIDIA encoding was already off.");
+        _log.Info("NvidiaGpuService", $"NVENC disabled ({done} DLL(s) renamed).");
+        return TweakResult.Ok("NVIDIA video encoding is off. Apps will use your other GPU to encode.");
+    }
+
+    /// <summary>Re-enable NVENC by restoring the encoder DLLs to their original names.</summary>
+    public static TweakResult EnableNvenc()
+    {
+        int done = 0;
+        if (File.Exists(NvEnc64Off))
+        {
+            var r = RenameDll(NvEnc64Off, NvEnc64);
+            if (!r.Success) return r;
+            done++;
+        }
+        if (File.Exists(NvEnc32Off))
+        {
+            var r = RenameDll(NvEnc32Off, NvEnc32);
+            if (!r.Success) return r;
+            done++;
+        }
+        if (done == 0) return TweakResult.Ok("NVIDIA encoding was already on.");
+        _log.Info("NvidiaGpuService", $"NVENC re-enabled ({done} DLL(s) restored).");
+        return TweakResult.Ok("NVIDIA video encoding is back on.");
+    }
+
+    private static TweakResult RenameDll(string from, string to)
+    {
+        try
+        {
+            // The DLLs are owned by TrustedInstaller. Take ownership and grant admin
+            // full control before renaming, same as the user's batch script does.
+            RunCmd("takeown", $"/f \"{from}\"");
+            RunCmd("icacls", $"\"{from}\" /grant *S-1-5-32-544:F");
+
+            if (File.Exists(to)) File.Delete(to);
+            File.Move(from, to);
+            return TweakResult.Ok($"Renamed {Path.GetFileName(from)}");
+        }
+        catch (IOException ex) when (ex.HResult == unchecked((int)0x80070020))
+        {
+            _log.Warn("NvidiaGpuService", $"NVENC DLL in use: {from} — {ex.Message}");
+            return TweakResult.Fail(
+                "An app is using the NVIDIA encoder right now. Close apps that record or stream " +
+                "(Discord, OBS, ShadowPlay, etc.) and try again.");
+        }
+        catch (Exception ex)
+        {
+            _log.Error("NvidiaGpuService", $"RenameDll {from} failed", ex);
+            return TweakResult.Fail($"Could not rename {Path.GetFileName(from)}: {ex.Message}");
+        }
+    }
+
+    private static void RunCmd(string exe, string args)
+    {
+        using var p = Process.Start(new ProcessStartInfo(exe, args)
+        {
+            CreateNoWindow = true, UseShellExecute = false,
+            RedirectStandardOutput = true, RedirectStandardError = true
+        });
+        p?.WaitForExit(5000);
+    }
 
     public TweakResult RevertAll(IReadOnlyList<NvidiaAdapter> adapters)
     {

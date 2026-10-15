@@ -622,6 +622,23 @@ public partial class App : Application
                 });
             }
 
+            // ── NVENC encoding re-enforce on startup ──
+            // If the user disabled NVIDIA encoding and a driver update restored the DLLs,
+            // re-disable them. Runs on a background thread with a short delay so the driver
+            // has time to finish initializing after a fresh update.
+            if (settingsService.NvencEncodingDisabled == true && nvidiaVm.IsNvidiaPresent)
+            {
+                _ = System.Threading.Tasks.Task.Run(async () =>
+                {
+                    try
+                    {
+                        await System.Threading.Tasks.Task.Delay(15_000);
+                        NvidiaGpuViewModel.ReEnforceNvenc(settingsService);
+                    }
+                    catch (Exception ex) { Log.Warn("App", $"Startup NVENC re-enforce failed: {ex.Message}"); }
+                });
+            }
+
             // ── Timer-resolution hold (opt-in) ──
             // GlobalTimerResolutionRequests persists in the registry, but the actual 0.5 ms
             // request must be re-issued by a running process each boot and kept pinned. If the

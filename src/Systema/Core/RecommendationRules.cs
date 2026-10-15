@@ -188,6 +188,11 @@ public static class RecommendationRules
         ["NvidiaFpsCap"] = pc => WantsFpsCap(pc)
             ? Rec("Frames above your screen's refresh rate are thrown away. Capping saves heat and battery.")
             : Advice.None,
+
+        // NVENC encoding
+        ["NvencEncoding"] = pc => pc.IsLaptop
+            ? RecValue("Off", "Moves encoding to the iGPU, which reduces heat and uses less power with little to no downside on modern PCs.")
+            : Advice.None,
     };
 
     private static Advice IntelPowerSaving(PcProfile pc) => WantsIntelMaxPerformance(pc)

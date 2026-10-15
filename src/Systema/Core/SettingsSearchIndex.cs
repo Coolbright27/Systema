@@ -139,6 +139,7 @@ public static class SettingsSearchIndex
         // Nvidia Graphics
         new("Nvidia", "Max frame rate (FPS cap)", "fps cap limit framerate"),
         new("Nvidia", "Power management mode", "nvidia power performance"),
+        new("Nvidia", "Use your other GPU for video encoding", "nvenc encoding igpu intel amd discord obs shadowplay stream"),
 
         // Dell
         new("Dell", "Thermal profile", "fan quiet cool ultra performance heat thermal bios"),

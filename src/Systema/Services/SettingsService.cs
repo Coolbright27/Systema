@@ -551,6 +551,21 @@ public class SettingsService
         set => WriteBool(nameof(NvidiaGpuPreferMaxPerformance), value);
     }
 
+    /// <summary>
+    /// Null when the user has never touched the NVENC toggle (show real state, don't enforce).
+    /// True when they chose to disable NVIDIA encoding (re-enforced on startup if a driver
+    /// update restores the DLLs). False when they explicitly re-enabled or reset it.
+    /// </summary>
+    public bool? NvencEncodingDisabled
+    {
+        get
+        {
+            string? raw = ReadString(nameof(NvencEncodingDisabled), defaultValue: null);
+            return raw != null && bool.TryParse(raw, out bool v) ? v : null;
+        }
+        set => WriteString(nameof(NvencEncodingDisabled), value?.ToString() ?? "");
+    }
+
     // ── System Stability tweaks ───────────────────────────────────────────────
 
     /// <summary>Whether the user has disabled Windows Fast Startup (off by default).</summary>

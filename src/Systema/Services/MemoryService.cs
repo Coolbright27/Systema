@@ -356,10 +356,9 @@ public class MemoryService
     /// <summary>
     /// The fixed page file sizes the Memory page offers, largest first (alongside "Windows
     /// decides"). Every recommendation below is one of these, so Auto Pilot, the Home suggestion
-    /// and the dropdown always agree. 64 GB is there to pick by hand (heavy workloads that run out
-    /// of commit) and is never recommended; ConfigurePagefileAsync refuses it when C: lacks room.
+    /// and the dropdown always agree.
     /// </summary>
-    public static readonly int[] PagefileSizeOptionsMb = { 65536, 32768, 16384, 12288, 8192, 4096 };
+    public static readonly int[] PagefileSizeOptionsMb = { 32768, 16384, 12288, 8192, 4096 };
 
     /// <summary>
     /// True when a page file needs no change from Auto Pilot: a fixed size at least as big as the
